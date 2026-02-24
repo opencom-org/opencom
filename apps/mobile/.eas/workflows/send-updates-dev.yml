@@ -1,0 +1,12 @@
+name: Send updates dev
+
+on:
+  push:
+    branches: ['master']
+
+jobs:
+  send_updates:
+    name: Send updates
+    type: update
+    params:
+      channel: development

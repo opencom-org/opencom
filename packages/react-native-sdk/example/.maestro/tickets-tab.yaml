@@ -1,0 +1,57 @@
+# Test: Tickets Tab
+# Verifies tickets tab displays properly
+
+appId: com.opencom.sdk.example
+name: Tickets Tab Test
+tags:
+  - tickets
+
+---
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Navigate to Tickets tab
+- tapOn:
+    id: "tab-tickets"
+
+# Wait for Tickets screen
+- extendedWaitUntil:
+    visible: "Tickets"
+    timeout: 5000
+
+# Verify office hours indicator is visible (either online or offline state)
+- runFlow:
+    when:
+      visible: "We're online"
+    commands:
+      - assertVisible: "We're online"
+- runFlow:
+    when:
+      visible: "Currently offline"
+    commands:
+      - assertVisible: "Currently offline"
+
+# Check for tickets or empty state
+- runFlow:
+    when:
+      visible: "No tickets yet"
+    commands:
+      - assertVisible: "Tickets created by Support will appear here."

@@ -1,0 +1,108 @@
+# Test: Full User Flow
+# End-to-end test covering complete user journey
+
+appId: com.opencom.sdk.example
+name: Full User Flow Test
+tags:
+  - e2e
+  - critical
+
+---
+
+- launchApp:
+    clearState: true
+
+# Wait for app to initialize
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 15000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# === Step 1: Open Messenger ===
+- tapOn:
+    id: "opencom-launcher"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# === Step 2: Explore all tabs ===
+# Help
+- tapOn:
+    id: "tab-help"
+- extendedWaitUntil:
+    visible: "Help Center"
+    timeout: 3000
+
+# Tours
+- tapOn:
+    id: "tab-tours"
+- extendedWaitUntil:
+    visible: "Product Tours"
+    timeout: 3000
+
+# Tasks
+- tapOn:
+    id: "tab-tasks"
+- extendedWaitUntil:
+    visible: "Tasks"
+    timeout: 3000
+
+# Tickets
+- tapOn:
+    id: "tab-tickets"
+- extendedWaitUntil:
+    visible: "Tickets"
+    timeout: 3000
+
+# Back to Messages
+- tapOn:
+    id: "tab-messages"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 3000
+
+# === Step 3: Test Login Flow ===
+- tapOn:
+    id: "login-button"
+- extendedWaitUntil:
+    visible: "Welcome!"
+    timeout: 5000
+- tapOn:
+    id: "login-close-button"
+
+# === Step 4: Start New Conversation ===
+- tapOn:
+    id: "new-conversation-button"
+- extendedWaitUntil:
+    visible: "Conversation"
+    timeout: 5000
+
+# === Step 5: Send a message ===
+- tapOn:
+    id: "message-input"
+- inputText: "Hello from Maestro E2E test!"
+- tapOn:
+    id: "send-button"
+- extendedWaitUntil:
+    visible: "Hello from Maestro E2E test!"
+    timeout: 5000
+
+# === Step 6: Go back to messages (conversation is within messenger) ===
+- tapOn:
+    id: "conversation-back-button"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# === Step 7: Close messenger ===
+- tapOn:
+    id: "close-messenger"
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 5000
+
+# === Verify launcher is back ===
+- assertVisible:
+    id: "opencom-launcher"

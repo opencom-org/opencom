@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# Convex
+.convex/
+
+# Environment files
+.env
+*/.env.test
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+packages/convex/.env.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+*.local
+.cache/
+test-results
+playwright-report
+packages/ios-sdk/.build
+packages/react-native-sdk/lib
+.opencode
+.playwright-cli
+apps/web/e2e/.auth-state.json
+apps/web/e2e/.e2e-state.json
+test-run-log.jsonl
+artifacts/screenshots
+playwright-report
+packages/convex/.env.test
+.claude
+.windsurf
+.codex
+artifacts
+apps/landing/public/opencom-widget.iife.js
+apps/web/public/opencom-widget.iife.js

@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Opencom SDK Example",
+    "slug": "opencom-sdk-example",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.opencom.sdk.example"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.opencom.sdk.example"
+    }
+  }
+}

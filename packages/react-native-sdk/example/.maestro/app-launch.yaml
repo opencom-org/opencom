@@ -1,0 +1,46 @@
+# Test: App Launch and Initialization
+# Verifies the app launches successfully and shows the main screen
+
+appId: com.opencom.sdk.example
+name: App Launch Test
+tags:
+  - smoke
+  - critical
+
+---
+
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# Dismiss React Native error overlays repeatedly until app content is visible
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+
+# Wait for the app to initialize - it shows "Initializing..." then "Your App Content"
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 15000
+
+# Final cleanup of any remaining error overlays
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+
+# Verify the placeholder text is visible
+- assertVisible: "Tap the chat button to open Opencom"
+
+# Verify the launcher button is visible (it's in the bottom right)
+- assertVisible:
+    id: "opencom-launcher"

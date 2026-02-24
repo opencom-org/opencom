@@ -1,0 +1,54 @@
+# Test: Messenger Open and Close
+# Verifies the messenger can be opened and closed properly
+
+appId: com.opencom.sdk.example
+name: Messenger Open/Close Test
+tags:
+  - messenger
+
+---
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger to open
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Verify all tabs are visible in the bottom nav
+- assertVisible:
+    id: "tab-messages"
+- assertVisible:
+    id: "tab-help"
+- assertVisible:
+    id: "tab-tours"
+- assertVisible:
+    id: "tab-tasks"
+- assertVisible:
+    id: "tab-tickets"
+
+# Close messenger using the X button in header
+- tapOn:
+    id: "close-messenger"
+
+# Verify we're back to the app content
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 5000
+
+# Verify launcher is visible again
+- assertVisible:
+    id: "opencom-launcher"

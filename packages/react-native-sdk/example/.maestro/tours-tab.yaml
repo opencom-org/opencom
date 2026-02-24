@@ -1,0 +1,40 @@
+# Test: Tours Tab
+# Verifies product tours tab displays properly
+
+appId: com.opencom.sdk.example
+name: Tours Tab Test
+tags:
+  - tours
+
+---
+
+- launchApp
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Navigate to Tours tab
+- tapOn:
+    id: "tab-tours"
+
+# Wait for Tours screen
+- extendedWaitUntil:
+    visible: "Product Tours"
+    timeout: 5000
+
+# Verify empty state or tours list - app shows partial text
+- assertVisible: "Product tours guide you through features. Available tours will appear here."

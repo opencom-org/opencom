@@ -1,0 +1,8 @@
+{
+  "budgets": {
+    "unexpected": 0,
+    "flaky": 5,
+    "skipped": 70
+  },
+  "notes": "Baseline initialized from current CI thresholds. Update only after measured full-suite baseline reruns on stable environment."
+}

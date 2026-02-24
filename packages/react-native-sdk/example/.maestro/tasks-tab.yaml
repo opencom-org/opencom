@@ -1,0 +1,53 @@
+# Test: Tasks Tab
+# Verifies tasks/checklists tab displays properly
+
+appId: com.opencom.sdk.example
+name: Tasks Tab Test
+tags:
+  - tasks
+
+---
+
+- launchApp
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Navigate to Tasks tab
+- tapOn:
+    id: "tab-tasks"
+
+# Wait for Tasks screen
+- extendedWaitUntil:
+    visible: "Tasks"
+    timeout: 5000
+
+# Check for checklists or empty state
+- runFlow:
+    when:
+      visible: "No tasks yet"
+    commands:
+      - assertVisible: "Create checklists in the web app to see them here."
+
+# If checklists exist, verify checklist items are visible
+- runFlow:
+    when:
+      visible:
+        id: "checklist-item"
+    commands:
+      - assertVisible:
+          id: "checklist-item"

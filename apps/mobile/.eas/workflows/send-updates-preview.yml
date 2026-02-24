@@ -1,0 +1,12 @@
+name: Send updates preview
+
+on:
+  push:
+    branches: ['master']
+
+jobs:
+  send_updates:
+    name: Send updates preview
+    type: update
+    params:
+      channel: preview

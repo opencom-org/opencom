@@ -1,0 +1,118 @@
+{
+  "generatedOn": "2026-02-14",
+  "scope": "Sensitive authorization surfaces from complete-auth-wrapper-migration",
+  "handlers": [
+    {
+      "file": "packages/convex/convex/tickets.ts",
+      "handler": "create",
+      "kind": "mutation",
+      "line": 95,
+      "classification": "visitor-session",
+      "rationale": "Dual actor endpoint with visitor session ownership and agent permission checks."
+    },
+    {
+      "file": "packages/convex/convex/tickets.ts",
+      "handler": "get",
+      "kind": "query",
+      "line": 282,
+      "classification": "visitor-session",
+      "rationale": "Ticket read access is gated by shared ownership/permission checks."
+    },
+    {
+      "file": "packages/convex/convex/tickets.ts",
+      "handler": "addComment",
+      "kind": "mutation",
+      "line": 376,
+      "classification": "visitor-session",
+      "rationale": "Comment write endpoint supports visitor and agent paths with explicit authorization guards."
+    },
+    {
+      "file": "packages/convex/convex/tickets.ts",
+      "handler": "listByVisitor",
+      "kind": "query",
+      "line": 491,
+      "classification": "visitor-session",
+      "rationale": "Visitor listing endpoint enforces session ownership and workspace scope."
+    },
+    {
+      "file": "packages/convex/convex/tickets.ts",
+      "handler": "getComments",
+      "kind": "query",
+      "line": 525,
+      "classification": "visitor-session",
+      "rationale": "Comment reads enforce ticket ownership and agent permission mapping."
+    },
+    {
+      "file": "packages/convex/convex/tours.ts",
+      "handler": "listAll",
+      "kind": "query",
+      "line": 237,
+      "classification": "visitor-session",
+      "rationale": "Visitor tour listing endpoint requires scoped session ownership or tours.manage permission."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "getSettings",
+      "kind": "query",
+      "line": 67,
+      "classification": "internal-only",
+      "rationale": "Non-member callers receive redacted defaults; member-only details require workspace membership."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "storeResponse",
+      "kind": "mutation",
+      "line": 297,
+      "classification": "visitor-session",
+      "rationale": "Conversation ownership checks gate response persistence."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "submitFeedback",
+      "kind": "mutation",
+      "line": 344,
+      "classification": "visitor-session",
+      "rationale": "Feedback writes require authorized conversation access."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "getConversationResponses",
+      "kind": "query",
+      "line": 368,
+      "classification": "visitor-session",
+      "rationale": "Conversation response reads are ownership-gated."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "handoffToHuman",
+      "kind": "mutation",
+      "line": 412,
+      "classification": "visitor-session",
+      "rationale": "Handoff mutation is available only to authorized conversation participants."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "shouldRespond",
+      "kind": "query",
+      "line": 459,
+      "classification": "internal-only",
+      "rationale": "Workspace-level AI availability check with coarse output only."
+    },
+    {
+      "file": "packages/convex/convex/aiAgent.ts",
+      "handler": "listAvailableModels",
+      "kind": "query",
+      "line": 570,
+      "classification": "internal-only",
+      "rationale": "Static model list endpoint with no sensitive data access."
+    },
+    {
+      "file": "packages/convex/convex/aiAgentActions.ts",
+      "handler": "generateResponse",
+      "kind": "action",
+      "line": 155,
+      "classification": "visitor-session",
+      "rationale": "Action path uses internal conversation authorization guard before processing AI output."
+    }
+  ]
+}

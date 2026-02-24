@@ -1,0 +1,59 @@
+# Test: Outbound Message Interaction
+# Verifies outbound messages appear and tapping them opens the messenger
+
+appId: com.opencom.sdk.example
+name: Outbound Message Interaction Test
+tags:
+  - outbound
+  - messenger
+
+---
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 15000
+
+# Check if outbound message is visible (may or may not appear depending on data)
+- runFlow:
+    when:
+      visible:
+        id: "outbound-message"
+    commands:
+      # Verify outbound message components are visible
+      - assertVisible:
+          id: "outbound-message-bubble"
+
+      # Tap on outbound message bubble to open messenger
+      - tapOn:
+          id: "outbound-message-bubble"
+
+      # Verify messenger opened
+      - extendedWaitUntil:
+          visible: "Messages"
+          timeout: 5000
+
+      # Verify we're in the messenger
+      - assertVisible:
+          id: "tab-messages"
+
+      # Close messenger
+      - tapOn:
+          id: "close-messenger"
+
+      # Verify back at app content
+      - extendedWaitUntil:
+          visible: "Your App Content"
+          timeout: 5000
+
+# If no outbound message, verify launcher is still accessible
+- runFlow:
+    when:
+      notVisible:
+        id: "outbound-message"
+    commands:
+      - assertVisible:
+          id: "opencom-launcher"

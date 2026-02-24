@@ -1,0 +1,58 @@
+# Test: Help Center
+# Verifies help center tab displays articles
+
+appId: com.opencom.sdk.example
+name: Help Center Test
+tags:
+  - help
+
+---
+
+- launchApp
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Navigate to Help tab
+- tapOn:
+    id: "tab-help"
+
+# Wait for Help Center to load
+- extendedWaitUntil:
+    visible: "Help Center"
+    timeout: 5000
+
+# Check for either articles or empty state
+# If articles exist, tap on one to view detail
+- runFlow:
+    when:
+      visible: "Tap to read more"
+    commands:
+      - tapOn: "Tap to read more"
+      - extendedWaitUntil:
+          visible: "Article"
+          timeout: 5000
+      # Go back to help center
+      - tapOn:
+          id: "article-back-button"
+
+# If no articles, verify empty state
+- runFlow:
+    when:
+      visible: "No articles yet"
+    commands:
+      - assertVisible: "Create articles in the web app"

@@ -1,0 +1,63 @@
+# Test: Tab Navigation
+# Verifies all tabs in the messenger can be navigated to
+
+appId: com.opencom.sdk.example
+name: Tab Navigation Test
+tags:
+  - navigation
+
+---
+
+- launchApp
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Navigate to Help tab
+- tapOn:
+    id: "tab-help"
+- extendedWaitUntil:
+    visible: "Help Center"
+    timeout: 3000
+
+# Navigate to Tours tab
+- tapOn:
+    id: "tab-tours"
+- extendedWaitUntil:
+    visible: "Product Tours"
+    timeout: 3000
+
+# Navigate to Tasks tab
+- tapOn:
+    id: "tab-tasks"
+- extendedWaitUntil:
+    visible: "Tasks"
+    timeout: 3000
+
+# Navigate to Tickets tab
+- tapOn:
+    id: "tab-tickets"
+- extendedWaitUntil:
+    visible: "Tickets"
+    timeout: 3000
+
+# Navigate back to Messages tab
+- tapOn:
+    id: "tab-messages"
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 3000

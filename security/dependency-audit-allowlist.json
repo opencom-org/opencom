@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "1113331",
+      "module": "fast-xml-parser",
+      "owner": "mobile-sdk-team",
+      "expiresOn": "2026-05-31",
+      "reason": "Pulled transitively through @react-native-community/cli 13.6.9 in the Expo SDK 54 / React Native 0.81 chain; parent upgrade path is not yet compatible in this workspace.",
+      "cleanupCriteria": "Remove once the Expo/React Native dependency chain resolves fast-xml-parser >= 5.3.6 without overrides, then delete this allowlist entry."
+    },
+    {
+      "id": "1113371",
+      "module": "minimatch",
+      "owner": "platform-team",
+      "expiresOn": "2026-05-31",
+      "reason": "Remaining vulnerable paths are transitive minimatch 9.x/3.x in Expo SDK 54 and eslint/@typescript-eslint toolchain dependencies that require major parent upgrades.",
+      "cleanupCriteria": "Remove after upgrading Expo and lint stack parents so lockfile no longer resolves minimatch < 10.2.1."
+    },
+    {
+      "id": "1113407",
+      "module": "fast-xml-parser",
+      "owner": "mobile-sdk-team",
+      "expiresOn": "2026-05-31",
+      "reason": "Pulled transitively through @react-native-community/cli 13.6.9 in the Expo SDK 54 / React Native 0.81 chain; parent upgrade path is not yet compatible in this workspace.",
+      "cleanupCriteria": "Remove once the Expo/React Native dependency chain resolves fast-xml-parser >= 5.3.5 without overrides, then delete this allowlist entry."
+    }
+  ]
+}

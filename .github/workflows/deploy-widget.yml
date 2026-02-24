@@ -1,0 +1,54 @@
+name: Deploy Widget CDN
+
+on:
+  push:
+    branches:
+      - "master"
+    tags:
+      - "widget-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate build and deploy flow without uploading to R2
+        type: boolean
+        required: false
+        default: true
+
+jobs:
+  deploy-widget-cdn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WIDGET_CDN_BUCKET: opencom-static
+      WIDGET_CDN_BASE_URL: https://cdn.opencom.dev
+      # Required repository secrets:
+      # - CLOUDFLARE_ACCOUNT_ID: Cloudflare account that owns the opencom-static R2 bucket
+      # - CLOUDFLARE_API_TOKEN: Cloudflare token with R2 Object Write + Cache Purge permissions
+      # - CLOUDFLARE_ZONE_ID: Zone ID for opencom.dev (used for purge-by-URL)
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy widget bundle to CDN
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: bash scripts/deploy-widget-cdn.sh

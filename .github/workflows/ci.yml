@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+      - release
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Convex raw auth guard
+        run: pnpm security:convex-auth-guard
+
+      - name: Convex validator any guard
+        run: pnpm security:convex-any-args-gate
+
+      - name: Secret scan gate
+        run: pnpm security:secret-scan
+
+      - name: Security headers policy check
+        run: pnpm security:headers-check
+
+      - name: Convex backend tests
+        run: pnpm --filter @opencom/convex test
+
+      - name: Web production build
+        run: pnpm --filter @opencom/web build
+
+      - name: Dependency audit gate
+        run: node scripts/ci-audit-gate.js
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: checks
+    env:
+      E2E_BACKEND_URL: ${{ secrets.E2E_BACKEND_URL }}
+      NEXT_PUBLIC_CONVEX_URL: ${{ secrets.E2E_BACKEND_URL }}
+      TEST_ADMIN_SECRET: ${{ secrets.TEST_ADMIN_SECRET }}
+      E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+      E2E_SUMMARY_PATH: artifacts/e2e-summary.json
+      E2E_RELIABILITY_REPORT_PATH: artifacts/e2e-reliability-report.json
+      E2E_RELIABILITY_BUDGET_PATH: security/e2e-reliability-budget.json
+      E2E_RELIABILITY_ALLOWLIST_PATH: security/e2e-reliability-allowlist.json
+      TEST_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate required E2E secrets
+        run: |
+          missing=0
+          for name in E2E_BACKEND_URL TEST_ADMIN_SECRET; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Playwright E2E suite
+        run: pnpm web:test:e2e
+
+      - name: Build E2E reliability report
+        if: always()
+        run: node scripts/e2e-reliability-report.js
+
+      - name: Enforce E2E reliability budgets
+        if: always()
+        run: node scripts/e2e-reliability-gate.js
+
+      - name: Upload E2E artifacts
+        if: always()
+        # actions/upload-artifact pinned to v4.6.2: https://github.com/actions/upload-artifact/releases/tag/v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: e2e-artifacts
+          path: |
+            playwright-report
+            test-results
+            artifacts/e2e-summary.json
+            artifacts/e2e-reliability-report.json
+            test-run-log.jsonl
+            security/e2e-reliability-budget.json
+            security/e2e-reliability-allowlist.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Opencom",
+    "slug": "opencom",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "opencom",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "expo-splash-screen": {
+      "backgroundColor": "#FFFFFF",
+      "image": "./assets/images/splash-icon.png",
+      "dark": {
+        "image": "./assets/images/splash-icon-dark.png",
+        "backgroundColor": "#000000"
+      },
+      "imageWidth": 480
+    },
+    "icon": "./assets/images/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.opencom.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.opencom.app",
+      "googleServicesFile": "./android/app/google-services.json",
+      "runtimeVersion": "1.0.0"
+    },
+    "plugins": ["expo-router", "expo-notifications"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "98b2b6c6-5524-4caa-8361-8cd6b84cf4b2"
+      }
+    },
+    "owner": "djanoglys-organization",
+    "updates": {
+      "url": "https://u.expo.dev/98b2b6c6-5524-4caa-8361-8cd6b84cf4b2"
+    }
+  }
+}

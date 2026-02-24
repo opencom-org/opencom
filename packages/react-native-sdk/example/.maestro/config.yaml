@@ -1,0 +1,29 @@
+# Maestro configuration for Opencom React Native SDK Example App
+# See: https://maestro.mobile.dev/reference/configuration
+
+appId: com.opencom.sdk.example
+name: Opencom SDK E2E Tests
+
+# Environment variables for tests
+env:
+  APP_NAME: "Opencom Example"
+
+# Test execution settings
+executionOrder:
+  continueOnFailure: false
+
+# Tags for organizing tests
+tags:
+  smoke:
+    - app-launch.yaml
+    - launcher-button.yaml
+  messenger:
+    - messenger-open.yaml
+    - new-conversation.yaml
+    - send-message.yaml
+  navigation:
+    - tab-navigation.yaml
+  help:
+    - help-center.yaml
+  auth:
+    - login-flow.yaml

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "description": "Auditable dispositions for non-actionable Android manifest exported-component findings required by launcher entrypoints.",
+  "policy": "Only platform-required launcher exports may be dispositioned. Any non-launcher exported component finding must be remediated in manifest code.",
+  "entries": [
+    {
+      "id": "android-mobile-main-activity-launcher-export",
+      "scanner": "aikido",
+      "platform": "android",
+      "file": "apps/mobile/android/app/src/main/AndroidManifest.xml",
+      "component": "activity:.MainActivity",
+      "findingType": "manifest-exported-component",
+      "status": "accepted-required",
+      "owner": "mobile-team",
+      "reason": "Launcher activity includes MAIN/LAUNCHER intent filters and must remain exported for app startup.",
+      "expiresOn": "2026-08-31",
+      "cleanupCriteria": "Remove this disposition if launcher routing changes and the activity no longer requires MAIN/LAUNCHER export."
+    },
+    {
+      "id": "android-rn-sdk-example-main-activity-launcher-export",
+      "scanner": "aikido",
+      "platform": "android",
+      "file": "packages/react-native-sdk/example/android/app/src/main/AndroidManifest.xml",
+      "component": "activity:.MainActivity",
+      "findingType": "manifest-exported-component",
+      "status": "accepted-required",
+      "owner": "mobile-sdk-team",
+      "reason": "Example launcher activity includes MAIN/LAUNCHER intent filters and requires exported visibility for runnable sample behavior.",
+      "expiresOn": "2026-08-31",
+      "cleanupCriteria": "Remove this disposition when the example launcher entrypoint is replaced or scanner logic recognizes launcher-required exports."
+    },
+    {
+      "id": "android-sdk-example-main-activity-launcher-export",
+      "scanner": "aikido",
+      "platform": "android",
+      "file": "packages/android-sdk/example/src/main/AndroidManifest.xml",
+      "component": "activity:.MainActivity",
+      "findingType": "manifest-exported-component",
+      "status": "accepted-required",
+      "owner": "android-sdk-team",
+      "reason": "Android SDK example launcher activity includes MAIN/LAUNCHER intent filters and must stay exported to provide an app entrypoint.",
+      "expiresOn": "2026-08-31",
+      "cleanupCriteria": "Remove this disposition when launcher responsibilities move to another component or scanner recognizes launcher-required exports."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+# Test: New Conversation
+# Verifies creating a new conversation flow
+
+appId: com.opencom.sdk.example
+name: New Conversation Test
+tags:
+  - messenger
+  - conversations
+
+---
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger - should be on Messages tab by default
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Tap new conversation button
+- tapOn:
+    id: "new-conversation-button"
+
+# Wait for conversation screen to open (within messenger)
+- extendedWaitUntil:
+    visible: "Conversation"
+    timeout: 5000
+
+# Verify message input is visible
+- assertVisible:
+    id: "message-input"
+
+# Verify send button is visible
+- assertVisible:
+    id: "send-button"
+
+# Verify back button is available (conversation is within messenger)
+- assertVisible:
+    id: "conversation-back-button"

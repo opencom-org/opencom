@@ -1,0 +1,67 @@
+{
+  "generatedOn": "2026-02-14",
+  "scope": "Exported Convex handler args containing v.any()",
+  "counts": {
+    "totalBeforeMigration": 39,
+    "remaining": 7,
+    "migratedInThisChange": 32
+  },
+  "entries": [
+    {
+      "file": "packages/convex/convex/testAdmin.ts",
+      "handler": "runTestMutation",
+      "kind": "action",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Admin-only test gateway forwards arbitrary mutation arguments by design."
+    },
+    {
+      "file": "packages/convex/convex/testData.ts",
+      "handler": "seedVisitor",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Internal test seeding path accepts dynamic fixture attributes."
+    },
+    {
+      "file": "packages/convex/convex/testData.ts",
+      "handler": "seedSegment",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Internal test seeding path accepts dynamic audience rules fixtures."
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "createTestVisitor",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Internal helper for tests accepts dynamic visitor custom attributes."
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "updateTestArticle",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Internal helper for tests accepts dynamic audience rules fixtures."
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "createTestTour",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Internal helper for tests accepts dynamic targeting/audience fixtures."
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "updateTestTour",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "status": "exception",
+      "rationale": "Internal helper for tests accepts dynamic targeting/audience fixtures."
+    }
+  ]
+}

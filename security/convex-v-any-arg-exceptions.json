@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "description": "Temporary v.any() exceptions for exported handler args.",
+  "entries": [
+    {
+      "file": "packages/convex/convex/testAdmin.ts",
+      "handler": "runTestMutation",
+      "kind": "action",
+      "riskTier": "low",
+      "owner": "backend-security",
+      "reason": "Admin test gateway intentionally forwards arbitrary mutation args to internal test-only functions.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testData.ts",
+      "handler": "seedVisitor",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Test data seeding supports dynamic custom attributes for fixture flexibility.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testData.ts",
+      "handler": "seedSegment",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Test data seeding supports dynamic audience rule fixtures.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "createTestVisitor",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Internal testing helper accepts dynamic custom attributes for fixture scenarios.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "updateTestArticle",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Internal testing helper accepts dynamic audience rule fixtures.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "createTestTour",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Internal testing helper accepts dynamic targeting and audience fixtures.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "updateTestTour",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Internal testing helper accepts dynamic targeting and audience fixtures.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "createTestAuditLog",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Internal testing helper accepts dynamic metadata payloads for audit log fixture scenarios.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-16"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers.ts",
+      "handler": "createTestPushCampaign",
+      "kind": "internalMutation",
+      "riskTier": "low",
+      "owner": "backend-testing",
+      "reason": "Internal testing helper accepts dynamic push campaign payload fixtures for e2e coverage.",
+      "originalExpiresOn": "2026-04-15",
+      "expiresOn": "2026-04-15",
+      "justificationUpdatedOn": "2026-02-21"
+    }
+  ]
+}

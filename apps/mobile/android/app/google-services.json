@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1006428636302",
+    "project_id": "opencom-gcp",
+    "storage_bucket": "opencom-gcp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1006428636302:android:c247a6d0ecc370401135df",
+        "android_client_info": {
+          "package_name": "com.opencom.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDQULrhWeNJQ4PmF6RWHiVy4WtyA3a9y-Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

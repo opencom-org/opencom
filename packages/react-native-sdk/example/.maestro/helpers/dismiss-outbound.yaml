@@ -1,0 +1,19 @@
+# Helper: Dismiss Outbound Messages
+# Reusable flow to dismiss any visible outbound messages before interacting with messenger
+
+appId: com.opencom.sdk.example
+name: Dismiss Outbound Helper
+
+---
+
+# Try to dismiss outbound message if visible (up to 3 attempts)
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "outbound-dismiss-button"
+          commands:
+            - tapOn:
+                id: "outbound-dismiss-button"

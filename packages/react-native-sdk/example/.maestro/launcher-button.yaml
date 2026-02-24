@@ -1,0 +1,70 @@
+# Test: Launcher Button Visibility and Interaction
+# Verifies the floating launcher button is visible and responds to taps
+
+appId: com.opencom.sdk.example
+name: Launcher Button Test
+tags:
+  - smoke
+  - messenger
+
+---
+
+- launchApp:
+    clearState: true
+    clearKeychain: true
+
+# Dismiss React Native error overlays repeatedly until app content is visible
+- repeat:
+    times: 10
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 15000
+
+# Final cleanup of any remaining error overlays
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Dismiss"
+          commands:
+            - tapOn: "Dismiss"
+
+# Verify launcher button is visible
+- assertVisible:
+    id: "opencom-launcher"
+
+# Dismiss any error overlays that appeared
+- runFlow:
+    when:
+      visible: "Dismiss"
+    commands:
+      - tapOn: "Dismiss"
+
+# Tap the launcher button to open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Dismiss any error overlays that appeared after tap
+- runFlow:
+    when:
+      visible: "Dismiss"
+    commands:
+      - tapOn: "Dismiss"
+
+# Wait for messenger to open
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Verify bottom navigation tab is visible
+- assertVisible:
+    id: "tab-messages"

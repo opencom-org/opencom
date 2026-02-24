@@ -1,0 +1,63 @@
+# Test: Login Flow
+# Verifies user can open login screen and enter email
+
+appId: com.opencom.sdk.example
+name: Login Flow Test
+tags:
+  - auth
+
+---
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- extendedWaitUntil:
+    visible: "Your App Content"
+    timeout: 10000
+
+# Dismiss any outbound messages first
+- runFlow: helpers/dismiss-outbound.yaml
+
+# Open messenger
+- tapOn:
+    id: "opencom-launcher"
+
+# Wait for messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000
+
+# Tap login button in header
+- tapOn:
+    id: "login-button"
+
+# Wait for login screen
+- extendedWaitUntil:
+    visible: "Welcome!"
+    timeout: 5000
+
+# Verify login form elements
+- assertVisible: "Enter your email to personalize"
+- assertVisible:
+    id: "login-email-input"
+- assertVisible:
+    id: "login-continue-button"
+
+# Enter test email
+- tapOn:
+    id: "login-email-input"
+- inputText: "test@example.com"
+
+# Close keyboard and verify email was entered
+- hideKeyboard
+- assertVisible: "test@example.com"
+
+# Close login screen without submitting (to avoid network calls in test)
+- tapOn:
+    id: "login-close-button"
+
+# Verify we're back in messenger
+- extendedWaitUntil:
+    visible: "Messages"
+    timeout: 5000

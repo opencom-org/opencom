@@ -1,0 +1,31 @@
+{
+  "appliesTo": "apps/landing (static export)",
+  "deploymentModel": "static-host",
+  "requiredHeaders": [
+    {
+      "key": "Content-Security-Policy",
+      "valueTemplate": "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:"
+    },
+    {
+      "key": "X-Frame-Options",
+      "valueTemplate": "DENY"
+    },
+    {
+      "key": "X-Content-Type-Options",
+      "valueTemplate": "nosniff"
+    },
+    {
+      "key": "Referrer-Policy",
+      "valueTemplate": "strict-origin-when-cross-origin"
+    },
+    {
+      "key": "Strict-Transport-Security",
+      "valueTemplate": "max-age=31536000; includeSubDomains; preload"
+    }
+  ],
+  "notes": [
+    "Because apps/landing uses Next.js static export (output=export), headers must be set by the production host/CDN.",
+    "Unsafe inline script/style allowances in CSP are temporary compatibility defaults and should be tightened over time.",
+    "Any exception to these headers requires security review and explicit documentation."
+  ]
+}

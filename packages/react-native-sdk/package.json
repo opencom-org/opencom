@@ -1,0 +1,97 @@
+{
+  "name": "@opencom/react-native-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "main": "lib/commonjs/index",
+  "module": "lib/module/index",
+  "types": "lib/typescript/index.d.ts",
+  "react-native": "src/index",
+  "source": "src/index",
+  "exports": {
+    ".": {
+      "types": "./lib/typescript/index.d.ts",
+      "import": "./lib/module/index.js",
+      "require": "./lib/commonjs/index.js"
+    },
+    "./plugin": {
+      "types": "./plugin/build/index.d.ts",
+      "require": "./plugin/build/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "plugin",
+    "app.plugin.js",
+    "!**/__tests__",
+    "!**/__fixtures__",
+    "!**/__mocks__"
+  ],
+  "scripts": {
+    "build": "bob build",
+    "build:plugin": "tsc -p plugin/tsconfig.json",
+    "prepack": "bob build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf lib"
+  },
+  "dependencies": {
+    "@opencom/convex": "workspace:*",
+    "@opencom/sdk-core": "workspace:*",
+    "@react-native-async-storage/async-storage": "^1.23.0",
+    "convex": "^1.31.7",
+    "react-native-safe-area-context": "^5.6.2",
+    "react-native-svg": "^15.0.0"
+  },
+  "devDependencies": {
+    "@expo/config-plugins": "^7.9.1",
+    "@react-native-community/cli": "17.0.1",
+    "@types/react": "~19.1.0",
+    "react-native-builder-bob": "^0.40.13",
+    "typescript": "~5.0.4",
+    "vitest": "^4.0.17"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-device": "*",
+    "expo-notifications": "*",
+    "expo-secure-store": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-svg": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo": {
+      "optional": true
+    },
+    "expo-device": {
+      "optional": true
+    },
+    "expo-notifications": {
+      "optional": true
+    },
+    "expo-secure-store": {
+      "optional": true
+    }
+  },
+  "codegenConfig": {
+    "name": "RNOpencomSpec",
+    "type": "all",
+    "jsSrcsDir": "src"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "targets": [
+      "commonjs",
+      "module",
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
+  }
+}
