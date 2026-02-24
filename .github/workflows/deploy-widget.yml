@@ -3,7 +3,7 @@ name: Deploy Widget CDN
 on:
   push:
     branches:
-      - "master"
+      - "main"
     tags:
       - "widget-v*"
   workflow_dispatch:

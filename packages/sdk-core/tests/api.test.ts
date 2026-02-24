@@ -20,6 +20,7 @@ vi.mock("@opencom/convex", () => ({
     },
     aiAgent: {
       getSettings: "aiAgent:getSettings",
+      getPublicSettings: "aiAgent:getPublicSettings",
       getRelevantKnowledge: "aiAgent:getRelevantKnowledge",
       getConversationResponses: "aiAgent:getConversationResponses",
       submitFeedback: "aiAgent:submitFeedback",

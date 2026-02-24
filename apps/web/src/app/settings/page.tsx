@@ -800,6 +800,7 @@ function SettingsContent(): React.JSX.Element | null {
       )}
 
       {/* Help Center Access Policy - Admin Only */}
+      {/* TODO(help-center): Replace this workspace-wide toggle with per-article visibility controls. */}
       {isAdmin && (
         <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
