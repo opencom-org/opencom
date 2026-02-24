@@ -20,7 +20,7 @@
       },
       "imageWidth": 480
     },
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/android-icon.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.opencom.app",
@@ -32,9 +32,9 @@
       }
     },
     "android": {
+      "icon": "./assets/images/android-icon.png",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "monochromeImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon-foreground.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.opencom.app",
