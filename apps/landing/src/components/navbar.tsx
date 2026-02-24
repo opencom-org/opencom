@@ -13,6 +13,7 @@ import {
 const navigation = [
   { name: "Features", href: "/features" },
   { name: "Docs", href: "/docs" },
+  { name: "Support", href: "/support" },
   { name: "Roadmap", href: "/roadmap" },
   { name: "Contributing", href: "/contributing" },
 ];

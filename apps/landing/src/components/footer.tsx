@@ -9,6 +9,7 @@ import {
 const footerLinks = {
   product: [
     { name: "Features", href: "/features" },
+    { name: "Support", href: "/support" },
     { name: "Roadmap", href: "/roadmap" },
     {
       name: "Start Hosted Onboarding",
