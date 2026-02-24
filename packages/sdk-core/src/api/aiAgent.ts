@@ -50,7 +50,7 @@ export async function getAISettings(): Promise<AIAgentSettings> {
   const client = getClient();
   const config = getConfig();
 
-  const settings = await client.query(api.aiAgent.getSettings, {
+  const settings = await client.query(api.aiAgent.getPublicSettings, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 

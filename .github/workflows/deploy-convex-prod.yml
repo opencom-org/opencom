@@ -1,0 +1,53 @@
+name: Deploy Convex Production
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+jobs:
+  deploy-convex-prod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    concurrency:
+      group: deploy-convex-production
+      cancel-in-progress: false
+    env:
+      # Required repository secret:
+      # - CONVEX_DEPLOY_KEY: Production deploy key from Convex dashboard
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate required deploy secrets
+        run: |
+          if [ -z "${CONVEX_DEPLOY_KEY}" ]; then
+            echo "::error::Missing required secret: CONVEX_DEPLOY_KEY"
+            exit 1
+          fi
+
+      - name: Convex backend typecheck
+        run: pnpm --filter @opencom/convex typecheck
+
+      - name: Deploy Convex production backend
+        run: pnpm --filter @opencom/convex deploy -- --yes

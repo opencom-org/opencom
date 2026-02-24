@@ -22,9 +22,13 @@ const createAIClient = () => {
     throw new Error("AI_GATEWAY_API_KEY environment variable is not set");
   }
 
+  const baseURL =
+    process.env.AI_GATEWAY_BASE_URL ||
+    (apiKey.startsWith("vck_") ? "https://ai-gateway.vercel.sh/v1" : "https://api.openai.com/v1");
+
   return createOpenAI({
     apiKey,
-    baseURL: process.env.AI_GATEWAY_BASE_URL || "https://api.openai.com/v1",
+    baseURL,
   });
 };
 
@@ -238,7 +242,7 @@ export const generateResponse = action({
     }
 
     // Get AI settings
-    const settings = await ctx.runQuery(api.aiAgent.getSettings, {
+    const settings = await ctx.runQuery(internal.aiAgent.getRuntimeSettingsForWorkspace, {
       workspaceId: args.workspaceId,
     });
 
@@ -285,7 +289,7 @@ export const generateResponse = action({
     });
 
     // Get relevant knowledge
-    const knowledgeResults = await ctx.runQuery(api.aiAgent.getRelevantKnowledge, {
+    const knowledgeResults = await ctx.runQuery(internal.aiAgent.getRelevantKnowledgeForRuntime, {
       workspaceId: args.workspaceId,
       query: args.query,
       knowledgeSources: settings.knowledgeSources as Array<
@@ -335,14 +339,56 @@ export const generateResponse = action({
       tokensUsed = result.usage?.totalTokens;
     } catch (error) {
       console.error("AI generation error:", error);
+      const reason = "AI generation failed";
+      const errorMessage = error instanceof Error ? error.message : "Unknown generation error";
+
+      try {
+        await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
+          workspaceId: args.workspaceId,
+          code: "GENERATION_FAILED",
+          message: `AI generation failed: ${errorMessage}`,
+          provider,
+          model: settings.model,
+        });
+      } catch (diagnosticError) {
+        console.error("Failed to record AI runtime diagnostic:", diagnosticError);
+      }
+
+      try {
+        const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+          conversationId: args.conversationId,
+          visitorId: args.visitorId,
+          sessionToken: args.sessionToken,
+          reason,
+        });
+
+        return {
+          response: handoff.handoffMessage,
+          confidence: 0,
+          sources: [],
+          handoff: true,
+          handoffReason: reason,
+          messageId: handoff.messageId,
+        };
+      } catch (handoffError) {
+        console.error("Failed to handoff after AI generation error:", handoffError);
+      }
+
+      const fallbackResponse =
+        "I'm having trouble processing your request right now. Let me connect you with a human agent.";
+      const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+        conversationId: args.conversationId,
+        senderId: "ai-agent",
+        content: fallbackResponse,
+      });
+
       return {
-        response:
-          "I'm having trouble processing your request right now. Let me connect you with a human agent.",
+        response: fallbackResponse,
         confidence: 0,
         sources: [],
         handoff: true,
-        handoffReason: "AI generation failed",
-        messageId: null,
+        handoffReason: reason,
+        messageId,
       };
     }
 

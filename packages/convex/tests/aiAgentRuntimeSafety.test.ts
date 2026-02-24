@@ -158,6 +158,128 @@ describe("aiAgentActions runtime safety", () => {
     expect(mockGenerateText).toHaveBeenCalledTimes(1);
   });
 
+  it("persists a handoff message when generation fails", async () => {
+    mockGenerateText.mockRejectedValue(new Error("gateway timeout"));
+
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if ("query" in args) {
+        return [];
+      }
+      if ("workspaceId" in args && "conversationId" in args === false) {
+        return {
+          enabled: true,
+          model: "openai/gpt-5-nano",
+          confidenceThreshold: 0.2,
+          knowledgeSources: ["articles"],
+          personality: null,
+        };
+      }
+      return {
+        conversationId: "conversation_1",
+        workspaceId: "workspace_1",
+        visitorId: "visitor_1",
+      };
+    });
+
+    const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "workspaceId" in args) {
+        return "cleared";
+      }
+      if ("code" in args) {
+        return "diagnostic_record_id";
+      }
+      if ("reason" in args) {
+        return {
+          messageId: "handoff_message_1",
+          handoffMessage: "Routing you to a human agent.",
+        };
+      }
+      if ("senderId" in args && "content" in args) {
+        return "fallback_message_1";
+      }
+      throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
+    });
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "How do I get started?",
+      }
+    );
+
+    expect(result.handoff).toBe(true);
+    expect(result.handoffReason).toBe("AI generation failed");
+    expect(result.messageId).toBe("handoff_message_1");
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        workspaceId: "workspace_1",
+        code: "GENERATION_FAILED",
+      })
+    );
+  });
+
+  it("falls back to a persisted bot message if handoff fails after generation error", async () => {
+    mockGenerateText.mockRejectedValue(new Error("provider unavailable"));
+
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if ("query" in args) {
+        return [];
+      }
+      if ("workspaceId" in args && "conversationId" in args === false) {
+        return {
+          enabled: true,
+          model: "openai/gpt-5-nano",
+          confidenceThreshold: 0.2,
+          knowledgeSources: ["articles"],
+          personality: null,
+        };
+      }
+      return {
+        conversationId: "conversation_1",
+        workspaceId: "workspace_1",
+        visitorId: "visitor_1",
+      };
+    });
+
+    const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "workspaceId" in args) {
+        return "cleared";
+      }
+      if ("code" in args) {
+        return "diagnostic_record_id";
+      }
+      if ("reason" in args) {
+        throw new Error("handoff unavailable");
+      }
+      if ("senderId" in args && "content" in args) {
+        return "fallback_message_1";
+      }
+      throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
+    });
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "Need help",
+      }
+    );
+
+    expect(result.handoff).toBe(true);
+    expect(result.messageId).toBe("fallback_message_1");
+    expect(result.response).toMatch(/having trouble processing your request/i);
+  });
+
   it("rejects action execution when conversation workspace does not match request workspace", async () => {
     const runQuery = vi.fn(async (_reference: unknown, _args: Record<string, unknown>) => ({
       conversationId: "conversation_1",

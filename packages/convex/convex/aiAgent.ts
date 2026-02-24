@@ -19,9 +19,19 @@ const knowledgeSourceValidator = v.union(
   v.literal("snippets")
 );
 
+type KnowledgeSource = "articles" | "internalArticles" | "snippets";
+
+type KnowledgeResult = {
+  id: string;
+  type: "article" | "internalArticle" | "snippet";
+  title: string;
+  content: string;
+  relevanceScore: number;
+};
+
 const DEFAULT_AI_SETTINGS = {
   enabled: false,
-  knowledgeSources: ["articles"] as const,
+  knowledgeSources: ["articles"] as KnowledgeSource[],
   confidenceThreshold: 0.6,
   personality: null,
   handoffMessage: "Let me connect you with a human agent who can help you better.",
@@ -31,6 +41,168 @@ const DEFAULT_AI_SETTINGS = {
   embeddingModel: "text-embedding-3-small",
   lastConfigError: null,
 };
+
+function withAISettingDefaults(
+  settings: Doc<"aiAgentSettings"> | null
+): {
+  _id?: Id<"aiAgentSettings">;
+  _creationTime?: number;
+  workspaceId?: Id<"workspaces">;
+  enabled: boolean;
+  knowledgeSources: KnowledgeSource[];
+  confidenceThreshold: number;
+  personality: string | null;
+  handoffMessage: string;
+  workingHours: { start: string; end: string; timezone: string } | null;
+  model: string;
+  suggestionsEnabled: boolean;
+  embeddingModel: string;
+  lastConfigError: {
+    code: string;
+    message: string;
+    provider?: string;
+    model?: string;
+    detectedAt: number;
+  } | null;
+  createdAt?: number;
+  updatedAt?: number;
+} {
+  if (!settings) {
+    return DEFAULT_AI_SETTINGS;
+  }
+
+  return {
+    ...settings,
+    knowledgeSources: settings.knowledgeSources as KnowledgeSource[],
+    personality: settings.personality ?? null,
+    handoffMessage: settings.handoffMessage ?? DEFAULT_AI_SETTINGS.handoffMessage,
+    workingHours: settings.workingHours ?? null,
+    suggestionsEnabled: settings.suggestionsEnabled ?? false,
+    embeddingModel: settings.embeddingModel ?? DEFAULT_AI_SETTINGS.embeddingModel,
+    lastConfigError: settings.lastConfigError ?? null,
+  };
+}
+
+async function getWorkspaceAISettings(
+  ctx: QueryCtx | MutationCtx,
+  workspaceId: Id<"workspaces">
+): Promise<Doc<"aiAgentSettings"> | null> {
+  return await ctx.db
+    .query("aiAgentSettings")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .first();
+}
+
+const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const calculateRelevanceScore = (title: string, content: string, term: string): number => {
+  let score = 0;
+  const lowerTitle = title.toLowerCase();
+  const lowerContent = content.toLowerCase();
+
+  if (lowerTitle.includes(term)) {
+    score += 10;
+    if (lowerTitle.startsWith(term)) score += 5;
+    if (lowerTitle === term) score += 10;
+  }
+
+  const contentMatches = (lowerContent.match(new RegExp(escapeRegex(term), "g")) || []).length;
+  score += Math.min(contentMatches, 5);
+
+  const words = term.split(/\s+/).filter((w) => w.length > 2);
+  for (const word of words) {
+    if (lowerTitle.includes(word)) score += 2;
+    if (lowerContent.includes(word)) score += 1;
+  }
+
+  return score;
+};
+
+async function collectRelevantKnowledge(
+  ctx: QueryCtx,
+  args: {
+    workspaceId: Id<"workspaces">;
+    query: string;
+    knowledgeSources?: KnowledgeSource[];
+    limit?: number;
+  }
+): Promise<KnowledgeResult[]> {
+  const searchTerm = args.query.trim().toLowerCase();
+  if (!searchTerm) {
+    return [];
+  }
+
+  const limit = args.limit ?? 5;
+  const sources = args.knowledgeSources ?? ["articles", "internalArticles", "snippets"];
+  const results: KnowledgeResult[] = [];
+
+  if (sources.includes("articles")) {
+    const articles = await ctx.db
+      .query("articles")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    for (const article of articles) {
+      if (article.status !== "published") continue;
+
+      const score = calculateRelevanceScore(article.title, article.content, searchTerm);
+      if (score > 0) {
+        results.push({
+          id: article._id,
+          type: "article",
+          title: article.title,
+          content: article.content,
+          relevanceScore: score,
+        });
+      }
+    }
+  }
+
+  if (sources.includes("internalArticles")) {
+    const internalArticles = await ctx.db
+      .query("internalArticles")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    for (const article of internalArticles) {
+      if (article.status === "archived") continue;
+
+      const score = calculateRelevanceScore(article.title, article.content, searchTerm);
+      if (score > 0) {
+        results.push({
+          id: article._id,
+          type: "internalArticle",
+          title: article.title,
+          content: article.content,
+          relevanceScore: score,
+        });
+      }
+    }
+  }
+
+  if (sources.includes("snippets")) {
+    const snippets = await ctx.db
+      .query("snippets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    for (const snippet of snippets) {
+      const score = calculateRelevanceScore(snippet.name, snippet.content, searchTerm);
+      if (score > 0) {
+        results.push({
+          id: snippet._id,
+          type: "snippet",
+          title: snippet.name,
+          content: snippet.content,
+          relevanceScore: score,
+        });
+      }
+    }
+  }
+
+  results.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  return results.slice(0, limit);
+}
 
 async function requireConversationAccess(
   ctx: QueryCtx | MutationCtx,
@@ -82,21 +254,41 @@ export const getSettings = query({
       return DEFAULT_AI_SETTINGS;
     }
 
-    const settings = await ctx.db
-      .query("aiAgentSettings")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .first();
+    const settings = await getWorkspaceAISettings(ctx, args.workspaceId);
+    return withAISettingDefaults(settings);
+  },
+});
 
-    if (!settings) {
-      return DEFAULT_AI_SETTINGS;
-    }
+// Public AI settings for widget/runtime use (no workspace membership required)
+export const getPublicSettings = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  handler: async (ctx, args) => {
+    const settings = await getWorkspaceAISettings(ctx, args.workspaceId);
+    const normalized = withAISettingDefaults(settings);
 
     return {
-      ...settings,
-      suggestionsEnabled: settings.suggestionsEnabled ?? false,
-      embeddingModel: settings.embeddingModel ?? "text-embedding-3-small",
-      lastConfigError: settings.lastConfigError ?? null,
+      enabled: normalized.enabled,
+      knowledgeSources: normalized.knowledgeSources,
+      confidenceThreshold: normalized.confidenceThreshold,
+      personality: normalized.personality,
+      handoffMessage: normalized.handoffMessage,
+      workingHours: normalized.workingHours,
+      model: normalized.model,
+      suggestionsEnabled: normalized.suggestionsEnabled,
+      embeddingModel: normalized.embeddingModel,
     };
+  },
+});
+
+export const getRuntimeSettingsForWorkspace = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  handler: async (ctx, args) => {
+    const settings = await getWorkspaceAISettings(ctx, args.workspaceId);
+    return withAISettingDefaults(settings);
   },
 });
 
@@ -181,10 +373,7 @@ export const recordRuntimeDiagnostic = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    const existing = await ctx.db
-      .query("aiAgentSettings")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .first();
+    const existing = await getWorkspaceAISettings(ctx, args.workspaceId);
 
     const diagnostic = {
       code: args.code,
@@ -225,10 +414,7 @@ export const clearRuntimeDiagnostic = internalMutation({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("aiAgentSettings")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .first();
+    const existing = await getWorkspaceAISettings(ctx, args.workspaceId);
     if (!existing) {
       return null;
     }
@@ -250,119 +436,29 @@ export const getRelevantKnowledge = authQuery({
   },
   permission: "articles.read",
   handler: async (ctx, args) => {
-    const searchTerm = args.query.toLowerCase();
-    const limit = args.limit ?? 5;
-    const sources = args.knowledgeSources ?? ["articles", "internalArticles", "snippets"];
+    return await collectRelevantKnowledge(ctx, {
+      workspaceId: args.workspaceId,
+      query: args.query,
+      knowledgeSources: args.knowledgeSources as KnowledgeSource[] | undefined,
+      limit: args.limit,
+    });
+  },
+});
 
-    type KnowledgeResult = {
-      id: string;
-      type: "article" | "internalArticle" | "snippet";
-      title: string;
-      content: string;
-      relevanceScore: number;
-    };
-
-    const results: KnowledgeResult[] = [];
-
-    // Helper to calculate relevance score
-    const calculateScore = (title: string, content: string, term: string): number => {
-      let score = 0;
-      const lowerTitle = title.toLowerCase();
-      const lowerContent = content.toLowerCase();
-
-      // Title match is worth more
-      if (lowerTitle.includes(term)) {
-        score += 10;
-        if (lowerTitle.startsWith(term)) score += 5;
-        if (lowerTitle === term) score += 10;
-      }
-
-      // Content matches
-      const contentMatches = (
-        lowerContent.match(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) || []
-      ).length;
-      score += Math.min(contentMatches, 5);
-
-      // Word-level matching for multi-word queries
-      const words = term.split(/\s+/).filter((w) => w.length > 2);
-      for (const word of words) {
-        if (lowerTitle.includes(word)) score += 2;
-        if (lowerContent.includes(word)) score += 1;
-      }
-
-      return score;
-    };
-
-    // Search public articles
-    if (sources.includes("articles")) {
-      const articles = await ctx.db
-        .query("articles")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect();
-
-      for (const article of articles) {
-        if (article.status !== "published") continue;
-
-        const score = calculateScore(article.title, article.content, searchTerm);
-        if (score > 0) {
-          results.push({
-            id: article._id,
-            type: "article",
-            title: article.title,
-            content: article.content,
-            relevanceScore: score,
-          });
-        }
-      }
-    }
-
-    // Search internal articles
-    if (sources.includes("internalArticles")) {
-      const internalArticles = await ctx.db
-        .query("internalArticles")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect();
-
-      for (const article of internalArticles) {
-        if (article.status === "archived") continue;
-
-        const score = calculateScore(article.title, article.content, searchTerm);
-        if (score > 0) {
-          results.push({
-            id: article._id,
-            type: "internalArticle",
-            title: article.title,
-            content: article.content,
-            relevanceScore: score,
-          });
-        }
-      }
-    }
-
-    // Search snippets
-    if (sources.includes("snippets")) {
-      const snippets = await ctx.db
-        .query("snippets")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect();
-
-      for (const snippet of snippets) {
-        const score = calculateScore(snippet.name, snippet.content, searchTerm);
-        if (score > 0) {
-          results.push({
-            id: snippet._id,
-            type: "snippet",
-            title: snippet.name,
-            content: snippet.content,
-            relevanceScore: score,
-          });
-        }
-      }
-    }
-
-    // Sort by relevance and return top results
-    results.sort((a, b) => b.relevanceScore - a.relevanceScore);
-    return results.slice(0, limit);
+export const getRelevantKnowledgeForRuntime = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    query: v.string(),
+    knowledgeSources: v.optional(v.array(knowledgeSourceValidator)),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    return await collectRelevantKnowledge(ctx, {
+      workspaceId: args.workspaceId,
+      query: args.query,
+      knowledgeSources: args.knowledgeSources as KnowledgeSource[] | undefined,
+      limit: args.limit,
+    });
   },
 });
 
@@ -507,10 +603,7 @@ export const handoffToHuman = mutation({
     });
 
     // Get AI settings for handoff message
-    const settings = await ctx.db
-      .query("aiAgentSettings")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", conversation.workspaceId))
-      .first();
+    const settings = await getWorkspaceAISettings(ctx, conversation.workspaceId);
 
     const handoffMessage =
       settings?.handoffMessage ?? "Let me connect you with a human agent who can help you better.";
@@ -546,10 +639,7 @@ export const shouldRespond = query({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const settings = await ctx.db
-      .query("aiAgentSettings")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .first();
+    const settings = await getWorkspaceAISettings(ctx, args.workspaceId);
 
     if (!settings?.enabled) {
       return { shouldRespond: false, reason: "AI Agent is disabled" };
@@ -659,13 +749,13 @@ export const listAvailableModels = query({
     // In production, this could query the AI Gateway API
     return [
       { id: "openai/gpt-5-nano", name: "GPT-5.1 Mini", provider: "openai" },
-      { id: "openai/gpt-5.1", name: "GPT-5.1", provider: "openai" },
-      { id: "anthropic/claude-3-haiku-20240307", name: "Claude 3 Haiku", provider: "anthropic" },
-      {
-        id: "anthropic/claude-3-5-sonnet-20241022",
-        name: "Claude 3.5 Sonnet",
-        provider: "anthropic",
-      },
+      // { id: "openai/gpt-5.1", name: "GPT-5.1", provider: "openai" },
+      // { id: "anthropic/claude-3-haiku-20240307", name: "Claude 3 Haiku", provider: "anthropic" },
+      // {
+      //   id: "anthropic/claude-3-5-sonnet-20241022",
+      //   name: "Claude 3.5 Sonnet",
+      //   provider: "anthropic",
+      // },
     ];
   },
 });

@@ -117,7 +117,7 @@ export function ConversationView({
   const agentMessageCount =
     messages?.filter((m: { senderType: string }) => m.senderType !== "visitor").length ?? 0;
 
-  const aiSettings = useQuery(api.aiAgent.getSettings, {
+  const aiSettings = useQuery(api.aiAgent.getPublicSettings, {
     workspaceId: activeWorkspaceId as Id<"workspaces">,
   });
 
@@ -263,7 +263,7 @@ export function ConversationView({
         setHasVisitorSentMessage(true);
       }
 
-      if (aiSettings?.enabled) {
+      if (aiSettings?.enabled !== false) {
         setIsAiTyping(true);
         try {
           const history =
@@ -282,6 +282,16 @@ export function ConversationView({
           });
         } catch (aiError) {
           console.error("AI response generation failed:", aiError);
+          try {
+            await handoffToHuman({
+              conversationId,
+              visitorId,
+              sessionToken: sessionTokenRef.current ?? undefined,
+              reason: "AI generation failed",
+            });
+          } catch (handoffError) {
+            console.error("AI handoff fallback failed:", handoffError);
+          }
         } finally {
           setIsAiTyping(false);
         }
