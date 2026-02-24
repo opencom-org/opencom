@@ -78,6 +78,7 @@ describe("tourSteps", () => {
       id: testStepId1,
       content: "Updated content",
       advanceOn: "elementClick",
+      routePath: "/dashboard/settings",
     });
 
     const steps = await client.query(api.tourSteps.list, { tourId: testTourId });
@@ -85,6 +86,19 @@ describe("tourSteps", () => {
 
     expect(updatedStep?.content).toBe("Updated content");
     expect(updatedStep?.advanceOn).toBe("elementClick");
+    expect(updatedStep?.routePath).toBe("/dashboard/settings");
+  });
+
+  it("should clear routePath when updated with an empty string", async () => {
+    await client.mutation(api.tourSteps.update, {
+      id: testStepId1,
+      routePath: "",
+    });
+
+    const steps = await client.query(api.tourSteps.list, { tourId: testTourId });
+    const updatedStep = steps.find((s: { _id: Id<"tourSteps"> }) => s._id === testStepId1);
+
+    expect(updatedStep?.routePath).toBeUndefined();
   });
 
   it("should reorder steps", async () => {

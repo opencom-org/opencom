@@ -104,12 +104,15 @@ describe("authoringSessions", () => {
       token: testToken,
       stepId: testStepId,
       elementSelector: newSelector,
+      currentUrl:
+        "https://example.com/dashboard?view=team&opencom_authoring=qN4r4HoFFTxHj1F1BECsRNZh4HzK5Lof",
     });
 
     const step = await client.query(api.tourSteps.list, { tourId: testTourId });
     const updatedStep = step.find((s: { _id: Id<"tourSteps"> }) => s._id === testStepId);
 
     expect(updatedStep?.elementSelector).toBe(newSelector);
+    expect(updatedStep?.routePath).toBe("/dashboard?view=team");
   });
 
   it("should set current step in session", async () => {

@@ -252,7 +252,7 @@ export default function TourEditorPage() {
           title: stepFormData.title || undefined,
           content: stepFormData.content,
           elementSelector: normalizedSelector || undefined,
-          routePath: normalizedRoutePath || undefined,
+          routePath: normalizedRoutePath,
           selectorQuality: nextSelectorQuality,
           position: stepFormData.position,
           size: stepFormData.size,

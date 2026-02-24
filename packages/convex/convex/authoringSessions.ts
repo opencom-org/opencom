@@ -18,7 +18,10 @@ function deriveRoutePath(currentUrl?: string, fallbackUrl?: string): string | un
   }
   try {
     const parsed = new URL(candidate);
-    return `${parsed.pathname}${parsed.search}` || "/";
+    parsed.searchParams.delete("opencom_authoring");
+    parsed.searchParams.delete("opencom_tooltip_authoring");
+    const search = parsed.searchParams.toString();
+    return `${parsed.pathname}${search ? `?${search}` : ""}` || "/";
   } catch {
     return undefined;
   }
