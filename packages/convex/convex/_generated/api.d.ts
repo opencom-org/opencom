@@ -40,6 +40,7 @@ import type * as lib_authWrappers from "../lib/authWrappers.js";
 import type * as lib_notificationPreferences from "../lib/notificationPreferences.js";
 import type * as messages from "../messages.js";
 import type * as messengerSettings from "../messengerSettings.js";
+import type * as migrations_backfillHelpCenterAccessPolicy from "../migrations/backfillHelpCenterAccessPolicy.js";
 import type * as migrations_migrateAuthSessions from "../migrations/migrateAuthSessions.js";
 import type * as migrations_migrateRolesToPermissions from "../migrations/migrateRolesToPermissions.js";
 import type * as migrations_removePasswordHash from "../migrations/removePasswordHash.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   "lib/notificationPreferences": typeof lib_notificationPreferences;
   messages: typeof messages;
   messengerSettings: typeof messengerSettings;
+  "migrations/backfillHelpCenterAccessPolicy": typeof migrations_backfillHelpCenterAccessPolicy;
   "migrations/migrateAuthSessions": typeof migrations_migrateAuthSessions;
   "migrations/migrateRolesToPermissions": typeof migrations_migrateRolesToPermissions;
   "migrations/removePasswordHash": typeof migrations_removePasswordHash;

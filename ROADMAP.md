@@ -16,6 +16,12 @@ Goal: ship a professional open-source customer messaging platform with strong de
 
 ### P0 (critical before OSS copy / production confidence)
 
+- [ ] **(P0 | 0.95)** Finalize Convex integration:
+  - CI for Convex functions on push.
+  - set up proper CI strategy (preview branches on vercel and convex? Multiple vs single release branches?)
+
+- [ ] Split up / simplify the settings page - maybe colocate settings with their corresponding functionality
+
 - [ ] **(P0 | 0.90)** Finalize auth edge cases across web + mobile:
   - Password attempt should gracefully route to OTP flow when account is OTP-only.
   - Invite links should prefill email on both login and signup.

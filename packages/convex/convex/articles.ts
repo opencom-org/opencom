@@ -23,6 +23,7 @@ async function canReadHelpCenterArticles(
   workspaceId: Id<"workspaces">,
   userId?: Id<"users">
 ) {
+  // TODO(help-center): Replace workspace-wide policy with per-article visibility controls.
   if (userId) {
     await requirePermission(ctx, userId, workspaceId, "articles.read");
     return true;
