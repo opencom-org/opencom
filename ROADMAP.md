@@ -21,6 +21,7 @@ Goal: ship a professional open-source customer messaging platform with strong de
   - set up proper CI strategy (preview branches on vercel and convex? Multiple vs single release branches?)
 
 - [ ] Split up / simplify the settings page - maybe colocate settings with their corresponding functionality
+- [ ] Import feature for docs / help center, so you can keep a folder of markdown anywhere that you edit and maintain, and upload it to sync latest changes while maintaining folder structure (as collections), etc.
 
 - [ ] **(P0 | 0.90)** Finalize auth edge cases across web + mobile:
   - Password attempt should gracefully route to OTP flow when account is OTP-only.
