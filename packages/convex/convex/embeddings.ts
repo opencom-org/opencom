@@ -3,8 +3,8 @@ import { internalAction, internalMutation, internalQuery } from "./_generated/se
 import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { embed, embedMany } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { authAction } from "./lib/authWrappers";
+import { createAIClient } from "./lib/aiGateway";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
@@ -65,8 +65,9 @@ export const generateInternal = internalAction({
     }
 
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const aiClient = createAIClient();
     const { embedding } = await embed({
-      model: openai.embedding(modelName),
+      model: aiClient.embedding(modelName),
       value: textToEmbed,
     });
 
@@ -180,8 +181,9 @@ export const generateBatch = authAction({
     }
 
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const aiClient = createAIClient();
     const { embeddings } = await embedMany({
-      model: openai.embedding(modelName),
+      model: aiClient.embedding(modelName),
       values: itemsToProcess.map((item: BatchItemWithHash) => item.textToEmbed),
     });
 
@@ -363,8 +365,9 @@ export const generateBatchInternal = internalAction({
     }
 
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const aiClient = createAIClient();
     const { embeddings } = await embedMany({
-      model: openai.embedding(modelName),
+      model: aiClient.embedding(modelName),
       values: itemsToProcess.map((item: BatchItemWithHash) => item.textToEmbed),
     });
 

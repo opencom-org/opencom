@@ -36,6 +36,7 @@ import type * as http from "../http.js";
 import type * as identityVerification from "../identityVerification.js";
 import type * as internalArticles from "../internalArticles.js";
 import type * as knowledge from "../knowledge.js";
+import type * as lib_aiGateway from "../lib/aiGateway.js";
 import type * as lib_authWrappers from "../lib/authWrappers.js";
 import type * as lib_notificationPreferences from "../lib/notificationPreferences.js";
 import type * as messages from "../messages.js";
@@ -120,6 +121,7 @@ declare const fullApi: ApiFromModules<{
   identityVerification: typeof identityVerification;
   internalArticles: typeof internalArticles;
   knowledge: typeof knowledge;
+  "lib/aiGateway": typeof lib_aiGateway;
   "lib/authWrappers": typeof lib_authWrappers;
   "lib/notificationPreferences": typeof lib_notificationPreferences;
   messages: typeof messages;

@@ -3,17 +3,19 @@ import { action, internalAction, internalQuery } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { embed } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
+import { createAIClient } from "./lib/aiGateway";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
 const FEEDBACK_STATS_MAX_LIMIT = 20000;
 const WIDGET_QUERY_MAX_LENGTH = 500;
 
+type SuggestionContentType = "article" | "internalArticle" | "snippet";
+
 type SuggestionResult = {
   id: string;
-  type: "article" | "internalArticle" | "snippet";
+  type: SuggestionContentType;
   title: string;
   snippet: string;
   score: number;
@@ -27,6 +29,37 @@ type WidgetSuggestionResult = {
   snippet: string;
   score: number;
 };
+
+function normalizeSuggestionContentType(value: string): SuggestionContentType | null {
+  switch (value) {
+    case "article":
+    case "internalArticle":
+    case "snippet":
+      return value;
+    case "articles":
+      return "article";
+    case "internalArticles":
+      return "internalArticle";
+    case "snippets":
+      return "snippet";
+    default:
+      return null;
+  }
+}
+
+function normalizeSuggestionContentTypes(
+  values: readonly string[] | undefined
+): SuggestionContentType[] | undefined {
+  if (!values || values.length === 0) {
+    return undefined;
+  }
+
+  const normalized = Array.from(
+    new Set(values.map(normalizeSuggestionContentType).filter((value): value is SuggestionContentType => Boolean(value)))
+  );
+
+  return normalized.length > 0 ? normalized : undefined;
+}
 
 export const searchSimilar = authAction({
   args: {
@@ -42,9 +75,10 @@ export const searchSimilar = authAction({
   handler: async (ctx, args): Promise<SuggestionResult[]> => {
     const limit = args.limit || 10;
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const aiClient = createAIClient();
 
     const { embedding } = await embed({
-      model: openai.embedding(modelName),
+      model: aiClient.embedding(modelName),
       value: args.query,
     });
 
@@ -139,15 +173,16 @@ export const getForConversation = authAction({
     }
 
     const contextText: string = messages.map((m: Doc<"messages">) => m.content).join("\n\n");
+    const normalizedContentTypes = normalizeSuggestionContentTypes(
+      settings.knowledgeSources as unknown as string[] | undefined
+    );
 
     const results: SuggestionResultWithContent[] = await ctx.runAction(
       internal.suggestions.searchSimilarInternal,
       {
         workspaceId: conversation.workspaceId,
         query: contextText,
-        contentTypes: settings.knowledgeSources as unknown as
-          | ("article" | "internalArticle" | "snippet")[]
-          | undefined,
+        contentTypes: normalizedContentTypes,
         limit,
         model: settings.embeddingModel,
       }
@@ -182,9 +217,10 @@ export const searchSimilarInternal = internalAction({
   > => {
     const limit = args.limit || 10;
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const aiClient = createAIClient();
 
     const { embedding } = await embed({
-      model: openai.embedding(modelName),
+      model: aiClient.embedding(modelName),
       value: args.query,
     });
 
@@ -480,8 +516,9 @@ export const searchForWidget = action({
       return [];
     }
 
+    const aiClient = createAIClient();
     const { embedding } = await embed({
-      model: openai.embedding(DEFAULT_EMBEDDING_MODEL),
+      model: aiClient.embedding(DEFAULT_EMBEDDING_MODEL),
       value: normalizedQuery,
     });
 

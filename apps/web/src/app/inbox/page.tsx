@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@opencom/convex";
 import { Button, Card, Input } from "@opencom/ui";
 import {
@@ -107,6 +107,8 @@ function InboxContent(): React.JSX.Element | null {
   const [isSending, setIsSending] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [isConvertingTicket, setIsConvertingTicket] = useState(false);
+  const [suggestionsCount, setSuggestionsCount] = useState(0);
+  const [isSuggestionsCountLoading, setIsSuggestionsCountLoading] = useState(false);
   const [readSyncConversationId, setReadSyncConversationId] = useState<Id<"conversations"> | null>(
     null
   );
@@ -152,6 +154,7 @@ function InboxContent(): React.JSX.Element | null {
   const markAsRead = useMutation(api.conversations.markAsRead);
   const updateStatus = useMutation(api.conversations.updateStatus);
   const convertToTicket = useMutation(api.tickets.convertFromConversation);
+  const getSuggestionsForConversation = useAction(api.suggestions.getForConversation);
 
   const snippets = useQuery(
     api.snippets.search,
@@ -235,9 +238,7 @@ function InboxContent(): React.JSX.Element | null {
   const showThreadPane = !isCompactViewport || Boolean(selectedConversationId);
   const aiReviewPanelOpen = Boolean(selectedConversationId) && activeCompactPanel === "ai-review";
   const suggestionsPanelOpen =
-    Boolean(selectedConversationId) &&
-    isSidecarEnabled &&
-    (!isCompactViewport || activeCompactPanel === "suggestions");
+    Boolean(selectedConversationId) && isSidecarEnabled && activeCompactPanel === "suggestions";
 
   const focusReplyInput = () => {
     if (typeof window === "undefined") {
@@ -251,6 +252,10 @@ function InboxContent(): React.JSX.Element | null {
   const closeCompactPanel = () => {
     setActiveCompactPanel(null);
     focusReplyInput();
+  };
+
+  const toggleAuxiliaryPanel = (panel: "ai-review" | "suggestions") => {
+    setActiveCompactPanel((current) => (current === panel ? null : panel));
   };
 
   const playInboxCueSound = () => {
@@ -314,6 +319,44 @@ function InboxContent(): React.JSX.Element | null {
     }
     setSelectedConversationId(queryConversationId);
   }, [conversations, queryConversationId, selectedConversationId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchSuggestionsCount = async () => {
+      if (!selectedConversationId || !isSidecarEnabled) {
+        setSuggestionsCount(0);
+        setIsSuggestionsCountLoading(false);
+        return;
+      }
+
+      setIsSuggestionsCountLoading(true);
+      try {
+        const results = await getSuggestionsForConversation({
+          conversationId: selectedConversationId,
+          limit: 5,
+        });
+        if (!cancelled) {
+          setSuggestionsCount(results.length);
+        }
+      } catch (error) {
+        console.error("Failed to fetch suggestions count:", error);
+        if (!cancelled) {
+          setSuggestionsCount(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsSuggestionsCountLoading(false);
+        }
+      }
+    };
+
+    void fetchSuggestionsCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getSuggestionsForConversation, isSidecarEnabled, selectedConversationId, messages?.length]);
 
   useEffect(() => {
     if (!selectedConversationId || !messages || messages.length === 0) {
@@ -934,15 +977,31 @@ function InboxContent(): React.JSX.Element | null {
                             <Button
                               variant={aiReviewPanelOpen ? "default" : "outline"}
                               size="sm"
-                              onClick={() =>
-                                setActiveCompactPanel((current) =>
-                                  current === "ai-review" ? null : "ai-review"
-                                )
-                              }
+                              onClick={() => toggleAuxiliaryPanel("ai-review")}
                               data-testid="inbox-open-ai-review"
                             >
                               <Bot className="h-4 w-4 mr-1" />
                               AI review
+                            </Button>
+                          )}
+                          {!isCompactViewport && isSidecarEnabled && (
+                            <Button
+                              variant={suggestionsPanelOpen ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => toggleAuxiliaryPanel("suggestions")}
+                              data-testid="inbox-open-suggestions"
+                            >
+                              <MessageSquareText className="h-4 w-4 mr-1" />
+                              Suggestions
+                              <span
+                                className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
+                                  suggestionsPanelOpen
+                                    ? "bg-primary-foreground/20 text-primary-foreground"
+                                    : "bg-primary/10 text-primary"
+                                }`}
+                              >
+                                {isSuggestionsCountLoading ? "…" : suggestionsCount}
+                              </span>
                             </Button>
                           )}
                         </div>
@@ -955,7 +1014,7 @@ function InboxContent(): React.JSX.Element | null {
                           <Button
                             variant={activeCompactPanel === "ai-review" ? "default" : "outline"}
                             size="sm"
-                            onClick={() => setActiveCompactPanel("ai-review")}
+                            onClick={() => toggleAuxiliaryPanel("ai-review")}
                             data-testid="inbox-open-ai-review"
                           >
                             <Bot className="h-4 w-4 mr-1" />
@@ -965,11 +1024,20 @@ function InboxContent(): React.JSX.Element | null {
                             <Button
                               variant={activeCompactPanel === "suggestions" ? "default" : "outline"}
                               size="sm"
-                              onClick={() => setActiveCompactPanel("suggestions")}
+                              onClick={() => toggleAuxiliaryPanel("suggestions")}
                               data-testid="inbox-open-suggestions"
                             >
                               <MessageSquareText className="h-4 w-4 mr-1" />
                               Suggestions
+                              <span
+                                className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
+                                  activeCompactPanel === "suggestions"
+                                    ? "bg-primary-foreground/20 text-primary-foreground"
+                                    : "bg-primary/10 text-primary"
+                                }`}
+                              >
+                                {isSuggestionsCountLoading ? "…" : suggestionsCount}
+                              </span>
                             </Button>
                           )}
                         </div>
@@ -1504,7 +1572,8 @@ function InboxContent(): React.JSX.Element | null {
                   isOpen={suggestionsPanelOpen}
                   panelTestId="inbox-sidecar-container"
                   closeLabel="Close suggestions"
-                  desktopContainerClassName="w-72 flex-shrink-0"
+                  desktopMode="slideout"
+                  desktopContainerClassName="w-full max-w-md"
                   onOpenChange={(open) => {
                     if (!open) {
                       closeCompactPanel();
@@ -1514,6 +1583,7 @@ function InboxContent(): React.JSX.Element | null {
                   <SuggestionsPanel
                     conversationId={selectedConversationId}
                     workspaceId={activeWorkspace._id}
+                    onSuggestionsUpdated={setSuggestionsCount}
                     onInsert={(content) =>
                       setInputValue((prev) => prev + (prev ? "\n\n" : "") + content)
                     }

@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { generateText } from "ai";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createAIClient } from "./lib/aiGateway";
 
 type AIConfigurationDiagnostic = {
   code: string;
@@ -14,23 +14,6 @@ type AIConfigurationDiagnostic = {
 };
 
 const SUPPORTED_AI_PROVIDERS = new Set(["openai"]);
-
-// Create AI Gateway client
-const createAIClient = () => {
-  const apiKey = process.env.AI_GATEWAY_API_KEY;
-  if (!apiKey) {
-    throw new Error("AI_GATEWAY_API_KEY environment variable is not set");
-  }
-
-  const baseURL =
-    process.env.AI_GATEWAY_BASE_URL ||
-    (apiKey.startsWith("vck_") ? "https://ai-gateway.vercel.sh/v1" : "https://api.openai.com/v1");
-
-  return createOpenAI({
-    apiKey,
-    baseURL,
-  });
-};
 
 // Parse model string to get provider and model name
 export const parseModel = (modelString: string): { provider: string; model: string } => {

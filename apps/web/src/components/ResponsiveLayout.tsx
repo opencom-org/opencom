@@ -109,6 +109,7 @@ export interface AdaptiveSecondaryPanelProps {
   onOpenChange: (open: boolean) => void;
   onAfterClose?: () => void;
   closeLabel?: string;
+  desktopMode?: "inline" | "slideout";
   desktopContainerClassName?: string;
   compactContainerClassName?: string;
   children: React.ReactNode;
@@ -121,6 +122,7 @@ export function AdaptiveSecondaryPanel({
   onOpenChange,
   onAfterClose,
   closeLabel = "Close panel",
+  desktopMode = "inline",
   desktopContainerClassName,
   compactContainerClassName,
   children,
@@ -151,6 +153,38 @@ export function AdaptiveSecondaryPanel({
 
   if (!isOpen) {
     return null;
+  }
+
+  if (!isCompact && desktopMode === "slideout") {
+    return (
+      <>
+        <div className="fixed inset-0 z-40 bg-black/35" aria-hidden="true" onClick={closePanel} />
+        <aside
+          className={joinClasses(
+            "fixed inset-y-0 right-0 z-50 w-full border-l bg-background shadow-2xl",
+            desktopContainerClassName ?? "max-w-md"
+          )}
+          style={{
+            paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+            paddingRight: "max(0.75rem, env(safe-area-inset-right))",
+            paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+            paddingLeft: "max(0.75rem, env(safe-area-inset-left))",
+          }}
+          data-testid={panelTestId}
+        >
+          <button
+            type="button"
+            onClick={closePanel}
+            className="absolute right-4 top-4 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm"
+            aria-label={closeLabel}
+            data-testid={`${panelTestId}-close`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="h-full min-h-0 overflow-y-auto pt-10">{children}</div>
+        </aside>
+      </>
+    );
   }
 
   if (!isCompact) {

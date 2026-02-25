@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@opencom/convex";
 import { Button, Card } from "@opencom/ui";
@@ -29,9 +29,15 @@ interface SuggestionsPanelProps {
   conversationId: Id<"conversations">;
   workspaceId: Id<"workspaces">;
   onInsert: (content: string) => void;
+  onSuggestionsUpdated?: (count: number) => void;
 }
 
-export function SuggestionsPanel({ conversationId, workspaceId, onInsert }: SuggestionsPanelProps) {
+export function SuggestionsPanel({
+  conversationId,
+  workspaceId,
+  onInsert,
+  onSuggestionsUpdated,
+}: SuggestionsPanelProps) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,29 +48,40 @@ export function SuggestionsPanel({ conversationId, workspaceId, onInsert }: Sugg
   const trackUsage = useMutation(api.suggestions.trackUsage);
   const trackDismissal = useMutation(api.suggestions.trackDismissal);
 
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (!settings?.suggestionsEnabled) return;
-
-      setIsLoading(true);
+  const fetchSuggestions = useCallback(async () => {
+    if (!settings?.suggestionsEnabled) {
+      setSuggestions([]);
       setError(null);
+      onSuggestionsUpdated?.(0);
+      return;
+    }
 
-      try {
-        const results = await getSuggestions({
-          conversationId,
-          limit: 5,
-        });
-        setSuggestions(results);
-      } catch (err) {
-        console.error("Failed to fetch suggestions:", err);
-        setError("Failed to load suggestions");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    setIsLoading(true);
+    setError(null);
 
-    fetchSuggestions();
-  }, [conversationId, settings?.suggestionsEnabled, getSuggestions]);
+    try {
+      const results = await getSuggestions({
+        conversationId,
+        limit: 5,
+      });
+      setSuggestions(results);
+    } catch (err) {
+      console.error("Failed to fetch suggestions:", err);
+      setSuggestions([]);
+      setError("Failed to load suggestions");
+      onSuggestionsUpdated?.(0);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [conversationId, getSuggestions, onSuggestionsUpdated, settings?.suggestionsEnabled]);
+
+  useEffect(() => {
+    void fetchSuggestions();
+  }, [fetchSuggestions]);
+
+  useEffect(() => {
+    setDismissedIds(new Set());
+  }, [conversationId]);
 
   const handleInsert = async (suggestion: Suggestion) => {
     onInsert(suggestion.content);
@@ -129,11 +146,15 @@ export function SuggestionsPanel({ conversationId, workspaceId, onInsert }: Sugg
     return <span className={`text-xs px-1.5 py-0.5 rounded ${styles[type]}`}>{labels[type]}</span>;
   };
 
+  const visibleSuggestions = suggestions.filter((s) => !dismissedIds.has(s.id));
+
+  useEffect(() => {
+    onSuggestionsUpdated?.(visibleSuggestions.length);
+  }, [onSuggestionsUpdated, visibleSuggestions.length]);
+
   if (!settings?.suggestionsEnabled) {
     return null;
   }
-
-  const visibleSuggestions = suggestions.filter((s) => !dismissedIds.has(s.id));
 
   return (
     <Card className="p-3" data-testid="inbox-suggestions-sidecar">
@@ -145,7 +166,9 @@ export function SuggestionsPanel({ conversationId, workspaceId, onInsert }: Sugg
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => getSuggestions({ conversationId })}
+          onClick={() => {
+            void fetchSuggestions();
+          }}
           disabled={isLoading}
           className="h-7 px-2"
         >

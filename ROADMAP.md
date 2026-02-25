@@ -14,14 +14,21 @@ Goal: ship a professional open-source customer messaging platform with strong de
 
 ## Prioritized TODO (with certainty)
 
-### P0 (critical before OSS copy / production confidence)
+### P0 (critical before production confidence)
+
+- [ ] Split up / simplify the settings page - maybe colocate settings with their corresponding functionality
+- [ ] Import feature for docs / help center, so you can keep a folder of markdown anywhere that you edit and maintain, and upload it to sync latest changes while maintaining folder structure (as collections), etc.
+- [ ] Fix inbox chat responsiveness (navbar)
+- [ ] make mobile app match inbox functionality (understand AI review, which messages were sent by AI, visitors list and details/navigation flows)
+- [ ] Merge some sidebar items
+- [ ] Check AI chat suggestions setup is working
+- [ ] check email campaign setup 
+- [ ] check series setup
 
 - [ ] **(P0 | 0.95)** Finalize Convex integration:
   - CI for Convex functions on push.
   - set up proper CI strategy (preview branches on vercel and convex? Multiple vs single release branches?)
 
-- [ ] Split up / simplify the settings page - maybe colocate settings with their corresponding functionality
-- [ ] Import feature for docs / help center, so you can keep a folder of markdown anywhere that you edit and maintain, and upload it to sync latest changes while maintaining folder structure (as collections), etc.
 
 - [ ] **(P0 | 0.90)** Finalize auth edge cases across web + mobile:
   - Password attempt should gracefully route to OTP flow when account is OTP-only.
@@ -119,4 +126,4 @@ Legend: `[x]` complete, `[~]` present but still maturing, `[ ]` not yet implemen
 
 - [ ] Should OTP be the only default path for new users, with password optional?
 - [ ] How strict should hosted-tier limits be for email campaigns and push usage?
-- [ ] What exact feature set is required for "v1 OSS release" vs "post-release roadmap"?
+- [ ] What is required for Production Readiness, vs nice-to-haves?
