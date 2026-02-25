@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type MouseEvent } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { X } from "./icons";
@@ -75,6 +75,8 @@ interface OutboundOverlayProps {
   sessionToken?: string | null;
   sessionId: string;
   currentUrl: string;
+  allowBlockingPost?: boolean;
+  onBlockingStateChange?: (state: { hasPendingPost: boolean; hasActivePost: boolean }) => void;
   onStartTour?: (tourId: Id<"tours">) => void;
   onOpenMessenger?: () => void;
   onStartConversation?: (prefillMessage?: string) => void;
@@ -88,6 +90,8 @@ export function OutboundOverlay({
   sessionToken,
   sessionId,
   currentUrl,
+  allowBlockingPost = true,
+  onBlockingStateChange,
   onStartTour,
   onOpenMessenger,
   onStartConversation,
@@ -140,45 +144,77 @@ export function OutboundOverlay({
     setTimeOnPage(0);
   }, [currentUrl]);
 
-  // Show all eligible messages simultaneously, grouped by type
-  useEffect(() => {
-    if (!eligibleMessages || eligibleMessages.length === 0) return;
-
-    // Check trigger conditions for a message
-    const shouldShowMessage = (message: (typeof eligibleMessages)[number]): boolean => {
+  const isTriggerReady = useCallback(
+    (message: OutboundMessage): boolean => {
       const triggers = message.triggers;
       if (!triggers || triggers.type === "immediate") return true;
       if (triggers.type === "time_on_page") return timeOnPage >= (triggers.delaySeconds || 5);
       if (triggers.type === "scroll_depth") return scrollPercent >= (triggers.scrollPercent || 50);
       if (triggers.type === "page_visit") return true;
       return false;
-    };
+    },
+    [timeOnPage, scrollPercent]
+  );
 
-    // Find the first eligible, unshown, trigger-ready message for each type
-    const bannerMessage = eligibleMessages.find(
-      (m) => m.type === "banner" && !shownMessageIds.has(m._id) && shouldShowMessage(m)
+  const nextMessages = useMemo(() => {
+    if (!eligibleMessages || eligibleMessages.length === 0) {
+      return {
+        banner: null as OutboundMessage | null,
+        post: null as OutboundMessage | null,
+        chat: null as OutboundMessage | null,
+      };
+    }
+
+    const banner = eligibleMessages.find(
+      (m) => m.type === "banner" && !shownMessageIds.has(m._id) && isTriggerReady(m)
     );
-    const postMessage = eligibleMessages.find(
-      (m) => m.type === "post" && !shownMessageIds.has(m._id) && shouldShowMessage(m)
+    const post = eligibleMessages.find(
+      (m) => m.type === "post" && !shownMessageIds.has(m._id) && isTriggerReady(m)
     );
-    const chatMessage = eligibleMessages.find(
-      (m) => m.type === "chat" && !shownMessageIds.has(m._id) && shouldShowMessage(m)
+    const chat = eligibleMessages.find(
+      (m) => m.type === "chat" && !shownMessageIds.has(m._id) && isTriggerReady(m)
     );
+
+    return {
+      banner: (banner as OutboundMessage | undefined) ?? null,
+      post: (post as OutboundMessage | undefined) ?? null,
+      chat: (chat as OutboundMessage | undefined) ?? null,
+    };
+  }, [eligibleMessages, shownMessageIds, isTriggerReady]);
+
+  const hasActivePost = Boolean(visibleMessages.post);
+  const hasPendingPost = Boolean(nextMessages.post && !visibleMessages.post);
+
+  useEffect(() => {
+    onBlockingStateChange?.({ hasPendingPost, hasActivePost });
+  }, [onBlockingStateChange, hasPendingPost, hasActivePost]);
+
+  useEffect(() => {
+    return () => {
+      onBlockingStateChange?.({ hasPendingPost: false, hasActivePost: false });
+    };
+  }, [onBlockingStateChange]);
+
+  // Show all eligible messages simultaneously, grouped by type
+  useEffect(() => {
+    if (!nextMessages.banner && !nextMessages.post && !nextMessages.chat) return;
 
     const toShow: Array<{ message: OutboundMessage; delay: number }> = [];
     let delay = 0;
 
-    if (bannerMessage && !visibleMessages.banner) {
-      toShow.push({ message: bannerMessage as OutboundMessage, delay });
+    if (nextMessages.banner && !visibleMessages.banner) {
+      toShow.push({ message: nextMessages.banner, delay });
       delay += STAGGER_DELAY_MS;
     }
-    if (postMessage && !visibleMessages.post) {
-      toShow.push({ message: postMessage as OutboundMessage, delay });
+    if (nextMessages.post && !visibleMessages.post && allowBlockingPost) {
+      toShow.push({ message: nextMessages.post, delay });
       delay += STAGGER_DELAY_MS;
     }
-    if (chatMessage && !visibleMessages.chat) {
-      toShow.push({ message: chatMessage as OutboundMessage, delay });
+    if (nextMessages.chat && !visibleMessages.chat) {
+      toShow.push({ message: nextMessages.chat, delay });
     }
+
+    if (toShow.length === 0) return;
 
     // Show each message with staggered timing
     toShow.forEach(({ message, delay: msgDelay }) => {
@@ -201,11 +237,9 @@ export function OutboundOverlay({
       staggerTimers.current = [];
     };
   }, [
-    eligibleMessages,
-    shownMessageIds,
+    nextMessages,
+    allowBlockingPost,
     visibleMessages,
-    timeOnPage,
-    scrollPercent,
     visitorId,
     sessionToken,
     sessionId,

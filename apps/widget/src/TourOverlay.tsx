@@ -62,6 +62,8 @@ interface TourOverlayProps {
   sessionToken?: string | null;
   availableTours: TourData[];
   forcedTourId?: Id<"tours"> | null;
+  allowBlockingTour?: boolean;
+  onBlockingActiveChange?: (isActive: boolean) => void;
   onTourComplete?: () => void;
   onTourDismiss?: () => void;
 }
@@ -228,6 +230,8 @@ export function TourOverlay({
   sessionToken,
   availableTours,
   forcedTourId,
+  allowBlockingTour = true,
+  onBlockingActiveChange,
   onTourComplete,
   onTourDismiss,
 }: TourOverlayProps) {
@@ -303,6 +307,10 @@ export function TourOverlay({
   }, [availableTours]);
 
   useEffect(() => {
+    if (!allowBlockingTour && !activeTour) {
+      return;
+    }
+
     if (forcedTourId) {
       const forcedTour = availableTours.find((t) => t.tour._id === forcedTourId);
       if (forcedTour) {
@@ -361,7 +369,18 @@ export function TourOverlay({
     forcedTourId,
     suppressedTourIds,
     unsuppressTour,
+    allowBlockingTour,
   ]);
+
+  useEffect(() => {
+    onBlockingActiveChange?.(Boolean(activeTour));
+  }, [activeTour, onBlockingActiveChange]);
+
+  useEffect(() => {
+    return () => {
+      onBlockingActiveChange?.(false);
+    };
+  }, [onBlockingActiveChange]);
 
   const currentStep = activeTour?.steps[currentStepIndex];
   const isPointerStep = currentStep?.type === "pointer" || currentStep?.type === "video";

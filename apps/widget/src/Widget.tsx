@@ -49,6 +49,7 @@ type WidgetView =
 
 // Main tabs that show in the bottom nav
 type MainTab = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
+type BlockingExperience = "tour" | "outbound_post" | "survey_large";
 
 interface WidgetProps {
   workspaceId?: string;
@@ -116,6 +117,16 @@ export function Widget({
   const [sessionShownSurveyIds, setSessionShownSurveyIds] = useState<Set<string>>(new Set());
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [surveyEligibilityUnavailable, setSurveyEligibilityUnavailable] = useState(false);
+  const [activeBlockingExperience, setActiveBlockingExperience] =
+    useState<BlockingExperience | null>(null);
+  const [tourBlockingActive, setTourBlockingActive] = useState(false);
+  const [outboundBlockingState, setOutboundBlockingState] = useState<{
+    hasPendingPost: boolean;
+    hasActivePost: boolean;
+  }>({
+    hasPendingPost: false,
+    hasActivePost: false,
+  });
   const locationFetchedRef = useRef(false);
   const widgetCuePreferencesRef = useRef({
     browserNotifications: true,
@@ -376,6 +387,94 @@ export function Widget({
     completedSurveyIds,
   ]);
 
+  const hasForcedTourCandidate = Boolean(
+    forcedTourId &&
+      allTours?.some((tourData) => tourData.tour._id === forcedTourId && tourData.steps.length > 0)
+  );
+  const hasRegularTourCandidate = Boolean(
+    availableTours?.some((tourData) => tourData.steps.length > 0)
+  );
+  const hasTourBlockingCandidate = Boolean(
+    visitorId &&
+      activeWorkspaceId &&
+      isValidIdFormat &&
+      (hasRegularTourCandidate || hasForcedTourCandidate)
+  );
+  const hasOutboundPostBlockingCandidate = outboundBlockingState.hasPendingPost;
+  const hasOutboundPostBlockingActive = outboundBlockingState.hasActivePost;
+  const hasLargeSurveyBlockingCandidate = Boolean(
+    candidateSurvey && candidateSurvey.format === "large" && !displayedSurvey
+  );
+  const hasLargeSurveyBlockingActive = displayedSurvey?.format === "large";
+
+  useEffect(() => {
+    if (activeBlockingExperience !== null) {
+      return;
+    }
+
+    // Priority order for blockers:
+    // 1. tours (guided workflows), 2. outbound post, 3. large surveys.
+    if (hasTourBlockingCandidate) {
+      setActiveBlockingExperience("tour");
+      return;
+    }
+
+    if (hasOutboundPostBlockingCandidate) {
+      setActiveBlockingExperience("outbound_post");
+      return;
+    }
+
+    if (hasLargeSurveyBlockingCandidate) {
+      setActiveBlockingExperience("survey_large");
+    }
+  }, [
+    activeBlockingExperience,
+    hasTourBlockingCandidate,
+    hasOutboundPostBlockingCandidate,
+    hasLargeSurveyBlockingCandidate,
+  ]);
+
+  useEffect(() => {
+    if (activeBlockingExperience === null) {
+      return;
+    }
+
+    if (activeBlockingExperience === "tour") {
+      if (tourBlockingActive || hasTourBlockingCandidate) {
+        return;
+      }
+      setActiveBlockingExperience(null);
+      return;
+    }
+
+    if (activeBlockingExperience === "outbound_post") {
+      if (hasOutboundPostBlockingActive || hasOutboundPostBlockingCandidate) {
+        return;
+      }
+      setActiveBlockingExperience(null);
+      return;
+    }
+
+    if (hasLargeSurveyBlockingActive || hasLargeSurveyBlockingCandidate) {
+      return;
+    }
+    setActiveBlockingExperience(null);
+  }, [
+    activeBlockingExperience,
+    tourBlockingActive,
+    hasTourBlockingCandidate,
+    hasOutboundPostBlockingActive,
+    hasOutboundPostBlockingCandidate,
+    hasLargeSurveyBlockingActive,
+    hasLargeSurveyBlockingCandidate,
+  ]);
+
+  const allowTourBlocking = activeBlockingExperience === "tour";
+  const allowOutboundPostBlocking = activeBlockingExperience === "outbound_post";
+  const allowLargeSurveyBlocking = activeBlockingExperience === "survey_large";
+  const hasAnyPendingBlockingCandidate =
+    hasTourBlockingCandidate || hasOutboundPostBlockingCandidate || hasLargeSurveyBlockingCandidate;
+
   // Validate origin when workspaceId is provided (only if ID format is valid)
   const originValidation = useQuery(
     api.workspaces.validateOrigin,
@@ -541,6 +640,14 @@ export function Widget({
       return;
     }
 
+    if (candidateSurvey.format === "large") {
+      if (!allowLargeSurveyBlocking) {
+        return;
+      }
+    } else if (activeBlockingExperience !== null || hasAnyPendingBlockingCandidate) {
+      return;
+    }
+
     const surveyId = candidateSurvey._id.toString();
     setSessionShownSurveyIds((prev) => {
       if (prev.has(surveyId)) {
@@ -551,12 +658,21 @@ export function Widget({
       return next;
     });
     setDisplayedSurvey(candidateSurvey);
-  }, [displayedSurvey, candidateSurvey]);
+  }, [
+    displayedSurvey,
+    candidateSurvey,
+    allowLargeSurveyBlocking,
+    activeBlockingExperience,
+    hasAnyPendingBlockingCandidate,
+  ]);
 
   useEffect(() => {
     setDisplayedSurvey(null);
     setSessionShownSurveyIds(new Set());
     setCompletedSurveyIds(new Set());
+    setActiveBlockingExperience(null);
+    setTourBlockingActive(false);
+    setOutboundBlockingState({ hasPendingPost: false, hasActivePost: false });
   }, [sessionId, visitorId, activeWorkspaceId]);
 
   useEffect(() => {
@@ -647,6 +763,25 @@ export function Widget({
   const handleTourDismiss = useCallback(() => {
     setForcedTourId(null);
   }, []);
+
+  const handleTourBlockingActiveChange = useCallback((isActive: boolean) => {
+    setTourBlockingActive(isActive);
+  }, []);
+
+  const handleOutboundBlockingStateChange = useCallback(
+    (state: { hasPendingPost: boolean; hasActivePost: boolean }) => {
+      setOutboundBlockingState((prev) => {
+        if (
+          prev.hasPendingPost === state.hasPendingPost &&
+          prev.hasActivePost === state.hasActivePost
+        ) {
+          return prev;
+        }
+        return state;
+      });
+    },
+    []
+  );
 
   useEffect(() => {
     async function fetchLocation() {
@@ -1207,6 +1342,8 @@ export function Widget({
                 : availableTours) || []
             }
             forcedTourId={forcedTourId}
+            allowBlockingTour={allowTourBlocking}
+            onBlockingActiveChange={handleTourBlockingActiveChange}
             onTourComplete={handleTourComplete}
             onTourDismiss={handleTourDismiss}
           />
@@ -1220,6 +1357,8 @@ export function Widget({
           sessionToken={sessionToken}
           sessionId={sessionId}
           currentUrl={window.location.href}
+          allowBlockingPost={allowOutboundPostBlocking}
+          onBlockingStateChange={handleOutboundBlockingStateChange}
           onStartTour={handleStartTour}
           onOpenMessenger={() => {
             setView("conversation-list");

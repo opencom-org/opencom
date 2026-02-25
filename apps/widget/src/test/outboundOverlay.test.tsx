@@ -189,4 +189,60 @@ describe("OutboundOverlay", () => {
       expect(screen.queryByText("Dismiss update")).not.toBeInTheDocument();
     });
   });
+
+  it("defers blocking post until the scheduler allows it", async () => {
+    const onBlockingStateChange = vi.fn();
+
+    setupEligibleMessages([
+      {
+        _id: "post_queued" as Id<"outboundMessages">,
+        type: "post",
+        name: "queued-post",
+        content: {
+          title: "Queued post",
+          body: "Waits for active blocker to finish",
+          buttons: [{ text: "Dismiss", action: "dismiss" }],
+        },
+        triggers: {
+          type: "immediate",
+        },
+      },
+    ]);
+
+    const { rerender } = render(
+      <OutboundOverlay
+        workspaceId={workspaceId}
+        visitorId={visitorId}
+        sessionToken="wst_test"
+        sessionId="session_1"
+        currentUrl="http://localhost:4000/"
+        allowBlockingPost={false}
+        onBlockingStateChange={onBlockingStateChange}
+      />
+    );
+
+    await waitFor(() => {
+      expect(onBlockingStateChange).toHaveBeenCalledWith({
+        hasPendingPost: true,
+        hasActivePost: false,
+      });
+    });
+    expect(screen.queryByText("Queued post")).not.toBeInTheDocument();
+
+    rerender(
+      <OutboundOverlay
+        workspaceId={workspaceId}
+        visitorId={visitorId}
+        sessionToken="wst_test"
+        sessionId="session_1"
+        currentUrl="http://localhost:4000/"
+        allowBlockingPost
+        onBlockingStateChange={onBlockingStateChange}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Queued post")).toBeVisible();
+    });
+  });
 });
