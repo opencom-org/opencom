@@ -88,11 +88,12 @@ export default function Home() {
             <CardHeader>
               <Users className="h-8 w-8 text-primary mb-2" />
               <CardTitle>Mobile Apps</CardTitle>
-              <CardDescription>iOS and Android support</CardDescription>
+              <CardDescription>Android available, iOS coming soon</CardDescription>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Native mobile apps for on-the-go support.
+                Get push notifications in the Android inbox app and stay responsive while away from
+                desktop.
               </p>
             </CardContent>
           </Card>

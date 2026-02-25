@@ -8,6 +8,9 @@ import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { loadInboxCuePreferences, saveInboxCuePreferences } from "@/lib/inboxNotificationCues";
 
+const ANDROID_INBOX_APP_URL = "https://play.google.com/store/apps/details?id=com.opencom.app";
+const IOS_INBOX_APP_URL: string | null = null;
+
 interface NotificationSettingsSectionProps {
   workspaceId?: Id<"workspaces">;
   isAdmin: boolean;
@@ -145,8 +148,48 @@ export function NotificationSettingsSection({
         Configure which message events notify you and which channels are used.
       </p>
 
+      <div className="mb-6 rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <h3 className="text-sm font-medium">Mobile Inbox app</h3>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Stay up to date on incoming conversations with push notifications from the Android app.
+          Works for hosted and self-hosted workspaces.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <a
+            href={ANDROID_INBOX_APP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+          >
+            Download on Google Play
+          </a>
+          {IOS_INBOX_APP_URL ? (
+            <a
+              href={IOS_INBOX_APP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-semibold text-foreground transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+            >
+              Download on App Store
+            </a>
+          ) : (
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className="inline-flex h-9 cursor-not-allowed items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-semibold text-muted-foreground opacity-70"
+            >
+              iOS App Store (coming soon)
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="space-y-3">
         <h3 className="text-sm font-medium">My Message Notifications</h3>
+        <p className="text-xs text-muted-foreground">
+          Enable push to receive mobile alerts for your account.
+        </p>
 
         <label className="flex items-center gap-2 cursor-pointer">
           <input

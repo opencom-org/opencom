@@ -12,7 +12,12 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useState, useEffect, memo } from "react";
-import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_DOCS_URL } from "@/lib/links";
+import {
+  OPENCOM_ANDROID_INBOX_APP_URL,
+  OPENCOM_GITHUB_DOCS_URL,
+  OPENCOM_HOSTED_ONBOARDING_URL,
+  OPENCOM_IOS_INBOX_APP_URL,
+} from "@/lib/links";
 
 const container: Variants = {
   hidden: { opacity: 0 },
@@ -152,6 +157,8 @@ const CommandInput = memo(function CommandInput() {
 });
 
 export function Hero() {
+  const isIosInboxAppAvailable = Boolean(OPENCOM_IOS_INBOX_APP_URL);
+
   return (
     <section
       data-tour-target="hero-section"
@@ -230,6 +237,45 @@ export function Hero() {
               />
               GitHub Docs
             </Link>
+          </motion.div>
+
+          <motion.div
+            variants={item}
+            className="mt-7 w-full max-w-xl rounded-2xl border border-border/70 bg-white/70 p-4 backdrop-blur-sm shadow-sm"
+          >
+            <p className="text-sm text-muted-foreground">
+              Stay on top of new conversations with the Inbox Android app and push notifications.
+              Works for hosted and self-hosted workspaces.
+            </p>
+            <div className="mt-3 flex flex-col sm:flex-row items-center gap-3">
+              <a
+                href={OPENCOM_ANDROID_INBOX_APP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 w-full sm:w-auto items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+              >
+                Download on Google Play
+              </a>
+              {isIosInboxAppAvailable ? (
+                <a
+                  href={OPENCOM_IOS_INBOX_APP_URL ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-11 w-full sm:w-auto items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold text-foreground transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+                >
+                  Download on App Store
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="inline-flex h-11 w-full sm:w-auto cursor-not-allowed items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold text-muted-foreground opacity-70"
+                >
+                  iOS App Store (coming soon)
+                </button>
+              )}
+            </div>
           </motion.div>
         </motion.div>
 

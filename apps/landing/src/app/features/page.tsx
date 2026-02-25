@@ -191,7 +191,8 @@ const additionalFeatures = [
   },
   {
     title: "Mobile Admin Apps",
-    description: "Native iOS and Android apps to manage conversations on the go.",
+    description:
+      "Android app with push notifications is live now. iOS app is coming soon for mobile inbox workflows.",
     icon: Smartphone,
   },
 ];
