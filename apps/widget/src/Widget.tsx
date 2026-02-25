@@ -387,6 +387,17 @@ export function Widget({
     completedSurveyIds,
   ]);
 
+  /*
+   * TODO(2026-02-25): Add dedicated scheduler E2E coverage by Friday, 2026-02-27.
+   * Scope:
+   * - Seed tour + outbound post + large survey at the same time and assert order:
+   *   tour -> outbound post -> large survey.
+   * - Assert deferred experiences are not tracked as "shown" until visible.
+   * - Assert queue release behavior for each blocker exit path:
+   *   tour complete, tour dismiss, outbound dismiss, survey complete, survey dismiss.
+   * - Assert forced tours preempt queued blockers and queued blockers resume after tour exit.
+   * - Run the same assertions in compact/mobile viewport to catch stacking and interaction regressions.
+   */
   const hasForcedTourCandidate = Boolean(
     forcedTourId &&
       allTours?.some((tourData) => tourData.tour._id === forcedTourId && tourData.steps.length > 0)
