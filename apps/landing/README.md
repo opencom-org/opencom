@@ -40,13 +40,13 @@ CONVEX_URL=<your-convex-url> WORKSPACE_ID=<your-workspace-id> TEST_ADMIN_SECRET=
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | Product Tour       | 5-step tour targeting current landing hooks (hero CTA, features section, product-tour showcase, final CTA) |
 | Checklist          | "Explore Opencom" with 5 tasks                                                                             |
-| Knowledge Base     | 2 collections, 6 published articles                                                                        |
+| Knowledge Base     | 6 collections, 24 published articles covering hosted, self-hosting, SDKs, security, and operations docs  |
 | Outbound Messages  | Welcome post (click → new conversation) + docs banner (click → URL)                                        |
 | Survey             | NPS survey after 60s on page                                                                               |
 | Tooltips           | 3 contextual hints on hero CTA, product-tour showcase, and GitHub nav link                                 |
 | Messenger Settings | Purple brand colour, custom welcome message                                                                |
 
-All seeded items use the `LANDING_DEMO_` name prefix for easy identification and cleanup.
+Seeded records are tagged with internal `LANDING_DEMO_` markers for safe identification and cleanup.
 
 ## Tour Targets
 

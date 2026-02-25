@@ -46,6 +46,13 @@ Goal: ship a professional open-source customer messaging platform with strong de
   - Permissions/role boundaries
   - Workspace-scoped settings and data isolation
 
+- [ ] **(P1 | 0.82)** Widget blocking scheduler regression coverage (target: Friday, 2026-02-27):
+  - Add E2E scenario that seeds tour + outbound post + large survey simultaneously.
+  - Assert strict blocker order in runtime: tour -> outbound post -> large survey.
+  - Assert deferred blockers are not counted as shown until visible.
+  - Assert queue release paths: complete/dismiss for each blocker type.
+  - Add compact/mobile viewport variant to catch stacking/pointer interaction regressions.
+
 - [ ] **(P1 | 0.75)** Admin web responsiveness pass:
   - Ensure key pages are reliable on smaller laptop widths and tablets.
 
