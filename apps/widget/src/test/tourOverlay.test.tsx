@@ -229,4 +229,136 @@ describe("TourOverlay", () => {
       targetElement.remove();
     }
   });
+
+  it("waits to render the next step card until transition scroll settles", async () => {
+    const startMock = vi.fn().mockResolvedValue(undefined);
+    const dismissMock = vi.fn().mockResolvedValue(undefined);
+    const checkpointMock = vi.fn().mockResolvedValue(undefined);
+    const advanceMock = vi.fn().mockResolvedValue({
+      advanced: true,
+      nextStep: 1,
+      status: "in_progress",
+    });
+    const defaultMutationMock = vi.fn().mockResolvedValue(undefined);
+
+    const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
+    mockedUseMutation.mockImplementation((mutationRef: unknown) => {
+      if (mutationRef === "tourProgress.start") return startMock;
+      if (mutationRef === "tourProgress.dismiss") return dismissMock;
+      if (mutationRef === "tourProgress.checkpoint") return checkpointMock;
+      if (mutationRef === "tourProgress.advance") return advanceMock;
+      return defaultMutationMock;
+    });
+
+    const stepOneTarget = document.createElement("button");
+    stepOneTarget.setAttribute("data-testid", "tour-step-one-target");
+    document.body.appendChild(stepOneTarget);
+
+    const stepTwoTarget = document.createElement("button");
+    stepTwoTarget.setAttribute("data-testid", "tour-step-two-target");
+    document.body.appendChild(stepTwoTarget);
+
+    let stepTwoTop = -280;
+    let stepTwoLeft = 72;
+
+    vi.spyOn(stepOneTarget, "getBoundingClientRect").mockImplementation(() => ({
+      x: 100,
+      y: 180,
+      top: 180,
+      left: 100,
+      width: 140,
+      height: 44,
+      right: 240,
+      bottom: 224,
+      toJSON: () => ({}),
+    }));
+
+    vi.spyOn(stepTwoTarget, "getBoundingClientRect").mockImplementation(() => ({
+      x: stepTwoLeft,
+      y: stepTwoTop,
+      top: stepTwoTop,
+      left: stepTwoLeft,
+      width: 160,
+      height: 48,
+      right: stepTwoLeft + 160,
+      bottom: stepTwoTop + 48,
+      toJSON: () => ({}),
+    }));
+
+    const stepTwoScrollIntoViewMock = vi.fn();
+    Object.defineProperty(stepTwoTarget, "scrollIntoView", {
+      value: stepTwoScrollIntoViewMock,
+      configurable: true,
+    });
+
+    const tourId = "tour_transition_scroll" as Id<"tours">;
+
+    render(
+      <TourOverlay
+        workspaceId={"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Id<"workspaces">}
+        visitorId={"visitor_1" as Id<"visitors">}
+        sessionToken="wst_test"
+        availableTours={[
+          {
+            tour: {
+              _id: tourId,
+              name: "Transition Scroll Tour",
+              displayMode: "first_time_only",
+              buttonColor: "#792cd4",
+            },
+            steps: [
+              {
+                _id: "transition_step_one" as Id<"tourSteps">,
+                tourId,
+                type: "pointer",
+                order: 0,
+                title: "First step",
+                content: "Click next to continue.",
+                elementSelector: "[data-testid='tour-step-one-target']",
+                advanceOn: "click",
+              },
+              {
+                _id: "transition_step_two" as Id<"tourSteps">,
+                tourId,
+                type: "pointer",
+                order: 1,
+                title: "Second step",
+                content: "This card should wait until scroll settles.",
+                elementSelector: "[data-testid='tour-step-two-target']",
+                advanceOn: "click",
+              },
+            ],
+          },
+        ]}
+      />
+    );
+
+    try {
+      await waitFor(() => {
+        expect(screen.getByText("First step")).toBeVisible();
+      });
+
+      fireEvent.click(screen.getByTestId("tour-primary-action"));
+
+      await waitFor(() => {
+        expect(advanceMock).toHaveBeenCalledTimes(1);
+      });
+      expect(stepTwoScrollIntoViewMock).toHaveBeenCalledTimes(1);
+
+      expect(screen.queryByText("Second step")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("tour-step-card")).not.toBeInTheDocument();
+
+      stepTwoTop = 220;
+      stepTwoLeft = 160;
+      window.dispatchEvent(new Event("scroll"));
+
+      await waitFor(() => {
+        expect(screen.getByText("Second step")).toBeVisible();
+      });
+      expect(screen.getByTestId("tour-step-card")).toBeVisible();
+    } finally {
+      stepOneTarget.remove();
+      stepTwoTarget.remove();
+    }
+  });
 });

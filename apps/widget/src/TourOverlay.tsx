@@ -252,6 +252,7 @@ export function TourOverlay({
   const skipHandledStepRef = useRef<string | null>(null);
   const routeCheckpointStepRef = useRef<string | null>(null);
   const checkpointStepRef = useRef<string | null>(null);
+  const pendingStepScrollRef = useRef(false);
   const programmaticScrollInFlightRef = useRef(false);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollForceRecomputeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -415,13 +416,21 @@ export function TourOverlay({
         return;
       }
 
+      if (nextStepIndex !== currentStepIndex) {
+        pendingStepScrollRef.current = true;
+        setElementPosition(null);
+        setTooltipPosition(null);
+      } else {
+        pendingStepScrollRef.current = false;
+      }
+
       setCurrentStepIndex(nextStepIndex);
       setAdvanceHint(getAdvanceGuidance(activeTour.steps[nextStepIndex]));
       setRouteHint(null);
       setFailureHint(null);
       setShowMoreMenu(false);
     },
-    [activeTour, finalizeTourCompletion]
+    [activeTour, currentStepIndex, finalizeTourCompletion]
   );
 
   const handleSkipCurrentStep = useCallback(
@@ -545,6 +554,7 @@ export function TourOverlay({
       skipHandledStepRef.current = null;
       routeCheckpointStepRef.current = null;
       checkpointStepRef.current = null;
+      pendingStepScrollRef.current = false;
       programmaticScrollInFlightRef.current = false;
       if (scrollSettleTimerRef.current) {
         clearTimeout(scrollSettleTimerRef.current);
@@ -616,6 +626,7 @@ export function TourOverlay({
       routeCheckpointStepRef.current = null;
 
       if (!isPointerStep) {
+        pendingStepScrollRef.current = false;
         setElementPosition(null);
         setTooltipPosition(null);
         return;
@@ -653,6 +664,34 @@ export function TourOverlay({
       const viewport = getVisualViewportBounds();
       const highlightPadding = 8;
       const safePadding = 12;
+      const viewportBottom = viewport.top + viewport.height;
+      const requiresScroll = rect.top < viewport.top || rect.bottom > viewportBottom;
+
+      if (pendingStepScrollRef.current && requiresScroll && !force) {
+        setElementPosition(null);
+        setTooltipPosition(null);
+        if (!programmaticScrollInFlightRef.current) {
+          programmaticScrollInFlightRef.current = true;
+          if (scrollSettleTimerRef.current) {
+            clearTimeout(scrollSettleTimerRef.current);
+            scrollSettleTimerRef.current = null;
+          }
+          if (scrollForceRecomputeTimerRef.current) {
+            clearTimeout(scrollForceRecomputeTimerRef.current);
+          }
+          scrollForceRecomputeTimerRef.current = setTimeout(() => {
+            programmaticScrollInFlightRef.current = false;
+            scrollForceRecomputeTimerRef.current = null;
+            if (scrollSettleTimerRef.current) {
+              clearTimeout(scrollSettleTimerRef.current);
+              scrollSettleTimerRef.current = null;
+            }
+            updateElementPosition({ force: true });
+          }, SCROLL_SETTLE_MAX_WAIT_MS);
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        return;
+      }
 
       setElementPosition({
         top: rect.top - highlightPadding,
@@ -670,7 +709,6 @@ export function TourOverlay({
       const estimatedTooltipHeight = Math.max(180, Math.min(260, tooltipMaxHeight));
       const position = currentStep.position || "auto";
 
-      const viewportBottom = viewport.top + viewport.height;
       const viewportRight = viewport.left + viewport.width;
       const spaceBelow = viewportBottom - rect.bottom;
       const spaceAbove = rect.top - viewport.top;
@@ -752,8 +790,9 @@ export function TourOverlay({
           layout: "anchored",
         });
       }
+      pendingStepScrollRef.current = false;
 
-      if (rect.top < viewport.top || rect.bottom > viewportBottom) {
+      if (requiresScroll) {
         if (!force && !programmaticScrollInFlightRef.current) {
           programmaticScrollInFlightRef.current = true;
           if (scrollSettleTimerRef.current) {
@@ -930,6 +969,7 @@ export function TourOverlay({
       scrollForceRecomputeTimerRef.current = null;
     }
     programmaticScrollInFlightRef.current = false;
+    pendingStepScrollRef.current = false;
     setActiveTour(null);
     setCurrentStepIndex(0);
     setElementPosition(null);
@@ -1002,6 +1042,7 @@ export function TourOverlay({
         sessionToken: sessionToken ?? undefined,
         tourId: activeTour.tour._id,
       });
+      pendingStepScrollRef.current = false;
       setCurrentStepIndex(0);
       setAdvanceHint(null);
       setRouteHint(null);
