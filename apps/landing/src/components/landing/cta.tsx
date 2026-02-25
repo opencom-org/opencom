@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { ArrowRight, GithubLogo, Sparkle } from "@phosphor-icons/react";
 import Link from "next/link";
 import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_DOCS_URL } from "@/lib/links";
@@ -11,37 +10,11 @@ export function CTA() {
       data-tour-target="final-cta-section"
       className="relative py-40 overflow-hidden border-t border-border/40 bg-[#f9fafb] dark:bg-background"
     >
-      {/* Mesh Gradient Background / Lava-lamp blobs */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[1000px] aspect-square pointer-events-none opacity-50 dark:opacity-30 mix-blend-multiply dark:mix-blend-screen">
-        <motion.div
-          animate={{
-            rotate: 360,
-            scale: [1, 1.1, 1],
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-0 bg-gradient-to-r from-primary/30 to-violet-500/30 blur-[120px] rounded-full"
-        />
-        <motion.div
-          animate={{
-            rotate: -360,
-            scale: [1, 1.2, 1],
-          }}
-          transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
-          className="absolute inset-10 bg-gradient-to-l from-blue-500/30 to-primary/30 blur-[120px] rounded-full"
-        />
-      </div>
-
-      {/* Noise overlay */}
-      <div className="pointer-events-none absolute inset-0 z-0 opacity-[0.03] mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]" />
+      {/* Static accent gradients to avoid scroll-time paint churn */}
+      <div className="pointer-events-none absolute inset-0 z-0 opacity-70 [background:radial-gradient(circle_at_20%_20%,rgba(124,58,237,0.14),transparent_42%),radial-gradient(circle_at_80%_75%,rgba(59,130,246,0.12),transparent_40%)]" />
 
       <div className="relative z-10 mx-auto max-w-[1400px] px-6 lg:px-12 flex flex-col items-center text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          whileInView={{ opacity: 1, y: 0, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ type: "spring", stiffness: 100, damping: 20 }}
-          className="bg-white dark:bg-card border border-slate-200/50 dark:border-white/5 rounded-[3rem] p-12 md:p-20 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] flex flex-col items-center w-full max-w-4xl"
-        >
+        <div className="bg-white dark:bg-card border border-slate-200/50 dark:border-white/5 rounded-[3rem] p-12 md:p-20 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] flex flex-col items-center w-full max-w-4xl">
           <div className="mb-8 flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary">
             <Sparkle weight="fill" className="w-8 h-8" />
           </div>
@@ -77,7 +50,7 @@ export function CTA() {
             <Link
               href={OPENCOM_GITHUB_DOCS_URL}
               target="_blank"
-              className="group flex h-14 w-full sm:w-auto items-center justify-center gap-3 rounded-2xl border border-border/80 bg-white dark:bg-background px-10 font-semibold text-foreground transition-all hover:bg-muted/50 hover:border-border hover:scale-105 active:scale-95 shadow-sm"
+              className="group flex h-14 w-full sm:w-auto items-center justify-center gap-3 rounded-2xl border border-border/80 bg-white dark:bg-background px-10 font-semibold text-foreground transition-[transform,background-color,border-color] hover:bg-muted/50 hover:border-border hover:scale-105 active:scale-95 shadow-sm"
             >
               <GithubLogo
                 weight="fill"
@@ -86,7 +59,7 @@ export function CTA() {
               View Repository
             </Link>
           </div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );
