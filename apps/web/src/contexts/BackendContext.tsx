@@ -77,6 +77,9 @@ export function BackendProvider({ children }: { children: ReactNode }): React.JS
   const [activeBackend, setActiveBackend] = useState<StoredBackend | null>(null);
   const [recentBackends, setRecentBackends] = useState<StoredBackend[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [defaultBackendUrl, setDefaultBackendUrl] = useState<string | undefined>(
+    DEFAULT_BACKEND_URL
+  );
 
   useEffect(() => {
     void loadBackendStorage();
@@ -98,6 +101,7 @@ export function BackendProvider({ children }: { children: ReactNode }): React.JS
       }
 
       const queryParamBackendUrl = getBackendUrlFromQueryParam();
+      setDefaultBackendUrl(queryParamBackendUrl ?? DEFAULT_BACKEND_URL);
       const autoSelectBackendUrl = queryParamBackendUrl ?? DEFAULT_BACKEND_URL;
 
       if (autoSelectBackendUrl) {
@@ -199,7 +203,7 @@ export function BackendProvider({ children }: { children: ReactNode }): React.JS
         convexUrl: activeBackend?.convexUrl ?? null,
         selectBackend,
         clearBackend,
-        defaultBackendUrl: DEFAULT_BACKEND_URL,
+        defaultBackendUrl,
       }}
     >
       {children}
