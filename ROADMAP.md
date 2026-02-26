@@ -22,13 +22,14 @@ Goal: ship a professional open-source customer messaging platform with strong de
 - [ ] make mobile app match inbox functionality (understand AI review, which messages were sent by AI, visitors list and details/navigation flows)
 - [ ] Merge some sidebar items
 - [ ] Check AI chat suggestions setup is working
-- [ ] check email campaign setup 
+- [ ] check email campaign setup
 - [ ] check series setup
+- [ ] plan shift to production env
+- [ ] edit app store description for License to AGPLv3
 
 - [ ] **(P0 | 0.95)** Finalize Convex integration:
   - CI for Convex functions on push.
   - set up proper CI strategy (preview branches on vercel and convex? Multiple vs single release branches?)
-
 
 - [ ] **(P0 | 0.90)** Finalize auth edge cases across web + mobile:
   - Password attempt should gracefully route to OTP flow when account is OTP-only.

@@ -201,7 +201,7 @@ export function Hero() {
 
           <motion.div
             variants={item}
-            className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto"
+            className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-10"
           >
             <Link
               href={OPENCOM_HOSTED_ONBOARDING_URL}
@@ -230,6 +230,57 @@ export function Hero() {
               />
               GitHub Docs
             </Link>
+          </motion.div>
+
+          {/* Hosting Options & Apps */}
+          <motion.div variants={item} className="flex flex-col gap-6 w-full mt-4">
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold text-foreground/90 uppercase tracking-wider">
+                Flexible hosting for any team
+              </p>
+              <ul className="text-sm text-muted-foreground flex flex-col gap-2.5">
+                <li className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  </div>
+                  Self-host everything for total control
+                </li>
+                <li className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  </div>
+                  Self-host backend + use our hosted frontends (Free)
+                </li>
+                <li className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  </div>
+                  Use our fully hosted managed cloud
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-4 border-t border-border/60 mt-2">
+              <span className="text-sm font-medium text-foreground/80 whitespace-nowrap">
+                Manage inbox on the go:
+              </span>
+              <div className="flex items-center gap-3">
+                <Link
+                  href="https://apps.apple.com/us/app/opencom/id6759488331"
+                  target="_blank"
+                  className="transition-transform hover:scale-105 active:scale-95"
+                >
+                  <img src="/app-store-badge.svg" alt="Download on the App Store" className="h-[40px] w-auto" />
+                </Link>
+                <Link
+                  href="https://play.google.com/store/apps/details?id=com.opencom.app"
+                  target="_blank"
+                  className="transition-transform hover:scale-105 active:scale-95"
+                >
+                  <img src="/google-play-badge.png" alt="Get it on Google Play" className="h-[58px] w-auto -ml-2" />
+                </Link>
+              </div>
+            </div>
           </motion.div>
         </motion.div>
 
