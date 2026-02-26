@@ -19,6 +19,27 @@ type VerificationStatus = "idle" | "checking" | "success" | "error";
 
 const VERIFY_TIMEOUT_MS = 15000;
 
+function formatTimestamp(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "unknown";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+}
+
+function formatClientType(clientType: string): string {
+  if (clientType === "web_widget") {
+    return "Web widget";
+  }
+  if (clientType === "mobile_sdk") {
+    return "Mobile SDK";
+  }
+  return clientType.replace(/_/g, " ");
+}
+
 export default function OnboardingScreen() {
   const { activeWorkspaceId, user } = useAuth();
   const { activeBackend } = useBackend();
@@ -34,6 +55,10 @@ export default function OnboardingScreen() {
 
   const onboardingState = useQuery(
     api.workspaces.getHostedOnboardingState,
+    workspaceId ? { workspaceId } : "skip"
+  );
+  const integrationSignals = useQuery(
+    api.workspaces.getHostedOnboardingIntegrationSignals,
     workspaceId ? { workspaceId } : "skip"
   );
 
@@ -129,7 +154,7 @@ export default function OnboardingScreen() {
     verifyTimeoutRef.current = setTimeout(() => {
       setVerificationStatus("error");
       setVerificationMessage(
-        "No verification event was received yet. Confirm the widget snippet is live, then retry."
+        "No active widget/SDK installation detected yet. Confirm your setup is live, then retry."
       );
     }, VERIFY_TIMEOUT_MS);
 
@@ -173,7 +198,7 @@ export default function OnboardingScreen() {
     }
 
     setVerificationStatus("checking");
-    setVerificationMessage("Checking for a verification event from your installed widget...");
+    setVerificationMessage("Checking for active web or mobile widget sessions...");
   };
 
   const handleRegenerateToken = async () => {
@@ -194,6 +219,29 @@ export default function OnboardingScreen() {
 
   const verificationToken = onboardingState?.verificationToken ?? localVerificationToken;
   const isVerified = onboardingState?.isWidgetVerified ?? false;
+  const detectedIntegrations = integrationSignals?.integrations ?? [];
+  const showInstallGuidance = !isVerified;
+  const resolvedConvexUrl = activeBackend?.convexUrl ?? "YOUR_CONVEX_URL";
+  const resolvedWorkspaceId = workspaceId ?? "YOUR_WORKSPACE_ID";
+  const webSnippetLines = [
+    "<script",
+    '  src="https://cdn.opencom.dev/widget.js"',
+    `  data-opencom-convex-url="${resolvedConvexUrl}"`,
+    `  data-opencom-workspace-id="${resolvedWorkspaceId}"`,
+    '  data-opencom-track-page-views="true"',
+    verificationToken
+      ? `  data-opencom-onboarding-verification-token="${verificationToken}"`
+      : null,
+    "></script>",
+  ];
+  const webSnippetWithToken = webSnippetLines.filter(Boolean).join("\n");
+
+  const reactNativeSnippet = `import { OpencomSDK } from "@opencom/react-native-sdk";
+
+await OpencomSDK.initialize({
+  workspaceId: "${resolvedWorkspaceId}",
+  convexUrl: "${resolvedConvexUrl}",
+});`;
 
   if (onboardingState === undefined) {
     return (
@@ -225,6 +273,119 @@ export default function OnboardingScreen() {
           </Text>
         </View>
       </View>
+
+      <View style={styles.card}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.cardTitle}>Detected installations</Text>
+          <View style={styles.signalCountBadge}>
+            <Text style={styles.signalCountText}>{detectedIntegrations.length}</Text>
+          </View>
+        </View>
+        <Text style={styles.cardDescription}>
+          Signals are based on widget sessions from the last 30 days.
+        </Text>
+
+        {detectedIntegrations.length > 0 ? (
+          <View style={styles.integrationList}>
+            {detectedIntegrations.map((signal) => {
+              const recognized = signal.isActiveNow && signal.matchesCurrentVerificationWindow;
+              const statusLabel = recognized
+                ? "Recognized"
+                : signal.isActiveNow
+                  ? "Active"
+                  : "Inactive";
+
+              return (
+                <View key={signal.id} style={styles.integrationItem}>
+                  <View style={styles.integrationHeader}>
+                    <Text style={styles.integrationTitle}>
+                      {formatClientType(signal.clientType)}
+                      {signal.clientVersion ? ` v${signal.clientVersion}` : ""}
+                    </Text>
+                    <View
+                      style={[
+                        styles.integrationStatus,
+                        recognized
+                          ? styles.integrationStatusRecognized
+                          : signal.isActiveNow
+                            ? styles.integrationStatusActive
+                            : styles.integrationStatusInactive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.integrationStatusText,
+                          recognized
+                            ? styles.integrationStatusTextRecognized
+                            : signal.isActiveNow
+                              ? styles.integrationStatusTextActive
+                              : styles.integrationStatusTextInactive,
+                        ]}
+                      >
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.integrationMeta} numberOfLines={2}>
+                    {signal.origin ?? signal.currentUrl ?? signal.clientIdentifier ?? "Unknown source"}
+                    {" · Last seen "}
+                    {formatTimestamp(signal.lastSeenAt)}
+                    {" · Active sessions "}
+                    {signal.activeSessionCount}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={styles.emptyStateText}>
+            No active widget/SDK installations detected yet for this workspace.
+          </Text>
+        )}
+      </View>
+
+      {showInstallGuidance ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Install widget / SDK</Text>
+          <Text style={styles.cardDescription}>
+            Add one of these setups, then retry verification. This matches the hosted web onboarding
+            guidance.
+          </Text>
+
+          <Text style={styles.label}>Web widget snippet</Text>
+          <View style={styles.snippetBox}>
+            <Text style={styles.snippetText}>{webSnippetWithToken}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => {
+              void handleCopy(webSnippetWithToken, "Web widget snippet");
+            }}
+          >
+            <Text style={styles.secondaryButtonText}>Copy web snippet</Text>
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <Text style={styles.label}>React Native SDK init</Text>
+          <View style={styles.snippetBox}>
+            <Text style={styles.snippetText}>{reactNativeSnippet}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => {
+              void handleCopy(reactNativeSnippet, "React Native SDK snippet");
+            }}
+          >
+            <Text style={styles.secondaryButtonText}>Copy SDK snippet</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.helperText}>
+            If this workspace is not the one you installed on, switch workspace in Settings and
+            retry.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Setup values</Text>
@@ -356,6 +517,30 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#222",
   },
+  cardDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#666",
+    marginTop: -4,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  signalCountBadge: {
+    minWidth: 24,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+  },
+  signalCountText: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "600",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -374,6 +559,79 @@ const styles = StyleSheet.create({
   value: {
     fontSize: 13,
     color: "#222",
+    fontFamily: "monospace",
+  },
+  integrationList: {
+    gap: 8,
+  },
+  integrationItem: {
+    borderWidth: 1,
+    borderColor: "#ececec",
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+    backgroundColor: "#fff",
+  },
+  integrationHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  integrationTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#111827",
+    flex: 1,
+  },
+  integrationStatus: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  integrationStatusRecognized: {
+    backgroundColor: "#dcfce7",
+  },
+  integrationStatusActive: {
+    backgroundColor: "#dbeafe",
+  },
+  integrationStatusInactive: {
+    backgroundColor: "#f3f4f6",
+  },
+  integrationStatusText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  integrationStatusTextRecognized: {
+    color: "#15803d",
+  },
+  integrationStatusTextActive: {
+    color: "#1d4ed8",
+  },
+  integrationStatusTextInactive: {
+    color: "#6b7280",
+  },
+  integrationMeta: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 17,
+  },
+  emptyStateText: {
+    fontSize: 13,
+    color: "#6b7280",
+    lineHeight: 18,
+  },
+  snippetBox: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    backgroundColor: "#f9fafb",
+    padding: 10,
+  },
+  snippetText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#1f2937",
     fontFamily: "monospace",
   },
   divider: {
@@ -437,6 +695,11 @@ const styles = StyleSheet.create({
     color: "#333",
     fontSize: 13,
     fontWeight: "500",
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#6b7280",
+    lineHeight: 18,
   },
   buttonDisabled: {
     opacity: 0.7,

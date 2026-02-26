@@ -40,6 +40,8 @@ function AppLayoutContent() {
   return (
     <NotificationProvider>
       <Stack>
+        <Stack.Screen name="workspace" options={{ title: "Select Workspace" }} />
+        <Stack.Screen name="onboarding" options={{ title: "Onboarding" }} />
         <Stack.Screen name="index" options={{ title: "Inbox", headerShown: true }} />
         <Stack.Screen name="conversation/[id]" options={{ title: "Conversation" }} />
         <Stack.Screen name="settings" options={{ title: "Settings" }} />

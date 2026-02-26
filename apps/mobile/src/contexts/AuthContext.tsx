@@ -23,11 +23,14 @@ interface Workspace {
   allowedOrigins?: string[];
 }
 
+type HomePath = "/workspace" | "/onboarding" | "/inbox";
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  defaultHomePath: "/onboarding" | "/inbox";
+  defaultHomePath: HomePath;
+  requiresWorkspaceSelection: boolean;
   isHomeRouteLoading: boolean;
   workspaces: Workspace[];
   activeWorkspace: Workspace | null;
@@ -39,6 +42,7 @@ interface AuthContextType {
   completeSignupProfile: (name: string, workspaceName?: string) => Promise<void>;
   logout: () => Promise<void>;
   switchWorkspace: (workspaceId: Id<"workspaces">) => Promise<void>;
+  completeWorkspaceSelection: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -46,9 +50,9 @@ const ACTIVE_WORKSPACE_STORAGE_PREFIX = "opencom_mobile_active_workspace";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { activeBackend } = useBackend();
-  const supportsHostedOnboarding = activeBackend?.features?.includes("hosted-onboarding") ?? false;
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<Id<"workspaces"> | null>(null);
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
+  const [requiresWorkspaceSelection, setRequiresWorkspaceSelection] = useState(false);
 
   // Convex Auth hooks
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
@@ -81,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const hydrateActiveWorkspace = async () => {
       if (!user || workspaceIds.length === 0) {
         setActiveWorkspaceId(null);
+        setRequiresWorkspaceSelection(false);
         setIsWorkspaceLoading(false);
         return;
       }
@@ -95,12 +100,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           userWorkspaceId: user.workspaceId,
           availableWorkspaceIds: workspaceIds,
         });
+        const shouldPromptWorkspaceSelection = !storedWorkspaceId && workspaceIds.length > 1;
 
         if (cancelled) {
           return;
         }
 
         setActiveWorkspaceId(resolvedWorkspaceId);
+        setRequiresWorkspaceSelection(shouldPromptWorkspaceSelection);
         if (workspaceStorageKey) {
           if (resolvedWorkspaceId) {
             await AsyncStorage.setItem(workspaceStorageKey, resolvedWorkspaceId);
@@ -119,6 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         setActiveWorkspaceId(fallbackWorkspaceId);
+        setRequiresWorkspaceSelection(workspaceIds.length > 1);
       } finally {
         if (!cancelled) {
           setIsWorkspaceLoading(false);
@@ -144,23 +152,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [activeWorkspaceId, workspaces]
   );
   const workspaceIdForHomeRouting = activeWorkspace?._id ?? user?.workspaceId ?? null;
-  const isLoading = convexAuthUser === undefined || (!!user && isWorkspaceLoading);
   const isAuthenticated = !!user;
+  const shouldRequireWorkspaceSelection = requiresWorkspaceSelection && workspaces.length > 1;
+  const shouldResolveHostedOnboarding =
+    isAuthenticated && !!workspaceIdForHomeRouting && !shouldRequireWorkspaceSelection;
   const hostedOnboardingState = useQuery(
     api.workspaces.getHostedOnboardingState,
-    supportsHostedOnboarding && workspaceIdForHomeRouting
+    shouldResolveHostedOnboarding && workspaceIdForHomeRouting
       ? { workspaceId: workspaceIdForHomeRouting }
       : "skip"
   );
-  const isHomeRouteLoading =
-    supportsHostedOnboarding &&
-    isAuthenticated &&
-    !!workspaceIdForHomeRouting &&
-    hostedOnboardingState === undefined;
-  const defaultHomePath: "/onboarding" | "/inbox" =
-    supportsHostedOnboarding && hostedOnboardingState && !hostedOnboardingState.isWidgetVerified
+  const isHomeRouteLoading = shouldResolveHostedOnboarding && hostedOnboardingState === undefined;
+  const defaultHomePath: HomePath = shouldRequireWorkspaceSelection
+    ? "/workspace"
+    : hostedOnboardingState && !hostedOnboardingState.isWidgetVerified
       ? "/onboarding"
       : "/inbox";
+  const isLoading = convexAuthUser === undefined || (!!user && isWorkspaceLoading);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -236,6 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     await convexSignOut();
     setActiveWorkspaceId(null);
+    setRequiresWorkspaceSelection(false);
     if (workspaceStorageKey) {
       await AsyncStorage.removeItem(workspaceStorageKey);
     }
@@ -249,6 +258,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await switchWorkspaceMutation({ workspaceId });
       setActiveWorkspaceId(workspaceId);
+      setRequiresWorkspaceSelection(false);
 
       if (workspaceStorageKey) {
         await AsyncStorage.setItem(workspaceStorageKey, workspaceId);
@@ -257,11 +267,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [activeWorkspaceId, switchWorkspaceMutation, workspaceStorageKey]
   );
 
+  const completeWorkspaceSelection = useCallback(async () => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    setRequiresWorkspaceSelection(false);
+    const workspaceToPersist = activeWorkspaceId ?? user?.workspaceId ?? null;
+    if (!workspaceStorageKey) {
+      return;
+    }
+
+    if (workspaceToPersist) {
+      await AsyncStorage.setItem(workspaceStorageKey, workspaceToPersist);
+    } else {
+      await AsyncStorage.removeItem(workspaceStorageKey);
+    }
+  }, [activeWorkspaceId, isAuthenticated, user?.workspaceId, workspaceStorageKey]);
+
   const value: AuthContextType = {
     user,
     isLoading,
     isAuthenticated,
     defaultHomePath,
+    requiresWorkspaceSelection,
     isHomeRouteLoading,
     workspaces,
     activeWorkspace,
@@ -273,6 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     completeSignupProfile,
     logout,
     switchWorkspace,
+    completeWorkspaceSelection,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -286,6 +316,7 @@ export function useAuth(): AuthContextType {
       isLoading: true,
       isAuthenticated: false,
       defaultHomePath: "/inbox",
+      requiresWorkspaceSelection: false,
       isHomeRouteLoading: false,
       workspaces: [],
       activeWorkspace: null,
@@ -309,6 +340,9 @@ export function useAuth(): AuthContextType {
         throw new Error("No AuthProvider");
       },
       switchWorkspace: async () => {
+        throw new Error("No AuthProvider");
+      },
+      completeWorkspaceSelection: async () => {
         throw new Error("No AuthProvider");
       },
     };

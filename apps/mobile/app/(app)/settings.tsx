@@ -178,6 +178,10 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleOpenOnboardingGuide = () => {
+    router.push("/(app)/onboarding" as never);
+  };
+
   const handleInvite = async () => {
     if (
       // !token ||
@@ -711,6 +715,18 @@ export default function SettingsScreen() {
       )}
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Onboarding</Text>
+        <Text style={styles.sectionHint}>
+          Revisit install instructions and verification for this workspace.
+        </Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={handleOpenOnboardingGuide}>
+            <Text style={styles.onboardingGuideText}>Open onboarding guide</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Backend</Text>
         <View style={styles.card}>
           <View style={styles.row}>
@@ -1020,6 +1036,11 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   changeBackendText: {
+    color: "#792cd4",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  onboardingGuideText: {
     color: "#792cd4",
     fontSize: 16,
     fontWeight: "500",

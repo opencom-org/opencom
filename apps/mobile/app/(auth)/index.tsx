@@ -21,9 +21,21 @@ const INPUT_PLACEHOLDER_COLOR = "#9ca3af";
 
 export default function BackendSelectionScreen() {
   const { recentBackends, selectBackend, defaultBackendUrl } = useBackend();
+  const hostedBackendUrl = defaultBackendUrl?.trim() ?? "";
+  const hasHostedBackendOption = hostedBackendUrl.length > 0;
   const [url, setUrl] = useState(defaultBackendUrl ?? "");
   const [isLoading, setIsLoading] = useState(false);
   const submitLockRef = useRef(createSubmitLock());
+
+  const connectToBackend = async (backendUrl: string) => {
+    const result = await selectBackend(backendUrl);
+    if (result.success) {
+      router.replace("/(auth)/login");
+      return;
+    }
+
+    Alert.alert("Connection Failed", result.error ?? "Could not connect to backend");
+  };
 
   const handleConnect = async () => {
     const trimmedUrl = url.trim();
@@ -35,12 +47,7 @@ export default function BackendSelectionScreen() {
     await runWithSubmitLock(submitLockRef.current, async () => {
       setIsLoading(true);
       try {
-        const result = await selectBackend(trimmedUrl);
-        if (result.success) {
-          router.replace("/(auth)/login");
-        } else {
-          Alert.alert("Connection Failed", result.error ?? "Could not connect to backend");
-        }
+        await connectToBackend(trimmedUrl);
       } catch (error) {
         Alert.alert("Error", error instanceof Error ? error.message : "An error occurred");
       } finally {
@@ -53,12 +60,25 @@ export default function BackendSelectionScreen() {
     await runWithSubmitLock(submitLockRef.current, async () => {
       setIsLoading(true);
       try {
-        const result = await selectBackend(backend.url);
-        if (result.success) {
-          router.replace("/(auth)/login");
-        } else {
-          Alert.alert("Connection Failed", result.error ?? "Could not connect to backend");
-        }
+        await connectToBackend(backend.url);
+      } catch (error) {
+        Alert.alert("Error", error instanceof Error ? error.message : "An error occurred");
+      } finally {
+        setIsLoading(false);
+      }
+    });
+  };
+
+  const handleUseHostedBackend = async () => {
+    if (!hasHostedBackendOption) {
+      return;
+    }
+
+    setUrl(hostedBackendUrl);
+    await runWithSubmitLock(submitLockRef.current, async () => {
+      setIsLoading(true);
+      try {
+        await connectToBackend(hostedBackendUrl);
       } catch (error) {
         Alert.alert("Error", error instanceof Error ? error.message : "An error occurred");
       } finally {
@@ -104,6 +124,28 @@ export default function BackendSelectionScreen() {
             }}
           />
           <Text style={styles.helpText}>Enter the URL of your Opencom backend server</Text>
+
+          {hasHostedBackendOption && (
+            <View style={styles.hostedCard}>
+              <Text style={styles.hostedTitle}>No custom backend yet?</Text>
+              <Text style={styles.hostedDescription}>
+                You can start with the default hosted Opencom backend now and switch to your own
+                backend later.
+              </Text>
+              <TouchableOpacity
+                style={[styles.hostedButton, isLoading && styles.buttonDisabled]}
+                onPress={() => {
+                  void handleUseHostedBackend();
+                }}
+                disabled={isLoading}
+              >
+                <Text style={styles.hostedButtonText}>Use Opencom Hosted</Text>
+              </TouchableOpacity>
+              <Text style={styles.hostedUrl} numberOfLines={1}>
+                {hostedBackendUrl}
+              </Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -176,6 +218,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#888",
     marginTop: 4,
+  },
+  hostedCard: {
+    marginTop: 16,
+    backgroundColor: "#f9f5ff",
+    borderWidth: 1,
+    borderColor: "#e9d5ff",
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  hostedTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#5b21b6",
+  },
+  hostedDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#6b21a8",
+  },
+  hostedButton: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#d8b4fe",
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  hostedButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#6b21a8",
+  },
+  hostedUrl: {
+    fontSize: 11,
+    color: "#7c3aed",
+    fontFamily: "monospace",
   },
   button: {
     backgroundColor: "#792cd4",

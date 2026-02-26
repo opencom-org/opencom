@@ -36,17 +36,35 @@ function AuthNavigationGuard({ children }: { children: React.ReactNode }) {
     const onBackendScreen = inAuthGroup && segments.length <= 1;
     const inAppGroup = segments[0] === "(app)";
     const onAppRoot = inAppGroup && segments.length === 1;
+    const currentAppRoute = (segments[1] ?? "") as string;
+    const onWorkspaceRoute = inAppGroup && currentAppRoute === "workspace";
+    const onOnboardingRoute = inAppGroup && currentAppRoute === "onboarding";
+    const onHomeEntryRoute = inAppGroup && (onAppRoot || currentAppRoute === "index");
+
+    const homeRoute =
+      defaultHomePath === "/workspace"
+        ? "/workspace"
+        : defaultHomePath === "/onboarding"
+          ? "/onboarding"
+          : "/inbox";
 
     if (isAuthenticated && inAuthGroup && !onBackendScreen) {
       // User is authenticated but on login/signup screen - redirect to home.
-      if (defaultHomePath === "/onboarding") {
-        router.replace("/onboarding" as never);
-      } else {
-        router.replace("/inbox" as never);
-      }
-    } else if (isAuthenticated && defaultHomePath === "/onboarding" && onAppRoot) {
-      // Keep onboarding as default entry point until widget verification completes.
+      router.replace(homeRoute as never);
+    } else if (isAuthenticated && defaultHomePath === "/workspace" && !onWorkspaceRoute) {
+      // If a first-time user has multiple workspaces, force explicit workspace choice first.
+      router.replace("/workspace" as never);
+    } else if (
+      isAuthenticated &&
+      defaultHomePath === "/onboarding" &&
+      onHomeEntryRoute &&
+      !onOnboardingRoute
+    ) {
+      // Keep onboarding as the app entry point until widget verification completes.
       router.replace("/onboarding" as never);
+    } else if (isAuthenticated && defaultHomePath !== "/workspace" && onWorkspaceRoute) {
+      // Workspace selection is complete; route to the new default home.
+      router.replace(homeRoute as never);
     } else if (!isAuthenticated && !inAuthGroup) {
       // User is not authenticated and trying to access app - redirect to login
       router.replace("/(auth)/login");
