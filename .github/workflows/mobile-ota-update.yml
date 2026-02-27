@@ -1,0 +1,50 @@
+name: Mobile OTA Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      expo_channel:
+        description: Expo channel for OTA update
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - preview
+          - development
+
+concurrency:
+  group: mobile-ota-update
+  cancel-in-progress: false
+
+jobs:
+  update-expo:
+    name: Update Expo Apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node + pnpm + dependencies
+        uses: ./.github/actions/setup-node-pnpm
+        with:
+          node-version: "20"
+          install: "true"
+
+      - name: Validate required Expo secrets
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "::error::Missing required secret: EXPO_TOKEN"
+            exit 1
+          fi
+
+      - name: Publish OTA update
+        working-directory: apps/mobile
+        run: pnpm dlx eas-cli@latest update --channel "${{ inputs.expo_channel }}" --auto --non-interactive

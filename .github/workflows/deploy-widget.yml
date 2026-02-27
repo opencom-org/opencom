@@ -34,19 +34,11 @@ jobs:
         # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Setup pnpm
-        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
-        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
-
-      - name: Setup Node.js
-        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Setup Node + pnpm + dependencies
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version: "20"
+          install: "true"
 
       - name: Deploy widget bundle to CDN
         env:

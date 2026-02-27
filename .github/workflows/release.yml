@@ -2,21 +2,6 @@ name: Release Orchestrator
 
 on:
   workflow_dispatch:
-    inputs:
-      run_expo_updates:
-        description: Send Expo OTA update after Convex, web, and landing succeed
-        type: boolean
-        required: false
-        default: false
-      expo_channel:
-        description: Expo channel for OTA update
-        type: choice
-        required: true
-        default: production
-        options:
-          - production
-          - preview
-          - development
   # push:
   #   branches:
   #     - "main"
@@ -40,19 +25,11 @@ jobs:
         # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Setup pnpm
-        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
-        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
-
-      - name: Setup Node.js
-        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Setup Node + pnpm + dependencies
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          node-version: "20"
+          install: "true"
 
       - name: Validate required deploy secrets
         run: |
@@ -151,45 +128,43 @@ jobs:
       - name: Trigger landing deploy hook and wait for READY
         run: node scripts/vercel-deploy-hook-and-wait.js
 
-  update-expo:
-    name: Update Expo Apps
+  deploy-widget:
+    name: Deploy Widget CDN
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs:
-      - deploy-web
-      - deploy-landing
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_expo_updates == 'true' }}
-    permissions:
-      contents: read
+    timeout-minutes: 20
+    needs: deploy-convex
     env:
-      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      WIDGET_CDN_BUCKET: opencom-static
+      WIDGET_CDN_BASE_URL: https://cdn.opencom.dev
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
 
     steps:
       - name: Checkout
         # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Setup pnpm
-        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
-        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
-
-      - name: Setup Node.js
-        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - name: Setup Node + pnpm + dependencies
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: 20
-          cache: pnpm
+          node-version: "20"
+          install: "true"
 
-      - name: Validate required Expo secrets
+      - name: Validate required widget deploy secrets
         run: |
-          if [ -z "${EXPO_TOKEN}" ]; then
-            echo "::error::Missing required secret: EXPO_TOKEN"
+          missing=0
+          for name in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
             exit 1
           fi
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Publish OTA update
-        working-directory: apps/mobile
-        run: pnpm dlx eas-cli@latest update --channel "${{ github.event.inputs.expo_channel || 'production' }}" --auto --non-interactive
+      - name: Deploy widget bundle to CDN
+        env:
+          DRY_RUN: "0"
+        run: bash scripts/deploy-widget-cdn.sh
