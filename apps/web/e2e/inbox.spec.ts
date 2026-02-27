@@ -137,6 +137,45 @@ test.describe("Inbox deterministic flow", () => {
     });
   });
 
+  test("switching between conversations does not oscillate selection", async ({ page }) => {
+    const firstVisitorName = "e2e_test_switch_first";
+    const secondVisitorName = "e2e_test_switch_second";
+    const firstMessage = "Switch target first conversation";
+    const secondMessage = "Switch target second conversation";
+
+    const firstSeeded = await createInboxConversationFixture(workspaceId, {
+      visitorName: firstVisitorName,
+      visitorEmail: `${firstVisitorName}@test.opencom.dev`,
+      initialMessages: [{ content: firstMessage, senderType: "visitor" }],
+    });
+    const secondSeeded = await createInboxConversationFixture(workspaceId, {
+      visitorName: secondVisitorName,
+      visitorEmail: `${secondVisitorName}@test.opencom.dev`,
+      initialMessages: [{ content: secondMessage, senderType: "visitor" }],
+    });
+
+    await openInbox(page);
+
+    await page.getByTestId(`conversation-item-${firstSeeded.conversationId}`).click();
+    await expect(page.getByTestId("inbox-reply-input")).toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("conversationId"))
+      .toBe(String(firstSeeded.conversationId));
+
+    await page.getByTestId(`conversation-item-${secondSeeded.conversationId}`).click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("conversationId"))
+      .toBe(String(secondSeeded.conversationId));
+    await expect(page.getByTestId("inbox-message-list")).toContainText(secondMessage, {
+      timeout: 10000,
+    });
+
+    await page.waitForTimeout(1200);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("conversationId"))
+      .toBe(String(secondSeeded.conversationId));
+  });
+
   test("reply moves conversation to top ordering", async ({ page }) => {
     const olderVisitor = "e2e_test_order_old";
     const newerVisitor = "e2e_test_order_new";
@@ -218,7 +257,7 @@ test.describe("Inbox deterministic flow", () => {
     await expect(page).toHaveURL(/\/tickets\/.+/, { timeout: 10000 });
   });
 
-  test("uses visitor id fallback label and opens visitor profile from selected conversation", async ({
+  test("uses visitor id fallback label and restores selected thread when returning from visitor profile", async ({
     page,
   }) => {
     const seeded = await createInboxConversationFixture(workspaceId, {
@@ -239,11 +278,24 @@ test.describe("Inbox deterministic flow", () => {
 
     await page.getByTestId(`conversation-item-${seeded.conversationId}`).click();
     await expect(page.getByTestId("inbox-reply-input")).toBeVisible({ timeout: 10000 });
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("conversationId"))
+      .toBe(String(seeded.conversationId));
 
     await expect(page.getByTestId("inbox-open-visitor-profile")).toBeVisible({ timeout: 10000 });
     await page.getByTestId("inbox-open-visitor-profile").click();
     await expect(page).toHaveURL(new RegExp(`/visitors/${seeded.visitorId}$`), { timeout: 10000 });
     await expect(page.getByTestId("visitor-detail-heading")).toBeVisible({ timeout: 10000 });
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/inbox(?:\?|$)/, { timeout: 10000 });
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("conversationId"))
+      .toBe(String(seeded.conversationId));
+    await expect(page.getByTestId("inbox-reply-input")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("inbox-message-list")).toContainText("Anonymous visitor message", {
+      timeout: 10000,
+    });
   });
 
   test("hides visitor profile action for conversations without visitor id", async ({ page }) => {
@@ -371,10 +423,10 @@ test.describe("Inbox deterministic flow", () => {
     await expect(page.getByTestId("inbox-workflow-error")).toHaveCount(0);
   });
 
-  test("desktop viewport keeps core actions visible with on-demand AI review", async ({ page }) => {
+  test("desktop viewport keeps all thread header actions visible", async ({ page }) => {
     const visitorName = "e2e_test_desktop_rails";
 
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1180, height: 900 });
     await setInboxSuggestionsEnabled(workspaceId, true);
     await createInboxConversationFixture(workspaceId, {
       visitorName,
@@ -386,9 +438,18 @@ test.describe("Inbox deterministic flow", () => {
     await openConversationThread(page, visitorName);
 
     await expect(page.getByTestId("inbox-conversation-pane")).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId("inbox-sidecar-container")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("inbox-ai-review-panel")).toHaveCount(0);
+    await expect(page.getByTestId("inbox-resolve-button")).toBeVisible();
+    await expect(page.getByTestId("inbox-convert-ticket-button")).toBeVisible();
+    await expect(page.getByTestId("inbox-open-visitor-profile")).toBeVisible();
     await expect(page.getByTestId("inbox-open-ai-review")).toBeVisible({ timeout: 10000 });
+    await expect(page.getByTestId("inbox-open-suggestions")).toBeVisible({ timeout: 10000 });
+
+    await page.getByTestId("inbox-open-suggestions").click();
+    await expect(page.getByTestId("inbox-sidecar-container")).toBeVisible({ timeout: 10000 });
+    await page.getByTestId("inbox-sidecar-container-close").click();
+    await expect(page.getByTestId("inbox-sidecar-container")).toHaveCount(0);
+
     await page.getByTestId("inbox-open-ai-review").click();
     await expect(page.getByTestId("inbox-ai-review-panel")).toBeVisible({ timeout: 10000 });
     await page.getByTestId("inbox-ai-review-panel-close").click();

@@ -127,6 +127,7 @@ function InboxContent(): React.JSX.Element | null {
   });
   const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
   const defaultTitleRef = useRef<string | null>(null);
+  const lastAppliedQueryConversationIdRef = useRef<Id<"conversations"> | null>(null);
 
   const inboxQueryArgs = activeWorkspace?._id
     ? {
@@ -307,18 +308,66 @@ function InboxContent(): React.JSX.Element | null {
     }
     if (!conversations.some((conversation) => conversation._id === selectedConversationId)) {
       setSelectedConversationId(null);
+      setActiveCompactPanel(null);
     }
   }, [conversations, selectedConversationId]);
 
   useEffect(() => {
-    if (!queryConversationId || !conversations || selectedConversationId) {
+    if (!conversations) {
+      return;
+    }
+    const queryHasChanged = lastAppliedQueryConversationIdRef.current !== queryConversationId;
+    if (!queryHasChanged) {
+      return;
+    }
+    lastAppliedQueryConversationIdRef.current = queryConversationId;
+    if (!queryConversationId) {
+      if (selectedConversationId !== null) {
+        setSelectedConversationId(null);
+        setActiveCompactPanel(null);
+      }
       return;
     }
     if (!conversations.some((conversation) => conversation._id === queryConversationId)) {
       return;
     }
-    setSelectedConversationId(queryConversationId);
+    if (selectedConversationId !== queryConversationId) {
+      setSelectedConversationId(queryConversationId);
+      setWorkflowError(null);
+    }
   }, [conversations, queryConversationId, selectedConversationId]);
+
+  useEffect(() => {
+    if (isConversationsLoading) {
+      return;
+    }
+    if (
+      selectedConversationId === null &&
+      queryConversationId &&
+      conversations?.some((conversation) => conversation._id === queryConversationId)
+    ) {
+      return;
+    }
+    if (selectedConversationId === queryConversationId) {
+      return;
+    }
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    if (selectedConversationId) {
+      nextSearchParams.set("conversationId", selectedConversationId);
+    } else {
+      nextSearchParams.delete("conversationId");
+    }
+    nextSearchParams.delete("conversation");
+    const nextQuery = nextSearchParams.toString();
+    router.replace(nextQuery ? `/inbox?${nextQuery}` : "/inbox", { scroll: false });
+  }, [
+    conversations,
+    isConversationsLoading,
+    queryConversationId,
+    router,
+    searchParams,
+    selectedConversationId,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -914,97 +963,93 @@ function InboxContent(): React.JSX.Element | null {
                 {selectedConversationId ? (
                   <>
                     <div className="p-4 border-b space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {isCompactViewport && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedConversationId(null);
-                                setActiveCompactPanel(null);
-                              }}
-                              data-testid="inbox-back-to-list"
-                              title="Back to conversations"
-                            >
-                              <ArrowLeft className="h-4 w-4 mr-1" />
-                              Back
-                            </Button>
-                          )}
-                          <h2 className="font-semibold truncate">
-                            {selectedConversation
-                              ? getConversationIdentityLabel(selectedConversation)
-                              : "Loading conversation..."}
-                          </h2>
-                        </div>
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {isCompactViewport && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedConversationId(null);
+                              setActiveCompactPanel(null);
+                            }}
+                            data-testid="inbox-back-to-list"
+                            title="Back to conversations"
+                          >
+                            <ArrowLeft className="h-4 w-4 mr-1" />
+                            Back
+                          </Button>
+                        )}
+                        <h2 className="font-semibold truncate">
+                          {selectedConversation
+                            ? getConversationIdentityLabel(selectedConversation)
+                            : "Loading conversation..."}
+                        </h2>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleResolveConversation}
+                          disabled={isResolving || selectedConversation?.status === "closed"}
+                          data-testid="inbox-resolve-button"
+                          title="Resolve Conversation"
+                        >
+                          {isResolving ? "Resolving..." : "Resolve"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleConvertToTicket}
+                          disabled={isConvertingTicket}
+                          data-testid="inbox-convert-ticket-button"
+                          title="Convert to Ticket"
+                        >
+                          <Ticket className="h-4 w-4 mr-1" />
+                          {isConvertingTicket ? "Creating..." : "Create Ticket"}
+                        </Button>
+                        {selectedConversation?.visitorId ? (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={handleResolveConversation}
-                            disabled={isResolving || selectedConversation?.status === "closed"}
-                            data-testid="inbox-resolve-button"
-                            title="Resolve Conversation"
+                            onClick={() => router.push(`/visitors/${selectedConversation.visitorId}`)}
+                            data-testid="inbox-open-visitor-profile"
+                            title="View visitor profile"
                           >
-                            {isResolving ? "Resolving..." : "Resolve"}
+                            <ArrowUpRight className="h-4 w-4 mr-1" />
+                            View visitor
                           </Button>
+                        ) : null}
+                        {!isCompactViewport && (
                           <Button
-                            variant="outline"
+                            variant={aiReviewPanelOpen ? "default" : "outline"}
                             size="sm"
-                            onClick={handleConvertToTicket}
-                            disabled={isConvertingTicket}
-                            data-testid="inbox-convert-ticket-button"
-                            title="Convert to Ticket"
+                            onClick={() => toggleAuxiliaryPanel("ai-review")}
+                            data-testid="inbox-open-ai-review"
                           >
-                            <Ticket className="h-4 w-4 mr-1" />
-                            {isConvertingTicket ? "Creating..." : "Create Ticket"}
+                            <Bot className="h-4 w-4 mr-1" />
+                            AI review
                           </Button>
-                          {selectedConversation?.visitorId ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                router.push(`/visitors/${selectedConversation.visitorId}`)
-                              }
-                              data-testid="inbox-open-visitor-profile"
-                              title="View visitor profile"
+                        )}
+                        {!isCompactViewport && isSidecarEnabled && (
+                          <Button
+                            variant={suggestionsPanelOpen ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => toggleAuxiliaryPanel("suggestions")}
+                            data-testid="inbox-open-suggestions"
+                          >
+                            <MessageSquareText className="h-4 w-4 mr-1" />
+                            Suggestions
+                            <span
+                              className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
+                                suggestionsPanelOpen
+                                  ? "bg-primary-foreground/20 text-primary-foreground"
+                                  : "bg-primary/10 text-primary"
+                              }`}
                             >
-                              <ArrowUpRight className="h-4 w-4 mr-1" />
-                              View visitor
-                            </Button>
-                          ) : null}
-                          {!isCompactViewport && (
-                            <Button
-                              variant={aiReviewPanelOpen ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => toggleAuxiliaryPanel("ai-review")}
-                              data-testid="inbox-open-ai-review"
-                            >
-                              <Bot className="h-4 w-4 mr-1" />
-                              AI review
-                            </Button>
-                          )}
-                          {!isCompactViewport && isSidecarEnabled && (
-                            <Button
-                              variant={suggestionsPanelOpen ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => toggleAuxiliaryPanel("suggestions")}
-                              data-testid="inbox-open-suggestions"
-                            >
-                              <MessageSquareText className="h-4 w-4 mr-1" />
-                              Suggestions
-                              <span
-                                className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
-                                  suggestionsPanelOpen
-                                    ? "bg-primary-foreground/20 text-primary-foreground"
-                                    : "bg-primary/10 text-primary"
-                                }`}
-                              >
-                                {isSuggestionsCountLoading ? "…" : suggestionsCount}
-                              </span>
-                            </Button>
-                          )}
-                        </div>
+                              {isSuggestionsCountLoading ? "…" : suggestionsCount}
+                            </span>
+                          </Button>
+                        )}
                       </div>
                       {isCompactViewport && (
                         <div
