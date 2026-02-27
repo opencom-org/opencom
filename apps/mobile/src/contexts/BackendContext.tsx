@@ -4,7 +4,10 @@ import type { StoredBackend, BackendStorage, DiscoveryResponse } from "@opencom/
 import { validateBackendUrl } from "@opencom/types";
 
 const BACKEND_STORAGE_KEY = "opencom_backends";
-const DEFAULT_BACKEND_URL = process.env.EXPO_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL;
+const DEFAULT_BACKEND_URL =
+  process.env.EXPO_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL?.trim() ||
+  process.env.EXPO_PUBLIC_CONVEX_URL?.trim() ||
+  undefined;
 
 interface BackendContextType {
   activeBackend: StoredBackend | null;
