@@ -150,6 +150,7 @@ export default function InboxScreen() {
         data={conversations}
         renderItem={renderItem}
         keyExtractor={(item) => item._id}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={

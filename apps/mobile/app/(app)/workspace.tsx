@@ -45,7 +45,11 @@ export default function WorkspaceSelectionScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.title}>Choose your workspace</Text>
       <Text style={styles.subtitle}>
         You belong to multiple workspaces. Pick one to continue. You can switch anytime from

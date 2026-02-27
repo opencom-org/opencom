@@ -185,6 +185,7 @@ export default function ConversationScreen() {
         data={messages as Message[] | undefined}
         renderItem={renderMessage}
         keyExtractor={(item) => item._id}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
       />

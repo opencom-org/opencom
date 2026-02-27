@@ -162,6 +162,7 @@ export default function BackendSelectionScreen() {
               data={recentBackends}
               renderItem={renderRecentBackend}
               keyExtractor={(item) => item.url}
+              keyboardShouldPersistTaps="handled"
               scrollEnabled={false}
             />
           </View>

@@ -253,7 +253,11 @@ await OpencomSDK.initialize({
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.title}>Widget onboarding</Text>
       <Text style={styles.subtitle}>
         Until your widget is verified, this page is your default start. You can still go to Inbox

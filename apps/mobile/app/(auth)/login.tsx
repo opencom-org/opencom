@@ -45,7 +45,6 @@ export default function LoginScreen() {
       setIsLoading(true);
       try {
         await login(trimmedEmail, password);
-        router.replace("/(app)");
       } catch (error) {
         Alert.alert("Login Failed", error instanceof Error ? error.message : "An error occurred");
       } finally {
@@ -88,7 +87,6 @@ export default function LoginScreen() {
       setIsLoading(true);
       try {
         await loginWithOTP(trimmedEmail, trimmedOtpCode);
-        router.replace("/(app)");
       } catch (error) {
         Alert.alert("Login Failed", error instanceof Error ? error.message : "An error occurred");
       } finally {
@@ -109,7 +107,7 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <Text style={styles.title}>Opencom</Text>
           <Text style={styles.subtitle}>Sign in to your account</Text>
