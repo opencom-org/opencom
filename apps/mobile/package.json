@@ -7,6 +7,9 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "deploy:production": "eas update --branch production --environment production",
+    "deploy:development": "eas update --branch development --environment development",
+    "deploy:preview": "eas update --branch preview --environment preview",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit"
   },
