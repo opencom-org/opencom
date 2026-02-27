@@ -110,7 +110,7 @@ export function Widget({
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
-  const [previousView, setPreviousView] = useState<WidgetView>("conversation-list");
+  const [, setPreviousView] = useState<WidgetView>("conversation-list");
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
   const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
@@ -748,6 +748,7 @@ export function Widget({
 
   // Tour API callbacks
   const handleStartTour = useCallback((tourId: string) => {
+    setView("launcher");
     setForcedTourId(tourId as Id<"tours">);
   }, []);
 
@@ -778,6 +779,12 @@ export function Widget({
   const handleTourBlockingActiveChange = useCallback((isActive: boolean) => {
     setTourBlockingActive(isActive);
   }, []);
+
+  useEffect(() => {
+    if (tourBlockingActive && view !== "launcher") {
+      setView("launcher");
+    }
+  }, [tourBlockingActive, view]);
 
   const handleOutboundBlockingStateChange = useCallback(
     (state: { hasPendingPost: boolean; hasActivePost: boolean }) => {
@@ -957,8 +964,7 @@ export function Widget({
   };
 
   const handleSelectTour = (tourId: Id<"tours">) => {
-    setForcedTourId(tourId);
-    setView(previousView);
+    handleStartTour(tourId);
   };
 
   const handleBackFromTickets = () => {
