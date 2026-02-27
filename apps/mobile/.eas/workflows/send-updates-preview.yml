@@ -1,8 +1,11 @@
 name: Send updates preview
 
 on:
-  push:
-    branches: ['master']
+  workflow_dispatch:
+  # push:
+  #   branches: ['main']
+  # push:
+  #   branches: ['master']
 
 jobs:
   send_updates:

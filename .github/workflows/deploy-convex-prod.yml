@@ -1,10 +1,10 @@
 name: Deploy Convex Production
 
 on:
-  push:
-    branches:
-      - "main"
   workflow_dispatch:
+  # push:
+  #   branches:
+  #     - "main"
 
 jobs:
   deploy-convex-prod:

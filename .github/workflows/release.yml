@@ -1,0 +1,195 @@
+name: Release Orchestrator
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_expo_updates:
+        description: Send Expo OTA update after Convex, web, and landing succeed
+        type: boolean
+        required: false
+        default: false
+      expo_channel:
+        description: Expo channel for OTA update
+        type: choice
+        required: true
+        default: production
+        options:
+          - production
+          - preview
+          - development
+  # push:
+  #   branches:
+  #     - "main"
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-convex:
+    name: Deploy Convex Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate required deploy secrets
+        run: |
+          if [ -z "${CONVEX_DEPLOY_KEY}" ]; then
+            echo "::error::Missing required secret: CONVEX_DEPLOY_KEY"
+            exit 1
+          fi
+
+      - name: Convex backend typecheck
+        run: pnpm --filter @opencom/convex typecheck
+
+      - name: Deploy Convex production backend
+        run: pnpm --filter @opencom/convex deploy -- --yes
+
+  deploy-web:
+    name: Deploy Web Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: deploy-convex
+    permissions:
+      contents: read
+    env:
+      VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_WEB_DEPLOY_HOOK_URL }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_WEB_PROJECT_ID }}
+      VERCEL_PROJECT_NAME: web
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_DEPLOY_TIMEOUT_SECONDS: "1800"
+      VERCEL_DEPLOY_POLL_INTERVAL_SECONDS: "10"
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+
+      - name: Validate required Vercel secrets (web)
+        run: |
+          missing=0
+          for name in VERCEL_DEPLOY_HOOK_URL VERCEL_PROJECT_ID VERCEL_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required secret/env: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Trigger web deploy hook and wait for READY
+        run: node scripts/vercel-deploy-hook-and-wait.js
+
+  deploy-landing:
+    name: Deploy Landing Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: deploy-convex
+    permissions:
+      contents: read
+    env:
+      VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_LANDING_DEPLOY_HOOK_URL }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_LANDING_PROJECT_ID }}
+      VERCEL_PROJECT_NAME: landing
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_DEPLOY_TIMEOUT_SECONDS: "1800"
+      VERCEL_DEPLOY_POLL_INTERVAL_SECONDS: "10"
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+
+      - name: Validate required Vercel secrets (landing)
+        run: |
+          missing=0
+          for name in VERCEL_DEPLOY_HOOK_URL VERCEL_PROJECT_ID VERCEL_TOKEN; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required secret/env: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Trigger landing deploy hook and wait for READY
+        run: node scripts/vercel-deploy-hook-and-wait.js
+
+  update-expo:
+    name: Update Expo Apps
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - deploy-web
+      - deploy-landing
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.run_expo_updates == 'true' }}
+    permissions:
+      contents: read
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Validate required Expo secrets
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "::error::Missing required secret: EXPO_TOKEN"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish OTA update
+        working-directory: apps/mobile
+        run: pnpm dlx eas-cli@latest update --channel "${{ github.event.inputs.expo_channel || 'production' }}" --auto --non-interactive

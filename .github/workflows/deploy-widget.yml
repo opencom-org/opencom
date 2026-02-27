@@ -1,11 +1,6 @@
 name: Deploy Widget CDN
 
 on:
-  push:
-    branches:
-      - "main"
-    tags:
-      - "widget-v*"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -13,6 +8,11 @@ on:
         type: boolean
         required: false
         default: true
+  # push:
+  #   branches:
+  #     - "main"
+  #   tags:
+  #     - "widget-v*"
 
 jobs:
   deploy-widget-cdn:
