@@ -9,11 +9,14 @@ async function openSettingsReady(page: import("@playwright/test").Page): Promise
   for (let attempt = 0; attempt < 3; attempt++) {
     await gotoWithAuthRecovery(page, "/settings");
 
-    const headingVisible = await page
-      .getByRole("heading", { name: /messenger customization/i })
-      .isVisible({ timeout: 6000 })
-      .catch(() => false);
-    if (headingVisible) {
+    const toggle = page.getByTestId("settings-section-toggle-messenger-customization");
+    const sectionReady = await toggle.isVisible({ timeout: 6000 }).catch(() => false);
+    if (sectionReady) {
+      const sectionContent = page.locator("#messenger-customization-content");
+      if (!(await sectionContent.isVisible().catch(() => false))) {
+        await toggle.click();
+      }
+      await expect(sectionContent).toBeVisible({ timeout: 15000 });
       return;
     }
 
@@ -23,7 +26,7 @@ async function openSettingsReady(page: import("@playwright/test").Page): Promise
     }
   }
 
-  await expect(page.getByRole("heading", { name: /messenger customization/i })).toBeVisible({
+  await expect(page.locator("#messenger-customization-content")).toBeVisible({
     timeout: 15000,
   });
 }
@@ -47,7 +50,7 @@ test.describe("Web Admin - Messenger Settings", () => {
   test("should display Messenger Customization section", async ({ page }) => {
     await openSettingsReady(page);
 
-    await expect(page.getByRole("heading", { name: /messenger customization/i })).toBeVisible({
+    await expect(page.locator("#messenger-customization")).toBeVisible({
       timeout: 15000,
     });
   });
@@ -55,25 +58,17 @@ test.describe("Web Admin - Messenger Settings", () => {
   test("should display color picker inputs", async ({ page }) => {
     await openSettingsReady(page);
 
-    await expect(page.getByRole("heading", { name: /messenger customization/i })).toBeVisible({
-      timeout: 15000,
-    });
-
     // Primary Color and Header Color input[type='color'] elements exist
-    const colorInputs = page.locator("input[type='color']");
+    const colorInputs = page.locator("#messenger-customization-content input[type='color']");
     await expect(colorInputs.first()).toBeVisible({ timeout: 5000 });
   });
 
   test("should display welcome message textarea", async ({ page }) => {
     await openSettingsReady(page);
 
-    await expect(page.getByRole("heading", { name: /messenger customization/i })).toBeVisible({
-      timeout: 15000,
-    });
-
     // Welcome Message textarea
     const welcomeTextarea = page
-      .locator("textarea")
+      .locator("#messenger-customization-content textarea")
       .filter({ hasText: /./i })
       .first()
       .or(page.getByPlaceholder(/how can we help/i));
@@ -83,7 +78,9 @@ test.describe("Web Admin - Messenger Settings", () => {
   test("should save messenger settings", async ({ page }) => {
     await openSettingsReady(page);
 
-    const saveButton = page.getByRole("button", { name: /save messenger settings/i });
+    const saveButton = page
+      .locator("#messenger-customization-content")
+      .getByRole("button", { name: /save messenger settings/i });
     await expect(saveButton).toBeVisible({ timeout: 15000 });
     await saveButton.click();
 

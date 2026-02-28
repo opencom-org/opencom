@@ -9,9 +9,14 @@ async function openSettingsReady(page: import("@playwright/test").Page): Promise
   for (let attempt = 0; attempt < 3; attempt++) {
     await gotoWithAuthRecovery(page, "/settings");
 
-    const automationHeading = page.getByRole("heading", { name: /automation/i });
-    const ready = await automationHeading.isVisible({ timeout: 6000 }).catch(() => false);
+    const toggle = page.getByTestId("settings-section-toggle-automation");
+    const ready = await toggle.isVisible({ timeout: 6000 }).catch(() => false);
     if (ready) {
+      const sectionContent = page.locator("#automation-content");
+      if (!(await sectionContent.isVisible().catch(() => false))) {
+        await toggle.click();
+      }
+      await expect(sectionContent).toBeVisible({ timeout: 15000 });
       return;
     }
 
@@ -21,7 +26,7 @@ async function openSettingsReady(page: import("@playwright/test").Page): Promise
     }
   }
 
-  await expect(page.getByRole("heading", { name: /automation/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.locator("#automation-content")).toBeVisible({ timeout: 15000 });
 }
 
 test.describe("Web Admin - Automation Settings", () => {
@@ -44,7 +49,7 @@ test.describe("Web Admin - Automation Settings", () => {
     await openSettingsReady(page);
 
     // The Automation section is a Card with h2 heading
-    await expect(page.getByRole("heading", { name: /automation/i })).toBeVisible({
+    await expect(page.locator("#automation")).toBeVisible({
       timeout: 15000,
     });
   });
@@ -52,25 +57,33 @@ test.describe("Web Admin - Automation Settings", () => {
   test("should display Suggest Articles toggle", async ({ page }) => {
     await openSettingsReady(page);
 
-    await expect(page.getByText("Suggest Articles")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("#automation-content").getByText("Suggest Articles")).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test("should display Show Reply Time toggle", async ({ page }) => {
     await openSettingsReady(page);
 
-    await expect(page.getByText("Show Reply Time")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("#automation-content").getByText("Show Reply Time")).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test("should display Collect Email toggle", async ({ page }) => {
     await openSettingsReady(page);
 
-    await expect(page.getByText("Collect Email")).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("#automation-content").getByText("Collect Email")).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test("should save automation settings", async ({ page }) => {
     await openSettingsReady(page);
 
-    const saveButton = page.getByRole("button", { name: /save automation settings/i });
+    const saveButton = page
+      .locator("#automation-content")
+      .getByRole("button", { name: /save automation settings/i });
     await expect(saveButton).toBeVisible({ timeout: 15000 });
     await saveButton.click();
 

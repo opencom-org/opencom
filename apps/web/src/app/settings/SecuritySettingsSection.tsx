@@ -688,8 +688,19 @@ Opencom.identify({
           </select>
         </div>
 
-        {/* Audit Log Viewer */}
-        <AuditLogViewer workspaceId={workspaceId} />
+        {/* Audit Logs */}
+        <div className="p-4 border rounded-lg">
+          <h3 className="font-medium mb-2">Audit Logs</h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Investigate security events with advanced filtering and export in the dedicated viewer.
+          </p>
+          <a
+            href="/audit-logs"
+            className="inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            View Full Audit Logs
+          </a>
+        </div>
       </div>
     </Card>
   );

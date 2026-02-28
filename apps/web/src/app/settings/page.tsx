@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { Button, Card, Input } from "@opencom/ui";
 import {
@@ -17,10 +18,8 @@ import {
   Clock,
   Server,
   Shield,
-  Smartphone,
+  Search,
 } from "lucide-react";
-import { WidgetInstallGuide } from "@/components/WidgetInstallGuide";
-import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBackend } from "@/contexts/BackendContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -33,9 +32,15 @@ import { AIAgentSection } from "./AIAgentSection";
 import { SecuritySettingsSection } from "./SecuritySettingsSection";
 import { MobileDevicesSection } from "./MobileDevicesSection";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
+import { SettingsSectionContainer } from "./SettingsSectionContainer";
+import {
+  SETTINGS_SECTION_CONFIG,
+  type SettingsSectionId,
+} from "./settingsSections";
 
 function SettingsContent(): React.JSX.Element | null {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, activeWorkspace, logout } = useAuth();
   const { activeBackend, clearBackend } = useBackend();
   const [copied, setCopied] = useState(false);
@@ -80,6 +85,22 @@ function SettingsContent(): React.JSX.Element | null {
 
   const emailConfig = useQuery(
     api.emailChannel.getEmailConfig,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+  const aiSettings = useQuery(
+    api.aiAgent.getSettings,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+  const automationSettings = useQuery(
+    api.automationSettings.get,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+  const securityAccess = useQuery(
+    api.auditLogs.getAccess,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+  const mobileDeviceStats = useQuery(
+    api.visitorPushTokens.getStats,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
@@ -327,14 +348,171 @@ function SettingsContent(): React.JSX.Element | null {
     }
   };
 
+  const visibleSectionIds = useMemo(() => {
+    const allSectionIds = SETTINGS_SECTION_CONFIG.map((section) => section.id);
+    return allSectionIds.filter((sectionId) => {
+      if (sectionId === "signup-auth" || sectionId === "help-center-access") {
+        return isAdmin;
+      }
+      if (sectionId === "email-channel") {
+        return isAdmin;
+      }
+      return true;
+    });
+  }, [isAdmin]);
+
+  const visibleSections = useMemo(() => {
+    return SETTINGS_SECTION_CONFIG.filter((section) => visibleSectionIds.includes(section.id));
+  }, [visibleSectionIds]);
+
+  const defaultExpandedSectionId = useMemo(() => {
+    return visibleSections.find((section) => section.defaultExpanded)?.id ?? visibleSections[0]?.id ?? null;
+  }, [visibleSections]);
+
+  const [expandedSectionId, setExpandedSectionId] = useState<SettingsSectionId | null>(
+    defaultExpandedSectionId
+  );
+
+  useEffect(() => {
+    if (expandedSectionId && !visibleSectionIds.includes(expandedSectionId)) {
+      setExpandedSectionId(defaultExpandedSectionId);
+    }
+  }, [defaultExpandedSectionId, expandedSectionId, visibleSectionIds]);
+
+  useEffect(() => {
+    const deepLinkedSection = searchParams.get("section");
+    if (!deepLinkedSection) {
+      return;
+    }
+
+    const sectionId = deepLinkedSection as SettingsSectionId;
+    if (!visibleSectionIds.includes(sectionId)) {
+      return;
+    }
+
+    setExpandedSectionId(sectionId);
+
+    window.requestAnimationFrame(() => {
+      const sectionElement = document.getElementById(sectionId);
+      if (!sectionElement) {
+        return;
+      }
+
+      sectionElement.scrollIntoView({ behavior: "auto", block: "start" });
+      sectionElement.focus({ preventScroll: true });
+    });
+  }, [searchParams, visibleSectionIds]);
+
+  const statusBySection = useMemo(() => {
+    const originCount = workspace?.allowedOrigins?.length ?? 0;
+    const automationEnabledCount = [
+      automationSettings?.suggestArticlesEnabled,
+      automationSettings?.showReplyTimeEnabled,
+      automationSettings?.collectEmailEnabled,
+      automationSettings?.askForRatingEnabled,
+    ].filter(Boolean).length;
+    const securityDenied =
+      securityAccess?.status === "ok" ? !securityAccess.canManageSecurity : false;
+
+    return {
+      workspace: { label: "Active", tone: "success" as const },
+      "team-members": {
+        label: `${members?.length ?? 0} member${members?.length === 1 ? "" : "s"}`,
+        tone: "neutral" as const,
+      },
+      "signup-auth": {
+        label: signupMode === "invite-only" ? "Invite only" : "Domain allowlist",
+        tone: "neutral" as const,
+      },
+      "allowed-origins":
+        originCount > 0
+          ? { label: `${originCount} configured`, tone: "success" as const }
+          : { label: "Needs attention", tone: "warning" as const },
+      "help-center-access": {
+        label: helpCenterAccessPolicy === "public" ? "Public" : "Restricted",
+        tone: "neutral" as const,
+      },
+      security:
+        securityDenied || securityAccess?.status === "unauthenticated"
+          ? { label: "Permission required", tone: "warning" as const }
+          : { label: "Managed", tone: "success" as const },
+      "messenger-customization": { label: "Managed", tone: "neutral" as const },
+      "messenger-home": { label: "Managed", tone: "neutral" as const },
+      automation:
+        automationEnabledCount > 0
+          ? { label: `${automationEnabledCount} enabled`, tone: "success" as const }
+          : { label: "All disabled", tone: "warning" as const },
+      "ai-agent":
+        aiSettings?.enabled === true
+          ? { label: "Enabled", tone: "success" as const }
+          : { label: "Disabled", tone: "warning" as const },
+      notifications: { label: "Managed", tone: "neutral" as const },
+      "email-channel":
+        emailEnabled
+          ? { label: "Enabled", tone: "success" as const }
+          : { label: "Disabled", tone: "warning" as const },
+      "mobile-devices": {
+        label: mobileDeviceStats ? `${mobileDeviceStats.total} devices` : "No devices",
+        tone: mobileDeviceStats && mobileDeviceStats.total > 0 ? ("success" as const) : ("neutral" as const),
+      },
+      installations: { label: "In onboarding", tone: "neutral" as const },
+      "backend-connection": {
+        label: activeBackend?.name ? "Connected" : "Unknown",
+        tone: activeBackend?.name ? ("success" as const) : ("warning" as const),
+      },
+    } satisfies Partial<
+      Record<SettingsSectionId, { label: string; tone: "neutral" | "success" | "warning" | "danger" }>
+    >;
+  }, [
+    activeBackend?.name,
+    aiSettings?.enabled,
+    automationSettings?.askForRatingEnabled,
+    automationSettings?.collectEmailEnabled,
+    automationSettings?.showReplyTimeEnabled,
+    automationSettings?.suggestArticlesEnabled,
+    emailEnabled,
+    helpCenterAccessPolicy,
+    members?.length,
+    mobileDeviceStats,
+    securityAccess?.canManageSecurity,
+    securityAccess?.status,
+    signupMode,
+    workspace?.allowedOrigins?.length,
+  ]);
+
+  const isSectionExpanded = (sectionId: SettingsSectionId) => expandedSectionId === sectionId;
+
+  const toggleSection = (sectionId: SettingsSectionId) => {
+    setExpandedSectionId((currentSectionId) =>
+      currentSectionId === sectionId ? null : sectionId
+    );
+  };
+
   if (!user || !activeWorkspace) {
     return null;
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      {/* Workspace Info */}
-      <Card className="p-6">
+    <div className="mx-auto w-full max-w-[1520px] px-4 py-4 sm:px-6 sm:py-6">
+      <div className="min-w-0 space-y-6">
+        <header>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Manage workspace configuration, security, and channels.
+          </p>
+        </header>
+
+        <div className="space-y-8">
+            <SettingsSectionContainer
+              id="workspace"
+              title="Workspace"
+              description="Name, ID, and workspace identity details."
+              statusLabel={statusBySection.workspace?.label}
+              statusTone={statusBySection.workspace?.tone}
+              isExpanded={isSectionExpanded("workspace")}
+              onToggle={() => toggleSection("workspace")}
+            >
+              <Card className="p-6">
         <h2 className="text-lg font-semibold mb-4">Workspace</h2>
         <div className="space-y-4">
           <div>
@@ -356,10 +534,19 @@ function SettingsContent(): React.JSX.Element | null {
             </p>
           </div>
         </div>
-      </Card>
+              </Card>
+            </SettingsSectionContainer>
 
-      {/* Allowed Origins */}
-      <Card className="p-6">
+            <SettingsSectionContainer
+              id="allowed-origins"
+              title="Allowed Origins"
+              description="Restrict which domains can embed your widget."
+              statusLabel={statusBySection["allowed-origins"]?.label}
+              statusTone={statusBySection["allowed-origins"]?.tone}
+              isExpanded={isSectionExpanded("allowed-origins")}
+              onToggle={() => toggleSection("allowed-origins")}
+            >
+              <Card className="p-6">
         <div className="flex items-center gap-2 mb-4">
           <Globe className="h-5 w-5" />
           <h2 className="text-lg font-semibold">Allowed Origins</h2>
@@ -407,10 +594,19 @@ function SettingsContent(): React.JSX.Element | null {
             Add Origin
           </Button>
         </div>
-      </Card>
+              </Card>
+            </SettingsSectionContainer>
 
-      {/* Team Members */}
-      <Card className="p-6">
+            <SettingsSectionContainer
+              id="team-members"
+              title="Team Members"
+              description="Invite teammates, manage roles, and transfer ownership."
+              statusLabel={statusBySection["team-members"]?.label}
+              statusTone={statusBySection["team-members"]?.tone}
+              isExpanded={isSectionExpanded("team-members")}
+              onToggle={() => toggleSection("team-members")}
+            >
+              <Card className="p-6">
         <div className="flex items-center gap-2 mb-4">
           <Users className="h-5 w-5" />
           <h2 className="text-lg font-semibold">Team Members</h2>
@@ -615,7 +811,8 @@ function SettingsContent(): React.JSX.Element | null {
             </Button>
           </div>
         )}
-      </Card>
+              </Card>
+            </SettingsSectionContainer>
 
       {/* Role Change Confirmation Modal */}
       {showRoleConfirm && (
@@ -708,7 +905,16 @@ function SettingsContent(): React.JSX.Element | null {
 
       {/* Signup Settings - Admin Only */}
       {isAdmin && (
-        <Card className="p-6">
+        <SettingsSectionContainer
+          id="signup-auth"
+          title="Signup & Authentication"
+          description="Control signup mode and authentication methods."
+          statusLabel={statusBySection["signup-auth"]?.label}
+          statusTone={statusBySection["signup-auth"]?.tone}
+          isExpanded={isSectionExpanded("signup-auth")}
+          onToggle={() => toggleSection("signup-auth")}
+        >
+          <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Shield className="h-5 w-5" />
             <h2 className="text-lg font-semibold">Signup Settings</h2>
@@ -796,13 +1002,23 @@ function SettingsContent(): React.JSX.Element | null {
               {isSavingSignup ? "Saving..." : "Save Settings"}
             </Button>
           </div>
-        </Card>
+          </Card>
+        </SettingsSectionContainer>
       )}
 
       {/* Help Center Access Policy - Admin Only */}
       {/* TODO(help-center): Replace this workspace-wide toggle with per-article visibility controls. */}
       {isAdmin && (
-        <Card className="p-6">
+        <SettingsSectionContainer
+          id="help-center-access"
+          title="Help Center Access"
+          description="Control whether public help routes are open or restricted."
+          statusLabel={statusBySection["help-center-access"]?.label}
+          statusTone={statusBySection["help-center-access"]?.tone}
+          isExpanded={isSectionExpanded("help-center-access")}
+          onToggle={() => toggleSection("help-center-access")}
+        >
+          <Card className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="h-5 w-5" />
             <h2 className="text-lg font-semibold">Help Center Access</h2>
@@ -847,17 +1063,28 @@ function SettingsContent(): React.JSX.Element | null {
               {isSavingHelpCenterPolicy ? "Saving..." : "Save Access Policy"}
             </Button>
           </div>
-        </Card>
+          </Card>
+        </SettingsSectionContainer>
       )}
 
       {/* Email Channel Settings - Admin Only */}
       {isAdmin && (
-        <CollapsibleSection
+        <SettingsSectionContainer
+          id="email-channel"
           title="Email Channel"
-          description="Receive and send emails directly from your inbox"
-          icon={Mail}
+          description="Receive and send emails directly from your inbox."
+          statusLabel={statusBySection["email-channel"]?.label}
+          statusTone={statusBySection["email-channel"]?.tone}
+          isExpanded={isSectionExpanded("email-channel")}
+          onToggle={() => toggleSection("email-channel")}
         >
-          <div className="space-y-4">
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Mail className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">Email Channel</h2>
+            </div>
+
+            <div className="space-y-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -932,154 +1159,142 @@ function SettingsContent(): React.JSX.Element | null {
             <Button onClick={handleSaveEmailSettings} disabled={isSavingEmail}>
               {isSavingEmail ? "Saving..." : "Save Email Settings"}
             </Button>
+            </div>
+          </Card>
+        </SettingsSectionContainer>
+      )}
+
+      <SettingsSectionContainer
+        id="installations"
+        title="Installations"
+        description="Widget and Mobile SDK setup guides are now in onboarding."
+        statusLabel={statusBySection.installations?.label}
+        statusTone={statusBySection.installations?.tone}
+        isExpanded={isSectionExpanded("installations")}
+        onToggle={() => toggleSection("installations")}
+      >
+        <Card className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Search className="h-5 w-5" />
+            <h2 className="text-lg font-semibold">Setup & Install Guides</h2>
           </div>
-        </CollapsibleSection>
-      )}
-
-      {/* Widget Installation */}
-      {activeBackend?.convexUrl && activeWorkspace?._id && (
-        <WidgetInstallGuide convexUrl={activeBackend.convexUrl} workspaceId={activeWorkspace._id} />
-      )}
-
-      {/* Mobile SDK Installation */}
-      {activeBackend?.convexUrl && activeWorkspace?._id && (
-        <CollapsibleSection
-          title="Mobile SDK"
-          description="Embed Opencom in your customer mobile apps"
-          icon={Smartphone}
-        >
-          <div className="space-y-4">
-            {/* Configuration Values */}
-            <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-              <div>
-                <label className="text-sm font-medium">Workspace ID</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="bg-background px-3 py-2 rounded font-mono text-sm flex-1 border">
-                    {activeWorkspace._id}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigator.clipboard.writeText(activeWorkspace._id)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Convex URL</label>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="bg-background px-3 py-2 rounded font-mono text-sm flex-1 border">
-                    {activeBackend.convexUrl}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigator.clipboard.writeText(activeBackend.convexUrl)}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* Installation Instructions */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">Installation</h3>
-              <div className="bg-zinc-950 text-zinc-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                <pre>{`npm install @opencom/react-native-sdk
-# or
-pnpm add @opencom/react-native-sdk`}</pre>
-              </div>
-            </div>
-
-            {/* Expo Plugin Setup */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">Expo Setup (app.json)</h3>
-              <div className="bg-zinc-950 text-zinc-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                <pre>{`{
-  "expo": {
-    "plugins": [
-      ["@opencom/react-native-sdk", {
-        "workspaceId": "${activeWorkspace._id}",
-        "convexUrl": "${activeBackend.convexUrl}"
-      }]
-    ]
-  }
-}`}</pre>
-              </div>
-            </div>
-
-            {/* Quick Start Code */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">Quick Start</h3>
-              <div className="bg-zinc-950 text-zinc-100 p-4 rounded-lg font-mono text-sm overflow-x-auto">
-                <pre>{`import { OpencomSDK, OpencomProvider, OpencomLauncher } from '@opencom/react-native-sdk';
-
-// Initialize on app start
-await OpencomSDK.initialize({
-  workspaceId: '${activeWorkspace._id}',
-  convexUrl: '${activeBackend.convexUrl}',
-});
-
-// Identify logged-in users
-await OpencomSDK.identify({
-  userId: 'user-123',
-  email: 'user@example.com',
-  name: 'Jane Doe',
-});
-
-// In your app component
-function App() {
-  return (
-    <OpencomProvider config={{ workspaceId: '...', convexUrl: '...' }}>
-      <YourApp />
-      <OpencomLauncher onPress={() => {/* show messenger */}} />
-    </OpencomProvider>
-  );
-}`}</pre>
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-              See the{" "}
-              <a
-                href="https://github.com/opencom-org/opencom/tree/main/packages/react-native-sdk"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
-              >
-                SDK documentation
-              </a>{" "}
-              for full API reference and advanced usage.
-            </p>
+          <p className="text-sm text-muted-foreground mb-4">
+            Widget and Mobile SDK installation steps now live in Hosted Onboarding for a single
+            setup flow.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/onboarding" className="inline-flex rounded-md border px-3 py-2 text-sm">
+              Open Onboarding Setup
+            </Link>
+            <Link href="/widget-preview" className="inline-flex rounded-md border px-3 py-2 text-sm">
+              Open Widget Preview
+            </Link>
           </div>
-        </CollapsibleSection>
-      )}
+        </Card>
+      </SettingsSectionContainer>
 
       {/* Messenger Customization */}
-      <MessengerSettingsSection workspaceId={activeWorkspace?._id} />
+      <SettingsSectionContainer
+        id="messenger-customization"
+        title="Messenger Customization"
+        description="Branding, theme, launcher, and language preferences."
+        statusLabel={statusBySection["messenger-customization"]?.label}
+        statusTone={statusBySection["messenger-customization"]?.tone}
+        isExpanded={isSectionExpanded("messenger-customization")}
+        onToggle={() => toggleSection("messenger-customization")}
+      >
+        <MessengerSettingsSection workspaceId={activeWorkspace?._id} />
+      </SettingsSectionContainer>
 
       {/* Messenger Home */}
-      <HomeSettingsSection workspaceId={activeWorkspace?._id} />
+      <SettingsSectionContainer
+        id="messenger-home"
+        title="Messenger Home"
+        description="Configure home cards and default visitor entry space."
+        statusLabel={statusBySection["messenger-home"]?.label}
+        statusTone={statusBySection["messenger-home"]?.tone}
+        isExpanded={isSectionExpanded("messenger-home")}
+        onToggle={() => toggleSection("messenger-home")}
+      >
+        <HomeSettingsSection workspaceId={activeWorkspace?._id} />
+      </SettingsSectionContainer>
 
       {/* Automation & Self-Serve Settings */}
-      <AutomationSettingsSection workspaceId={activeWorkspace?._id} />
+      <SettingsSectionContainer
+        id="automation"
+        title="Automation"
+        description="Tune self-serve and workflow automation toggles."
+        statusLabel={statusBySection.automation?.label}
+        statusTone={statusBySection.automation?.tone}
+        isExpanded={isSectionExpanded("automation")}
+        onToggle={() => toggleSection("automation")}
+      >
+        <AutomationSettingsSection workspaceId={activeWorkspace?._id} />
+      </SettingsSectionContainer>
 
       {/* Notification Settings */}
-      <NotificationSettingsSection workspaceId={activeWorkspace?._id} isAdmin={isAdmin} />
+      <SettingsSectionContainer
+        id="notifications"
+        title="Notifications"
+        description="Manage personal and workspace notification defaults."
+        statusLabel={statusBySection.notifications?.label}
+        statusTone={statusBySection.notifications?.tone}
+        isExpanded={isSectionExpanded("notifications")}
+        onToggle={() => toggleSection("notifications")}
+      >
+        <NotificationSettingsSection workspaceId={activeWorkspace?._id} isAdmin={isAdmin} />
+      </SettingsSectionContainer>
 
       {/* AI Agent Settings */}
-      <AIAgentSection workspaceId={activeWorkspace?._id} />
+      <SettingsSectionContainer
+        id="ai-agent"
+        title="AI Agent"
+        description="Configure models, confidence, and handoff behavior."
+        statusLabel={statusBySection["ai-agent"]?.label}
+        statusTone={statusBySection["ai-agent"]?.tone}
+        isExpanded={isSectionExpanded("ai-agent")}
+        onToggle={() => toggleSection("ai-agent")}
+      >
+        <AIAgentSection workspaceId={activeWorkspace?._id} />
+      </SettingsSectionContainer>
 
       {/* Security Settings */}
-      <SecuritySettingsSection workspaceId={activeWorkspace?._id} />
+      <SettingsSectionContainer
+        id="security"
+        title="Security"
+        description="Identity verification, sessions, and audit policies."
+        statusLabel={statusBySection.security?.label}
+        statusTone={statusBySection.security?.tone}
+        isExpanded={isSectionExpanded("security")}
+        onToggle={() => toggleSection("security")}
+      >
+        <SecuritySettingsSection workspaceId={activeWorkspace?._id} />
+      </SettingsSectionContainer>
 
       {/* Connected Mobile Devices */}
-      <MobileDevicesSection workspaceId={activeWorkspace?._id} />
+      <SettingsSectionContainer
+        id="mobile-devices"
+        title="Connected Mobile Devices"
+        description="Review SDK-connected devices and push registration activity."
+        statusLabel={statusBySection["mobile-devices"]?.label}
+        statusTone={statusBySection["mobile-devices"]?.tone}
+        isExpanded={isSectionExpanded("mobile-devices")}
+        onToggle={() => toggleSection("mobile-devices")}
+      >
+        <MobileDevicesSection workspaceId={activeWorkspace?._id} />
+      </SettingsSectionContainer>
 
       {/* Backend Connection */}
-      <Card className="p-6">
+      <SettingsSectionContainer
+        id="backend-connection"
+        title="Backend Connection"
+        description="Current backend details and environment switching."
+        statusLabel={statusBySection["backend-connection"]?.label}
+        statusTone={statusBySection["backend-connection"]?.tone}
+        isExpanded={isSectionExpanded("backend-connection")}
+        onToggle={() => toggleSection("backend-connection")}
+      >
+        <Card className="p-6">
         <div className="flex items-center gap-2 mb-4">
           <Server className="h-5 w-5" />
           <h2 className="text-lg font-semibold">Backend Connection</h2>
@@ -1096,8 +1311,11 @@ function App() {
             Change Backend
           </Button>
         </div>
-      </Card>
-    </div>
+        </Card>
+      </SettingsSectionContainer>
+          </div>
+        </div>
+      </div>
   );
 }
 

@@ -234,6 +234,42 @@ function OnboardingContent(): React.JSX.Element {
 
           <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
             <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Install Mobile SDK</h3>
+              <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
+                React Native
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Use these values to initialize the React Native SDK and connect to this workspace.
+            </p>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-md border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Workspace ID</p>
+                <code className="mt-1 block break-all text-xs">{activeWorkspace._id}</code>
+              </div>
+              <div className="rounded-md border bg-background p-3">
+                <p className="text-xs text-muted-foreground">Convex URL</p>
+                <code className="mt-1 block break-all text-xs">{activeBackend.convexUrl}</code>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium">Install package</p>
+              <pre className="overflow-x-auto rounded-md bg-zinc-950 p-3 text-xs text-zinc-100">{`pnpm add @opencom/react-native-sdk`}</pre>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium">Initialize on app startup</p>
+              <pre className="overflow-x-auto rounded-md bg-zinc-950 p-3 text-xs text-zinc-100">{`await OpencomSDK.initialize({
+  workspaceId: "${activeWorkspace._id}",
+  convexUrl: "${activeBackend.convexUrl}",
+});`}</pre>
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+            <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">Detected integrations</h3>
               <span className="rounded-full bg-background px-2 py-0.5 text-xs text-muted-foreground">
                 {detectedIntegrations.length}
