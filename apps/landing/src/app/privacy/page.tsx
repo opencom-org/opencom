@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { ShieldCheck } from "lucide-react";
+import { createLandingPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createLandingPageMetadata({
   title: "Privacy Policy | Opencom",
   description:
     "Opencom privacy policy covering hosted web, mobile apps, widget, and React Native SDK data handling.",
-};
+  path: "/privacy",
+});
 
 const effectiveDate = "February 21, 2026";
 

@@ -3,41 +3,9 @@ import "@opencom/ui/globals.css";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { WidgetScript } from "@/components/widget-script";
+import { landingRootMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
-  title: "Opencom - Open Source Customer Messaging",
-  description:
-    "The open-source Intercom alternative. Self-hosted customer messaging with live chat, product tours, tickets, surveys, campaigns, knowledge base, AI agent, and native SDKs.",
-  keywords: [
-    "open source",
-    "intercom alternative",
-    "customer messaging",
-    "chat widget",
-    "self-hosted",
-    "product tours",
-    "knowledge base",
-    "support tickets",
-    "surveys",
-    "campaigns",
-    "ai agent",
-    "customer support",
-  ],
-  authors: [{ name: "Opencom Team" }],
-  openGraph: {
-    title: "Opencom - Open Source Customer Messaging",
-    description:
-      "The open-source Intercom alternative. Self-hosted customer messaging with live chat, tours, tickets, surveys, campaigns, and AI agent.",
-    url: "https://opencom.dev",
-    siteName: "Opencom",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Opencom - Open Source Customer Messaging",
-    description:
-      "The open-source Intercom alternative. Self-hosted customer messaging with live chat, tours, tickets, surveys, campaigns, and AI agent.",
-  },
-};
+export const metadata: Metadata = landingRootMetadata;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const fontVariables = {
@@ -54,10 +22,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:wght@100..800&display=swap"
         />
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="manifest" href="/site.webmanifest" />
       </head>
       <body className="antialiased font-sans" style={fontVariables}>
         <div className="flex min-h-screen flex-col">

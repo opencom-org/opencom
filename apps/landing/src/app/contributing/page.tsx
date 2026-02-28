@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   GitPullRequest,
   Bug,
@@ -11,6 +12,14 @@ import {
 import { buttonVariants, cn } from "@opencom/ui";
 import { Section, SectionHeader, FeatureCard } from "@/components/sections";
 import { OPENCOM_GITHUB_REPO_URL } from "@/lib/links";
+import { createLandingPageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = createLandingPageMetadata({
+  title: "Contributing | Opencom",
+  description:
+    "Contribute to Opencom with focused pull requests, docs updates, issue triage, and community discussions.",
+  path: "/contributing",
+});
 
 const contributionTypes = [
   {

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Terminal,
@@ -18,6 +19,14 @@ import {
   OPENCOM_GITHUB_REPO_URL,
   OPENCOM_HOSTED_ONBOARDING_URL,
 } from "@/lib/links";
+import { createLandingPageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = createLandingPageMetadata({
+  title: "Documentation | Opencom",
+  description:
+    "Opencom docs hub for hosted onboarding, self-host setup, widget installation, architecture, and SDK references.",
+  path: "/docs",
+});
 
 const quickLinks = [
   {

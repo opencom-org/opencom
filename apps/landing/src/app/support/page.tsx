@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import { Clock3, LifeBuoy, MessageCircle, MousePointerClick } from "lucide-react";
 import { Screenshot, Section, SectionHeader } from "@/components/sections";
 import { WidgetCtaPanel } from "@/components/support/widget-cta-panel";
+import { createLandingPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createLandingPageMetadata({
   title: "Support | Opencom",
   description:
     "Get Opencom support directly in the widget. Open Home or start a new chat from the support page.",
-};
+  path: "/support",
+});
 
 export default function SupportPage() {
   return (

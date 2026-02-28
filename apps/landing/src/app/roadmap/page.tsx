@@ -1,6 +1,15 @@
+import type { Metadata } from "next";
 import { CheckCircle, Clock, Circle, ExternalLink, Sparkles } from "lucide-react";
 import { buttonVariants, cn } from "@opencom/ui";
 import { Section, SectionHeader } from "@/components/sections";
+import { createLandingPageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = createLandingPageMetadata({
+  title: "Roadmap | Opencom",
+  description:
+    "Track Opencom roadmap progress across chat, widget, tours, knowledge base, campaigns, AI, reports, and SDK delivery.",
+  path: "/roadmap",
+});
 
 type FeatureStatus = "completed" | "in-progress" | "planned";
 

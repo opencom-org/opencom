@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   MessageCircle,
   Map,
@@ -18,6 +19,14 @@ import {
 } from "lucide-react";
 import { Section, SectionHeader, FeatureCard, Screenshot, CTA } from "@/components/sections";
 import { OPENCOM_GITHUB_DOCS_URL, OPENCOM_HOSTED_ONBOARDING_URL } from "@/lib/links";
+import { createLandingPageMetadata } from "@/lib/metadata";
+
+export const metadata: Metadata = createLandingPageMetadata({
+  title: "Features | Opencom",
+  description:
+    "Explore Opencom features across chat, inbox, tours, knowledge base, tickets, surveys, campaigns, reports, and mobile SDKs.",
+  path: "/features",
+});
 
 const featureCategories = [
   {
