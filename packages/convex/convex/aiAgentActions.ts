@@ -14,6 +14,10 @@ type AIConfigurationDiagnostic = {
 };
 
 const SUPPORTED_AI_PROVIDERS = new Set(["openai"]);
+const GENERATION_FAILURE_FALLBACK_RESPONSE =
+  "I'm having trouble processing your request right now. Let me connect you with a human agent.";
+const EMPTY_RESPONSE_RETRY_LIMIT = 1;
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 1800;
 
 // Parse model string to get provider and model name
 export const parseModel = (modelString: string): { provider: string; model: string } => {
@@ -69,6 +73,11 @@ export const getAIConfigurationDiagnostic = (
   return null;
 };
 
+const truncateDiagnosticMessage = (value: string): string =>
+  value.length > MAX_DIAGNOSTIC_MESSAGE_LENGTH
+    ? `${value.slice(0, MAX_DIAGNOSTIC_MESSAGE_LENGTH)}...`
+    : value;
+
 // Build system prompt for AI Agent
 const buildSystemPrompt = (personality: string | null, knowledgeContext: string): string => {
   const basePrompt = `You are a helpful customer support AI assistant. Your role is to answer customer questions accurately and helpfully using the provided knowledge base content.
@@ -81,12 +90,14 @@ IMPORTANT GUIDELINES:
 5. If the customer seems frustrated or asks to speak to a human, acknowledge their request
 6. Cite your sources when possible by mentioning the article or document title
 7. Never make up information that isn't in the knowledge context
+8. Respond in plain text with at least one complete sentence
+9. Never return an empty or whitespace-only response
 
 ${personality ? `PERSONALITY: ${personality}\n` : ""}
 KNOWLEDGE CONTEXT:
 ${knowledgeContext}
 
-If the knowledge context is empty or doesn't contain relevant information, politely explain that you don't have the information and offer to connect them with a human agent.`;
+If the knowledge context is empty or doesn't contain relevant information, politely explain that you don't have the information and offer to connect them with a human agent. If you are unsure, use that handoff message instead of returning blank output.`;
 
   return basePrompt;
 };
@@ -230,13 +241,40 @@ export const generateResponse = action({
     });
 
     if (!settings.enabled) {
+      const reason = "AI Agent is disabled";
+      try {
+        const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+          conversationId: args.conversationId,
+          visitorId: args.visitorId,
+          sessionToken: args.sessionToken,
+          reason,
+        });
+
+        return {
+          response: handoff.handoffMessage,
+          confidence: 0,
+          sources: [],
+          handoff: true,
+          handoffReason: reason,
+          messageId: handoff.messageId,
+        };
+      } catch (handoffError) {
+        console.error("Failed to handoff when AI Agent is disabled:", handoffError);
+      }
+
+      const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+        conversationId: args.conversationId,
+        senderId: "ai-agent",
+        content: GENERATION_FAILURE_FALLBACK_RESPONSE,
+      });
+
       return {
-        response: "",
+        response: GENERATION_FAILURE_FALLBACK_RESPONSE,
         confidence: 0,
         sources: [],
         handoff: true,
-        handoffReason: "AI Agent is disabled",
-        messageId: null,
+        handoffReason: reason,
+        messageId,
       };
     }
 
@@ -298,38 +336,16 @@ export const generateResponse = action({
     // Parse model configuration
     const { provider, model } = parseModel(settings.model);
 
-    // Generate response using Vercel AI SDK
-    let responseText: string;
-    let tokensUsed: number | undefined;
-
-    try {
-      const aiClient = createAIClient();
-
-      const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-        ...(args.conversationHistory || []),
-        { role: "user" as const, content: args.query },
-      ];
-
-      const result = await generateText({
-        model: aiClient(model),
-        system: systemPrompt,
-        messages,
-        maxOutputTokens: 1000,
-        temperature: 0.7,
-      });
-
-      responseText = result.text;
-      tokensUsed = result.usage?.totalTokens;
-    } catch (error) {
-      console.error("AI generation error:", error);
-      const reason = "AI generation failed";
-      const errorMessage = error instanceof Error ? error.message : "Unknown generation error";
-
+    const handleGenerationFailure = async (
+      reason: string,
+      diagnosticCode: string,
+      diagnosticMessage: string
+    ) => {
       try {
         await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
           workspaceId: args.workspaceId,
-          code: "GENERATION_FAILED",
-          message: `AI generation failed: ${errorMessage}`,
+          code: diagnosticCode,
+          message: diagnosticMessage,
           provider,
           model: settings.model,
         });
@@ -357,22 +373,132 @@ export const generateResponse = action({
         console.error("Failed to handoff after AI generation error:", handoffError);
       }
 
-      const fallbackResponse =
-        "I'm having trouble processing your request right now. Let me connect you with a human agent.";
       const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
         conversationId: args.conversationId,
         senderId: "ai-agent",
-        content: fallbackResponse,
+        content: GENERATION_FAILURE_FALLBACK_RESPONSE,
       });
 
       return {
-        response: fallbackResponse,
+        response: GENERATION_FAILURE_FALLBACK_RESPONSE,
         confidence: 0,
         sources: [],
         handoff: true,
         handoffReason: reason,
         messageId,
       };
+    };
+
+    const aiClient = createAIClient();
+    const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+      ...(args.conversationHistory || []),
+      { role: "user" as const, content: args.query },
+    ];
+
+    const generationAttempts: Array<Record<string, unknown>> = [];
+
+    const attemptGeneration = async (attempt: number, retryingAfterEmptyResponse: boolean) => {
+      const retrySuffix = retryingAfterEmptyResponse
+        ? "\n\nRETRY INSTRUCTION: Your first attempt returned empty text. Respond now with at least one complete plain-text sentence."
+        : "";
+
+      const result = await generateText({
+        model: aiClient(model),
+        system: `${systemPrompt}${retrySuffix}`,
+        messages,
+        maxOutputTokens: 1000,
+        temperature: retryingAfterEmptyResponse ? 0.2 : 0.7,
+      });
+
+      const responseText = (result.text ?? "").trim();
+      const warnings = (result.warnings ?? []).map((warning) => {
+        if (typeof warning === "string") {
+          return warning;
+        }
+        try {
+          return JSON.stringify(warning);
+        } catch (_error) {
+          return String(warning);
+        }
+      });
+      const usage = result.usage;
+
+      generationAttempts.push({
+        attempt,
+        retryingAfterEmptyResponse,
+        textLength: responseText.length,
+        finishReason: result.finishReason,
+        rawFinishReason: result.rawFinishReason,
+        outputTokens: usage?.outputTokens,
+        outputTextTokens: usage?.outputTokenDetails?.textTokens,
+        outputReasoningTokens: usage?.outputTokenDetails?.reasoningTokens,
+        totalTokens: usage?.totalTokens,
+        warningCount: warnings.length,
+        warnings: warnings.slice(0, 3),
+        responseId: result.response?.id,
+        responseModel: result.response?.modelId,
+      });
+
+      return {
+        responseText,
+        tokensUsed: usage?.totalTokens,
+      };
+    };
+
+    const serializeGenerationAttempts = (): string =>
+      truncateDiagnosticMessage(JSON.stringify({ attempts: generationAttempts }));
+
+    // Generate response using Vercel AI SDK with one retry on empty text output.
+    let responseText = "";
+    let tokensUsed: number | undefined;
+
+    try {
+      const firstAttempt = await attemptGeneration(1, false);
+      responseText = firstAttempt.responseText;
+      tokensUsed = firstAttempt.tokensUsed;
+    } catch (error) {
+      console.error("AI generation error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Unknown generation error";
+      return await handleGenerationFailure(
+        "AI generation failed",
+        "GENERATION_FAILED",
+        truncateDiagnosticMessage(
+          `AI generation failed: ${errorMessage}. generationMetadata=${serializeGenerationAttempts()}`
+        )
+      );
+    }
+
+    if (!responseText) {
+      for (let retry = 0; retry < EMPTY_RESPONSE_RETRY_LIMIT && !responseText; retry++) {
+        try {
+          const retryAttempt = await attemptGeneration(retry + 2, true);
+          responseText = retryAttempt.responseText;
+          if (retryAttempt.tokensUsed !== undefined) {
+            tokensUsed = (tokensUsed ?? 0) + retryAttempt.tokensUsed;
+          }
+        } catch (retryError) {
+          console.error("AI empty-response retry failed:", retryError);
+          const retryErrorMessage =
+            retryError instanceof Error ? retryError.message : "Unknown retry generation error";
+          return await handleGenerationFailure(
+            "AI returned an empty response and retry failed",
+            "EMPTY_RESPONSE_RETRY_FAILED",
+            truncateDiagnosticMessage(
+              `AI returned empty response and retry failed: ${retryErrorMessage}. generationMetadata=${serializeGenerationAttempts()}`
+            )
+          );
+        }
+      }
+    }
+
+    if (!responseText) {
+      return await handleGenerationFailure(
+        "AI returned an empty response",
+        "EMPTY_GENERATION_RESPONSE",
+        truncateDiagnosticMessage(
+          `AI returned an empty response payload after retry. generationMetadata=${serializeGenerationAttempts()}`
+        )
+      );
     }
 
     const generationTimeMs = Date.now() - startTime;
