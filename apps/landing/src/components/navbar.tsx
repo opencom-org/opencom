@@ -62,14 +62,14 @@ export function Navbar() {
           <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:gap-x-4">
             <Button variant="ghost" size="sm">
               <a
-                href={OPENCOM_GITHUB_DOCS_URL}
+                href={OPENCOM_GITHUB_REPO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 data-tour-target="nav-github"
                 className="flex items-center gap-2"
               >
                 <Github className="h-4 w-4" />
-                GitHub Docs
+                GitHub
               </a>
             </Button>
             <Button size="sm">

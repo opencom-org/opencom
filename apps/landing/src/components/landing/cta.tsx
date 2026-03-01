@@ -2,7 +2,7 @@
 
 import { ArrowRight, GithubLogo, Sparkle } from "@phosphor-icons/react";
 import Link from "next/link";
-import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_DOCS_URL } from "@/lib/links";
+import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_DOCS_URL, OPENCOM_GITHUB_REPO_URL } from "@/lib/links";
 
 export function CTA() {
   return (
@@ -48,7 +48,7 @@ export function CTA() {
             </Link>
 
             <Link
-              href={OPENCOM_GITHUB_DOCS_URL}
+              href={OPENCOM_GITHUB_REPO_URL}
               target="_blank"
               className="group flex h-14 w-full sm:w-auto items-center justify-center gap-3 rounded-2xl border border-border/80 bg-white dark:bg-background px-10 font-semibold text-foreground transition-[transform,background-color,border-color] hover:bg-muted/50 hover:border-border hover:scale-105 active:scale-95 shadow-sm"
             >

@@ -12,7 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import Link from "next/link";
 import { useState, useEffect, memo } from "react";
-import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_DOCS_URL } from "@/lib/links";
+import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_REPO_URL } from "@/lib/links";
 
 const container: Variants = {
   hidden: { opacity: 0 },
@@ -219,7 +219,7 @@ export function Hero() {
             </Link>
 
             <Link
-              href={OPENCOM_GITHUB_DOCS_URL}
+              href={OPENCOM_GITHUB_REPO_URL}
               target="_blank"
               data-tour-target="hero-github-docs"
               className="group flex h-14 w-full sm:w-auto items-center justify-center gap-2 rounded-2xl border border-border/80 bg-white dark:bg-card px-10 font-semibold text-foreground transition-all hover:bg-muted/50 hover:border-border active:scale-[0.98] shadow-sm"
@@ -228,7 +228,7 @@ export function Hero() {
                 weight="fill"
                 className="h-5 w-5 text-foreground/70 group-hover:text-foreground transition-colors"
               />
-              GitHub Docs
+              GitHub
             </Link>
           </motion.div>
 
