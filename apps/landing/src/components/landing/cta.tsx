@@ -2,7 +2,7 @@
 
 import { ArrowRight, GithubLogo, Sparkle } from "@phosphor-icons/react";
 import Link from "next/link";
-import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_DOCS_URL, OPENCOM_GITHUB_REPO_URL } from "@/lib/links";
+import { OPENCOM_HOSTED_ONBOARDING_URL, OPENCOM_GITHUB_REPO_URL } from "@/lib/links";
 
 export function CTA() {
   return (
