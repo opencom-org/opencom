@@ -47,7 +47,13 @@ jobs:
           fi
 
       - name: Convex backend typecheck
-        run: pnpm --filter @opencom/convex typecheck
+        run: pnpm --filter @opencom/convex run typecheck
 
       - name: Deploy Convex production backend
-        run: pnpm --filter @opencom/convex deploy -- --yes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! pnpm --filter @opencom/convex exec convex deploy --yes; then
+            echo "::error::Convex production deploy failed"
+            exit 1
+          fi
