@@ -133,6 +133,8 @@ export function Widget({
     sound: false,
   });
   const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
+  const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
+  const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
 
   // ── Tooltip trigger context ────────────────────────────────────────
   const [tooltipTriggerContext, setTooltipTriggerContext] = useState<{
@@ -283,6 +285,57 @@ export function Widget({
       visitorConversations?.find((conversation) => conversation._id === conversationId) ?? null
     );
   }, [visitorConversations, conversationId]);
+
+  const reusableDraftConversationId = useMemo(() => {
+    if (!visitorConversations || visitorConversations.length === 0) {
+      return null;
+    }
+
+    const draftConversation = visitorConversations.find((conversation) => {
+      if (conversation.status !== "open") {
+        return false;
+      }
+      const lastMessageAt = conversation.lastMessageAt ?? conversation.createdAt;
+      return lastMessageAt === conversation.createdAt;
+    });
+
+    return draftConversation?._id ?? null;
+  }, [visitorConversations]);
+
+  useEffect(() => {
+    if (!visitorConversations) {
+      return;
+    }
+
+    if (reusableDraftConversationId) {
+      latestDraftConversationIdRef.current = reusableDraftConversationId;
+      return;
+    }
+
+    const latestDraftConversationId = latestDraftConversationIdRef.current;
+    if (!latestDraftConversationId) {
+      return;
+    }
+
+    const latestConversation = visitorConversations.find(
+      (conversation) => conversation._id === latestDraftConversationId
+    );
+
+    if (!latestConversation) {
+      latestDraftConversationIdRef.current = null;
+      return;
+    }
+
+    const latestConversationLastMessageAt =
+      latestConversation.lastMessageAt ?? latestConversation.createdAt;
+    const isLatestConversationStillDraft =
+      latestConversation.status === "open" &&
+      latestConversationLastMessageAt === latestConversation.createdAt;
+
+    if (!isLatestConversationStillDraft) {
+      latestDraftConversationIdRef.current = null;
+    }
+  }, [visitorConversations, reusableDraftConversationId]);
 
   // Automation settings for self-serve features (getOrCreate returns defaults for new workspaces)
   const automationSettings = useQuery(
@@ -688,6 +741,8 @@ export function Widget({
 
   useEffect(() => {
     unreadSnapshotRef.current = null;
+    latestDraftConversationIdRef.current = null;
+    createConversationRequestRef.current = null;
   }, [sessionId, visitorId, activeWorkspaceId]);
 
   // Handle debug workspace ID update
@@ -698,34 +753,69 @@ export function Widget({
     setVisitorId(null);
   };
 
+  const openConversation = useCallback((id: Id<"conversations">) => {
+    setConversationId(id);
+    setView("conversation");
+  }, []);
+
   const handleNewConversation = async () => {
-    // Wait briefly for visitor initialization if it hasn't completed yet
-    let vid = visitorIdRef.current;
-    if (!vid) {
-      for (let i = 0; i < 30 && !visitorIdRef.current; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      vid = visitorIdRef.current;
-    }
-    if (!vid || !activeWorkspaceId) {
-      console.warn("[Opencom Widget] Cannot create conversation - visitor not initialized", {
-        visitorId: vid,
-        activeWorkspaceId,
-      });
+    const existingDraftConversationId =
+      reusableDraftConversationId ?? latestDraftConversationIdRef.current;
+    if (existingDraftConversationId) {
+      openConversation(existingDraftConversationId);
       return;
     }
-    try {
-      const newConv = await createConversation({
-        workspaceId: activeWorkspaceId as Id<"workspaces">,
-        visitorId: vid,
-        sessionToken: sessionTokenRef.current ?? "",
-      });
-      if (newConv) {
-        setConversationId(newConv._id);
-        setView("conversation");
+
+    if (createConversationRequestRef.current) {
+      const inFlightConversationId = await createConversationRequestRef.current;
+      if (inFlightConversationId) {
+        latestDraftConversationIdRef.current = inFlightConversationId;
+        openConversation(inFlightConversationId);
       }
-    } catch (error) {
-      console.error("Failed to create conversation:", error);
+      return;
+    }
+
+    const createConversationRequest = (async () => {
+      // Wait briefly for visitor initialization if it hasn't completed yet
+      let vid = visitorIdRef.current;
+      if (!vid) {
+        for (let i = 0; i < 30 && !visitorIdRef.current; i++) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        vid = visitorIdRef.current;
+      }
+      if (!vid || !activeWorkspaceId) {
+        console.warn("[Opencom Widget] Cannot create conversation - visitor not initialized", {
+          visitorId: vid,
+          activeWorkspaceId,
+        });
+        return null;
+      }
+      try {
+        const newConv = await createConversation({
+          workspaceId: activeWorkspaceId as Id<"workspaces">,
+          visitorId: vid,
+          sessionToken: sessionTokenRef.current ?? "",
+        });
+        return newConv?._id ?? null;
+      } catch (error) {
+        console.error("Failed to create conversation:", error);
+        return null;
+      }
+    })();
+
+    createConversationRequestRef.current = createConversationRequest;
+
+    try {
+      const createdConversationId = await createConversationRequest;
+      if (createdConversationId) {
+        latestDraftConversationIdRef.current = createdConversationId;
+        openConversation(createdConversationId);
+      }
+    } finally {
+      if (createConversationRequestRef.current === createConversationRequest) {
+        createConversationRequestRef.current = null;
+      }
     }
   };
 
