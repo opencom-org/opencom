@@ -1,9 +1,15 @@
 {
   "name": "@opencom/convex",
   "version": "0.1.0",
-  "private": true,
   "main": "./convex/_generated/api.js",
   "types": "./convex/_generated/api.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "convex/_generated",
+    "convex/schema.ts"
+  ],
   "exports": {
     ".": {
       "types": "./convex/_generated/api.d.ts",
@@ -11,9 +17,7 @@
       "require": "./convex/_generated/api.js"
     },
     "./dataModel": {
-      "types": "./convex/_generated/dataModel.d.ts",
-      "import": "./convex/_generated/dataModel.js",
-      "require": "./convex/_generated/dataModel.js"
+      "types": "./convex/_generated/dataModel.d.ts"
     }
   },
   "scripts": {

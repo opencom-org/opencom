@@ -90,6 +90,28 @@ traceability comments to the upstream release/source used during selection.
 Use the verification commands below as the minimum release baseline.
 Capture decision/evidence artifacts in your release process tooling.
 
+## NPM Package Releases (SDK)
+
+Public SDK packages are released with Changesets from GitHub Actions:
+
+- workflow: `.github/workflows/release-packages.yml`
+- packages: `@opencom/convex`, `@opencom/sdk-core`, `@opencom/react-native-sdk`
+- required secret: `NPM_TOKEN`
+
+Maintainer workflow:
+
+1. Add/update package changes.
+2. Create a release note entry: `pnpm changeset`.
+3. Merge to `main`.
+4. Let Changesets open a version PR, then merge it.
+5. Workflow publishes the packages to npm.
+
+Local preflight command:
+
+```bash
+pnpm release:packages:smoke
+```
+
 ## Mandatory Verification Commands
 
 Run from repository root:

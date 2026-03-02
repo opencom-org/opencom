@@ -2,9 +2,9 @@
 
 Opencom provides native SDKs for embedding customer messaging into mobile apps. All SDKs share the same backend API surface via `packages/sdk-core`.
 
-| SDK          | Language   | Package                     | Distribution    |
-| ------------ | ---------- | --------------------------- | --------------- |
-| React Native | TypeScript | `packages/react-native-sdk` | npm             |
+| SDK          | Language   | Package                     | Distribution |
+| ------------ | ---------- | --------------------------- | ------------ |
+| React Native | TypeScript | `@opencom/react-native-sdk` | npm          |
 | iOS          | Swift      | `packages/ios-sdk`          | SPM + CocoaPods |
 | Android      | Kotlin     | `packages/android-sdk`      | Maven / Gradle  |
 

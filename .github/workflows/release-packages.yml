@@ -1,0 +1,62 @@
+name: Release Packages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Focused package checks
+        run: |
+          pnpm --filter @opencom/sdk-core build
+          pnpm --filter @opencom/convex typecheck
+          pnpm --filter @opencom/sdk-core typecheck
+          pnpm --filter @opencom/react-native-sdk typecheck
+          pnpm --filter @opencom/react-native-sdk test
+
+      - name: SDK package smoke install check
+        run: pnpm release:packages:smoke
+
+      - name: Create version PR or publish packages
+        # changesets/action pinned to v1.5.3: https://github.com/changesets/action/releases/tag/v1.5.3
+        uses: changesets/action@8eb63fb4cfc7f9643537c7d39d0b68c835012a19
+        with:
+          commit: "chore: release npm packages"
+          title: "chore: release npm packages"
+          version: pnpm version-packages
+          publish: pnpm release:packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -39,6 +39,10 @@
     "security:convex-any-args-gate": "node scripts/ci-convex-any-args-gate.js",
     "security:secret-scan": "node scripts/ci-secret-scan.js",
     "security:headers-check": "node scripts/ci-security-headers-check.js",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release:packages": "changeset publish",
+    "release:packages:smoke": "bash scripts/ci-sdk-package-smoke.sh",
     "test:summary": "node scripts/test-summary.js",
     "test:clear": "node scripts/test-summary.js clear",
     "test:e2e:prod": "E2E_USE_PROD_BUILD=true pn web:test:e2e",
@@ -46,6 +50,7 @@
     "seed:landing:cleanup": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts --cleanup"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.7",
     "@playwright/test": "^1.52.0",
     "@types/node": "^20.10.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",

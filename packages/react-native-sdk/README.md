@@ -5,9 +5,6 @@ React Native SDK for embedding Opencom in customer mobile apps. Provides native 
 ## Installation
 
 ```bash
-# Install the SDK
-npm install @opencom/react-native-sdk
-# or
 pnpm add @opencom/react-native-sdk
 
 # Install peer dependencies
