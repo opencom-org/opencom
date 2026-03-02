@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
@@ -373,6 +373,36 @@ export function ConversationView({
     }
   };
 
+  const showWaitingForHumanSupport = useMemo(() => {
+    if (!messages || messages.length === 0 || !aiResponses || aiResponses.length === 0) {
+      return false;
+    }
+
+    const handoffMessageIds = new Set(
+      aiResponses
+        .filter((response: { handedOff?: boolean; messageId: string }) => response.handedOff)
+        .map((response: { messageId: string }) => response.messageId)
+    );
+    if (handoffMessageIds.size === 0) {
+      return false;
+    }
+
+    let lastHandoffMessageIndex = -1;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (handoffMessageIds.has(messages[i]._id)) {
+        lastHandoffMessageIndex = i;
+        break;
+      }
+    }
+    if (lastHandoffMessageIndex < 0) {
+      return false;
+    }
+
+    return !messages
+      .slice(lastHandoffMessageIndex + 1)
+      .some((message) => message.senderType === "agent" || message.senderType === "user");
+  }, [aiResponses, messages]);
+
   const dismissCsatPrompt = () => {
     setCsatPromptVisible(false);
     setDismissedCsatByConversation((prev) => ({ ...prev, [conversationKey]: true }));
@@ -515,6 +545,11 @@ export function ConversationView({
               );
             }
           )
+        )}
+        {showWaitingForHumanSupport && (
+          <div className="opencom-status-divider" data-testid="widget-waiting-human-divider">
+            Waiting for human support
+          </div>
         )}
         {isAiTyping && (
           <div className="opencom-message opencom-message-agent opencom-message-ai opencom-typing">

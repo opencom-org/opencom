@@ -538,6 +538,42 @@ export const generateResponse = action({
       title: r.title,
     }));
 
+    if (handoff) {
+      // Persist only the precanned handoff message so visitors see one assistant message.
+      const handoffResult = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+        conversationId: args.conversationId,
+        visitorId: args.visitorId,
+        sessionToken: args.sessionToken,
+        reason: handoffReason ?? undefined,
+      });
+
+      await ctx.runMutation(api.aiAgent.storeResponse, {
+        conversationId: args.conversationId,
+        visitorId: args.visitorId,
+        sessionToken: args.sessionToken,
+        messageId: handoffResult.messageId,
+        query: args.query,
+        response: handoffResult.handoffMessage,
+        sources: [],
+        confidence,
+        handedOff: true,
+        handoffReason: handoffReason ?? undefined,
+        generationTimeMs,
+        tokensUsed,
+        model: settings.model,
+        provider,
+      });
+
+      return {
+        response: handoffResult.handoffMessage,
+        confidence,
+        sources: [],
+        handoff: true,
+        handoffReason,
+        messageId: handoffResult.messageId,
+      };
+    }
+
     // Create the AI message via the internal bot-only path.
     const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
       conversationId: args.conversationId,
@@ -555,30 +591,19 @@ export const generateResponse = action({
       response: responseText,
       sources,
       confidence,
-      handedOff: handoff,
-      handoffReason: handoffReason ?? undefined,
+      handedOff: false,
       generationTimeMs,
       tokensUsed,
       model: settings.model,
       provider,
     });
 
-    // If handoff is needed, trigger it
-    if (handoff) {
-      await ctx.runMutation(api.aiAgent.handoffToHuman, {
-        conversationId: args.conversationId,
-        visitorId: args.visitorId,
-        sessionToken: args.sessionToken,
-        reason: handoffReason ?? undefined,
-      });
-    }
-
     return {
       response: responseText,
       confidence,
       sources,
-      handoff,
-      handoffReason,
+      handoff: false,
+      handoffReason: null,
       messageId,
     };
   },

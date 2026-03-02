@@ -362,6 +362,84 @@ describe("aiAgentActions runtime safety", () => {
     );
   });
 
+  it("stores only the handoff message when AI output requires a handoff", async () => {
+    const handoffMessage = "Let me connect you with a human agent who can help you better.";
+    mockGenerateText.mockResolvedValue({
+      text: "I don't have enough information to answer that question. Let me connect you with a human agent.",
+      usage: { totalTokens: 33 },
+    } as any);
+
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if ("query" in args) {
+        return [];
+      }
+      if ("workspaceId" in args && "conversationId" in args === false) {
+        return {
+          enabled: true,
+          model: "openai/gpt-5-nano",
+          confidenceThreshold: 0.2,
+          knowledgeSources: ["articles"],
+          personality: null,
+        };
+      }
+      return {
+        conversationId: "conversation_1",
+        workspaceId: "workspace_1",
+        visitorId: "visitor_1",
+      };
+    });
+
+    const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "workspaceId" in args) {
+        return "cleared";
+      }
+      if ("reason" in args) {
+        return {
+          messageId: "handoff_message_single_1",
+          handoffMessage,
+        };
+      }
+      if ("query" in args && "response" in args) {
+        return "ai_response_handoff_1";
+      }
+      if ("senderId" in args && "content" in args) {
+        throw new Error("Unexpected AI message persistence before handoff");
+      }
+      throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
+    });
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "Who should I vote for?",
+      }
+    );
+
+    expect(result.handoff).toBe(true);
+    expect(result.messageId).toBe("handoff_message_single_1");
+    expect(result.response).toBe(handoffMessage);
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: "Who should I vote for?",
+        response: handoffMessage,
+        messageId: "handoff_message_single_1",
+        handedOff: true,
+      })
+    );
+    expect(runMutation).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        senderId: "ai-agent",
+      })
+    );
+  });
+
   it("persists a handoff message when generation fails", async () => {
     mockGenerateText.mockRejectedValue(new Error("gateway timeout"));
 
