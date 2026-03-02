@@ -313,6 +313,81 @@
   box-shadow: 0 2px 4px color-mix(in srgb, var(--opencom-primary-color) 25%, transparent);
 }
 
+.opencom-message-content {
+  color: inherit;
+}
+
+.opencom-message-content > :first-child {
+  margin-top: 0;
+}
+
+.opencom-message-content > :last-child {
+  margin-bottom: 0;
+}
+
+.opencom-message-content p {
+  margin: 0 0 8px;
+}
+
+.opencom-message-content p:empty {
+  display: none;
+}
+
+.opencom-message-content ul,
+.opencom-message-content ol {
+  margin: 0 0 8px 20px;
+  padding: 0;
+}
+
+.opencom-message-content li {
+  margin: 2px 0;
+}
+
+.opencom-message-content pre {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.45;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.opencom-message-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.opencom-message-content pre code {
+  font-size: inherit;
+  padding: 0;
+  background: transparent;
+}
+
+.opencom-message-content blockquote {
+  margin: 8px 0;
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in srgb, currentColor 26%, transparent);
+  opacity: 0.9;
+}
+
+.opencom-message-content a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.opencom-message-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0;
+  border-radius: 8px;
+}
+
 .opencom-typing-indicator-area {
   min-height: 4px;
 }

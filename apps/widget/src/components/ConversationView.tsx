@@ -6,6 +6,7 @@ import { ChevronLeft, X, Send, Bot, ThumbsUp, ThumbsDown, User, Book } from "../
 import { CsatPrompt } from "../CsatPrompt";
 import { formatTime } from "../utils/format";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { parseMarkdown } from "../utils/parseMarkdown";
 
 const DEFAULT_HUMAN_AGENT_NAME = "Support";
 
@@ -420,6 +421,19 @@ export function ConversationView({
     setDismissedCsatByConversation((prev) => ({ ...prev, [conversationKey]: true }));
   };
 
+  const renderedMessages = useMemo(() => {
+    if (!messages) {
+      return new Map<string, string>();
+    }
+
+    return new Map(
+      messages.map((message: { _id: string; content: string }) => [
+        message._id,
+        parseMarkdown(message.content),
+      ])
+    );
+  }, [messages]);
+
   return (
     <div className="opencom-chat">
       <div className="opencom-header">
@@ -519,7 +533,12 @@ export function ConversationView({
                         <User /> {humanAgentName}
                       </span>
                     )}
-                    {msg.content}
+                    <div
+                      className="opencom-message-content"
+                      dangerouslySetInnerHTML={{
+                        __html: renderedMessages.get(msg._id) ?? "",
+                      }}
+                    />
                     {isAi && aiData && (
                       <div className="opencom-ai-feedback">
                         {aiData.sources && aiData.sources.length > 0 && (

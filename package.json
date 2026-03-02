@@ -32,7 +32,7 @@
     "test:e2e": "pnpm web:test:e2e",
     "test:ci": "pnpm web:test:ci",
     "web:test:unit": "vitest run",
-    "web:test:e2e": "playwright test",
+    "web:test:e2e": "set -a; source packages/convex/.env.local; set +a; pnpm playwright test",
     "web:test:ci": "vitest run --coverage && playwright test",
     "cleanup:e2e": "pnpm --filter @opencom/convex cleanup:e2e",
     "security:convex-auth-guard": "node scripts/ci-convex-auth-guard.js",
@@ -41,7 +41,7 @@
     "security:headers-check": "node scripts/ci-security-headers-check.js",
     "test:summary": "node scripts/test-summary.js",
     "test:clear": "node scripts/test-summary.js clear",
-    "test:e2e:prod": "E2E_USE_PROD_BUILD=true playwright test",
+    "test:e2e:prod": "E2E_USE_PROD_BUILD=true pn web:test:e2e",
     "seed:landing": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts",
     "seed:landing:cleanup": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts --cleanup"
   },

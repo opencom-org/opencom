@@ -177,4 +177,32 @@ describe("ConversationView personas", () => {
       "Support"
     );
   });
+
+  it("renders markdown content for messages, including line breaks and lists", () => {
+    messagesResult = [
+      {
+        _id: "m_markdown",
+        _creationTime: 1700000015000,
+        senderType: "bot",
+        content:
+          "First line\nSecond line\n\n- Install the app\n- Invite teammates\n\n[Docs](https://example.com/docs)",
+      },
+    ];
+    aiResponsesResult = [
+      {
+        _id: "r_markdown",
+        messageId: "m_markdown",
+        sources: [],
+      },
+    ];
+
+    renderSubject();
+
+    const messageContent = document.querySelector(".opencom-message-content");
+    expect(messageContent).not.toBeNull();
+    expect(messageContent?.querySelector("br")).not.toBeNull();
+    expect(messageContent?.querySelectorAll("li")).toHaveLength(2);
+    expect(messageContent?.querySelector("a")).toHaveAttribute("href", "https://example.com/docs");
+    expect(messageContent?.querySelector("a")).toHaveAttribute("target", "_blank");
+  });
 });
