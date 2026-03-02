@@ -7,6 +7,13 @@ import { CsatPrompt } from "../CsatPrompt";
 import { formatTime } from "../utils/format";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
+const DEFAULT_HUMAN_AGENT_NAME = "Support";
+
+function resolveHumanAgentName(senderName?: string): string {
+  const normalized = senderName?.trim();
+  return normalized && normalized.length > 0 ? normalized : DEFAULT_HUMAN_AGENT_NAME;
+}
+
 interface ConversationViewProps {
   conversationId: Id<"conversations">;
   visitorId: Id<"visitors">;
@@ -479,6 +486,10 @@ export function ConversationView({
                 (messages[index - 1] &&
                   msg._creationTime - messages[index - 1]._creationTime > 5 * 60 * 1000);
               const isAi = isAiMessage(msg._id);
+              const isHumanAgent = (msg.senderType === "agent" || msg.senderType === "user") && !isAi;
+              const humanAgentName = isHumanAgent
+                ? resolveHumanAgentName(msg.senderName)
+                : null;
               const aiData = isAi ? getAiResponseData(msg._id) : null;
               const feedbackGiven = aiData
                 ? aiResponseFeedback[aiData._id] || aiData.feedback
@@ -498,6 +509,14 @@ export function ConversationView({
                     {isAi && (
                       <span className="opencom-ai-badge">
                         <Bot /> AI
+                      </span>
+                    )}
+                    {isHumanAgent && (
+                      <span
+                        className="opencom-human-badge"
+                        data-testid={`widget-human-agent-badge-${msg._id}`}
+                      >
+                        <User /> {humanAgentName}
                       </span>
                     )}
                     {msg.content}

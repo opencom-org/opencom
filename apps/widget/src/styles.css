@@ -3637,6 +3637,26 @@
   height: 12px;
 }
 
+.opencom-human-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #16a34a 0%, #0891b2 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.opencom-human-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
 .opencom-message-ai {
   position: relative;
 }

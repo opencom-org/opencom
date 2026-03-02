@@ -72,12 +72,44 @@ vi.mock("../components/Home", () => ({
 }));
 
 vi.mock("../components/ConversationList", () => ({
-  ConversationList: () => <div data-testid="conversation-list" />,
+  ConversationList: ({
+    conversations,
+    onSelectConversation,
+  }: {
+    conversations?: Array<{ _id: string }>;
+    onSelectConversation: (id: string) => void;
+  }) => (
+    <div data-testid="conversation-list">
+      <button
+        type="button"
+        data-testid="mock-open-first-conversation"
+        onClick={() => {
+          const firstConversation = conversations?.[0];
+          if (firstConversation) {
+            onSelectConversation(firstConversation._id);
+          }
+        }}
+      >
+        Open first conversation
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../components/ConversationView", () => ({
-  ConversationView: ({ conversationId }: { conversationId: string }) => (
-    <div data-testid="conversation-view">{conversationId}</div>
+  ConversationView: ({
+    conversationId,
+    onBack,
+  }: {
+    conversationId: string;
+    onBack: () => void;
+  }) => (
+    <div data-testid="conversation-view">
+      <span>{conversationId}</span>
+      <button type="button" data-testid="mock-back-to-list" onClick={onBack}>
+        Back to list
+      </button>
+    </div>
   ),
 }));
 
@@ -167,6 +199,7 @@ vi.mock("../utils/dom", () => ({
 
 describe("Widget new conversation behavior", () => {
   let createConversationMock: ReturnType<typeof vi.fn>;
+  let markAsReadMock: ReturnType<typeof vi.fn>;
   let visitorConversationsResult: Array<Record<string, unknown>>;
 
   const openWidgetMessagesTab = async () => {
@@ -186,11 +219,15 @@ describe("Widget new conversation behavior", () => {
 
     visitorConversationsResult = [];
     createConversationMock = vi.fn().mockResolvedValue({ _id: "conv_created_1" });
+    markAsReadMock = vi.fn().mockResolvedValue(undefined);
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
       if (mutationRef === "conversations.createForVisitor") {
         return createConversationMock;
+      }
+      if (mutationRef === "conversations.markAsRead") {
+        return markAsReadMock;
       }
       return vi.fn().mockResolvedValue(undefined);
     });
@@ -294,5 +331,39 @@ describe("Widget new conversation behavior", () => {
     await waitFor(() => {
       expect(screen.getByTestId("conversation-view")).toHaveTextContent("conv_created_2");
     });
+  });
+
+  it("marks a conversation as read when leaving the chat view", async () => {
+    visitorConversationsResult = [
+      {
+        _id: "conv_unread_1",
+        status: "open",
+        createdAt: 1700000000000,
+        lastMessageAt: 1700000010000,
+        unreadByVisitor: 2,
+      },
+    ];
+
+    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+    await openWidgetMessagesTab();
+
+    fireEvent.click(screen.getByTestId("mock-open-first-conversation"));
+    await waitFor(() => {
+      expect(screen.getByTestId("conversation-view")).toHaveTextContent("conv_unread_1");
+    });
+
+    expect(markAsReadMock).toHaveBeenCalledWith({
+      id: "conv_unread_1",
+      readerType: "visitor",
+      visitorId: "visitor_1",
+      sessionToken: "wst_test",
+    });
+
+    fireEvent.click(screen.getByTestId("mock-back-to-list"));
+    await waitFor(() => {
+      expect(screen.getByTestId("conversation-list")).toBeInTheDocument();
+    });
+
+    expect(markAsReadMock).toHaveBeenCalledTimes(2);
   });
 });

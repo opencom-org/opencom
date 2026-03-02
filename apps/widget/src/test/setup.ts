@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
 
 function createStorageShim(): Storage {
   const store = new Map<string, string>();
@@ -39,6 +39,14 @@ if (
     value: createStorageShim(),
     configurable: true,
     enumerable: true,
+    writable: true,
+  });
+}
+
+if (typeof HTMLElement !== "undefined") {
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    value: vi.fn(),
+    configurable: true,
     writable: true,
   });
 }

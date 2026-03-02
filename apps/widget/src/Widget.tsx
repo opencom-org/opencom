@@ -819,18 +819,28 @@ export function Widget({
     }
   };
 
+  const syncConversationReadState = useCallback(
+    (convId: Id<"conversations">) => {
+      markAsReadMutation({
+        id: convId,
+        readerType: "visitor",
+        visitorId: visitorId ?? undefined,
+        sessionToken: sessionTokenRef.current ?? undefined,
+      }).catch(console.error);
+    },
+    [markAsReadMutation, sessionTokenRef, visitorId]
+  );
+
   const handleSelectConversation = (convId: Id<"conversations">) => {
     setConversationId(convId);
     setView("conversation");
-    markAsReadMutation({
-      id: convId,
-      readerType: "visitor",
-      visitorId: visitorId ?? undefined,
-      sessionToken: sessionTokenRef.current ?? undefined,
-    }).catch(console.error);
+    syncConversationReadState(convId);
   };
 
   const handleBackToList = () => {
+    if (conversationId) {
+      syncConversationReadState(conversationId);
+    }
     setView("conversation-list");
   };
 
@@ -1018,6 +1028,9 @@ export function Widget({
   };
 
   const handleCloseWidget = () => {
+    if (view === "conversation" && conversationId) {
+      syncConversationReadState(conversationId);
+    }
     setView("launcher");
   };
 

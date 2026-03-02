@@ -1,9 +1,57 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, type QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { type Doc, type Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
+
+async function withSupportSenderNames(
+  ctx: QueryCtx,
+  messages: Doc<"messages">[]
+): Promise<Array<Doc<"messages"> & { senderName?: string }>> {
+  const supportSenderIds = [
+    ...new Set(
+      messages
+        .filter((message) => message.senderType === "agent" || message.senderType === "user")
+        .map((message) => message.senderId)
+    ),
+  ];
+
+  if (supportSenderIds.length === 0) {
+    return messages;
+  }
+
+  const senderNameById = new Map<string, string>();
+
+  await Promise.all(
+    supportSenderIds.map(async (senderId) => {
+      try {
+        const sender = (await ctx.db.get(senderId as Id<"users">)) as Doc<"users"> | null;
+        if (!sender) {
+          return;
+        }
+        const senderName = sender.name?.trim() || sender.email?.trim();
+        if (!senderName) {
+          return;
+        }
+        senderNameById.set(senderId, senderName);
+      } catch {
+        // Some historical sender IDs are not user IDs; fall back to default UI labels.
+      }
+    })
+  );
+
+  return messages.map((message) => {
+    if (message.senderType !== "agent" && message.senderType !== "user") {
+      return message;
+    }
+    return {
+      ...message,
+      senderName: senderNameById.get(message.senderId) ?? "Support",
+    };
+  });
+}
 
 export const list = query({
   args: {
@@ -35,11 +83,12 @@ export const list = query({
     if (resolvedVisitorId) {
       const visitor = await ctx.db.get(resolvedVisitorId);
       if (visitor && conversation.visitorId === resolvedVisitorId) {
-        return await ctx.db
+        const messages = await ctx.db
           .query("messages")
           .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
           .order("asc")
           .collect();
+        return await withSupportSenderNames(ctx, messages);
       }
     }
 
@@ -59,11 +108,12 @@ export const list = query({
       return [];
     }
 
-    return await ctx.db
+    const messages = await ctx.db
       .query("messages")
       .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
       .order("asc")
       .collect();
+    return await withSupportSenderNames(ctx, messages);
   },
 });
 
