@@ -140,6 +140,70 @@ describe("aiAgentActions runtime safety", () => {
     expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
+  it("skips AI generation when the conversation is already in handoff", async () => {
+    const runQuery = vi.fn(async (_reference: unknown, _args: Record<string, unknown>) => ({
+      conversationId: "conversation_1",
+      workspaceId: "workspace_1",
+      visitorId: "visitor_1",
+      aiWorkflowState: "handoff",
+      hasHumanAgentResponse: false,
+    }));
+
+    const runMutation = vi.fn();
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "Can you help me?",
+      }
+    );
+
+    expect(result.handoff).toBe(true);
+    expect(result.handoffReason).toBe("Conversation has already been handed off to a human agent");
+    expect(result.messageId).toBeNull();
+    expect(result.response).toBe("");
+    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(runQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips AI generation after a human agent has responded in the thread", async () => {
+    const runQuery = vi.fn(async (_reference: unknown, _args: Record<string, unknown>) => ({
+      conversationId: "conversation_1",
+      workspaceId: "workspace_1",
+      visitorId: "visitor_1",
+      aiWorkflowState: "none",
+      hasHumanAgentResponse: true,
+    }));
+
+    const runMutation = vi.fn();
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "Can you still answer this?",
+      }
+    );
+
+    expect(result.handoff).toBe(true);
+    expect(result.handoffReason).toBe("A human agent has already responded in this conversation");
+    expect(result.messageId).toBeNull();
+    expect(result.response).toBe("");
+    expect(mockGenerateText).not.toHaveBeenCalled();
+    expect(runMutation).not.toHaveBeenCalled();
+    expect(runQuery).toHaveBeenCalledTimes(1);
+  });
+
   it("clears prior diagnostics and continues generation when configuration is valid", async () => {
     mockGenerateText.mockResolvedValue({
       text: "Here is the answer.",

@@ -235,6 +235,23 @@ export const generateResponse = action({
       throw new Error("Conversation does not belong to workspace");
     }
 
+    const suppressionReason =
+      access.aiWorkflowState === "handoff"
+        ? "Conversation has already been handed off to a human agent"
+        : access.hasHumanAgentResponse
+          ? "A human agent has already responded in this conversation"
+          : null;
+    if (suppressionReason) {
+      return {
+        response: "",
+        confidence: 0,
+        sources: [],
+        handoff: true,
+        handoffReason: suppressionReason,
+        messageId: null,
+      };
+    }
+
     // Get AI settings
     const settings = await ctx.runQuery(internal.aiAgent.getRuntimeSettingsForWorkspace, {
       workspaceId: args.workspaceId,

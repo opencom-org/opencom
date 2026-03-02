@@ -579,10 +579,19 @@ export const authorizeConversationAccess = internalQuery({
       sessionToken: args.sessionToken,
     });
 
+    const hasHumanAgentResponse = (
+      await ctx.db
+        .query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
+        .collect()
+    ).some((message) => message.senderType === "agent" || message.senderType === "user");
+
     return {
       conversationId: conversation._id,
       workspaceId: conversation.workspaceId,
       visitorId: conversation.visitorId,
+      aiWorkflowState: conversation.aiWorkflowState ?? "none",
+      hasHumanAgentResponse,
     };
   },
 });
