@@ -139,6 +139,15 @@ export function ConversationView({
         }
       : "skip"
   );
+  const conversationData = useQuery(
+    api.conversations.get,
+    conversationId
+      ? {
+          id: conversationId,
+          visitorId: visitorId ?? undefined,
+        }
+      : "skip"
+  );
 
   const csatEligibility = useQuery(
     api.reporting.getCsatEligibility,
@@ -344,8 +353,16 @@ export function ConversationView({
     sessionStorage.setItem("opencom_email_dismissed", "true");
   };
 
-  const isAiMessage = (messageId: string) => {
-    return aiResponses?.some((r: { messageId: string }) => r.messageId === messageId);
+  const isAiMessage = (message: { _id: string; senderType: string; senderId: string }) => {
+    if (message.senderType !== "bot") {
+      return false;
+    }
+
+    if (message.senderId === "ai-agent") {
+      return true;
+    }
+
+    return aiResponses?.some((r: { messageId: string }) => r.messageId === message._id) ?? false;
   };
 
   const getAiResponseData = (messageId: string) => {
@@ -382,22 +399,33 @@ export function ConversationView({
   };
 
   const showWaitingForHumanSupport = useMemo(() => {
-    if (!messages || messages.length === 0 || !aiResponses || aiResponses.length === 0) {
+    if (!messages || messages.length === 0) {
       return false;
     }
 
+    const aiWorkflowState = conversationData?.aiWorkflowState ?? "none";
     const handoffMessageIds = new Set(
-      aiResponses
+      (aiResponses ?? [])
         .filter((response: { handedOff?: boolean; messageId: string }) => response.handedOff)
         .map((response: { messageId: string }) => response.messageId)
     );
-    if (handoffMessageIds.size === 0) {
+
+    const hasResponseTrackedHandoff = handoffMessageIds.size > 0;
+    const hasConversationHandoffState = aiWorkflowState === "handoff";
+    if (!hasResponseTrackedHandoff && !hasConversationHandoffState) {
       return false;
     }
 
     let lastHandoffMessageIndex = -1;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (handoffMessageIds.has(messages[i]._id)) {
+      const message = messages[i];
+      const isTrackedHandoff = handoffMessageIds.has(message._id);
+      const isAiHandoffFallback =
+        hasConversationHandoffState &&
+        message.senderType === "bot" &&
+        message.senderId === "ai-agent";
+
+      if (isTrackedHandoff || isAiHandoffFallback) {
         lastHandoffMessageIndex = i;
         break;
       }
@@ -409,7 +437,7 @@ export function ConversationView({
     return !messages
       .slice(lastHandoffMessageIndex + 1)
       .some((message) => message.senderType === "agent" || message.senderType === "user");
-  }, [aiResponses, messages]);
+  }, [aiResponses, conversationData?.aiWorkflowState, messages]);
 
   const dismissCsatPrompt = () => {
     setCsatPromptVisible(false);
@@ -490,6 +518,7 @@ export function ConversationView({
                 _id: string;
                 _creationTime: number;
                 senderType: string;
+                senderId: string;
                 content: string;
                 senderName?: string;
               },
@@ -499,7 +528,7 @@ export function ConversationView({
                 index === 0 ||
                 (messages[index - 1] &&
                   msg._creationTime - messages[index - 1]._creationTime > 5 * 60 * 1000);
-              const isAi = isAiMessage(msg._id);
+              const isAi = isAiMessage(msg);
               const isHumanAgent = (msg.senderType === "agent" || msg.senderType === "user") && !isAi;
               const humanAgentName = isHumanAgent
                 ? resolveHumanAgentName(msg.senderName)
