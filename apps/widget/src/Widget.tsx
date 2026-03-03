@@ -267,6 +267,10 @@ export function Widget({
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
   );
+  const publishedCollections = useQuery(
+    api.collections.listHierarchy,
+    isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
+  );
 
   const selectedArticle = useMemo(() => {
     if (!selectedArticleId) return undefined;
@@ -1244,6 +1248,7 @@ export function Widget({
               onSearchChange={setArticleSearchQuery}
               articleSearchResults={articleSearchResults}
               publishedArticles={publishedArticles}
+              collections={publishedCollections}
               onSelectArticle={(id) => {
                 setSelectedArticleId(id);
                 setView("article-detail");

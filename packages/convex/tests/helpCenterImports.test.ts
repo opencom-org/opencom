@@ -225,6 +225,91 @@ describe("help center markdown imports", () => {
     expect(manualCollection?.importPath).toBe("manual-guides");
   });
 
+  it("strips markdown frontmatter from imported article body content", async () => {
+    const result = await client.mutation(api.helpCenterImports.syncMarkdownFolder, {
+      workspaceId,
+      sourceName: "frontmatter-cleanup-source",
+      rootCollectionId,
+      files: [
+        {
+          relativePath: "content/hosted-quick-start.md",
+          content: [
+            "---",
+            'title: "Hosted Quick Start Frontmatter"',
+            'slug: "hosted-quick-start-frontmatter"',
+            'collectionPath: "hosted-onboarding"',
+            "---",
+            "",
+            "# Hosted Quick Start Frontmatter",
+            "",
+            "Frontmatter metadata should not be visible in the saved article body.",
+          ].join("\n"),
+        },
+      ],
+      publishByDefault: true,
+    });
+
+    expect(result.createdArticles).toBe(1);
+
+    const articles = await client.query(api.articles.list, {
+      workspaceId,
+      status: "published",
+    });
+    const importedArticle = articles.find(
+      (article) => article.title === "Hosted Quick Start Frontmatter"
+    );
+
+    expect(importedArticle).toBeDefined();
+    expect(importedArticle?.content).toContain("# Hosted Quick Start Frontmatter");
+    expect(importedArticle?.content).toContain("should not be visible");
+    expect(importedArticle?.content).not.toContain("---");
+    expect(importedArticle?.content).not.toContain("collectionPath:");
+    expect(importedArticle?.content).not.toContain("slug:");
+  });
+
+  it("matches uncategorized uploads using frontmatter collectionPath aliases", async () => {
+    const manualArticleId = await client.mutation(api.articles.create, {
+      workspaceId,
+      title: "Secrets to Getting Started",
+      content: "Legacy uncategorized draft content",
+    });
+
+    const result = await client.mutation(api.helpCenterImports.syncMarkdownFolder, {
+      workspaceId,
+      sourceName: "uncategorized-frontmatter-match-source",
+      files: [
+        {
+          relativePath: "misc/secrets-to-getting-started.md",
+          content: [
+            "---",
+            'title: "Secrets To Getting Started"',
+            'slug: "secrets-to-getting-started-0-0-landing-demo"',
+            'collectionPath: "uncategorised"',
+            "---",
+            "",
+            "Updated uncategorized content from markdown upload.",
+          ].join("\n"),
+        },
+      ],
+      publishByDefault: true,
+    });
+
+    expect(result.createdCollections).toBe(0);
+    expect(result.createdArticles).toBe(0);
+    expect(result.updatedArticles).toBe(1);
+
+    const updatedArticle = await client.query(api.articles.get, {
+      id: manualArticleId,
+      workspaceId,
+    });
+    expect(updatedArticle).not.toBeNull();
+    expect(updatedArticle?._id).toBe(manualArticleId);
+    expect(updatedArticle?.collectionId).toBeUndefined();
+    expect(updatedArticle?.status).toBe("published");
+    expect(updatedArticle?.content).toContain("Updated uncategorized content");
+    expect(updatedArticle?.content).not.toContain("collectionPath:");
+  });
+
   it("migrates legacy root-prefixed paths without creating duplicate docs", async () => {
     const sourceName = "legacy-docs";
 

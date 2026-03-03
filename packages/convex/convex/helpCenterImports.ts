@@ -11,6 +11,11 @@ const markdownFileValidator = v.object({
 
 const MARKDOWN_EXTENSION_REGEX = /\.md(?:own)?$/i;
 const ROOT_COLLECTION_MATCH_KEY = "__root__";
+const UNCATEGORIZED_COLLECTION_PATH = "uncategorized";
+const UNCATEGORIZED_COLLECTION_ALIASES = new Set([
+  UNCATEGORIZED_COLLECTION_PATH,
+  "uncategorised",
+]);
 
 function normalizePath(path: string): string {
   const normalized = path
@@ -122,9 +127,126 @@ function inferTitle(filePath: string, content: string): string {
   return humanizeName(withoutMarkdownExtension(getFileName(filePath)));
 }
 
+function parseFrontmatterValue(rawValue: string): string {
+  const value = rawValue.trim();
+  if (!value) {
+    return "";
+  }
+
+  if (value.startsWith('"') && value.endsWith('"')) {
+    try {
+      return JSON.parse(value) as string;
+    } catch {
+      return value.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+    }
+  }
+
+  if (value.startsWith("'") && value.endsWith("'")) {
+    return value.slice(1, -1).replace(/''/g, "'");
+  }
+
+  return value;
+}
+
+function normalizeCollectionPathFromFrontmatter(
+  rawValue: string | undefined
+): string | null | undefined {
+  if (rawValue === undefined) {
+    return undefined;
+  }
+
+  const collectionPath = rawValue.trim();
+  if (!collectionPath) {
+    return null;
+  }
+
+  const normalized = normalizePath(collectionPath);
+  if (!normalized) {
+    return null;
+  }
+
+  if (UNCATEGORIZED_COLLECTION_ALIASES.has(normalized.toLowerCase())) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function parseMarkdownImportContent(content: string): {
+  body: string;
+  frontmatterTitle?: string;
+  frontmatterSlug?: string;
+  frontmatterCollectionPath?: string | null;
+} {
+  const normalizedContent = content.replace(/^\uFEFF/, "");
+  const lines = normalizedContent.split(/\r?\n/);
+  if (lines.length < 3 || lines[0]?.trim() !== "---") {
+    return { body: normalizedContent };
+  }
+
+  let frontmatterEndIndex = -1;
+  for (let index = 1; index < lines.length; index += 1) {
+    if (lines[index]?.trim() === "---") {
+      frontmatterEndIndex = index;
+      break;
+    }
+  }
+
+  if (frontmatterEndIndex === -1) {
+    return { body: normalizedContent };
+  }
+
+  const frontmatterEntries = new Map<string, string>();
+  for (const line of lines.slice(1, frontmatterEndIndex)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf(":");
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim().toLowerCase();
+    const rawValue = trimmed.slice(separatorIndex + 1);
+    frontmatterEntries.set(key, parseFrontmatterValue(rawValue));
+  }
+
+  const body = lines
+    .slice(frontmatterEndIndex + 1)
+    .join("\n")
+    .replace(/^\s*\n/, "");
+  const frontmatterTitle = frontmatterEntries.get("title")?.trim() || undefined;
+  const rawSlug = frontmatterEntries.get("slug");
+  const normalizedSlug = rawSlug ? normalizeSourceKey(rawSlug) : "";
+
+  return {
+    body,
+    frontmatterTitle,
+    frontmatterSlug: normalizedSlug || undefined,
+    frontmatterCollectionPath: normalizeCollectionPathFromFrontmatter(
+      frontmatterEntries.get("collectionpath")
+    ),
+  };
+}
+
 function getDirectoryPath(filePath: string): string | undefined {
   const parentPath = getParentPath(filePath);
   return parentPath && parentPath.length > 0 ? parentPath : undefined;
+}
+
+function resolveIncomingCollectionPath(file: {
+  relativePath: string;
+  frontmatterCollectionPath?: string | null;
+}): string | undefined {
+  if (file.frontmatterCollectionPath === null) {
+    return undefined;
+  }
+  if (typeof file.frontmatterCollectionPath === "string") {
+    return file.frontmatterCollectionPath;
+  }
+  return getDirectoryPath(file.relativePath);
 }
 
 function pathDepth(path: string): number {
@@ -309,14 +431,17 @@ export const syncMarkdownFolder = authMutation({
     }
 
     const rawIncomingFiles = args.files
-      .map((file) => ({
-        relativePath: normalizePath(file.relativePath),
-        content: file.content,
-      }))
-      .filter(
-        (file): file is { relativePath: string; content: string } =>
-          Boolean(file.relativePath) && MARKDOWN_EXTENSION_REGEX.test(file.relativePath)
-      );
+      .map((file) => {
+        const parsedContent = parseMarkdownImportContent(file.content);
+        return {
+          relativePath: normalizePath(file.relativePath),
+          content: parsedContent.body,
+          frontmatterTitle: parsedContent.frontmatterTitle,
+          frontmatterSlug: parsedContent.frontmatterSlug,
+          frontmatterCollectionPath: parsedContent.frontmatterCollectionPath,
+        };
+      })
+      .filter((file) => Boolean(file.relativePath) && MARKDOWN_EXTENSION_REGEX.test(file.relativePath));
 
     if (rawIncomingFiles.length === 0) {
       throw new Error("No markdown files were found in this upload");
@@ -332,6 +457,9 @@ export const syncMarkdownFolder = authMutation({
         relativePath: string;
         originalPath: string;
         content: string;
+        frontmatterTitle?: string;
+        frontmatterSlug?: string;
+        frontmatterCollectionPath?: string | null;
       }
     >();
     for (const file of rawIncomingFiles) {
@@ -350,6 +478,9 @@ export const syncMarkdownFolder = authMutation({
         relativePath: normalizedPath,
         originalPath: file.relativePath,
         content: file.content,
+        frontmatterTitle: file.frontmatterTitle,
+        frontmatterSlug: file.frontmatterSlug,
+        frontmatterCollectionPath: file.frontmatterCollectionPath,
       });
     }
 
@@ -504,7 +635,7 @@ export const syncMarkdownFolder = authMutation({
 
     const desiredCollectionPaths = new Set<string>();
     for (const file of incomingFiles.values()) {
-      const directoryPath = getDirectoryPath(file.relativePath);
+      const directoryPath = resolveIncomingCollectionPath(file);
       if (directoryPath) {
         addDirectoryAndParents(desiredCollectionPaths, directoryPath);
       }
@@ -680,7 +811,7 @@ export const syncMarkdownFolder = authMutation({
       let existingArticle =
         existingArticleByPath.get(file.relativePath) ??
         existingArticleByStrippedPath.get(file.relativePath);
-      const collectionPath = getDirectoryPath(file.relativePath);
+      const collectionPath = resolveIncomingCollectionPath(file);
       const collectionId = collectionPath
         ? collectionPathToId.get(collectionPath)
         : args.rootCollectionId;
@@ -688,7 +819,8 @@ export const syncMarkdownFolder = authMutation({
         throw new Error(`Unable to resolve collection for file "${file.relativePath}"`);
       }
 
-      const title = inferTitle(file.relativePath, file.content);
+      const title = file.frontmatterTitle ?? inferTitle(file.relativePath, file.content);
+      const preferredSlug = file.frontmatterSlug ?? generateSlug(title);
       if (!existingArticle) {
         const titleMatchKey = buildArticleTitleMatchKey(collectionId, title);
         const titleMatches =
@@ -704,6 +836,9 @@ export const syncMarkdownFolder = authMutation({
             generateSlug(humanizeName(withoutMarkdownExtension(getFileName(file.relativePath)))),
             generateSlug(withoutMarkdownExtension(getFileName(file.relativePath))),
           ]);
+          if (file.frontmatterSlug) {
+            potentialSlugs.add(file.frontmatterSlug);
+          }
 
           const slugMatches = new Map<Id<"articles">, (typeof workspaceArticles)[number]>();
           for (const slug of potentialSlugs) {
@@ -743,7 +878,7 @@ export const syncMarkdownFolder = authMutation({
               ctx.db,
               "articles",
               args.workspaceId,
-              generateSlug(title),
+              preferredSlug,
               existingArticle._id
             );
           }
@@ -793,7 +928,7 @@ export const syncMarkdownFolder = authMutation({
           ctx.db,
           "articles",
           args.workspaceId,
-          generateSlug(title)
+          preferredSlug
         );
         const articleId = await ctx.db.insert("articles", {
           workspaceId: args.workspaceId,
@@ -1162,9 +1297,11 @@ export const exportMarkdown = authQuery({
     const files = articles
       .sort((a, b) => a.title.localeCompare(b.title))
       .map((article) => {
-        const collectionPath = article.collectionId
-          ? buildCollectionPath(article.collectionId)
-          : "";
+        const hasCollection = Boolean(article.collectionId);
+        const collectionPath = hasCollection ? buildCollectionPath(article.collectionId!) : "";
+        const frontmatterCollectionPath = hasCollection
+          ? collectionPath || undefined
+          : UNCATEGORIZED_COLLECTION_PATH;
         const fallbackPathBase = collectionPath
           ? `${collectionPath}/${sanitizePathSegment(article.slug || article.title) || "article"}`
           : sanitizePathSegment(article.slug || article.title) || "article";
@@ -1178,7 +1315,7 @@ export const exportMarkdown = authQuery({
             slug: article.slug,
             status: article.status,
             updatedAt: article.updatedAt,
-            collectionPath: collectionPath || undefined,
+            collectionPath: frontmatterCollectionPath,
             sourceName,
             body: article.content,
           }),

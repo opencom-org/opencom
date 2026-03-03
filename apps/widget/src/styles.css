@@ -1126,6 +1126,93 @@
   min-height: 0;
 }
 
+.opencom-collection-list-title {
+  padding: 8px 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--opencom-text-color);
+}
+
+.opencom-collection-item {
+  width: 100%;
+  border: 1px solid var(--opencom-border-color);
+  border-radius: 12px;
+  background: var(--opencom-bg-elevated);
+  padding: 14px;
+  margin-bottom: 8px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 2px var(--opencom-shadow-color);
+}
+
+.opencom-collection-item:hover {
+  background: var(--opencom-bg-hover);
+  box-shadow: 0 2px 6px var(--opencom-shadow-color);
+}
+
+.opencom-collection-item:active {
+  background: var(--opencom-bg-muted);
+}
+
+.opencom-collection-item-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.opencom-collection-item-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--opencom-text-color);
+  line-height: 1.35;
+}
+
+.opencom-collection-item-description {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--opencom-text-muted);
+}
+
+.opencom-collection-item-meta {
+  font-size: 13px;
+  color: var(--opencom-text-muted);
+}
+
+.opencom-collection-item-chevron {
+  font-size: 22px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--opencom-primary-color) 82%, var(--opencom-text-muted));
+}
+
+.opencom-collection-back {
+  border: none;
+  background: none;
+  color: var(--opencom-text-muted);
+  padding: 4px 4px 8px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.opencom-collection-back:hover {
+  color: var(--opencom-text-color);
+}
+
+.opencom-collection-back svg {
+  width: 16px;
+  height: 16px;
+}
+
 .opencom-article-item {
   width: 100%;
   padding: 12px 14px;
