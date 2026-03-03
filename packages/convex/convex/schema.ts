@@ -430,6 +430,7 @@ export default defineSchema({
     title: v.string(),
     slug: v.string(),
     content: v.string(),
+    widgetLargeScreen: v.optional(v.boolean()),
     status: v.union(v.literal("draft"), v.literal("published")),
     order: v.number(),
     createdAt: v.number(),

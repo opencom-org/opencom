@@ -33,6 +33,9 @@ vi.mock("@opencom/convex", () => ({
       searchForVisitor: "articles.searchForVisitor",
       listForVisitor: "articles.listForVisitor",
     },
+    collections: {
+      listHierarchy: "collections.listHierarchy",
+    },
     automationSettings: {
       getOrCreate: "automationSettings.getOrCreate",
     },
@@ -114,7 +117,28 @@ vi.mock("../components/ConversationView", () => ({
 }));
 
 vi.mock("../components/HelpCenter", () => ({
-  HelpCenter: () => <div data-testid="help-center" />,
+  HelpCenter: ({
+    publishedArticles,
+    onSelectArticle,
+  }: {
+    publishedArticles?: Array<{ _id: string }>;
+    onSelectArticle: (id: string) => void;
+  }) => (
+    <div data-testid="help-center">
+      <button
+        type="button"
+        data-testid="mock-open-first-article"
+        onClick={() => {
+          const firstArticle = publishedArticles?.[0];
+          if (firstArticle) {
+            onSelectArticle(firstArticle._id);
+          }
+        }}
+      >
+        Open first article
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../components/ArticleDetail", () => ({
@@ -201,6 +225,7 @@ describe("Widget new conversation behavior", () => {
   let createConversationMock: ReturnType<typeof vi.fn>;
   let markAsReadMock: ReturnType<typeof vi.fn>;
   let visitorConversationsResult: Array<Record<string, unknown>>;
+  let publishedArticlesResult: Array<Record<string, unknown>>;
 
   const openWidgetMessagesTab = async () => {
     fireEvent.click(screen.getByTestId("widget-launcher"));
@@ -218,6 +243,7 @@ describe("Widget new conversation behavior", () => {
     vi.clearAllMocks();
 
     visitorConversationsResult = [];
+    publishedArticlesResult = [];
     createConversationMock = vi.fn().mockResolvedValue({ _id: "conv_created_1" });
     markAsReadMock = vi.fn().mockResolvedValue(undefined);
 
@@ -252,6 +278,18 @@ describe("Widget new conversation behavior", () => {
 
       if (queryRef === "conversations.getTotalUnreadForVisitor") {
         return 0;
+      }
+
+      if (queryRef === "articles.listForVisitor") {
+        return publishedArticlesResult;
+      }
+
+      if (queryRef === "articles.searchForVisitor") {
+        return [];
+      }
+
+      if (queryRef === "collections.listHierarchy") {
+        return [];
       }
 
       if (queryRef === "automationSettings.getOrCreate") {
@@ -365,5 +403,33 @@ describe("Widget new conversation behavior", () => {
     });
 
     expect(markAsReadMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("expands widget shell for large-screen articles", async () => {
+    publishedArticlesResult = [
+      {
+        _id: "article_large_1",
+        title: "Large article",
+        content: "Detailed guide",
+        widgetLargeScreen: true,
+      },
+    ];
+
+    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+
+    fireEvent.click(screen.getByTestId("widget-launcher"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTitle("Help Center"));
+    fireEvent.click(screen.getByTestId("mock-open-first-article"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("article-detail")).toBeInTheDocument();
+    });
+
+    const widgetRoot = document.querySelector(".opencom-widget");
+    expect(widgetRoot?.className).toContain("opencom-widget-article-large");
   });
 });

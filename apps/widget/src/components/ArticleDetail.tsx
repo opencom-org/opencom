@@ -4,6 +4,7 @@ import { parseMarkdown } from "../utils/parseMarkdown";
 
 interface ArticleDetailProps {
   article: { title: string; content: string } | undefined;
+  isLargeScreen: boolean;
   onBack: () => void;
   onClose: () => void;
   onStartConversation: () => void;
@@ -11,6 +12,7 @@ interface ArticleDetailProps {
 
 export function ArticleDetail({
   article,
+  isLargeScreen,
   onBack,
   onClose,
   onStartConversation,
@@ -18,7 +20,9 @@ export function ArticleDetail({
   const renderedContent = useMemo(() => (article ? parseMarkdown(article.content) : ""), [article]);
 
   return (
-    <div className="opencom-chat">
+    <div
+      className={`opencom-chat opencom-chat-article-detail ${isLargeScreen ? "opencom-chat-article-large" : ""}`}
+    >
       <div className="opencom-header">
         <button onClick={onBack} className="opencom-back">
           <ChevronLeft />
@@ -30,7 +34,7 @@ export function ArticleDetail({
           </button>
         </div>
       </div>
-      <div className="opencom-article-detail">
+      <div className={`opencom-article-detail ${isLargeScreen ? "opencom-article-detail-large" : ""}`}>
         {article ? (
           <>
             <h2 className="opencom-article-detail-title">{article.title}</h2>

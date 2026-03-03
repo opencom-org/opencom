@@ -71,6 +71,7 @@ export const create = mutation({
       title: args.title,
       slug,
       content: args.content,
+      widgetLargeScreen: false,
       status: "draft",
       order: maxOrder + 1,
       createdAt: now,
@@ -87,6 +88,7 @@ export const update = mutation({
     id: v.id("articles"),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
+    widgetLargeScreen: v.optional(v.boolean()),
     collectionId: v.optional(v.id("collections")),
     folderId: v.optional(v.id("contentFolders")),
     audienceRules: v.optional(audienceRulesValidator),
@@ -122,6 +124,10 @@ export const update = mutation({
 
     if (args.content !== undefined) {
       updates.content = args.content;
+    }
+
+    if (args.widgetLargeScreen !== undefined) {
+      updates.widgetLargeScreen = args.widgetLargeScreen;
     }
 
     if (args.collectionId !== undefined) {

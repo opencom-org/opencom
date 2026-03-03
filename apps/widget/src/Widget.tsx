@@ -280,6 +280,8 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
+  const selectedArticleIsLargeScreen = selectedArticle?.widgetLargeScreen === true;
+  const isLargeArticleView = view === "article-detail" && selectedArticleIsLargeScreen;
 
   const selectedConversation = useMemo(() => {
     if (!conversationId) {
@@ -1365,7 +1367,10 @@ export function Widget({
 
   // ── Return ─────────────────────────────────────────────────────────
   return (
-    <div className={`opencom-widget ${effectiveTheme === "dark" ? "opencom-theme-dark" : ""}`}>
+    <div
+      className={`opencom-widget ${effectiveTheme === "dark" ? "opencom-theme-dark" : ""} ${isLargeArticleView ? "opencom-widget-article-large" : ""}`}
+    >
+      {isLargeArticleView && <div className="opencom-widget-article-backdrop" aria-hidden="true" />}
       {showDebug && debugPanel}
       {view === "launcher" && messengerSettings.showLauncher && (
         <button
@@ -1424,6 +1429,7 @@ export function Widget({
       {view === "article-detail" && (
         <ArticleDetail
           article={selectedArticle ?? undefined}
+          isLargeScreen={selectedArticleIsLargeScreen}
           onBack={handleBackFromArticle}
           onClose={handleCloseWidget}
           onStartConversation={handleStartConversationFromArticle}
