@@ -225,9 +225,20 @@
   background: rgba(255, 255, 255, 0.25);
 }
 
+.opencom-header-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .opencom-header-actions button svg {
   width: 18px;
   height: 18px;
+}
+
+@media (max-width: 900px) {
+  .opencom-article-size-toggle {
+    display: none !important;
+  }
 }
 
 .opencom-close {

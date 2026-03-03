@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { ChevronLeft, X } from "../icons";
+import { ChevronLeft, Maximize2, Minimize2, X } from "../icons";
 import { parseMarkdown } from "../utils/parseMarkdown";
 
 interface ArticleDetailProps {
   article: { title: string; content: string } | undefined;
   isLargeScreen: boolean;
   isCollapsingLargeScreen: boolean;
+  onToggleLargeScreen: () => void;
   onBack: () => void;
   onClose: () => void;
   onStartConversation: () => void;
@@ -15,6 +16,7 @@ export function ArticleDetail({
   article,
   isLargeScreen,
   isCollapsingLargeScreen,
+  onToggleLargeScreen,
   onBack,
   onClose,
   onStartConversation,
@@ -31,6 +33,17 @@ export function ArticleDetail({
         </button>
         <span>Article</span>
         <div className="opencom-header-actions">
+          <button
+            onClick={onToggleLargeScreen}
+            className="opencom-article-size-toggle"
+            title={isLargeScreen && !isCollapsingLargeScreen ? "Exit large view" : "Expand article"}
+            aria-label={
+              isLargeScreen && !isCollapsingLargeScreen ? "Exit large view" : "Expand article"
+            }
+            disabled={isCollapsingLargeScreen}
+          >
+            {isLargeScreen && !isCollapsingLargeScreen ? <Minimize2 /> : <Maximize2 />}
+          </button>
           <button onClick={onClose} className="opencom-close">
             <X />
           </button>

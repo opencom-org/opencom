@@ -23,7 +23,6 @@ export default function ArticleEditorPage() {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [widgetLargeScreen, setWidgetLargeScreen] = useState(false);
   const [selectedCollectionId, setSelectedCollectionId] = useState<Id<"collections"> | undefined>();
   const [audienceRules, setAudienceRules] = useState<InlineAudienceRule | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,7 +42,6 @@ export default function ArticleEditorPage() {
     if (article) {
       setTitle(article.title);
       setContent(article.content);
-      setWidgetLargeScreen(article.widgetLargeScreen ?? false);
       setSelectedCollectionId(article.collectionId);
       setAudienceRules(toInlineAudienceRule(article.audienceRules));
     }
@@ -60,7 +58,6 @@ export default function ArticleEditorPage() {
         id: articleId,
         title,
         content,
-        widgetLargeScreen,
         collectionId: selectedCollectionId,
         ...(mutationAudienceRules ? { audienceRules: mutationAudienceRules } : {}),
       });
@@ -93,11 +90,6 @@ export default function ArticleEditorPage() {
 
   const handleCollectionChange = (value: string) => {
     setSelectedCollectionId(value ? (value as Id<"collections">) : undefined);
-    setHasChanges(true);
-  };
-
-  const handleWidgetLargeScreenChange = (enabled: boolean) => {
-    setWidgetLargeScreen(enabled);
     setHasChanges(true);
   };
 
@@ -197,30 +189,6 @@ export default function ArticleEditorPage() {
               className="w-full h-96 px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-none font-mono text-sm"
             />
             <p className="text-xs text-gray-500 mt-2">Supports Markdown formatting</p>
-          </div>
-
-          <div className="rounded-md border border-gray-200 p-4 bg-gray-50">
-            <div className="flex items-start gap-3">
-              <input
-                id="widgetLargeScreen"
-                type="checkbox"
-                checked={widgetLargeScreen}
-                onChange={(e) => handleWidgetLargeScreenChange(e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-              />
-              <div>
-                <label
-                  htmlFor="widgetLargeScreen"
-                  className="block text-sm font-medium text-gray-900 cursor-pointer"
-                >
-                  Open this article in large-screen widget mode
-                </label>
-                <p className="mt-1 text-xs text-gray-600">
-                  Visitors opening this article in the widget will see an expanded view with a
-                  smooth transition.
-                </p>
-              </div>
-            </div>
           </div>
         </div>
 

@@ -157,6 +157,7 @@ export function Widget({
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
   const [selectedHelpCollectionKey, setSelectedHelpCollectionKey] = useState<string | null>(null);
+  const [isArticleLargeMode, setIsArticleLargeMode] = useState(false);
   const [isCollapsingLargeArticle, setIsCollapsingLargeArticle] = useState(false);
   const [, setPreviousView] = useState<WidgetView>("conversation-list");
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
@@ -329,8 +330,8 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
-  const selectedArticleIsLargeScreen = selectedArticle?.widgetLargeScreen === true;
-  const isLargeArticleView = view === "article-detail" && selectedArticleIsLargeScreen;
+  const isLargeArticleView =
+    view === "article-detail" && (isArticleLargeMode || isCollapsingLargeArticle);
   const clearLargeArticleCollapseTimeout = useCallback(() => {
     if (largeArticleCollapseTimeoutRef.current !== null) {
       window.clearTimeout(largeArticleCollapseTimeoutRef.current);
@@ -347,6 +348,7 @@ export function Widget({
   const openArticleDetail = useCallback(
     (articleId: Id<"articles">) => {
       clearLargeArticleCollapseTimeout();
+      setIsArticleLargeMode(false);
       setIsCollapsingLargeArticle(false);
       setSelectedArticleId(articleId);
       setPreviousView(view);
@@ -817,6 +819,7 @@ export function Widget({
     setOutboundBlockingState({ hasPendingPost: false, hasActivePost: false });
     setSelectedHelpCollectionKey(null);
     clearLargeArticleCollapseTimeout();
+    setIsArticleLargeMode(false);
     setIsCollapsingLargeArticle(false);
   }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout]);
 
@@ -1129,6 +1132,7 @@ export function Widget({
       syncConversationReadState(conversationId);
     }
     clearLargeArticleCollapseTimeout();
+    setIsArticleLargeMode(false);
     setIsCollapsingLargeArticle(false);
     setView("launcher");
   };
@@ -1136,23 +1140,49 @@ export function Widget({
   // ── Navigation handlers ───────────────────────────────────────────
   const navigateBackFromArticle = () => {
     clearLargeArticleCollapseTimeout();
+    setIsArticleLargeMode(false);
     setIsCollapsingLargeArticle(false);
     setSelectedArticleId(null);
     setActiveTab("help");
     setView("conversation-list");
   };
 
-  const handleBackFromArticle = () => {
-    if (selectedArticleIsLargeScreen && !isCollapsingLargeArticle) {
+  const collapseLargeArticle = useCallback(
+    (onCollapsed?: () => void) => {
+      if (isCollapsingLargeArticle) {
+        return;
+      }
+      if (!isArticleLargeMode) {
+        onCollapsed?.();
+        return;
+      }
       setIsCollapsingLargeArticle(true);
       clearLargeArticleCollapseTimeout();
       largeArticleCollapseTimeoutRef.current = window.setTimeout(() => {
         largeArticleCollapseTimeoutRef.current = null;
-        navigateBackFromArticle();
+        setIsArticleLargeMode(false);
+        setIsCollapsingLargeArticle(false);
+        onCollapsed?.();
       }, 280);
+    },
+    [clearLargeArticleCollapseTimeout, isArticleLargeMode, isCollapsingLargeArticle]
+  );
+
+  const handleBackFromArticle = () => {
+    collapseLargeArticle(navigateBackFromArticle);
+  };
+
+  const handleToggleArticleLargeScreen = () => {
+    if (isCollapsingLargeArticle) {
       return;
     }
-    navigateBackFromArticle();
+    if (isArticleLargeMode) {
+      collapseLargeArticle();
+      return;
+    }
+    clearLargeArticleCollapseTimeout();
+    setIsCollapsingLargeArticle(false);
+    setIsArticleLargeMode(true);
   };
 
   const handleStartConversationFromArticle = async () => {
@@ -1175,6 +1205,7 @@ export function Widget({
         setView("conversation");
         setSelectedArticleId(null);
         clearLargeArticleCollapseTimeout();
+        setIsArticleLargeMode(false);
         setIsCollapsingLargeArticle(false);
       }
     } catch (error) {
@@ -1542,8 +1573,9 @@ export function Widget({
       {view === "article-detail" && (
         <ArticleDetail
           article={selectedArticle ?? undefined}
-          isLargeScreen={selectedArticleIsLargeScreen}
+          isLargeScreen={isLargeArticleView}
           isCollapsingLargeScreen={isCollapsingLargeArticle}
+          onToggleLargeScreen={handleToggleArticleLargeScreen}
           onBack={handleBackFromArticle}
           onClose={handleCloseWidget}
           onStartConversation={handleStartConversationFromArticle}

@@ -154,7 +154,17 @@ vi.mock("../components/HelpCenter", () => ({
 }));
 
 vi.mock("../components/ArticleDetail", () => ({
-  ArticleDetail: () => <div data-testid="article-detail" />,
+  ArticleDetail: ({
+    onToggleLargeScreen,
+  }: {
+    onToggleLargeScreen: () => void;
+  }) => (
+    <div data-testid="article-detail">
+      <button type="button" data-testid="mock-toggle-article-size" onClick={onToggleLargeScreen}>
+        Toggle size
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../components/TourPicker", () => ({
@@ -446,13 +456,12 @@ describe("Widget new conversation behavior", () => {
     expect(markAsReadMock).toHaveBeenCalledTimes(2);
   });
 
-  it("expands widget shell for large-screen articles", async () => {
+  it("toggles widget shell size from article header control", async () => {
     publishedArticlesResult = [
       {
         _id: "article_large_1",
-        title: "Large article",
+        title: "Article",
         content: "Detailed guide",
-        widgetLargeScreen: true,
       },
     ];
 
@@ -471,6 +480,14 @@ describe("Widget new conversation behavior", () => {
     });
 
     const widgetRoot = document.querySelector(".opencom-widget");
+    expect(widgetRoot?.className).not.toContain("opencom-widget-article-large");
+
+    fireEvent.click(screen.getByTestId("mock-toggle-article-size"));
     expect(widgetRoot?.className).toContain("opencom-widget-article-large");
+
+    fireEvent.click(screen.getByTestId("mock-toggle-article-size"));
+    await waitFor(() => {
+      expect(widgetRoot?.className).not.toContain("opencom-widget-article-large");
+    });
   });
 });
