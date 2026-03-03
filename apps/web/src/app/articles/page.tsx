@@ -66,10 +66,26 @@ type DeleteArticleTarget = {
   title: string;
 };
 
+const ALL_COLLECTION_FILTER = "all";
+const GENERAL_COLLECTION_FILTER = "general";
+
+type CollectionFilter =
+  | typeof ALL_COLLECTION_FILTER
+  | typeof GENERAL_COLLECTION_FILTER
+  | Id<"collections">;
+type CollectionFilterItem = {
+  id: CollectionFilter;
+  label: string;
+  count: number;
+};
+
 function ArticlesContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>(
+    ALL_COLLECTION_FILTER
+  );
   const [importSourceName, setImportSourceName] = useState("");
   const [importTargetCollectionId, setImportTargetCollectionId] = useState<
     Id<"collections"> | undefined
@@ -533,16 +549,32 @@ function ArticlesContent() {
   }, [activeWorkspace?._id, isExporting, logExport, markdownExport]);
 
   const getCollectionName = (collectionId?: Id<"collections">) => {
-    if (!collectionId || !collections) return "Uncategorized";
+    if (!collectionId || !collections) return "General";
     const collection = collections.find(
       (c: NonNullable<typeof collections>[number]) => c._id === collectionId
     );
-    return collection?.name || "Uncategorized";
+    return collection?.name || "General";
   };
 
-  const filteredArticles = articles?.filter((article: NonNullable<typeof articles>[number]) =>
-    article.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const getArticleCollectionFilter = (collectionId?: Id<"collections">): CollectionFilter => {
+    if (!collectionId) {
+      return GENERAL_COLLECTION_FILTER;
+    }
+    return collectionId;
+  };
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredArticles = articles?.filter((article: NonNullable<typeof articles>[number]) => {
+    const matchesSearch = article.title.toLowerCase().includes(normalizedSearchQuery);
+    const matchesCollection =
+      collectionFilter === ALL_COLLECTION_FILTER
+        ? true
+        : collectionFilter === GENERAL_COLLECTION_FILTER
+          ? !article.collectionId
+          : article.collectionId === collectionFilter;
+
+    return matchesSearch && matchesCollection;
+  });
   const selectedImportPaths = selectedImportItems.map((item) => item.relativePath);
   const selectedImportAssetPaths = selectedImportAssetItems.map((item) => item.relativePath);
   const hasCurrentPreview = Boolean(
@@ -570,6 +602,45 @@ function ArticlesContent() {
       cursor = collection.parentId;
     }
     return names.join(" / ");
+  };
+  const collectionArticleCounts = new Map<string, number>();
+  for (const article of articles ?? []) {
+    if (!article.collectionId) {
+      continue;
+    }
+    collectionArticleCounts.set(
+      article.collectionId,
+      (collectionArticleCounts.get(article.collectionId) ?? 0) + 1
+    );
+  }
+
+  const collectionFilterItems: CollectionFilterItem[] = [
+    {
+      id: ALL_COLLECTION_FILTER,
+      label: "All",
+      count: articles?.length ?? 0,
+    },
+    {
+      id: GENERAL_COLLECTION_FILTER,
+      label: "General",
+      count: (articles ?? []).filter(
+        (article: NonNullable<typeof articles>[number]) => !article.collectionId
+      ).length,
+    },
+    ...((collections ?? []).map(
+      (collection: NonNullable<typeof collections>[number]): CollectionFilterItem => ({
+        id: collection._id,
+        label: collection.name,
+        count: collectionArticleCounts.get(collection._id) ?? 0,
+      })
+    ) ?? []),
+  ];
+  const hasArticles = (articles?.length ?? 0) > 0;
+  const hasActiveFilters =
+    normalizedSearchQuery.length > 0 || collectionFilter !== ALL_COLLECTION_FILTER;
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setCollectionFilter(ALL_COLLECTION_FILTER);
   };
 
   const formatDate = (timestamp: number) => {
@@ -912,17 +983,62 @@ function ArticlesContent() {
             className="pl-10"
           />
         </div>
+        {hasActiveFilters && (
+          <Button variant="outline" size="sm" onClick={clearAllFilters}>
+            Clear filters
+          </Button>
+        )}
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        {collectionFilterItems.map((filterItem) => {
+          const isActive = collectionFilter === filterItem.id;
+          return (
+            <button
+              key={filterItem.id}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => setCollectionFilter(filterItem.id)}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                isActive
+                  ? "border-primary/30 bg-primary/10 text-primary"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-primary/30 hover:text-primary"
+              }`}
+            >
+              <span>{filterItem.label}</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs ${
+                  isActive ? "bg-primary/20 text-primary" : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {filterItem.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {filteredArticles?.length === 0 ? (
         <div className="text-center py-12 border rounded-lg bg-white">
           <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium mb-2">No articles yet</h3>
-          <p className="text-gray-500 mb-4">Create your first article to help your customers</p>
-          <Button onClick={handleCreateArticle}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Article
-          </Button>
+          <h3 className="text-lg font-medium mb-2">
+            {hasArticles ? "No matching articles" : "No articles yet"}
+          </h3>
+          <p className="text-gray-500 mb-4">
+            {hasArticles
+              ? "Try another search term or collection filter."
+              : "Create your first article to help your customers"}
+          </p>
+          {hasArticles ? (
+            <Button variant="outline" onClick={clearAllFilters}>
+              Clear filters
+            </Button>
+          ) : (
+            <Button onClick={handleCreateArticle}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Article
+            </Button>
+          )}
         </div>
       ) : (
         <div className="border rounded-lg bg-white overflow-hidden">
@@ -939,63 +1055,77 @@ function ArticlesContent() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredArticles?.map((article: NonNullable<typeof articles>[number]) => (
-                <tr key={article._id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/articles/${article._id}`}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {article.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {getCollectionName(article.collectionId)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        article.status === "published"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {article.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{formatDate(article.updatedAt)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Link href={`/articles/${article._id}`}>
-                        <Button variant="ghost" size="sm">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+              {filteredArticles?.map((article: NonNullable<typeof articles>[number]) => {
+                const articleCollectionFilter = getArticleCollectionFilter(article.collectionId);
+
+                return (
+                  <tr key={article._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/articles/${article._id}`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {article.title}
                       </Link>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          handleTogglePublish(article._id, article.status === "published")
-                        }
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      <button
+                        type="button"
+                        onClick={() => setCollectionFilter(articleCollectionFilter)}
+                        className={`transition-colors hover:text-primary hover:underline ${
+                          collectionFilter === articleCollectionFilter
+                            ? "text-primary underline"
+                            : "text-gray-500"
+                        }`}
                       >
-                        {article.status === "published" ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteRequest(article._id, article.title)}
-                        className="text-red-600 hover:text-red-700"
+                        {getCollectionName(article.collectionId)}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          article.status === "published"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {article.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">{formatDate(article.updatedAt)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1">
+                        <Link href={`/articles/${article._id}`}>
+                          <Button variant="ghost" size="sm">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            handleTogglePublish(article._id, article.status === "published")
+                          }
+                        >
+                          {article.status === "published" ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteRequest(article._id, article.title)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

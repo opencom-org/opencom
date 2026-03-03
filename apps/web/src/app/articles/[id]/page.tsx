@@ -256,7 +256,7 @@ export default function ArticleEditorPage() {
               onChange={(e) => handleCollectionChange(e.target.value)}
               className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="">Uncategorized</option>
+              <option value="">General</option>
               {collections?.map((collection: NonNullable<typeof collections>[number]) => (
                 <option key={collection._id} value={collection._id}>
                   {collection.name}
