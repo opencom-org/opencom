@@ -1404,6 +1404,14 @@
   display: none;
 }
 
+.opencom-article-detail-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0 14px 0;
+  display: block;
+}
+
 .opencom-article-detail-content h1 {
   font-size: 22px;
   font-weight: 700;

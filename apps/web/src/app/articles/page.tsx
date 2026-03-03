@@ -28,6 +28,13 @@ type ImportSelectionItem = {
   relativePath: string;
 };
 
+type ImportAssetPayload = {
+  relativePath: string;
+  storageId: Id<"_storage">;
+  mimeType?: string;
+  size?: number;
+};
+
 type MarkdownImportPreview = {
   dryRun: boolean;
   createdCollections: number;
@@ -37,7 +44,9 @@ type MarkdownImportPreview = {
   deletedArticles: number;
   deletedCollections: number;
   totalFiles: number;
+  totalAssets?: number;
   strippedRootFolder?: string;
+  unresolvedImageReferences?: string[];
   preview: {
     collections: {
       create: string[];
@@ -66,6 +75,9 @@ function ArticlesContent() {
     Id<"collections"> | undefined
   >(undefined);
   const [selectedImportItems, setSelectedImportItems] = useState<ImportSelectionItem[]>([]);
+  const [selectedImportAssetItems, setSelectedImportAssetItems] = useState<ImportSelectionItem[]>(
+    []
+  );
   const [importPreview, setImportPreview] = useState<MarkdownImportPreview | null>(null);
   const [previewSignature, setPreviewSignature] = useState<string | null>(null);
   const [isPreviewingImport, setIsPreviewingImport] = useState(false);
@@ -116,6 +128,7 @@ function ArticlesContent() {
   const unpublishArticle = useMutation(api.articles.unpublish);
   const syncMarkdownFolder = useMutation(api.helpCenterImports.syncMarkdownFolder);
   const restoreImportRun = useMutation(api.helpCenterImports.restoreRun);
+  const generateAssetUploadUrl = useMutation(api.articles.generateAssetUploadUrl);
   const logExport = useMutation(api.auditLogs.logExport);
 
   const handleCreateArticle = async () => {
@@ -187,20 +200,27 @@ function ArticlesContent() {
   const buildImportSignature = (
     sourceName: string,
     targetCollectionId: Id<"collections"> | undefined,
-    items: ImportSelectionItem[]
+    markdownItems: ImportSelectionItem[],
+    assetItems: ImportSelectionItem[]
   ): string => {
     const normalizedSourceName = sourceName.trim().toLowerCase();
     const normalizedTarget = targetCollectionId ?? "root";
-    const normalizedItems = items
+    const normalizedMarkdownItems = markdownItems
       .map((item) => `${item.relativePath}:${item.file.size}:${item.file.lastModified}`)
       .sort((a, b) => a.localeCompare(b));
-    return [normalizedSourceName, normalizedTarget, ...normalizedItems].join("::");
+    const normalizedAssetItems = assetItems
+      .map((item) => `${item.relativePath}:${item.file.size}:${item.file.lastModified}`)
+      .sort((a, b) => a.localeCompare(b));
+    return [normalizedSourceName, normalizedTarget, ...normalizedMarkdownItems, ...normalizedAssetItems].join(
+      "::"
+    );
   };
 
   const currentImportSignature = buildImportSignature(
     importSourceName,
     importTargetCollectionId,
-    selectedImportItems
+    selectedImportItems,
+    selectedImportAssetItems
   );
 
   const buildImportPayload = async () =>
@@ -211,12 +231,55 @@ function ArticlesContent() {
       }))
     );
 
+  const buildImportAssetPreviewPayload = () =>
+    selectedImportAssetItems.map((item) => ({
+      relativePath: item.relativePath,
+      mimeType: item.file.type || undefined,
+      size: item.file.size,
+    }));
+
+  const uploadImportAssets = async (): Promise<ImportAssetPayload[]> => {
+    if (!activeWorkspace?._id || selectedImportAssetItems.length === 0) {
+      return [];
+    }
+
+    const uploadedAssets: ImportAssetPayload[] = [];
+    for (const item of selectedImportAssetItems) {
+      const uploadUrl = await generateAssetUploadUrl({ workspaceId: activeWorkspace._id });
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": item.file.type || "application/octet-stream",
+        },
+        body: item.file,
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to upload image "${item.relativePath}"`);
+      }
+
+      const payload = (await response.json()) as { storageId?: Id<"_storage"> };
+      if (!payload.storageId) {
+        throw new Error(`Missing storageId for uploaded image "${item.relativePath}"`);
+      }
+      uploadedAssets.push({
+        relativePath: item.relativePath,
+        storageId: payload.storageId,
+        mimeType: item.file.type || undefined,
+        size: item.file.size,
+      });
+    }
+
+    return uploadedAssets;
+  };
+
   const handleImportFolderSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     const markdownFiles = files.filter((file) => /\.(md|markdown)$/i.test(file.name));
+    const imageFiles = files.filter((file) => /\.(png|jpe?g|gif|webp|avif)$/i.test(file.name));
 
     if (markdownFiles.length === 0) {
       setSelectedImportItems([]);
+      setSelectedImportAssetItems([]);
       setImportPreview(null);
       setPreviewSignature(null);
       setImportError("No markdown files found in selection.");
@@ -230,7 +293,12 @@ function ArticlesContent() {
       file,
       relativePath: rawPaths[index]!,
     }));
+    const assetItems = imageFiles.map((file) => ({
+      file,
+      relativePath: getRawImportRelativePath(file),
+    }));
     setSelectedImportItems(items);
+    setSelectedImportAssetItems(assetItems);
     setImportPreview(null);
     setPreviewSignature(null);
     setImportError(null);
@@ -271,12 +339,14 @@ function ArticlesContent() {
 
     try {
       const files = await buildImportPayload();
+      const assets = buildImportAssetPreviewPayload();
 
       const result = await syncMarkdownFolder({
         workspaceId: activeWorkspace._id,
         sourceName,
         rootCollectionId: importTargetCollectionId,
         files,
+        assets,
         publishByDefault: true,
         dryRun: true,
       });
@@ -286,8 +356,12 @@ function ArticlesContent() {
       const rootStripSuffix = result.strippedRootFolder
         ? ` Upload root "${result.strippedRootFolder}" will be ignored.`
         : "";
+      const unresolvedSuffix =
+        result.unresolvedImageReferences && result.unresolvedImageReferences.length > 0
+          ? ` ${result.unresolvedImageReferences.length} unresolved image reference(s) detected.`
+          : "";
       setImportNotice(
-        `Preview ready. Create ${result.createdArticles} articles / ${result.createdCollections} collections, update ${result.updatedArticles} articles / ${result.updatedCollections} collections, delete ${result.deletedArticles} articles / ${result.deletedCollections} collections.${rootStripSuffix}`
+        `Preview ready. Create ${result.createdArticles} articles / ${result.createdCollections} collections, update ${result.updatedArticles} articles / ${result.updatedCollections} collections, delete ${result.deletedArticles} articles / ${result.deletedCollections} collections.${rootStripSuffix}${unresolvedSuffix}`
       );
     } catch (error) {
       console.error("Failed to preview markdown import:", error);
@@ -325,22 +399,29 @@ function ArticlesContent() {
 
     try {
       const files = await buildImportPayload();
+      const assets = await uploadImportAssets();
 
       const result = await syncMarkdownFolder({
         workspaceId: activeWorkspace._id,
         sourceName,
         rootCollectionId: importTargetCollectionId,
         files,
+        assets,
         publishByDefault: true,
       });
 
       const rootStripSuffix = result.strippedRootFolder
         ? ` Ignored upload root folder "${result.strippedRootFolder}".`
         : "";
+      const unresolvedSuffix =
+        result.unresolvedImageReferences && result.unresolvedImageReferences.length > 0
+          ? ` ${result.unresolvedImageReferences.length} unresolved image reference(s) were left unchanged.`
+          : "";
       setImportNotice(
-        `Synced ${result.totalFiles} markdown files. Added ${result.createdArticles}, updated ${result.updatedArticles}, removed ${result.deletedArticles}.${rootStripSuffix}`
+        `Synced ${result.totalFiles} markdown file(s) and ${result.totalAssets ?? 0} image file(s). Added ${result.createdArticles}, updated ${result.updatedArticles}, removed ${result.deletedArticles}.${rootStripSuffix}${unresolvedSuffix}`
       );
       setSelectedImportItems([]);
+      setSelectedImportAssetItems([]);
       setImportPreview(null);
       setPreviewSignature(null);
       if (folderInputRef.current) {
@@ -392,40 +473,63 @@ function ArticlesContent() {
       return;
     }
 
-    try {
-      const archiveFiles: Record<string, Uint8Array> = {};
-      for (const file of markdownExport.files) {
-        archiveFiles[file.path] = strToU8(file.content);
+    let cancelled = false;
+    const buildArchive = async () => {
+      try {
+        const archiveFiles: Record<string, Uint8Array> = {};
+        for (const file of markdownExport.files) {
+          if (file.type === "asset" && file.assetUrl) {
+            const response = await fetch(file.assetUrl);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch exported asset "${file.path}"`);
+            }
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            archiveFiles[file.path] = bytes;
+            continue;
+          }
+          archiveFiles[file.path] = strToU8(file.content ?? "");
+        }
+
+        const zipped = zipSync(archiveFiles, { level: 6 });
+        const zipBytes = new Uint8Array(zipped);
+        const blob = new Blob([zipBytes], { type: "application/zip" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = markdownExport.fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(url);
+
+        logExport({
+          workspaceId: activeWorkspace._id,
+          exportType: "helpCenterMarkdown",
+          recordCount: markdownExport.count,
+        }).catch((error) => {
+          console.error("Failed to log markdown export:", error);
+        });
+
+        if (!cancelled) {
+          setImportNotice(`Exported ${markdownExport.count} file(s).`);
+          setImportError(null);
+        }
+      } catch (error) {
+        console.error("Failed to create markdown export archive:", error);
+        if (!cancelled) {
+          setImportError(error instanceof Error ? error.message : "Failed to export markdown.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsExporting(false);
+        }
       }
+    };
 
-      const zipped = zipSync(archiveFiles, { level: 6 });
-      const zipBytes = new Uint8Array(zipped);
-      const blob = new Blob([zipBytes], { type: "application/zip" });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = markdownExport.fileName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
-
-      logExport({
-        workspaceId: activeWorkspace._id,
-        exportType: "helpCenterMarkdown",
-        recordCount: markdownExport.count,
-      }).catch((error) => {
-        console.error("Failed to log markdown export:", error);
-      });
-
-      setImportNotice(`Exported ${markdownExport.count} markdown files.`);
-      setImportError(null);
-    } catch (error) {
-      console.error("Failed to create markdown export archive:", error);
-      setImportError(error instanceof Error ? error.message : "Failed to export markdown.");
-    } finally {
-      setIsExporting(false);
-    }
+    void buildArchive();
+    return () => {
+      cancelled = true;
+    };
   }, [activeWorkspace?._id, isExporting, logExport, markdownExport]);
 
   const getCollectionName = (collectionId?: Id<"collections">) => {
@@ -440,6 +544,7 @@ function ArticlesContent() {
     article.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const selectedImportPaths = selectedImportItems.map((item) => item.relativePath);
+  const selectedImportAssetPaths = selectedImportAssetItems.map((item) => item.relativePath);
   const hasCurrentPreview = Boolean(
     importPreview && previewSignature && previewSignature === currentImportSignature
   );
@@ -564,23 +669,32 @@ function ArticlesContent() {
           </div>
         </div>
 
-        {selectedImportPaths.length > 0 && (
+        {(selectedImportPaths.length > 0 || selectedImportAssetPaths.length > 0) && (
           <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
             <div
               data-testid="markdown-import-selection-count"
               className="text-sm text-gray-700 mb-1"
             >
               {selectedImportPaths.length} markdown file
-              {selectedImportPaths.length !== 1 ? "s" : ""} selected
+              {selectedImportPaths.length !== 1 ? "s" : ""} and {selectedImportAssetPaths.length}{" "}
+              image file{selectedImportAssetPaths.length !== 1 ? "s" : ""} selected
             </div>
-            <div className="text-xs text-gray-500 space-y-1 max-h-24 overflow-auto">
+            <div className="text-xs text-gray-500 space-y-1 max-h-32 overflow-auto">
               {selectedImportPaths.slice(0, 6).map((path) => (
                 <div key={path} className="font-mono">
-                  {path}
+                  md: {path}
+                </div>
+              ))}
+              {selectedImportAssetPaths.slice(0, 6).map((path) => (
+                <div key={path} className="font-mono">
+                  img: {path}
                 </div>
               ))}
               {selectedImportPaths.length > 6 && (
-                <div>+ {selectedImportPaths.length - 6} more...</div>
+                <div>+ {selectedImportPaths.length - 6} more markdown files...</div>
+              )}
+              {selectedImportAssetPaths.length > 6 && (
+                <div>+ {selectedImportAssetPaths.length - 6} more image files...</div>
               )}
             </div>
           </div>
@@ -604,6 +718,15 @@ function ArticlesContent() {
                 Upload root folder &ldquo;{importPreview.strippedRootFolder}&rdquo; will be ignored.
               </div>
             )}
+            {importPreview.unresolvedImageReferences &&
+              importPreview.unresolvedImageReferences.length > 0 && (
+                <div className="text-xs text-amber-700 rounded border border-amber-200 bg-amber-50 p-2">
+                  Unresolved image references ({importPreview.unresolvedImageReferences.length}):{" "}
+                  <span className="font-mono">
+                    {formatPreviewPathSample(importPreview.unresolvedImageReferences)}
+                  </span>
+                </div>
+              )}
             <div className="grid gap-2 text-xs md:grid-cols-2">
               <div>
                 <div className="font-medium text-blue-900">Article Changes</div>

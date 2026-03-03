@@ -449,6 +449,26 @@ export default defineSchema({
     .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
     .index("by_import_source_path", ["importSourceId", "importPath"]),
 
+  // Help Center - Article Assets
+  articleAssets: defineTable({
+    workspaceId: v.id("workspaces"),
+    articleId: v.optional(v.id("articles")),
+    importSourceId: v.optional(v.id("helpCenterImportSources")),
+    importPath: v.optional(v.string()),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_article", ["articleId"])
+    .index("by_workspace_article", ["workspaceId", "articleId"])
+    .index("by_import_source", ["importSourceId"])
+    .index("by_import_source_path", ["importSourceId", "importPath"]),
+
   // Help Center - Import Sources
   helpCenterImportSources: defineTable({
     workspaceId: v.id("workspaces"),

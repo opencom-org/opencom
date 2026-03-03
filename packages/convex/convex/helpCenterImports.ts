@@ -9,13 +9,40 @@ const markdownFileValidator = v.object({
   content: v.string(),
 });
 
+const importAssetValidator = v.object({
+  relativePath: v.string(),
+  storageId: v.optional(v.id("_storage")),
+  mimeType: v.optional(v.string()),
+  size: v.optional(v.number()),
+});
+
 const MARKDOWN_EXTENSION_REGEX = /\.md(?:own)?$/i;
+const IMAGE_EXTENSION_REGEX = /\.(png|jpe?g|gif|webp|avif)$/i;
 const ROOT_COLLECTION_MATCH_KEY = "__root__";
 const UNCATEGORIZED_COLLECTION_PATH = "uncategorized";
 const UNCATEGORIZED_COLLECTION_ALIASES = new Set([
   UNCATEGORIZED_COLLECTION_PATH,
   "uncategorised",
 ]);
+const ASSET_REFERENCE_PREFIX = "oc-asset://";
+const ASSET_REFERENCE_REGEX = /oc-asset:\/\/([A-Za-z0-9_-]+)/g;
+const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
+const HTML_IMAGE_REGEX = /<img\b([^>]*?)\bsrc=(["'])([^"']+)\2([^>]*)>/gi;
+const SUPPORTED_IMPORT_IMAGE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+]);
+const MAX_IMPORT_IMAGE_BYTES = 5 * 1024 * 1024;
+
+function isSupportedImportMimeType(mimeType: string | undefined | null): boolean {
+  if (!mimeType) {
+    return false;
+  }
+  return SUPPORTED_IMPORT_IMAGE_MIME_TYPES.has(mimeType.toLowerCase());
+}
 
 function normalizePath(path: string): string {
   const normalized = path
@@ -101,6 +128,14 @@ function getFileName(path: string): string {
     return path;
   }
   return path.slice(index + 1);
+}
+
+function getFileExtension(fileName: string): string {
+  const index = fileName.lastIndexOf(".");
+  if (index === -1) {
+    return "";
+  }
+  return fileName.slice(index).toLowerCase();
 }
 
 function withoutMarkdownExtension(fileName: string): string {
@@ -303,18 +338,20 @@ function ensureMarkdownPath(path: string): string {
   return MARKDOWN_EXTENSION_REGEX.test(path) ? path : `${path}.md`;
 }
 
-function dedupeRelativePath(path: string, usedPaths: Set<string>): string {
-  const normalized = ensureMarkdownPath(path);
-  if (!usedPaths.has(normalized)) {
-    usedPaths.add(normalized);
-    return normalized;
+function dedupePath(path: string, usedPaths: Set<string>): string {
+  if (!usedPaths.has(path)) {
+    usedPaths.add(path);
+    return path;
   }
 
-  const extensionIndex = normalized.toLowerCase().lastIndexOf(".md");
-  const basePath = extensionIndex === -1 ? normalized : normalized.slice(0, extensionIndex);
+  const extensionIndex = path.lastIndexOf(".");
+  const hasExtension = extensionIndex > -1 && extensionIndex < path.length - 1;
+  const basePath = hasExtension ? path.slice(0, extensionIndex) : path;
+  const extension = hasExtension ? path.slice(extensionIndex) : "";
+
   let attempt = 2;
   while (attempt < 10_000) {
-    const candidate = `${basePath}-${attempt}.md`;
+    const candidate = `${basePath}-${attempt}${extension}`;
     if (!usedPaths.has(candidate)) {
       usedPaths.add(candidate);
       return candidate;
@@ -322,7 +359,211 @@ function dedupeRelativePath(path: string, usedPaths: Set<string>): string {
     attempt += 1;
   }
 
-  throw new Error(`Failed to create unique markdown export path for "${path}"`);
+  throw new Error(`Failed to create unique export path for "${path}"`);
+}
+
+function dedupeRelativePath(path: string, usedPaths: Set<string>): string {
+  const normalized = ensureMarkdownPath(path);
+  return dedupePath(normalized, usedPaths);
+}
+
+function extractAssetReferenceIds(markdown: string): string[] {
+  const ids = new Set<string>();
+  const matches = markdown.matchAll(ASSET_REFERENCE_REGEX);
+  for (const match of matches) {
+    const id = match[1];
+    if (id) {
+      ids.add(id);
+    }
+  }
+  return Array.from(ids);
+}
+
+function parseMarkdownImageTarget(target: string): {
+  path: string;
+  suffix: string;
+  wrappedInAngles: boolean;
+} | null {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("<")) {
+    const end = trimmed.indexOf(">");
+    if (end <= 1) {
+      return null;
+    }
+    return {
+      path: trimmed.slice(1, end).trim(),
+      suffix: trimmed.slice(end + 1).trim(),
+      wrappedInAngles: true,
+    };
+  }
+
+  const [path, ...suffixParts] = trimmed.split(/\s+/);
+  if (!path) {
+    return null;
+  }
+  return {
+    path,
+    suffix: suffixParts.join(" ").trim(),
+    wrappedInAngles: false,
+  };
+}
+
+function buildMarkdownImageTarget(parsed: {
+  path: string;
+  suffix: string;
+  wrappedInAngles: boolean;
+}): string {
+  const path = parsed.wrappedInAngles ? `<${parsed.path}>` : parsed.path;
+  return parsed.suffix ? `${path} ${parsed.suffix}` : path;
+}
+
+function isExternalReference(path: string): boolean {
+  const normalized = path.trim().toLowerCase();
+  return (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("data:") ||
+    normalized.startsWith("javascript:") ||
+    normalized.startsWith("vbscript:") ||
+    normalized.startsWith("//") ||
+    normalized.startsWith("#")
+  );
+}
+
+function resolveReferencePath(markdownPath: string, reference: string): string | null {
+  const normalized = reference
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^<|>$/g, "");
+  if (!normalized || isExternalReference(normalized)) {
+    return null;
+  }
+
+  const pathWithoutQuery = normalized.split("#")[0]?.split("?")[0] ?? "";
+  if (!pathWithoutQuery) {
+    return null;
+  }
+
+  const baseSegments = (getDirectoryPath(markdownPath) ?? "").split("/").filter(Boolean);
+  const referenceSegments = pathWithoutQuery.split("/").filter((segment) => segment.length > 0);
+  const resolvedSegments = [...baseSegments];
+
+  for (const segment of referenceSegments) {
+    if (segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (resolvedSegments.length === 0) {
+        return null;
+      }
+      resolvedSegments.pop();
+      continue;
+    }
+    resolvedSegments.push(segment);
+  }
+
+  return resolvedSegments.join("/");
+}
+
+function rewriteMarkdownImageReferences(
+  markdownContent: string,
+  markdownPath: string,
+  assetReferenceByPath: Map<string, string>
+): { content: string; unresolvedReferences: string[] } {
+  const unresolved = new Set<string>();
+
+  const withMarkdownLinksRewritten = markdownContent.replace(
+    MARKDOWN_IMAGE_REGEX,
+    (full, alt, target) => {
+      const parsed = parseMarkdownImageTarget(target);
+      if (!parsed || parsed.path.startsWith(ASSET_REFERENCE_PREFIX) || isExternalReference(parsed.path)) {
+        return full;
+      }
+
+      const resolvedPath = resolveReferencePath(markdownPath, parsed.path);
+      if (!resolvedPath) {
+        unresolved.add(`${markdownPath}: ${parsed.path}`);
+        return full;
+      }
+
+      const assetReference = assetReferenceByPath.get(resolvedPath);
+      if (!assetReference) {
+        unresolved.add(`${markdownPath}: ${parsed.path}`);
+        return full;
+      }
+
+      const rewrittenTarget = buildMarkdownImageTarget({
+        ...parsed,
+        path: assetReference,
+      });
+      return `![${alt}](${rewrittenTarget})`;
+    }
+  );
+
+  const withHtmlLinksRewritten = withMarkdownLinksRewritten.replace(
+    HTML_IMAGE_REGEX,
+    (full, before, quote, src, after) => {
+      if (src.startsWith(ASSET_REFERENCE_PREFIX) || isExternalReference(src)) {
+        return full;
+      }
+
+      const resolvedPath = resolveReferencePath(markdownPath, src);
+      if (!resolvedPath) {
+        unresolved.add(`${markdownPath}: ${src}`);
+        return full;
+      }
+
+      const assetReference = assetReferenceByPath.get(resolvedPath);
+      if (!assetReference) {
+        unresolved.add(`${markdownPath}: ${src}`);
+        return full;
+      }
+
+      return `<img${before}src=${quote}${assetReference}${quote}${after}>`;
+    }
+  );
+
+  return {
+    content: withHtmlLinksRewritten,
+    unresolvedReferences: Array.from(unresolved).sort((a, b) => a.localeCompare(b)),
+  };
+}
+
+function getRelativePath(fromPath: string, toPath: string): string {
+  const fromDirSegments = (getDirectoryPath(fromPath) ?? "").split("/").filter(Boolean);
+  const toSegments = toPath.split("/").filter(Boolean);
+
+  let sharedPrefixLength = 0;
+  const maxShared = Math.min(fromDirSegments.length, toSegments.length);
+  while (
+    sharedPrefixLength < maxShared &&
+    fromDirSegments[sharedPrefixLength] === toSegments[sharedPrefixLength]
+  ) {
+    sharedPrefixLength += 1;
+  }
+
+  const upSegments = fromDirSegments.slice(sharedPrefixLength).map(() => "..");
+  const downSegments = toSegments.slice(sharedPrefixLength);
+  const parts = [...upSegments, ...downSegments];
+  return parts.length > 0 ? parts.join("/") : ".";
+}
+
+function rewriteAssetReferencesForExport(
+  markdownContent: string,
+  markdownPath: string,
+  assetPathById: Map<string, string>
+): string {
+  return markdownContent.replace(ASSET_REFERENCE_REGEX, (fullMatch, id) => {
+    const assetPath = assetPathById.get(id);
+    if (!assetPath) {
+      return fullMatch;
+    }
+    return getRelativePath(markdownPath, assetPath);
+  });
 }
 
 function yamlQuote(value: string): string {
@@ -408,6 +649,7 @@ export const syncMarkdownFolder = authMutation({
     sourceName: v.string(),
     rootCollectionId: v.optional(v.id("collections")),
     files: v.array(markdownFileValidator),
+    assets: v.optional(v.array(importAssetValidator)),
     publishByDefault: v.optional(v.boolean()),
     dryRun: v.optional(v.boolean()),
   },
@@ -447,8 +689,17 @@ export const syncMarkdownFolder = authMutation({
       throw new Error("No markdown files were found in this upload");
     }
 
+    const rawIncomingAssets = (args.assets ?? [])
+      .map((asset) => ({
+        relativePath: normalizePath(asset.relativePath),
+        storageId: asset.storageId,
+        mimeType: asset.mimeType,
+        size: asset.size,
+      }))
+      .filter((asset) => Boolean(asset.relativePath) && IMAGE_EXTENSION_REGEX.test(asset.relativePath));
+
     const commonRootFolder = detectCommonRootFolder(
-      rawIncomingFiles.map((file) => file.relativePath)
+      [...rawIncomingFiles.map((file) => file.relativePath), ...rawIncomingAssets.map((asset) => asset.relativePath)]
     );
 
     const incomingFiles = new Map<
@@ -486,6 +737,37 @@ export const syncMarkdownFolder = authMutation({
 
     if (incomingFiles.size === 0) {
       throw new Error("No markdown files remained after path normalization");
+    }
+
+    const incomingAssets = new Map<
+      string,
+      {
+        relativePath: string;
+        originalPath: string;
+        storageId?: Id<"_storage">;
+        mimeType?: string;
+        size?: number;
+      }
+    >();
+    for (const asset of rawIncomingAssets) {
+      const normalizedPath = commonRootFolder
+        ? stripSpecificRootFolder(asset.relativePath, commonRootFolder)
+        : asset.relativePath;
+      if (!normalizedPath) {
+        continue;
+      }
+      if (incomingAssets.has(normalizedPath)) {
+        throw new Error(
+          `Import contains duplicate image path after root normalization: "${normalizedPath}"`
+        );
+      }
+      incomingAssets.set(normalizedPath, {
+        relativePath: normalizedPath,
+        originalPath: asset.relativePath,
+        storageId: asset.storageId,
+        mimeType: asset.mimeType,
+        size: asset.size,
+      });
     }
 
     const existingSource = await ctx.db
@@ -532,6 +814,110 @@ export const syncMarkdownFolder = authMutation({
           )
           .collect()
       : [];
+
+    const existingAssets = sourceId
+      ? await ctx.db
+          .query("articleAssets")
+          .withIndex("by_import_source", (q) => q.eq("importSourceId", sourceId!))
+          .collect()
+      : [];
+    const existingAssetByPath = new Map(
+      existingAssets
+        .filter((asset) => asset.importPath)
+        .map((asset) => [asset.importPath!, asset] as const)
+    );
+    const assetReferenceByPath = new Map<string, string>();
+    for (const existingAsset of existingAssets) {
+      if (!existingAsset.importPath) {
+        continue;
+      }
+      assetReferenceByPath.set(
+        existingAsset.importPath,
+        `${ASSET_REFERENCE_PREFIX}${existingAsset._id}`
+      );
+    }
+
+    for (const incomingAsset of incomingAssets.values()) {
+      const existingAsset = existingAssetByPath.get(incomingAsset.relativePath);
+
+      if (dryRun) {
+        const syntheticReference =
+          existingAsset
+            ? `${ASSET_REFERENCE_PREFIX}${existingAsset._id}`
+            : `${ASSET_REFERENCE_PREFIX}dryrun-${normalizeSourceKey(incomingAsset.relativePath) || "asset"}`;
+        assetReferenceByPath.set(incomingAsset.relativePath, syntheticReference);
+        continue;
+      }
+
+      if (!sourceId) {
+        throw new Error("Failed to resolve import source");
+      }
+      if (!incomingAsset.storageId) {
+        throw new Error(
+          `Image "${incomingAsset.relativePath}" is missing storageId. Upload assets before applying import.`
+        );
+      }
+
+      const metadata = await ctx.storage.getMetadata(incomingAsset.storageId);
+      if (!metadata) {
+        throw new Error(`Uploaded image "${incomingAsset.relativePath}" was not found in storage.`);
+      }
+
+      const mimeType = (metadata.contentType ?? incomingAsset.mimeType ?? "").toLowerCase();
+      if (!isSupportedImportMimeType(mimeType)) {
+        throw new Error(
+          `Unsupported image type for "${incomingAsset.relativePath}". Allowed: PNG, JPEG, GIF, WEBP, AVIF.`
+        );
+      }
+      if (metadata.size > MAX_IMPORT_IMAGE_BYTES) {
+        throw new Error(`Image "${incomingAsset.relativePath}" exceeds the 5MB upload limit.`);
+      }
+
+      const nowTimestamp = Date.now();
+      if (existingAsset) {
+        if (existingAsset.storageId !== incomingAsset.storageId) {
+          await ctx.storage.delete(existingAsset.storageId);
+        }
+        await ctx.db.patch(existingAsset._id, {
+          storageId: incomingAsset.storageId,
+          fileName: getFileName(incomingAsset.relativePath),
+          mimeType,
+          size: metadata.size,
+          updatedAt: nowTimestamp,
+        });
+        assetReferenceByPath.set(
+          incomingAsset.relativePath,
+          `${ASSET_REFERENCE_PREFIX}${existingAsset._id}`
+        );
+        continue;
+      }
+
+      const createdAssetId = await ctx.db.insert("articleAssets", {
+        workspaceId: args.workspaceId,
+        importSourceId: sourceId,
+        importPath: incomingAsset.relativePath,
+        storageId: incomingAsset.storageId,
+        fileName: getFileName(incomingAsset.relativePath),
+        mimeType,
+        size: metadata.size,
+        createdBy: ctx.user._id,
+        createdAt: nowTimestamp,
+        updatedAt: nowTimestamp,
+      });
+      assetReferenceByPath.set(incomingAsset.relativePath, `${ASSET_REFERENCE_PREFIX}${createdAssetId}`);
+    }
+
+    const unresolvedImageReferenceSet = new Set<string>();
+    for (const [path, file] of incomingFiles.entries()) {
+      const rewritten = rewriteMarkdownImageReferences(file.content, path, assetReferenceByPath);
+      for (const unresolved of rewritten.unresolvedReferences) {
+        unresolvedImageReferenceSet.add(unresolved);
+      }
+      incomingFiles.set(path, {
+        ...file,
+        content: rewritten.content,
+      });
+    }
 
     const canMatchImportSource = (
       importSourceId: Id<"helpCenterImportSources"> | undefined
@@ -1040,7 +1426,7 @@ export const syncMarkdownFolder = authMutation({
         updatedAt: now,
         lastImportedAt: now,
         lastImportRunId: importRunId,
-        lastImportedFileCount: incomingFiles.size,
+        lastImportedFileCount: incomingFiles.size + incomingAssets.size,
         lastImportedCollectionCount: desiredCollectionPaths.size,
       });
     }
@@ -1060,8 +1446,12 @@ export const syncMarkdownFolder = authMutation({
       deletedArticles,
       deletedCollections,
       totalFiles: incomingFiles.size,
+      totalAssets: incomingAssets.size,
       totalCollections: desiredCollectionPaths.size,
       strippedRootFolder: commonRootFolder ?? undefined,
+      unresolvedImageReferences: Array.from(unresolvedImageReferenceSet).sort((a, b) =>
+        a.localeCompare(b)
+      ),
       preview: {
         collections: {
           create: sortPaths(createdCollectionPaths),
@@ -1294,7 +1684,7 @@ export const exportMarkdown = authQuery({
     }
 
     const usedPaths = new Set<string>();
-    const files = articles
+    const articleExports = articles
       .sort((a, b) => a.title.localeCompare(b.title))
       .map((article) => {
         const hasCollection = Boolean(article.collectionId);
@@ -1307,20 +1697,72 @@ export const exportMarkdown = authQuery({
           : sanitizePathSegment(article.slug || article.title) || "article";
         const preferredPath =
           sourceId && article.importPath ? article.importPath : fallbackPathBase;
-        const path = dedupeRelativePath(preferredPath, usedPaths);
+        const markdownPath = dedupeRelativePath(preferredPath, usedPaths);
         return {
-          path,
-          content: buildFrontmatterContent({
-            title: article.title,
-            slug: article.slug,
-            status: article.status,
-            updatedAt: article.updatedAt,
-            collectionPath: frontmatterCollectionPath,
-            sourceName,
-            body: article.content,
-          }),
+          article,
+          markdownPath,
+          frontmatterCollectionPath,
         };
       });
+
+    const referencedAssetIds = new Set<string>();
+    for (const articleExport of articleExports) {
+      const ids = extractAssetReferenceIds(articleExport.article.content);
+      for (const id of ids) {
+        referencedAssetIds.add(id);
+      }
+    }
+
+    const assetPathById = new Map<string, string>();
+    const assetFiles: Array<{ path: string; assetUrl: string; type: "asset" }> = [];
+    for (const assetId of referencedAssetIds) {
+      const asset = await ctx.db.get(assetId as Id<"articleAssets">);
+      if (!asset || asset.workspaceId !== args.workspaceId) {
+        continue;
+      }
+
+      const fileNameStem =
+        sanitizePathSegment(withoutMarkdownExtension(asset.fileName)) || `image-${asset._id}`;
+      const extension = getFileExtension(asset.fileName) || ".bin";
+      const preferredAssetPath = asset.importPath
+        ? `_assets/${asset.importPath}`
+        : `_assets/${fileNameStem}${extension}`;
+      const dedupedAssetPath = dedupePath(preferredAssetPath, usedPaths);
+      const assetUrl = await ctx.storage.getUrl(asset.storageId);
+      if (!assetUrl) {
+        continue;
+      }
+
+      assetPathById.set(assetId, dedupedAssetPath);
+      assetFiles.push({
+        path: dedupedAssetPath,
+        assetUrl,
+        type: "asset",
+      });
+    }
+
+    const markdownFiles = articleExports.map((articleExport) => {
+      const bodyWithPortableAssetRefs = rewriteAssetReferencesForExport(
+        articleExport.article.content,
+        articleExport.markdownPath,
+        assetPathById
+      );
+      return {
+        path: articleExport.markdownPath,
+        type: "markdown" as const,
+        content: buildFrontmatterContent({
+          title: articleExport.article.title,
+          slug: articleExport.article.slug,
+          status: articleExport.article.status,
+          updatedAt: articleExport.article.updatedAt,
+          collectionPath: articleExport.frontmatterCollectionPath,
+          sourceName,
+          body: bodyWithPortableAssetRefs,
+        }),
+      };
+    });
+
+    const files = [...markdownFiles, ...assetFiles];
 
     const exportNameParts = ["help-center", "markdown"];
     if (sourceName) {

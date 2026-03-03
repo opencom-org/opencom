@@ -3,7 +3,7 @@ import { ChevronLeft, Maximize2, Minimize2, X } from "../icons";
 import { parseMarkdown } from "../utils/parseMarkdown";
 
 interface ArticleDetailProps {
-  article: { title: string; content: string } | undefined;
+  article: { title: string; content: string; renderedContent?: string } | undefined;
   isLargeScreen: boolean;
   isCollapsingLargeScreen: boolean;
   onToggleLargeScreen: () => void;
@@ -21,7 +21,10 @@ export function ArticleDetail({
   onClose,
   onStartConversation,
 }: ArticleDetailProps) {
-  const renderedContent = useMemo(() => (article ? parseMarkdown(article.content) : ""), [article]);
+  const renderedContent = useMemo(
+    () => (article ? parseMarkdown(article.renderedContent ?? article.content) : ""),
+    [article]
+  );
 
   return (
     <div
