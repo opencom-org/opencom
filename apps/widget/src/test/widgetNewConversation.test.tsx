@@ -3,6 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
 import { Widget } from "../Widget";
 
+type MockHomeConfig = {
+  enabled: boolean;
+  defaultSpace?: "home" | "messages" | "help";
+  tabs?: Array<{
+    id: "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
+    enabled: boolean;
+    visibleTo: "all" | "visitors" | "users";
+  }>;
+};
+
+let mockedHomeConfig: MockHomeConfig = { enabled: true };
+
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
@@ -71,7 +83,7 @@ vi.mock("../main", () => ({
 
 vi.mock("../components/Home", () => ({
   Home: () => <div data-testid="home-component" />,
-  useHomeConfig: vi.fn(() => ({ enabled: true })),
+  useHomeConfig: vi.fn(() => mockedHomeConfig),
 }));
 
 vi.mock("../components/ConversationList", () => ({
@@ -241,6 +253,7 @@ describe("Widget new conversation behavior", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedHomeConfig = { enabled: true };
 
     visitorConversationsResult = [];
     publishedArticlesResult = [];
@@ -344,6 +357,34 @@ describe("Widget new conversation behavior", () => {
       expect(screen.getByTestId("conversation-view")).toHaveTextContent("conv_draft_1");
     });
     expect(createConversationMock).not.toHaveBeenCalled();
+  });
+
+  it("renders only configured tabs and falls back to Messages when Home is hidden", async () => {
+    mockedHomeConfig = {
+      enabled: true,
+      tabs: [
+        { id: "messages", enabled: true, visibleTo: "all" },
+        { id: "help", enabled: true, visibleTo: "all" },
+      ],
+    };
+
+    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+
+    fireEvent.click(screen.getByTestId("widget-launcher"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTitle("New conversation")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTitle("Conversations")).toBeInTheDocument();
+    expect(screen.getByTitle("Help Center")).toBeInTheDocument();
+    expect(screen.queryByTitle("Home")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Product Tours")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Tasks")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("My Tickets")).not.toBeInTheDocument();
   });
 
   it("deduplicates rapid create clicks while a new conversation request is in flight", async () => {

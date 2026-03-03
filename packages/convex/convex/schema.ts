@@ -1968,6 +1968,22 @@ export default defineSchema({
         ),
         defaultSpace: v.union(v.literal("home"), v.literal("messages"), v.literal("help")),
         launchDirectlyToConversation: v.optional(v.boolean()),
+        tabs: v.optional(
+          v.array(
+            v.object({
+              id: v.union(
+                v.literal("home"),
+                v.literal("messages"),
+                v.literal("help"),
+                v.literal("tours"),
+                v.literal("tasks"),
+                v.literal("tickets")
+              ),
+              enabled: v.boolean(),
+              visibleTo: v.union(v.literal("all"), v.literal("visitors"), v.literal("users")),
+            })
+          )
+        ),
       })
     ),
 

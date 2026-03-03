@@ -406,6 +406,43 @@ export const deleteLogo = mutation({
 });
 
 // Home Configuration Types
+type HomeCardType =
+  | "welcome"
+  | "search"
+  | "conversations"
+  | "startConversation"
+  | "featuredArticles"
+  | "announcements";
+type HomeTabId = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
+type HomeVisibility = "all" | "visitors" | "users";
+type HomeCardConfigPrimitive = string | number | boolean | null;
+type HomeCardConfigObject = Record<string, HomeCardConfigPrimitive>;
+type HomeCardConfigValue =
+  | HomeCardConfigPrimitive
+  | HomeCardConfigPrimitive[]
+  | HomeCardConfigObject;
+
+interface HomeCard {
+  id: string;
+  type: HomeCardType;
+  config?: Record<string, HomeCardConfigValue>;
+  visibleTo: HomeVisibility;
+}
+
+interface HomeTab {
+  id: HomeTabId;
+  enabled: boolean;
+  visibleTo: HomeVisibility;
+}
+
+interface HomeConfig {
+  enabled: boolean;
+  cards: HomeCard[];
+  defaultSpace: "home" | "messages" | "help";
+  launchDirectlyToConversation?: boolean;
+  tabs?: HomeTab[];
+}
+
 const homeCardValidator = v.object({
   id: v.string(),
   type: v.union(
@@ -420,25 +457,111 @@ const homeCardValidator = v.object({
   visibleTo: v.union(v.literal("all"), v.literal("visitors"), v.literal("users")),
 });
 
+const homeTabValidator = v.object({
+  id: v.union(
+    v.literal("home"),
+    v.literal("messages"),
+    v.literal("help"),
+    v.literal("tours"),
+    v.literal("tasks"),
+    v.literal("tickets")
+  ),
+  enabled: v.boolean(),
+  visibleTo: v.union(v.literal("all"), v.literal("visitors"), v.literal("users")),
+});
+
 const homeConfigValidator = v.object({
   enabled: v.boolean(),
   cards: v.array(homeCardValidator),
   defaultSpace: v.union(v.literal("home"), v.literal("messages"), v.literal("help")),
   launchDirectlyToConversation: v.optional(v.boolean()),
+  tabs: v.optional(v.array(homeTabValidator)),
 });
 
+const DEFAULT_HOME_TABS: HomeTab[] = [
+  { id: "home", enabled: true, visibleTo: "all" },
+  { id: "messages", enabled: true, visibleTo: "all" },
+  { id: "help", enabled: true, visibleTo: "all" },
+  { id: "tours", enabled: true, visibleTo: "all" },
+  { id: "tasks", enabled: true, visibleTo: "all" },
+  { id: "tickets", enabled: true, visibleTo: "all" },
+];
+
 // Default home configuration for new workspaces
-const DEFAULT_HOME_CONFIG = {
+const DEFAULT_HOME_CONFIG: HomeConfig = {
   enabled: true,
   cards: [
-    { id: "welcome-1", type: "welcome" as const, visibleTo: "all" as const },
-    { id: "search-1", type: "search" as const, visibleTo: "all" as const },
-    { id: "conversations-1", type: "conversations" as const, visibleTo: "all" as const },
-    { id: "startConversation-1", type: "startConversation" as const, visibleTo: "all" as const },
+    { id: "welcome-1", type: "welcome", visibleTo: "all" },
+    { id: "search-1", type: "search", visibleTo: "all" },
+    { id: "conversations-1", type: "conversations", visibleTo: "all" },
+    { id: "startConversation-1", type: "startConversation", visibleTo: "all" },
   ],
-  defaultSpace: "home" as const,
+  defaultSpace: "home",
   launchDirectlyToConversation: false,
+  tabs: DEFAULT_HOME_TABS,
 };
+
+function normalizeHomeTabs(tabs: HomeTab[] | undefined): HomeTab[] {
+  const tabsById = new Map((tabs ?? []).map((tab) => [tab.id, tab]));
+
+  return DEFAULT_HOME_TABS.map((defaultTab) => {
+    if (defaultTab.id === "messages") {
+      // Keep Messages always available (Intercom-style invariant).
+      return { ...defaultTab };
+    }
+    const configuredTab = tabsById.get(defaultTab.id);
+    if (!configuredTab) {
+      return { ...defaultTab };
+    }
+    return {
+      id: defaultTab.id,
+      enabled: configuredTab.enabled,
+      visibleTo: configuredTab.visibleTo,
+    };
+  });
+}
+
+function normalizeHomeConfig(
+  homeConfig: HomeConfig | undefined
+): HomeConfig & { launchDirectlyToConversation: boolean; tabs: HomeTab[] } {
+  const source = homeConfig ?? DEFAULT_HOME_CONFIG;
+  return {
+    ...source,
+    launchDirectlyToConversation: source.launchDirectlyToConversation ?? false,
+    tabs: normalizeHomeTabs(source.tabs),
+  };
+}
+
+function isVisibleToAudience(visibleTo: HomeVisibility, isUser: boolean): boolean {
+  if (visibleTo === "all") {
+    return true;
+  }
+  if (visibleTo === "users") {
+    return isUser;
+  }
+  return !isUser;
+}
+
+function resolveDefaultSpace(
+  defaultSpace: HomeConfig["defaultSpace"],
+  visibleTabs: HomeTab[],
+  homeEnabled: boolean
+): HomeConfig["defaultSpace"] {
+  const visibleTabIds = new Set(visibleTabs.map((tab) => tab.id));
+  if (defaultSpace === "home" && homeEnabled && visibleTabIds.has("home")) {
+    return "home";
+  }
+  if (defaultSpace === "help" && visibleTabIds.has("help")) {
+    return "help";
+  }
+  if (visibleTabIds.has("messages")) {
+    return "messages";
+  }
+  if (homeEnabled && visibleTabIds.has("home")) {
+    return "home";
+  }
+  return "help";
+}
 
 // Get home configuration for a workspace
 export const getHomeConfig = query({
@@ -448,7 +571,7 @@ export const getHomeConfig = query({
   handler: async (ctx, args) => {
     const canRead = await canReadWorkspaceSettings(ctx, args.workspaceId);
     if (!canRead) {
-      return DEFAULT_HOME_CONFIG;
+      return normalizeHomeConfig(DEFAULT_HOME_CONFIG);
     }
 
     const settings = await ctx.db
@@ -456,11 +579,7 @@ export const getHomeConfig = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .first();
 
-    if (!settings || !settings.homeConfig) {
-      return DEFAULT_HOME_CONFIG;
-    }
-
-    return settings.homeConfig;
+    return normalizeHomeConfig(settings?.homeConfig as HomeConfig | undefined);
   },
 });
 
@@ -476,37 +595,37 @@ export const getPublicHomeConfig = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .first();
 
-    const homeConfig = settings?.homeConfig ?? DEFAULT_HOME_CONFIG;
+    const homeConfig = normalizeHomeConfig(settings?.homeConfig as HomeConfig | undefined);
+    const isUser = args.isIdentified ?? false;
+    const visibleTabs = homeConfig.tabs.filter(
+      (tab) =>
+        tab.enabled &&
+        isVisibleToAudience(tab.visibleTo, isUser) &&
+        (tab.id !== "home" || homeConfig.enabled)
+    );
+    const defaultSpace = resolveDefaultSpace(homeConfig.defaultSpace, visibleTabs, homeConfig.enabled);
 
     if (!homeConfig.enabled) {
       return {
         enabled: false,
-        defaultSpace: homeConfig.defaultSpace,
-        launchDirectlyToConversation: homeConfig.launchDirectlyToConversation ?? false,
+        defaultSpace,
+        launchDirectlyToConversation: homeConfig.launchDirectlyToConversation,
         cards: [],
+        tabs: visibleTabs,
       };
     }
 
     // Filter cards based on visitor/user status
-    const isUser = args.isIdentified ?? false;
-    const cards = homeConfig.cards as Array<{
-      id: string;
-      type: string;
-      config?: unknown;
-      visibleTo: "all" | "visitors" | "users";
-    }>;
-    const filteredCards = cards.filter((card) => {
-      if (card.visibleTo === "all") return true;
-      if (card.visibleTo === "users" && isUser) return true;
-      if (card.visibleTo === "visitors" && !isUser) return true;
-      return false;
-    });
+    const filteredCards = homeConfig.cards.filter((card) =>
+      isVisibleToAudience(card.visibleTo, isUser)
+    );
 
     return {
       enabled: homeConfig.enabled,
-      defaultSpace: homeConfig.defaultSpace,
-      launchDirectlyToConversation: homeConfig.launchDirectlyToConversation ?? false,
+      defaultSpace,
+      launchDirectlyToConversation: homeConfig.launchDirectlyToConversation,
       cards: filteredCards,
+      tabs: visibleTabs,
     };
   },
 });
@@ -525,6 +644,7 @@ export const updateHomeConfig = mutation({
     if (new Set(cardIds).size !== cardIds.length) {
       throw new Error("Card IDs must be unique");
     }
+    const normalizedHomeConfig = normalizeHomeConfig(args.homeConfig as HomeConfig);
 
     const existing = await ctx.db
       .query("messengerSettings")
@@ -535,7 +655,7 @@ export const updateHomeConfig = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        homeConfig: args.homeConfig,
+        homeConfig: normalizedHomeConfig,
         updatedAt: now,
       });
       return existing._id;
@@ -544,7 +664,7 @@ export const updateHomeConfig = mutation({
     // Create new settings with home config
     return await ctx.db.insert("messengerSettings", {
       workspaceId: args.workspaceId,
-      homeConfig: args.homeConfig,
+      homeConfig: normalizedHomeConfig,
       ...DEFAULT_SETTINGS,
       createdAt: now,
       updatedAt: now,
@@ -569,7 +689,7 @@ export const toggleHomeEnabled = mutation({
     const now = Date.now();
 
     if (existing) {
-      const currentConfig = existing.homeConfig ?? DEFAULT_HOME_CONFIG;
+      const currentConfig = normalizeHomeConfig(existing.homeConfig as HomeConfig | undefined);
       await ctx.db.patch(existing._id, {
         homeConfig: { ...currentConfig, enabled: args.enabled },
         updatedAt: now,
@@ -603,7 +723,7 @@ export const addHomeCard = mutation({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .first();
 
-    const currentConfig = existing?.homeConfig ?? DEFAULT_HOME_CONFIG;
+    const currentConfig = normalizeHomeConfig(existing?.homeConfig as HomeConfig | undefined);
 
     // Check for duplicate ID
     if (currentConfig.cards.some((c) => c.id === args.card.id)) {
@@ -652,10 +772,11 @@ export const removeHomeCard = mutation({
       throw new Error("Home configuration not found");
     }
 
-    const newCards = existing.homeConfig.cards.filter((c) => c.id !== args.cardId);
+    const currentConfig = normalizeHomeConfig(existing.homeConfig as HomeConfig);
+    const newCards = currentConfig.cards.filter((c) => c.id !== args.cardId);
 
     await ctx.db.patch(existing._id, {
-      homeConfig: { ...existing.homeConfig, cards: newCards },
+      homeConfig: { ...currentConfig, cards: newCards },
       updatedAt: Date.now(),
     });
 
@@ -681,8 +802,10 @@ export const reorderHomeCards = mutation({
       throw new Error("Home configuration not found");
     }
 
+    const currentConfig = normalizeHomeConfig(existing.homeConfig as HomeConfig);
+
     // Validate all card IDs exist
-    const existingIds = new Set(existing.homeConfig.cards.map((c) => c.id));
+    const existingIds = new Set(currentConfig.cards.map((c) => c.id));
     for (const id of args.cardIds) {
       if (!existingIds.has(id)) {
         throw new Error(`Card with ID "${id}" not found`);
@@ -690,11 +813,11 @@ export const reorderHomeCards = mutation({
     }
 
     // Reorder cards based on the provided order
-    const cardMap = new Map(existing.homeConfig.cards.map((c) => [c.id, c]));
+    const cardMap = new Map(currentConfig.cards.map((c) => [c.id, c]));
     const reorderedCards = args.cardIds.map((id) => cardMap.get(id)!);
 
     await ctx.db.patch(existing._id, {
-      homeConfig: { ...existing.homeConfig, cards: reorderedCards },
+      homeConfig: { ...currentConfig, cards: reorderedCards },
       updatedAt: Date.now(),
     });
 
@@ -724,12 +847,13 @@ export const updateHomeCard = mutation({
       throw new Error("Home configuration not found");
     }
 
-    const cardIndex = existing.homeConfig.cards.findIndex((c) => c.id === args.cardId);
+    const currentConfig = normalizeHomeConfig(existing.homeConfig as HomeConfig);
+    const cardIndex = currentConfig.cards.findIndex((c) => c.id === args.cardId);
     if (cardIndex === -1) {
       throw new Error("Card not found");
     }
 
-    const updatedCards = [...existing.homeConfig.cards];
+    const updatedCards = [...currentConfig.cards];
     updatedCards[cardIndex] = {
       ...updatedCards[cardIndex],
       ...(args.updates.config !== undefined && { config: args.updates.config }),
@@ -737,7 +861,7 @@ export const updateHomeCard = mutation({
     };
 
     await ctx.db.patch(existing._id, {
-      homeConfig: { ...existing.homeConfig, cards: updatedCards },
+      homeConfig: { ...currentConfig, cards: updatedCards },
       updatedAt: Date.now(),
     });
 

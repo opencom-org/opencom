@@ -49,7 +49,53 @@ type WidgetView =
 
 // Main tabs that show in the bottom nav
 type MainTab = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
+type TabVisibility = "all" | "visitors" | "users";
+type TabConfig = {
+  id: MainTab;
+  enabled: boolean;
+  visibleTo: TabVisibility;
+};
 type BlockingExperience = "tour" | "outbound_post" | "survey_large";
+
+const DEFAULT_TAB_CONFIG: TabConfig[] = [
+  { id: "home", enabled: true, visibleTo: "all" },
+  { id: "messages", enabled: true, visibleTo: "all" },
+  { id: "help", enabled: true, visibleTo: "all" },
+  { id: "tours", enabled: true, visibleTo: "all" },
+  { id: "tasks", enabled: true, visibleTo: "all" },
+  { id: "tickets", enabled: true, visibleTo: "all" },
+];
+
+function normalizeTabConfig(config: TabConfig[] | undefined): TabConfig[] {
+  if (!config) {
+    return DEFAULT_TAB_CONFIG.map((tab) => ({ ...tab }));
+  }
+
+  const tabsById = new globalThis.Map(config.map((tab) => [tab.id, tab]));
+  const configuredIds = new Set(config.map((tab) => tab.id));
+  const normalizedTabs = DEFAULT_TAB_CONFIG.filter((tab) => configuredIds.has(tab.id)).map(
+    (defaultTab) => {
+      if (defaultTab.id === "messages") {
+        return { ...defaultTab };
+      }
+      const configuredTab = tabsById.get(defaultTab.id);
+      if (!configuredTab) {
+        return { ...defaultTab };
+      }
+      return {
+        id: defaultTab.id,
+        enabled: configuredTab.enabled,
+        visibleTo: configuredTab.visibleTo,
+      };
+    }
+  );
+
+  if (!normalizedTabs.some((tab) => tab.id === "messages")) {
+    normalizedTabs.unshift({ ...DEFAULT_TAB_CONFIG.find((tab) => tab.id === "messages")! });
+  }
+
+  return normalizedTabs;
+}
 
 interface WidgetProps {
   workspaceId?: string;
@@ -941,24 +987,40 @@ export function Widget({
   // (article suggestions, email capture, message sending are now in ConversationView component)
 
   // Home configuration for customizable home page
+  const isIdentifiedVisitor = !!(userInfo?.userId || userInfo?.email);
   const homeConfig = useHomeConfig(
     isValidIdFormat ? (activeWorkspaceId as Id<"workspaces">) : undefined,
-    !!userInfo?.userId
+    isIdentifiedVisitor
+  );
+
+  const visibleTabs = useMemo(() => {
+    const configuredTabs = normalizeTabConfig(homeConfig?.tabs as TabConfig[] | undefined);
+    return configuredTabs.filter((tab) => tab.enabled && (tab.id !== "home" || homeConfig?.enabled));
+  }, [homeConfig]);
+  const fallbackTab = visibleTabs[0]?.id ?? "messages";
+  const isTabVisible = useCallback(
+    (tab: MainTab) => visibleTabs.some((configuredTab) => configuredTab.id === tab),
+    [visibleTabs]
   );
 
   // Determine initial tab based on home config
   useEffect(() => {
-    if (homeConfig !== undefined) {
-      if (!homeConfig?.enabled) {
-        const defaultSpace = homeConfig?.defaultSpace || "messages";
-        if (defaultSpace === "help") {
-          setActiveTab("help");
-        } else {
-          setActiveTab("messages");
-        }
-      }
+    if (!homeConfig || homeConfig.enabled) {
+      return;
     }
-  }, [homeConfig]);
+    if (homeConfig.defaultSpace === "help" && isTabVisible("help")) {
+      setActiveTab("help");
+      return;
+    }
+    setActiveTab("messages");
+  }, [homeConfig, isTabVisible]);
+
+  // Keep active tab valid whenever tab configuration or audience changes.
+  useEffect(() => {
+    if (!isTabVisible(activeTab)) {
+      setActiveTab(fallbackTab);
+    }
+  }, [activeTab, fallbackTab, isTabVisible]);
 
   // Debug panel for dev mode
   const debugPanel = (
@@ -1169,7 +1231,8 @@ export function Widget({
 
   // Get header title and actions based on active tab
   const getTabHeader = () => {
-    switch (activeTab) {
+    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
+    switch (resolvedActiveTab) {
       case "home":
         return { title: "Home", showNew: false };
       case "messages":
@@ -1189,6 +1252,7 @@ export function Widget({
 
   // ── Main tabbed shell ──────────────────────────────────────────────
   const renderMainShell = () => {
+    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
     const header = getTabHeader();
     return (
       <div className="opencom-chat">
@@ -1210,12 +1274,12 @@ export function Widget({
           </div>
         </div>
         <div className="opencom-tab-content">
-          {activeTab === "home" && homeConfig?.enabled && (
+          {resolvedActiveTab === "home" && homeConfig?.enabled && (
             <HomeComponent
               workspaceId={activeWorkspaceId as Id<"workspaces">}
               visitorId={visitorId}
               sessionToken={sessionToken}
-              isIdentified={!!userInfo?.userId}
+              isIdentified={isIdentifiedVisitor}
               settings={{
                 primaryColor: messengerSettings.primaryColor,
                 backgroundColor: messengerSettings.backgroundColor,
@@ -1237,14 +1301,14 @@ export function Widget({
               }}
             />
           )}
-          {activeTab === "messages" && (
+          {resolvedActiveTab === "messages" && (
             <ConversationList
               conversations={visitorConversations}
               onSelectConversation={handleSelectConversation}
               onNewConversation={handleNewConversation}
             />
           )}
-          {activeTab === "help" && (
+          {resolvedActiveTab === "help" && (
             <HelpCenter
               articleSearchQuery={articleSearchQuery}
               onSearchChange={setArticleSearchQuery}
@@ -1257,10 +1321,10 @@ export function Widget({
               }}
             />
           )}
-          {activeTab === "tours" && (
+          {resolvedActiveTab === "tours" && (
             <TourPicker allTours={allTours} onSelectTour={handleSelectTour} />
           )}
-          {activeTab === "tasks" && (
+          {resolvedActiveTab === "tasks" && (
             <TasksList
               visitorId={visitorId}
               activeWorkspaceId={activeWorkspaceId}
@@ -1270,7 +1334,7 @@ export function Widget({
               onStartTour={handleStartTour}
             />
           )}
-          {activeTab === "tickets" && (
+          {resolvedActiveTab === "tickets" && (
             <div className="opencom-tickets-view">
               <TicketsList
                 tickets={visitorTickets}
@@ -1296,70 +1360,80 @@ export function Widget({
           )}
         </div>
         <div className="opencom-bottom-nav">
-          {homeConfig?.enabled && (
+          {isTabVisible("home") && (
             <button
               onClick={() => setActiveTab("home")}
-              className={`opencom-nav-item ${activeTab === "home" ? "opencom-nav-item-active" : ""}`}
+              className={`opencom-nav-item ${resolvedActiveTab === "home" ? "opencom-nav-item-active" : ""}`}
               title="Home"
             >
               <Home />
               <span>Home</span>
             </button>
           )}
-          <button
-            onClick={() => setActiveTab("messages")}
-            className={`opencom-nav-item ${activeTab === "messages" ? "opencom-nav-item-active" : ""}`}
-            title="Conversations"
-          >
-            <MessageCircle />
-            <span>Messages</span>
-            {normalizedUnreadCount > 0 && (
-              <span className="opencom-nav-badge opencom-nav-badge-alert">
-                {normalizedUnreadCount > 99 ? "99+" : normalizedUnreadCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("help")}
-            className={`opencom-nav-item ${activeTab === "help" ? "opencom-nav-item-active" : ""}`}
-            title="Help Center"
-          >
-            <Search />
-            <span>Help</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("tours")}
-            className={`opencom-nav-item ${activeTab === "tours" ? "opencom-nav-item-active" : ""}`}
-            title="Product Tours"
-          >
-            <Map />
-            <span>Tours</span>
-            {(() => {
-              const availableCount =
-                allTours?.filter((t: { elementSelectors: string[] }) =>
-                  checkElementsAvailable(t.elementSelectors)
-                ).length || 0;
-              return availableCount > 0 ? (
-                <span className="opencom-nav-badge">{availableCount}</span>
-              ) : null;
-            })()}
-          </button>
-          <button
-            onClick={() => setActiveTab("tasks")}
-            className={`opencom-nav-item ${activeTab === "tasks" ? "opencom-nav-item-active" : ""}`}
-            title="Tasks"
-          >
-            <CheckSquare />
-            <span>Tasks</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("tickets")}
-            className={`opencom-nav-item ${activeTab === "tickets" ? "opencom-nav-item-active" : ""}`}
-            title="My Tickets"
-          >
-            <Ticket />
-            <span>Tickets</span>
-          </button>
+          {isTabVisible("messages") && (
+            <button
+              onClick={() => setActiveTab("messages")}
+              className={`opencom-nav-item ${resolvedActiveTab === "messages" ? "opencom-nav-item-active" : ""}`}
+              title="Conversations"
+            >
+              <MessageCircle />
+              <span>Messages</span>
+              {normalizedUnreadCount > 0 && (
+                <span className="opencom-nav-badge opencom-nav-badge-alert">
+                  {normalizedUnreadCount > 99 ? "99+" : normalizedUnreadCount}
+                </span>
+              )}
+            </button>
+          )}
+          {isTabVisible("help") && (
+            <button
+              onClick={() => setActiveTab("help")}
+              className={`opencom-nav-item ${resolvedActiveTab === "help" ? "opencom-nav-item-active" : ""}`}
+              title="Help Center"
+            >
+              <Search />
+              <span>Help</span>
+            </button>
+          )}
+          {isTabVisible("tours") && (
+            <button
+              onClick={() => setActiveTab("tours")}
+              className={`opencom-nav-item ${resolvedActiveTab === "tours" ? "opencom-nav-item-active" : ""}`}
+              title="Product Tours"
+            >
+              <Map />
+              <span>Tours</span>
+              {(() => {
+                const availableCount =
+                  allTours?.filter((t: { elementSelectors: string[] }) =>
+                    checkElementsAvailable(t.elementSelectors)
+                  ).length || 0;
+                return availableCount > 0 ? (
+                  <span className="opencom-nav-badge">{availableCount}</span>
+                ) : null;
+              })()}
+            </button>
+          )}
+          {isTabVisible("tasks") && (
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`opencom-nav-item ${resolvedActiveTab === "tasks" ? "opencom-nav-item-active" : ""}`}
+              title="Tasks"
+            >
+              <CheckSquare />
+              <span>Tasks</span>
+            </button>
+          )}
+          {isTabVisible("tickets") && (
+            <button
+              onClick={() => setActiveTab("tickets")}
+              className={`opencom-nav-item ${resolvedActiveTab === "tickets" ? "opencom-nav-item-active" : ""}`}
+              title="My Tickets"
+            >
+              <Ticket />
+              <span>Tickets</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -1499,7 +1573,8 @@ export function Widget({
             handleNewConversation();
           }}
           onNavigateTab={(tabId) => {
-            setActiveTab(tabId as MainTab);
+            const requestedTab = tabId as MainTab;
+            setActiveTab(isTabVisible(requestedTab) ? requestedTab : fallbackTab);
             setView("conversation-list");
           }}
           onOpenArticle={(articleId) => {
