@@ -46,3 +46,9 @@ The refactor SHALL preserve externally observable behavior for view transitions,
 - **WHEN** the host page registers start-tour and available-tour callbacks
 - **THEN** the widget SHALL continue invoking and updating these callbacks as before refactor
 - **AND** callback lifecycle cleanup SHALL occur on unmount
+
+#### Scenario: Active tab visibility changes after shell loads
+
+- **WHEN** home/tab configuration or visitor audience rules hide the currently selected tab
+- **THEN** the widget SHALL preserve current fallback behavior by selecting the first visible tab
+- **AND** messages SHALL remain the default fallback when no configured tab is available

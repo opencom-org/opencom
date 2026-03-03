@@ -13,11 +13,7 @@ import { TicketsList } from "./components/TicketsList";
 import { TicketDetail } from "./components/TicketDetail";
 import { TicketCreate } from "./components/TicketCreate";
 import type { Id } from "@opencom/convex/dataModel";
-import {
-  setStartTourCallback,
-  setGetAvailableToursCallback,
-  type UserIdentification,
-} from "./main";
+import { type UserIdentification } from "./main";
 import { TourOverlay } from "./TourOverlay";
 import { OutboundOverlay } from "./OutboundOverlay";
 import { TooltipOverlay } from "./TooltipOverlay";
@@ -26,14 +22,13 @@ import { useWidgetSession } from "./hooks/useWidgetSession";
 import { useWidgetSettings } from "./hooks/useWidgetSettings";
 import { useEventTracking } from "./hooks/useEventTracking";
 import { useNavigationTracking } from "./hooks/useNavigationTracking";
+import { useWidgetShellValidation } from "./hooks/useWidgetShellValidation";
+import { useBlockingExperienceArbitration } from "./hooks/useBlockingExperienceArbitration";
+import { useWidgetTabVisibility, type MainTab, type TabConfig } from "./hooks/useWidgetTabVisibility";
+import { useWidgetUnreadCues } from "./hooks/useWidgetUnreadCues";
+import { useWidgetTourBridge } from "./hooks/useWidgetTourBridge";
 import { checkElementsAvailable } from "./utils/dom";
 import { selectSurveyForDelivery, type SurveyDeliveryCandidate } from "@opencom/sdk-core";
-import {
-  buildWidgetUnreadSnapshot,
-  getWidgetUnreadIncreases,
-  loadWidgetCuePreferences,
-  shouldSuppressWidgetCue,
-} from "./lib/widgetNotificationCues";
 
 type WidgetView =
   | "launcher"
@@ -47,55 +42,6 @@ type WidgetView =
   | "ticket-detail"
   | "ticket-create";
 
-// Main tabs that show in the bottom nav
-type MainTab = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
-type TabVisibility = "all" | "visitors" | "users";
-type TabConfig = {
-  id: MainTab;
-  enabled: boolean;
-  visibleTo: TabVisibility;
-};
-type BlockingExperience = "tour" | "outbound_post" | "survey_large";
-
-const DEFAULT_TAB_CONFIG: TabConfig[] = [
-  { id: "home", enabled: true, visibleTo: "all" },
-  { id: "messages", enabled: true, visibleTo: "all" },
-  { id: "help", enabled: true, visibleTo: "all" },
-  { id: "tours", enabled: true, visibleTo: "all" },
-  { id: "tasks", enabled: true, visibleTo: "all" },
-  { id: "tickets", enabled: true, visibleTo: "all" },
-];
-
-function normalizeTabConfig(config: TabConfig[] | undefined): TabConfig[] {
-  if (!config) {
-    return DEFAULT_TAB_CONFIG.map((tab) => ({ ...tab }));
-  }
-
-  const tabsById = new globalThis.Map(config.map((tab) => [tab.id, tab]));
-  const configuredIds = new Set(config.map((tab) => tab.id));
-  const normalizedTabs = DEFAULT_TAB_CONFIG.filter((tab) => configuredIds.has(tab.id)).map(
-    (defaultTab) => {
-      if (defaultTab.id === "messages") {
-        return { ...defaultTab };
-      }
-      const configuredTab = tabsById.get(defaultTab.id);
-      if (!configuredTab) {
-        return { ...defaultTab };
-      }
-      return {
-        id: defaultTab.id,
-        enabled: configuredTab.enabled,
-        visibleTo: configuredTab.visibleTo,
-      };
-    }
-  );
-
-  if (!normalizedTabs.some((tab) => tab.id === "messages")) {
-    normalizedTabs.unshift({ ...DEFAULT_TAB_CONFIG.find((tab) => tab.id === "messages")! });
-  }
-
-  return normalizedTabs;
-}
 
 interface WidgetProps {
   workspaceId?: string;
@@ -148,8 +94,6 @@ export function Widget({
   const [view, setView] = useState<WidgetView>("launcher");
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [userInfo, setUserInfo] = useState<UserIdentification | undefined>(initialUser);
-  const [originError, setOriginError] = useState<string | null>(null);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [debugWorkspaceId, setDebugWorkspaceId] = useState(_workspaceId || "");
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(_workspaceId);
@@ -166,8 +110,6 @@ export function Widget({
   const [sessionShownSurveyIds, setSessionShownSurveyIds] = useState<Set<string>>(new Set());
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [surveyEligibilityUnavailable, setSurveyEligibilityUnavailable] = useState(false);
-  const [activeBlockingExperience, setActiveBlockingExperience] =
-    useState<BlockingExperience | null>(null);
   const [tourBlockingActive, setTourBlockingActive] = useState(false);
   const [outboundBlockingState, setOutboundBlockingState] = useState<{
     hasPendingPost: boolean;
@@ -177,11 +119,6 @@ export function Widget({
     hasActivePost: false,
   });
   const locationFetchedRef = useRef(false);
-  const widgetCuePreferencesRef = useRef({
-    browserNotifications: true,
-    sound: false,
-  });
-  const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
   const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
   const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
   const largeArticleCollapseTimeoutRef = useRef<number | null>(null);
@@ -197,15 +134,19 @@ export function Widget({
     currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
   });
 
-  // Check if workspace ID looks valid (basic format check)
-  const isValidIdFormat = !!(activeWorkspaceId && /^[a-z0-9]{32}$/.test(activeWorkspaceId));
+  const {
+    isValidIdFormat,
+    workspaceValidation,
+    workspaceError,
+    originError,
+  } = useWidgetShellValidation(activeWorkspaceId);
 
-  // ── Extracted hooks ────────────────────────────────────────────────
-  // Validate workspace exists (only if ID format is valid)
-  const workspaceValidation = useQuery(
-    api.workspaces.get,
-    isValidIdFormat ? { id: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  // Shell ownership boundaries:
+  // - `useWidgetShellValidation` handles workspace + origin gating.
+  // - `useBlockingExperienceArbitration` handles blocker priority and release.
+  // - `useWidgetTabVisibility` owns tab visibility/fallback semantics.
+  // - `useWidgetUnreadCues` owns unread cue side effects and suppression rules.
+  // - `useWidgetTourBridge` owns host callback registration/update/cleanup.
 
   const { sessionId, visitorId, setVisitorId, visitorIdRef, sessionToken, sessionTokenRef } =
     useWidgetSession({
@@ -550,103 +491,21 @@ export function Widget({
     candidateSurvey && candidateSurvey.format === "large" && !displayedSurvey
   );
   const hasLargeSurveyBlockingActive = displayedSurvey?.format === "large";
-
-  useEffect(() => {
-    if (activeBlockingExperience !== null) {
-      return;
-    }
-
-    // Priority order for blockers:
-    // 1. tours (guided workflows), 2. outbound post, 3. large surveys.
-    if (hasTourBlockingCandidate) {
-      setActiveBlockingExperience("tour");
-      return;
-    }
-
-    if (hasOutboundPostBlockingCandidate) {
-      setActiveBlockingExperience("outbound_post");
-      return;
-    }
-
-    if (hasLargeSurveyBlockingCandidate) {
-      setActiveBlockingExperience("survey_large");
-    }
-  }, [
+  const {
     activeBlockingExperience,
+    setActiveBlockingExperience,
+    allowTourBlocking,
+    allowOutboundPostBlocking,
+    allowLargeSurveyBlocking,
+    hasAnyPendingBlockingCandidate,
+  } = useBlockingExperienceArbitration({
     hasTourBlockingCandidate,
     hasOutboundPostBlockingCandidate,
-    hasLargeSurveyBlockingCandidate,
-  ]);
-
-  useEffect(() => {
-    if (activeBlockingExperience === null) {
-      return;
-    }
-
-    if (activeBlockingExperience === "tour") {
-      if (tourBlockingActive || hasTourBlockingCandidate) {
-        return;
-      }
-      setActiveBlockingExperience(null);
-      return;
-    }
-
-    if (activeBlockingExperience === "outbound_post") {
-      if (hasOutboundPostBlockingActive || hasOutboundPostBlockingCandidate) {
-        return;
-      }
-      setActiveBlockingExperience(null);
-      return;
-    }
-
-    if (hasLargeSurveyBlockingActive || hasLargeSurveyBlockingCandidate) {
-      return;
-    }
-    setActiveBlockingExperience(null);
-  }, [
-    activeBlockingExperience,
-    tourBlockingActive,
-    hasTourBlockingCandidate,
     hasOutboundPostBlockingActive,
-    hasOutboundPostBlockingCandidate,
-    hasLargeSurveyBlockingActive,
     hasLargeSurveyBlockingCandidate,
-  ]);
-
-  const allowTourBlocking = activeBlockingExperience === "tour";
-  const allowOutboundPostBlocking = activeBlockingExperience === "outbound_post";
-  const allowLargeSurveyBlocking = activeBlockingExperience === "survey_large";
-  const hasAnyPendingBlockingCandidate =
-    hasTourBlockingCandidate || hasOutboundPostBlockingCandidate || hasLargeSurveyBlockingCandidate;
-
-  // Validate origin when workspaceId is provided (only if ID format is valid)
-  const originValidation = useQuery(
-    api.workspaces.validateOrigin,
-    isValidIdFormat
-      ? { workspaceId: activeWorkspaceId as Id<"workspaces">, origin: window.location.origin }
-      : "skip"
-  );
-
-  useEffect(() => {
-    if (!activeWorkspaceId) {
-      setWorkspaceError("workspaceId is required");
-      return;
-    }
-    if (!isValidIdFormat) {
-      setWorkspaceError("Invalid workspace ID format");
-      return;
-    }
-    if (workspaceValidation === null) {
-      setWorkspaceError("Workspace not found");
-      return;
-    }
-    setWorkspaceError(null); // Clear error if workspace is valid
-    if (originValidation && !originValidation.valid) {
-      setOriginError(originValidation.reason);
-    } else {
-      setOriginError(null);
-    }
-  }, [activeWorkspaceId, isValidIdFormat, workspaceValidation, originValidation]);
+    hasLargeSurveyBlockingActive,
+    tourBlockingActive,
+  });
 
   useEffect(() => {
     if (!(isValidIdFormat && visitorId && sessionToken && activeWorkspaceId)) {
@@ -668,116 +527,25 @@ export function Widget({
     return () => clearTimeout(timeout);
   }, [isValidIdFormat, visitorId, sessionToken, activeWorkspaceId, activeSurveys]);
 
-  const playWidgetCueSound = () => {
-    const AudioContextCtor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) {
-      return;
-    }
-
-    const context = new AudioContextCtor();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(740, context.currentTime);
-    gainNode.gain.setValueAtTime(0.045, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.16);
-    oscillator.onended = () => {
-      void context.close();
-    };
-  };
-
-  useEffect(() => {
-    const refreshCuePreferences = () => {
-      widgetCuePreferencesRef.current = loadWidgetCuePreferences(window.localStorage);
-    };
-    refreshCuePreferences();
-    window.addEventListener("storage", refreshCuePreferences);
-    return () => {
-      window.removeEventListener("storage", refreshCuePreferences);
-    };
+  const openConversation = useCallback((id: Id<"conversations">) => {
+    setConversationId(id);
+    setView("conversation");
   }, []);
 
-  useEffect(() => {
-    if (!visitorConversations) {
-      return;
-    }
+  const handleOpenConversationFromCue = useCallback(
+    (id: Id<"conversations">) => {
+      setActiveTab("messages");
+      openConversation(id);
+    },
+    [openConversation]
+  );
 
-    const previousSnapshot = unreadSnapshotRef.current;
-    const currentSnapshot = buildWidgetUnreadSnapshot(
-      visitorConversations.map((conversation) => ({
-        _id: conversation._id,
-        unreadByVisitor: conversation.unreadByVisitor,
-      }))
-    );
-    unreadSnapshotRef.current = currentSnapshot;
-
-    if (!previousSnapshot) {
-      return;
-    }
-
-    const increasedConversationIds = getWidgetUnreadIncreases({
-      previous: previousSnapshot,
-      conversations: visitorConversations.map((conversation) => ({
-        _id: conversation._id,
-        unreadByVisitor: conversation.unreadByVisitor,
-      })),
-    });
-    if (increasedConversationIds.length === 0) {
-      return;
-    }
-
-    const cueView =
-      view === "conversation" || view === "launcher" ? view : ("conversation-list" as const);
-
-    for (const increasedConversationId of increasedConversationIds) {
-      const conversation = visitorConversations.find(
-        (entry) => entry._id === increasedConversationId
-      );
-      if (!conversation) {
-        continue;
-      }
-
-      const suppressCue = shouldSuppressWidgetCue({
-        conversationId: increasedConversationId,
-        activeConversationId: conversationId,
-        widgetView: cueView,
-        isDocumentVisible: document.visibilityState === "visible",
-        hasWindowFocus: document.hasFocus(),
-      });
-      if (suppressCue) {
-        continue;
-      }
-
-      const preferences = widgetCuePreferencesRef.current;
-      if (preferences.sound) {
-        playWidgetCueSound();
-      }
-
-      if (
-        preferences.browserNotifications &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        const notification = new Notification("New message from support", {
-          body: conversation.lastMessage?.content ?? "Tap to open the conversation.",
-          tag: `opencom-widget-${conversation._id}`,
-        });
-        notification.onclick = () => {
-          window.focus();
-          setActiveTab("messages");
-          setConversationId(conversation._id);
-          setView("conversation");
-        };
-      }
-    }
-  }, [conversationId, view, visitorConversations]);
+  const { resetUnreadSnapshot } = useWidgetUnreadCues({
+    conversationId,
+    view,
+    visitorConversations,
+    onOpenConversation: handleOpenConversationFromCue,
+  });
 
   useEffect(() => {
     if (displayedSurvey || !candidateSurvey) {
@@ -821,13 +589,13 @@ export function Widget({
     clearLargeArticleCollapseTimeout();
     setIsArticleLargeMode(false);
     setIsCollapsingLargeArticle(false);
-  }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout]);
+  }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout, setActiveBlockingExperience]);
 
   useEffect(() => {
-    unreadSnapshotRef.current = null;
+    resetUnreadSnapshot();
     latestDraftConversationIdRef.current = null;
     createConversationRequestRef.current = null;
-  }, [sessionId, visitorId, activeWorkspaceId]);
+  }, [sessionId, visitorId, activeWorkspaceId, resetUnreadSnapshot]);
 
   // Handle debug workspace ID update
   const handleDebugWorkspaceUpdate = () => {
@@ -836,11 +604,6 @@ export function Widget({
     setConversationId(null);
     setVisitorId(null);
   };
-
-  const openConversation = useCallback((id: Id<"conversations">) => {
-    setConversationId(id);
-    setView("conversation");
-  }, []);
 
   const handleNewConversation = async () => {
     const existingDraftConversationId =
@@ -947,10 +710,10 @@ export function Widget({
     }));
   }, [allTours]);
 
-  useEffect(() => {
-    setStartTourCallback(handleStartTour);
-    setGetAvailableToursCallback(handleGetAvailableTours);
-  }, [handleStartTour, handleGetAvailableTours]);
+  useWidgetTourBridge({
+    onStartTour: handleStartTour,
+    onGetAvailableTours: handleGetAvailableTours,
+  });
 
   const handleTourComplete = useCallback(() => {
     setForcedTourId(null);
@@ -1025,34 +788,11 @@ export function Widget({
     isIdentifiedVisitor
   );
 
-  const visibleTabs = useMemo(() => {
-    const configuredTabs = normalizeTabConfig(homeConfig?.tabs as TabConfig[] | undefined);
-    return configuredTabs.filter((tab) => tab.enabled && (tab.id !== "home" || homeConfig?.enabled));
-  }, [homeConfig]);
-  const fallbackTab = visibleTabs[0]?.id ?? "messages";
-  const isTabVisible = useCallback(
-    (tab: MainTab) => visibleTabs.some((configuredTab) => configuredTab.id === tab),
-    [visibleTabs]
-  );
-
-  // Determine initial tab based on home config
-  useEffect(() => {
-    if (!homeConfig || homeConfig.enabled) {
-      return;
-    }
-    if (homeConfig.defaultSpace === "help" && isTabVisible("help")) {
-      setActiveTab("help");
-      return;
-    }
-    setActiveTab("messages");
-  }, [homeConfig, isTabVisible]);
-
-  // Keep active tab valid whenever tab configuration or audience changes.
-  useEffect(() => {
-    if (!isTabVisible(activeTab)) {
-      setActiveTab(fallbackTab);
-    }
-  }, [activeTab, fallbackTab, isTabVisible]);
+  const { fallbackTab, isTabVisible } = useWidgetTabVisibility({
+    activeTab,
+    setActiveTab,
+    homeConfig: homeConfig as { enabled?: boolean; defaultSpace?: "home" | "messages" | "help"; tabs?: TabConfig[] },
+  });
 
   // Debug panel for dev mode
   const debugPanel = (
@@ -1099,28 +839,6 @@ export function Widget({
       </div>
     </div>
   );
-
-  // If workspace validation failed, show error with debug option
-  if (workspaceError) {
-    console.error("[Opencom Widget] Workspace validation failed:", workspaceError);
-    return (
-      <div className="opencom-widget">
-        {showDebug && debugPanel}
-        <div className="opencom-error">
-          <p>Widget Error: {workspaceError}</p>
-          <button onClick={() => setShowDebug(!showDebug)} className="opencom-debug-toggle">
-            {showDebug ? "Hide Debug" : "Debug"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // If origin validation failed, don't render the widget
-  if (originError) {
-    console.error("[Opencom Widget] Origin validation failed:", originError);
-    return null;
-  }
 
   const handleOpenWidget = () => {
     // Always open to conversation list first
@@ -1512,6 +1230,26 @@ export function Widget({
       </div>
     );
   };
+
+  if (workspaceError) {
+    console.error("[Opencom Widget] Workspace validation failed:", workspaceError);
+    return (
+      <div className="opencom-widget">
+        {showDebug && debugPanel}
+        <div className="opencom-error">
+          <p>Widget Error: {workspaceError}</p>
+          <button onClick={() => setShowDebug(!showDebug)} className="opencom-debug-toggle">
+            {showDebug ? "Hide Debug" : "Debug"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (originError) {
+    console.error("[Opencom Widget] Origin validation failed:", originError);
+    return null;
+  }
 
   // ── Return ─────────────────────────────────────────────────────────
   return (

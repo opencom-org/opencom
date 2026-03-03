@@ -1,11 +1,16 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
 import { Widget } from "../Widget";
+import { setGetAvailableToursCallback, setStartTourCallback } from "../main";
 
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
+}));
+
+vi.mock("@opencom/sdk-core", () => ({
+  selectSurveyForDelivery: vi.fn(() => null),
 }));
 
 vi.mock("@opencom/convex", () => ({
@@ -70,65 +75,48 @@ vi.mock("../main", () => ({
 }));
 
 vi.mock("../components/Home", () => ({
-  Home: () => <div data-testid="home-component" />,
+  Home: () => null,
   useHomeConfig: vi.fn(() => ({ enabled: true })),
 }));
 
 vi.mock("../components/ConversationList", () => ({
-  ConversationList: () => <div data-testid="conversation-list" />,
+  ConversationList: () => null,
 }));
 
 vi.mock("../components/ConversationView", () => ({
-  ConversationView: () => <div data-testid="conversation-view" />,
+  ConversationView: () => null,
 }));
 
 vi.mock("../components/HelpCenter", () => ({
-  HelpCenter: () => <div data-testid="help-center" />,
+  HelpCenter: () => null,
 }));
 
 vi.mock("../components/ArticleDetail", () => ({
-  ArticleDetail: () => <div data-testid="article-detail" />,
+  ArticleDetail: () => null,
 }));
 
 vi.mock("../components/TourPicker", () => ({
-  TourPicker: ({ onSelectTour }: { onSelectTour: (tourId: string) => void }) => (
-    <button type="button" onClick={() => onSelectTour("tour_1")}>
-      Start demo tour
-    </button>
-  ),
+  TourPicker: () => null,
 }));
 
 vi.mock("../components/TasksList", () => ({
-  TasksList: () => <div data-testid="tasks-list" />,
+  TasksList: () => null,
 }));
 
 vi.mock("../components/TicketsList", () => ({
-  TicketsList: () => <div data-testid="tickets-list" />,
+  TicketsList: () => null,
 }));
 
 vi.mock("../components/TicketDetail", () => ({
-  TicketDetail: () => <div data-testid="ticket-detail" />,
+  TicketDetail: () => null,
 }));
 
 vi.mock("../components/TicketCreate", () => ({
-  TicketCreate: () => <div data-testid="ticket-create" />,
+  TicketCreate: () => null,
 }));
 
 vi.mock("../TourOverlay", () => ({
-  TourOverlay: ({
-    forcedTourId,
-    onBlockingActiveChange,
-  }: {
-    forcedTourId?: string | null;
-    onBlockingActiveChange?: (isActive: boolean) => void;
-  }) => (
-    <div>
-      <div data-testid="tour-overlay-mock">{forcedTourId ?? ""}</div>
-      <button type="button" data-testid="tour-overlay-activate" onClick={() => onBlockingActiveChange?.(true)}>
-        Activate tour
-      </button>
-    </div>
-  ),
+  TourOverlay: () => null,
 }));
 
 vi.mock("../OutboundOverlay", () => ({
@@ -183,12 +171,19 @@ vi.mock("../utils/dom", () => ({
   checkElementsAvailable: vi.fn(() => true),
 }));
 
-describe("Widget tour launch behavior", () => {
-  let availableToursResult: unknown[];
+describe("Widget tour callback bridge lifecycle", () => {
+  let allToursResult: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    availableToursResult = [];
+    allToursResult = [
+      {
+        tour: { _id: "tour_1", name: "Demo Tour", description: "Demo" },
+        steps: [{ _id: "step_1" }],
+        tourStatus: "new",
+        elementSelectors: [],
+      },
+    ];
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockReturnValue(vi.fn().mockResolvedValue(undefined));
@@ -199,98 +194,77 @@ describe("Widget tour launch behavior", () => {
         return undefined;
       }
 
-      if (queryRef === "workspaces.get") {
-        return { _id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
-      }
-
-      if (queryRef === "workspaces.validateOrigin") {
-        return { valid: true };
-      }
-
-      if (queryRef === "tourProgress.getAvailableTours") {
-        return availableToursResult;
-      }
-
-      if (queryRef === "collections.listHierarchy") {
-        return [];
-      }
-
-      if (queryRef === "tours.listAll") {
-        return [
-          {
-            tour: {
-              _id: "tour_1",
-              name: "Demo Tour",
-              description: "Demo",
-            },
-            steps: [{ _id: "step_1" }],
-            tourStatus: "new",
-            elementSelectors: [],
-          },
-        ];
-      }
-
-      if (queryRef === "checklists.getEligible") {
-        return [];
-      }
-
-      if (queryRef === "surveys.getActiveSurveys") {
-        return [];
-      }
-
-      if (queryRef === "tooltips.getAvailableTooltips") {
-        return [];
+      if (queryRef === "workspaces.get") return { _id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
+      if (queryRef === "workspaces.validateOrigin") return { valid: true };
+      if (queryRef === "tours.listAll") return allToursResult;
+      if (queryRef === "tourProgress.getAvailableTours") return [];
+      if (queryRef === "conversations.getTotalUnreadForVisitor") return 0;
+      if (queryRef === "conversations.listByVisitor") return [];
+      if (queryRef === "articles.searchForVisitor") return [];
+      if (queryRef === "articles.listForVisitor") return [];
+      if (queryRef === "collections.listHierarchy") return [];
+      if (queryRef === "checklists.getEligible") return [];
+      if (queryRef === "surveys.getActiveSurveys") return [];
+      if (queryRef === "tooltips.getAvailableTooltips") return [];
+      if (queryRef === "officeHours.isCurrentlyOpen") return { isOpen: true };
+      if (queryRef === "officeHours.getExpectedReplyTime") return null;
+      if (queryRef === "automationSettings.getOrCreate") {
+        return {
+          suggestArticlesEnabled: false,
+          collectEmailEnabled: false,
+          showReplyTimeEnabled: false,
+          askForRatingEnabled: false,
+        };
       }
 
       return undefined;
     });
   });
 
-  it("closes the widget before starting a tour from the tours tab", async () => {
-    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+  it("registers, updates, and cleans up host callbacks", async () => {
+    const mockedSetStartTourCallback = setStartTourCallback as unknown as ReturnType<typeof vi.fn>;
+    const mockedSetGetAvailableToursCallback =
+      setGetAvailableToursCallback as unknown as ReturnType<typeof vi.fn>;
 
-    const launcher = screen.getByTestId("widget-launcher");
-    fireEvent.click(launcher);
-
-    await waitFor(() => {
-      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTitle("Product Tours"));
-    fireEvent.click(screen.getByRole("button", { name: "Start demo tour" }));
+    const { rerender, unmount } = render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("widget-launcher")).toBeVisible();
-      expect(screen.getByTestId("tour-overlay-mock")).toHaveTextContent("tour_1");
+      expect(mockedSetStartTourCallback).toHaveBeenCalledWith(expect.any(Function));
+      expect(mockedSetGetAvailableToursCallback).toHaveBeenCalledWith(expect.any(Function));
     });
-  });
 
-  it("closes the widget when a tour becomes active after opening", async () => {
-    availableToursResult = [
+    const initialGetToursCallback = mockedSetGetAvailableToursCallback.mock.calls.find(
+      ([arg]) => typeof arg === "function"
+    )?.[0] as (() => unknown[]) | undefined;
+    expect(initialGetToursCallback?.()[0]).toMatchObject({
+      id: "tour_1",
+      name: "Demo Tour",
+    });
+
+    allToursResult = [
       {
-        tour: {
-          _id: "tour_auto_1",
-          name: "Automatic Tour",
-          description: "Auto",
-        },
-        steps: [{ _id: "step_auto_1" }],
-        progress: { currentStep: 0, status: "new" },
+        tour: { _id: "tour_2", name: "Onboarding Tour", description: "Start here" },
+        steps: [{ _id: "step_2" }],
+        tourStatus: "in_progress",
+        elementSelectors: [],
       },
     ];
-
-    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
-
-    fireEvent.click(screen.getByTestId("widget-launcher"));
+    rerender(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
 
     await waitFor(() => {
-      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+      const latestRegistration = [...mockedSetGetAvailableToursCallback.mock.calls]
+        .reverse()
+        .find(([arg]) => typeof arg === "function");
+      const latestCallback = latestRegistration?.[0] as (() => unknown[]) | undefined;
+      expect(latestCallback?.()[0]).toMatchObject({
+        id: "tour_2",
+        name: "Onboarding Tour",
+      });
     });
 
-    fireEvent.click(screen.getByTestId("tour-overlay-activate"));
+    unmount();
 
-    await waitFor(() => {
-      expect(screen.getByTestId("widget-launcher")).toBeVisible();
-      expect(screen.queryByTestId("conversation-list")).not.toBeInTheDocument();
-    });
+    expect(mockedSetStartTourCallback).toHaveBeenLastCalledWith(null);
+    expect(mockedSetGetAvailableToursCallback).toHaveBeenLastCalledWith(null);
   });
 });

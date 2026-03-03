@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
 import { Widget } from "../Widget";
@@ -6,6 +7,10 @@ import { Widget } from "../Widget";
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
+}));
+
+vi.mock("@opencom/sdk-core", () => ({
+  selectSurveyForDelivery: vi.fn((surveys: unknown[]) => surveys[0] ?? null),
 }));
 
 vi.mock("@opencom/convex", () => ({
@@ -91,11 +96,7 @@ vi.mock("../components/ArticleDetail", () => ({
 }));
 
 vi.mock("../components/TourPicker", () => ({
-  TourPicker: ({ onSelectTour }: { onSelectTour: (tourId: string) => void }) => (
-    <button type="button" onClick={() => onSelectTour("tour_1")}>
-      Start demo tour
-    </button>
-  ),
+  TourPicker: () => <div data-testid="tour-picker" />,
 }));
 
 vi.mock("../components/TasksList", () => ({
@@ -114,25 +115,28 @@ vi.mock("../components/TicketCreate", () => ({
   TicketCreate: () => <div data-testid="ticket-create" />,
 }));
 
+let outboundState = { hasPendingPost: true, hasActivePost: false };
+
 vi.mock("../TourOverlay", () => ({
-  TourOverlay: ({
-    forcedTourId,
-    onBlockingActiveChange,
-  }: {
-    forcedTourId?: string | null;
-    onBlockingActiveChange?: (isActive: boolean) => void;
-  }) => (
-    <div>
-      <div data-testid="tour-overlay-mock">{forcedTourId ?? ""}</div>
-      <button type="button" data-testid="tour-overlay-activate" onClick={() => onBlockingActiveChange?.(true)}>
-        Activate tour
-      </button>
-    </div>
+  TourOverlay: ({ allowBlockingTour }: { allowBlockingTour: boolean }) => (
+    <div data-testid="tour-overlay-state" data-allow={allowBlockingTour ? "yes" : "no"} />
   ),
 }));
 
 vi.mock("../OutboundOverlay", () => ({
-  OutboundOverlay: () => null,
+  OutboundOverlay: ({
+    allowBlockingPost,
+    onBlockingStateChange,
+  }: {
+    allowBlockingPost: boolean;
+    onBlockingStateChange?: (state: { hasPendingPost: boolean; hasActivePost: boolean }) => void;
+  }) => {
+    useEffect(() => {
+      onBlockingStateChange?.(outboundState);
+    }, [onBlockingStateChange]);
+
+    return <div data-testid="outbound-overlay-state" data-allow={allowBlockingPost ? "yes" : "no"} />;
+  },
 }));
 
 vi.mock("../TooltipOverlay", () => ({
@@ -140,7 +144,7 @@ vi.mock("../TooltipOverlay", () => ({
 }));
 
 vi.mock("../SurveyOverlay", () => ({
-  SurveyOverlay: () => null,
+  SurveyOverlay: () => <div data-testid="survey-overlay" />,
 }));
 
 vi.mock("../hooks/useWidgetSession", () => ({
@@ -183,12 +187,30 @@ vi.mock("../utils/dom", () => ({
   checkElementsAvailable: vi.fn(() => true),
 }));
 
-describe("Widget tour launch behavior", () => {
-  let availableToursResult: unknown[];
+describe("Widget shell orchestration", () => {
+  let workspaceValidationResult: unknown;
+  let originValidationResult: { valid: boolean; reason?: string };
+  let availableToursResult: Array<Record<string, unknown>>;
+  let activeSurveysResult: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    availableToursResult = [];
+    outboundState = { hasPendingPost: true, hasActivePost: false };
+    workspaceValidationResult = { _id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
+    originValidationResult = { valid: true };
+    availableToursResult = [
+      {
+        tour: { _id: "tour_1" },
+        steps: [{ _id: "step_1" }],
+        progress: { currentStep: 0, status: "new" },
+      },
+    ];
+    activeSurveysResult = [
+      {
+        _id: "survey_large_1",
+        format: "large",
+      },
+    ];
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockReturnValue(vi.fn().mockResolvedValue(undefined));
@@ -199,30 +221,14 @@ describe("Widget tour launch behavior", () => {
         return undefined;
       }
 
-      if (queryRef === "workspaces.get") {
-        return { _id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
-      }
-
-      if (queryRef === "workspaces.validateOrigin") {
-        return { valid: true };
-      }
-
-      if (queryRef === "tourProgress.getAvailableTours") {
-        return availableToursResult;
-      }
-
-      if (queryRef === "collections.listHierarchy") {
-        return [];
-      }
-
+      if (queryRef === "workspaces.get") return workspaceValidationResult;
+      if (queryRef === "workspaces.validateOrigin") return originValidationResult;
+      if (queryRef === "tourProgress.getAvailableTours") return availableToursResult;
+      if (queryRef === "surveys.getActiveSurveys") return activeSurveysResult;
       if (queryRef === "tours.listAll") {
         return [
           {
-            tour: {
-              _id: "tour_1",
-              name: "Demo Tour",
-              description: "Demo",
-            },
+            tour: { _id: "tour_1", name: "Demo Tour", description: "Demo" },
             steps: [{ _id: "step_1" }],
             tourStatus: "new",
             elementSelectors: [],
@@ -230,67 +236,44 @@ describe("Widget tour launch behavior", () => {
         ];
       }
 
-      if (queryRef === "checklists.getEligible") {
-        return [];
-      }
-
-      if (queryRef === "surveys.getActiveSurveys") {
-        return [];
-      }
-
-      if (queryRef === "tooltips.getAvailableTooltips") {
-        return [];
+      if (queryRef === "conversations.getTotalUnreadForVisitor") return 0;
+      if (queryRef === "conversations.listByVisitor") return [];
+      if (queryRef === "articles.searchForVisitor") return [];
+      if (queryRef === "articles.listForVisitor") return [];
+      if (queryRef === "collections.listHierarchy") return [];
+      if (queryRef === "checklists.getEligible") return [];
+      if (queryRef === "tooltips.getAvailableTooltips") return [];
+      if (queryRef === "officeHours.isCurrentlyOpen") return { isOpen: true };
+      if (queryRef === "officeHours.getExpectedReplyTime") return null;
+      if (queryRef === "automationSettings.getOrCreate") {
+        return {
+          suggestArticlesEnabled: false,
+          collectEmailEnabled: false,
+          showReplyTimeEnabled: false,
+          askForRatingEnabled: false,
+        };
       }
 
       return undefined;
     });
   });
 
-  it("closes the widget before starting a tour from the tours tab", async () => {
+  it("renders widget error surface when workspace validation fails", async () => {
+    workspaceValidationResult = null;
     render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
 
-    const launcher = screen.getByTestId("widget-launcher");
-    fireEvent.click(launcher);
-
     await waitFor(() => {
-      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+      expect(screen.getByText("Widget Error: Workspace not found")).toBeInTheDocument();
     });
-
-    fireEvent.click(screen.getByTitle("Product Tours"));
-    fireEvent.click(screen.getByRole("button", { name: "Start demo tour" }));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("widget-launcher")).toBeVisible();
-      expect(screen.getByTestId("tour-overlay-mock")).toHaveTextContent("tour_1");
-    });
+    expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
   });
 
-  it("closes the widget when a tour becomes active after opening", async () => {
-    availableToursResult = [
-      {
-        tour: {
-          _id: "tour_auto_1",
-          name: "Automatic Tour",
-          description: "Auto",
-        },
-        steps: [{ _id: "step_auto_1" }],
-        progress: { currentStep: 0, status: "new" },
-      },
-    ];
-
-    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
-
-    fireEvent.click(screen.getByTestId("widget-launcher"));
+  it("short-circuits rendering when origin validation fails", async () => {
+    originValidationResult = { valid: false, reason: "Invalid origin" };
+    const { container } = render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
 
     await waitFor(() => {
-      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId("tour-overlay-activate"));
-
-    await waitFor(() => {
-      expect(screen.getByTestId("widget-launcher")).toBeVisible();
-      expect(screen.queryByTestId("conversation-list")).not.toBeInTheDocument();
+      expect(container.firstChild).toBeNull();
     });
   });
 });

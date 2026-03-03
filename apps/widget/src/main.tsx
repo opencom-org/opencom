@@ -397,11 +397,11 @@ export function setTrackEventCallback(
   currentTrackEventCallback = callback;
 }
 
-export function setStartTourCallback(callback: (tourId: string) => void) {
+export function setStartTourCallback(callback: ((tourId: string) => void) | null) {
   currentStartTourCallback = callback;
 }
 
-export function setGetAvailableToursCallback(callback: () => TourInfo[]) {
+export function setGetAvailableToursCallback(callback: (() => TourInfo[]) | null) {
   currentGetAvailableToursCallback = callback;
 }
 
