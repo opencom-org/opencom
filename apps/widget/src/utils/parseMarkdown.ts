@@ -32,6 +32,7 @@ const ALLOWED_TAGS = [
 ];
 
 const ALLOWED_ATTR = ["href", "target", "rel", "src", "alt", "title", "class"];
+const FRONTMATTER_BLOCK_REGEX = /^\uFEFF?---\s*\r?\n[\s\S]*?\r?\n---(?:\s*\r?\n)?/;
 
 function hasBlockedProtocol(rawUrl: string): boolean {
   const normalized = rawUrl.trim().toLowerCase();
@@ -78,8 +79,40 @@ function enforceSafeLinksAndMedia(html: string): string {
   return container.innerHTML;
 }
 
+export function stripMarkdownFrontmatter(markdownInput: string): string {
+  if (!markdownInput) {
+    return "";
+  }
+
+  return markdownInput.replace(FRONTMATTER_BLOCK_REGEX, "");
+}
+
+function htmlToPlainText(html: string): string {
+  if (typeof document === "undefined") {
+    return html.replace(/<[^>]*>/g, " ");
+  }
+
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  return container.textContent ?? "";
+}
+
+export function toPlainTextExcerpt(markdownInput: string, maxLength = 100): string {
+  const safeMaxLength = Math.max(1, maxLength);
+  const contentWithoutFrontmatter = stripMarkdownFrontmatter(markdownInput);
+  const rendered = markdown.render(contentWithoutFrontmatter);
+  const normalizedText = htmlToPlainText(rendered).replace(/\s+/g, " ").trim();
+
+  if (normalizedText.length <= safeMaxLength) {
+    return normalizedText;
+  }
+
+  return `${normalizedText.slice(0, safeMaxLength).trimEnd()}...`;
+}
+
 export function parseMarkdown(markdownInput: string): string {
-  const rendered = markdown.render(markdownInput);
+  const contentWithoutFrontmatter = stripMarkdownFrontmatter(markdownInput);
+  const rendered = markdown.render(contentWithoutFrontmatter);
   const sanitized = DOMPurify.sanitize(rendered, {
     ALLOWED_TAGS: ALLOWED_TAGS,
     ALLOWED_ATTR: ALLOWED_ATTR,

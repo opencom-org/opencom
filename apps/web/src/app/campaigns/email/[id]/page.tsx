@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import { ArrowLeft, Save, Send, Eye, BarChart3 } from "lucide-react";
@@ -63,7 +64,7 @@ function EmailCampaignEditor() {
   };
 
   const handleSend = async () => {
-    if (!confirm("Are you sure you want to send this campaign?")) return;
+    if (!(await appConfirm("Are you sure you want to send this campaign?"))) return;
     await sendCampaign({ id: campaignId });
     router.push("/campaigns");
   };

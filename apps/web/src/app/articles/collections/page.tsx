@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
 import { ArrowLeft, Plus, Pencil, Trash2, FolderOpen } from "lucide-react";
@@ -82,7 +83,7 @@ export default function CollectionsPage() {
   };
 
   const handleDelete = async (id: Id<"collections">) => {
-    if (confirm("Are you sure you want to delete this collection?")) {
+    if (await appConfirm("Are you sure you want to delete this collection?")) {
       try {
         await deleteCollection({ id });
       } catch (error) {

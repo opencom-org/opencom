@@ -410,13 +410,17 @@ export default defineSchema({
     description: v.optional(v.string()),
     icon: v.optional(v.string()),
     parentId: v.optional(v.id("collections")),
+    importSourceId: v.optional(v.id("helpCenterImportSources")),
+    importPath: v.optional(v.string()),
     order: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_slug", ["workspaceId", "slug"])
-    .index("by_parent", ["workspaceId", "parentId"]),
+    .index("by_parent", ["workspaceId", "parentId"])
+    .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
+    .index("by_import_source_path", ["importSourceId", "importPath"]),
 
   // Help Center - Articles
   articles: defineTable({
@@ -433,12 +437,53 @@ export default defineSchema({
     publishedAt: v.optional(v.number()),
     authorId: v.optional(v.id("users")),
     audienceRules: v.optional(audienceRulesValidator),
+    importSourceId: v.optional(v.id("helpCenterImportSources")),
+    importPath: v.optional(v.string()),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_collection", ["collectionId"])
     .index("by_folder", ["folderId"])
     .index("by_slug", ["workspaceId", "slug"])
-    .index("by_status", ["workspaceId", "status"]),
+    .index("by_status", ["workspaceId", "status"])
+    .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
+    .index("by_import_source_path", ["importSourceId", "importPath"]),
+
+  // Help Center - Import Sources
+  helpCenterImportSources: defineTable({
+    workspaceId: v.id("workspaces"),
+    sourceKey: v.string(),
+    sourceName: v.string(),
+    rootCollectionId: v.optional(v.id("collections")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastImportedAt: v.optional(v.number()),
+    lastImportRunId: v.optional(v.string()),
+    lastImportedFileCount: v.optional(v.number()),
+    lastImportedCollectionCount: v.optional(v.number()),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_source_key", ["workspaceId", "sourceKey"])
+    .index("by_workspace_updated_at", ["workspaceId", "updatedAt"]),
+
+  // Help Center - Import Deletion History
+  helpCenterImportArchives: defineTable({
+    workspaceId: v.id("workspaces"),
+    sourceId: v.id("helpCenterImportSources"),
+    importRunId: v.string(),
+    entityType: v.union(v.literal("article"), v.literal("collection")),
+    importPath: v.string(),
+    parentPath: v.optional(v.string()),
+    name: v.string(),
+    content: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+    description: v.optional(v.string()),
+    icon: v.optional(v.string()),
+    deletedAt: v.number(),
+    restoredAt: v.optional(v.number()),
+  })
+    .index("by_workspace_deleted_at", ["workspaceId", "deletedAt"])
+    .index("by_workspace_source", ["workspaceId", "sourceId"])
+    .index("by_workspace_source_run", ["workspaceId", "sourceId", "importRunId"]),
 
   // Help Center - Article Feedback
   articleFeedback: defineTable({

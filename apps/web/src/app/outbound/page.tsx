@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -61,7 +62,7 @@ function OutboundContent() {
   };
 
   const handleDelete = async (id: Id<"outboundMessages">) => {
-    if (confirm("Are you sure you want to delete this message?")) {
+    if (await appConfirm("Are you sure you want to delete this message?")) {
       await deleteMessage({ id });
     }
   };

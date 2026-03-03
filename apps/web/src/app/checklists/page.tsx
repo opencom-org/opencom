@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -50,7 +51,7 @@ function ChecklistsContent() {
   };
 
   const handleDelete = async (id: Id<"checklists">) => {
-    if (confirm("Are you sure you want to delete this checklist?")) {
+    if (await appConfirm("Are you sure you want to delete this checklist?")) {
       await deleteChecklist({ id });
     }
   };

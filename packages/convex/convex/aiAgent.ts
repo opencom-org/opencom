@@ -604,7 +604,10 @@ export const handoffToHuman = mutation({
     sessionToken: v.optional(v.string()),
     reason: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{ messageId: Id<"messages">; handoffMessage: string }> => {
     const conversation = await requireConversationAccess(ctx, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -617,12 +620,11 @@ export const handoffToHuman = mutation({
     const handoffMessage =
       settings?.handoffMessage ?? "Let me connect you with a human agent who can help you better.";
 
-    // Create a system message for the handoff
-    const messageId = await ctx.db.insert("messages", {
+    const messageId: Id<"messages"> = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
-      senderId: "system",
-      senderType: "bot",
+      senderId: "ai-agent",
       content: handoffMessage,
+      senderType: "bot",
       createdAt: Date.now(),
     });
 
@@ -632,7 +634,6 @@ export const handoffToHuman = mutation({
     await ctx.db.patch(args.conversationId, {
       status: "open",
       updatedAt: now,
-      lastMessageAt: now,
       aiWorkflowState: "handoff",
       aiHandoffReason: args.reason,
       aiLastResponseAt: now,

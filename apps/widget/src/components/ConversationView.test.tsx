@@ -14,6 +14,9 @@ vi.mock("@opencom/convex", () => ({
     messages: {
       list: "messages.list",
     },
+    conversations: {
+      get: "conversations.get",
+    },
     visitors: {
       getBySession: "visitors.getBySession",
       identify: "visitors.identify",
@@ -44,6 +47,7 @@ type MessageFixture = {
   _id: string;
   _creationTime: number;
   senderType: "visitor" | "agent" | "bot" | "user";
+  senderId: string;
   content: string;
   senderName?: string;
 };
@@ -59,6 +63,7 @@ type AiResponseFixture = {
 describe("ConversationView personas", () => {
   let messagesResult: MessageFixture[];
   let aiResponsesResult: AiResponseFixture[];
+  let conversationResult: { aiWorkflowState?: "none" | "ai_handled" | "handoff" } | null;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -66,6 +71,7 @@ describe("ConversationView personas", () => {
 
     messagesResult = [];
     aiResponsesResult = [];
+    conversationResult = { aiWorkflowState: "none" };
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockReturnValue(vi.fn().mockResolvedValue(undefined));
@@ -81,6 +87,10 @@ describe("ConversationView personas", () => {
 
       if (queryRef === "messages.list") {
         return messagesResult;
+      }
+
+      if (queryRef === "conversations.get") {
+        return conversationResult;
       }
 
       if (queryRef === "visitors.getBySession") {
@@ -136,6 +146,7 @@ describe("ConversationView personas", () => {
         _id: "m_human",
         _creationTime: 1700000000000,
         senderType: "agent",
+        senderId: "agent_1",
         senderName: "Alex",
         content: "Happy to help.",
       },
@@ -143,6 +154,7 @@ describe("ConversationView personas", () => {
         _id: "m_ai",
         _creationTime: 1700000005000,
         senderType: "bot",
+        senderId: "ai-agent",
         content: "Try restarting the app.",
       },
     ];
@@ -167,6 +179,7 @@ describe("ConversationView personas", () => {
         _id: "m_support",
         _creationTime: 1700000010000,
         senderType: "agent",
+        senderId: "agent_2",
         content: "We are looking into this.",
       },
     ];
@@ -184,6 +197,7 @@ describe("ConversationView personas", () => {
         _id: "m_markdown",
         _creationTime: 1700000015000,
         senderType: "bot",
+        senderId: "ai-agent",
         content:
           "First line\nSecond line\n\n- Install the app\n- Invite teammates\n\n[Docs](https://example.com/docs)",
       },
@@ -204,5 +218,63 @@ describe("ConversationView personas", () => {
     expect(messageContent?.querySelectorAll("li")).toHaveLength(2);
     expect(messageContent?.querySelector("a")).toHaveAttribute("href", "https://example.com/docs");
     expect(messageContent?.querySelector("a")).toHaveAttribute("target", "_blank");
+  });
+
+  it("shows AI badge and waiting divider for AI handoff without aiResponses", () => {
+    conversationResult = { aiWorkflowState: "handoff" };
+    messagesResult = [
+      {
+        _id: "m_user",
+        _creationTime: 1700000020000,
+        senderType: "visitor",
+        senderId: "visitor_1",
+        content: "Can you compare products?",
+      },
+      {
+        _id: "m_handoff",
+        _creationTime: 1700000024000,
+        senderType: "bot",
+        senderId: "ai-agent",
+        content: "Let me connect you with a human agent who can help you better.",
+      },
+    ];
+    aiResponsesResult = [];
+
+    renderSubject();
+
+    expect(document.querySelectorAll(".opencom-ai-badge").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("widget-waiting-human-divider")).toBeInTheDocument();
+  });
+
+  it("hides waiting divider after a human agent reply", () => {
+    conversationResult = { aiWorkflowState: "handoff" };
+    messagesResult = [
+      {
+        _id: "m_user",
+        _creationTime: 1700000030000,
+        senderType: "visitor",
+        senderId: "visitor_1",
+        content: "Need billing help.",
+      },
+      {
+        _id: "m_handoff",
+        _creationTime: 1700000033000,
+        senderType: "bot",
+        senderId: "ai-agent",
+        content: "Let me connect you with a human agent who can help you better.",
+      },
+      {
+        _id: "m_agent",
+        _creationTime: 1700000039000,
+        senderType: "agent",
+        senderId: "agent_5",
+        content: "Hi, I can help with billing.",
+      },
+    ];
+    aiResponsesResult = [];
+
+    renderSubject();
+
+    expect(screen.queryByTestId("widget-waiting-human-divider")).toBeNull();
   });
 });
