@@ -5,6 +5,7 @@ import { parseMarkdown } from "../utils/parseMarkdown";
 interface ArticleDetailProps {
   article: { title: string; content: string } | undefined;
   isLargeScreen: boolean;
+  isCollapsingLargeScreen: boolean;
   onBack: () => void;
   onClose: () => void;
   onStartConversation: () => void;
@@ -13,6 +14,7 @@ interface ArticleDetailProps {
 export function ArticleDetail({
   article,
   isLargeScreen,
+  isCollapsingLargeScreen,
   onBack,
   onClose,
   onStartConversation,
@@ -21,7 +23,7 @@ export function ArticleDetail({
 
   return (
     <div
-      className={`opencom-chat opencom-chat-article-detail ${isLargeScreen ? "opencom-chat-article-large" : ""}`}
+      className={`opencom-chat opencom-chat-article-detail ${isLargeScreen ? "opencom-chat-article-large" : ""} ${isCollapsingLargeScreen ? "opencom-chat-article-collapsing" : ""}`}
     >
       <div className="opencom-header">
         <button onClick={onBack} className="opencom-back">

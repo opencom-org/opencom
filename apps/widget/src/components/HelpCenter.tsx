@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Id } from "@opencom/convex/dataModel";
 import { Search, Book, ChevronLeft } from "../icons";
 import { toPlainTextExcerpt } from "../utils/parseMarkdown";
@@ -25,6 +25,8 @@ interface HelpCenterProps {
   publishedArticles: Article[] | undefined;
   collections: Collection[] | undefined;
   onSelectArticle: (id: Id<"articles">) => void;
+  selectedCollectionKey?: string | null;
+  onSelectedCollectionKeyChange?: (key: string | null) => void;
 }
 
 interface ArticleGroup {
@@ -68,8 +70,25 @@ export function HelpCenter({
   publishedArticles,
   collections,
   onSelectArticle,
+  selectedCollectionKey: selectedCollectionKeyProp,
+  onSelectedCollectionKeyChange,
 }: HelpCenterProps) {
-  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
+  const [uncontrolledSelectedCollectionKey, setUncontrolledSelectedCollectionKey] = useState<
+    string | null
+  >(null);
+  const isCollectionSelectionControlled = selectedCollectionKeyProp !== undefined;
+  const selectedCollectionKey = isCollectionSelectionControlled
+    ? selectedCollectionKeyProp
+    : uncontrolledSelectedCollectionKey;
+  const setSelectedCollectionKey = useCallback(
+    (key: string | null) => {
+      if (!isCollectionSelectionControlled) {
+        setUncontrolledSelectedCollectionKey(key);
+      }
+      onSelectedCollectionKeyChange?.(key);
+    },
+    [isCollectionSelectionControlled, onSelectedCollectionKeyChange]
+  );
 
   const collectionMap = useMemo(() => {
     return new Map((collections ?? []).map((collection) => [collection._id, collection] as const));

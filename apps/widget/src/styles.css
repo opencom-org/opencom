@@ -1480,8 +1480,17 @@
     height: min(88vh, 860px);
     max-height: calc(100vh - 48px);
     border-radius: 18px;
-    animation: opencom-chat-expand-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
     will-change: width, height, transform;
+  }
+
+  .opencom-widget-article-large
+    .opencom-chat-article-detail.opencom-chat-article-large:not(.opencom-chat-article-collapsing) {
+    animation: opencom-chat-expand-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .opencom-widget-article-large
+    .opencom-chat-article-detail.opencom-chat-article-collapsing.opencom-chat-article-large {
+    animation: opencom-chat-expand-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) reverse;
   }
 }
 

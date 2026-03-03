@@ -156,6 +156,8 @@ export function Widget({
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
+  const [selectedHelpCollectionKey, setSelectedHelpCollectionKey] = useState<string | null>(null);
+  const [isCollapsingLargeArticle, setIsCollapsingLargeArticle] = useState(false);
   const [, setPreviousView] = useState<WidgetView>("conversation-list");
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
@@ -181,6 +183,7 @@ export function Widget({
   const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
   const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
   const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
+  const largeArticleCollapseTimeoutRef = useRef<number | null>(null);
 
   // ── Tooltip trigger context ────────────────────────────────────────
   const [tooltipTriggerContext, setTooltipTriggerContext] = useState<{
@@ -328,6 +331,29 @@ export function Widget({
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
   const selectedArticleIsLargeScreen = selectedArticle?.widgetLargeScreen === true;
   const isLargeArticleView = view === "article-detail" && selectedArticleIsLargeScreen;
+  const clearLargeArticleCollapseTimeout = useCallback(() => {
+    if (largeArticleCollapseTimeoutRef.current !== null) {
+      window.clearTimeout(largeArticleCollapseTimeoutRef.current);
+      largeArticleCollapseTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearLargeArticleCollapseTimeout();
+    };
+  }, [clearLargeArticleCollapseTimeout]);
+
+  const openArticleDetail = useCallback(
+    (articleId: Id<"articles">) => {
+      clearLargeArticleCollapseTimeout();
+      setIsCollapsingLargeArticle(false);
+      setSelectedArticleId(articleId);
+      setPreviousView(view);
+      setView("article-detail");
+    },
+    [clearLargeArticleCollapseTimeout, view]
+  );
 
   const selectedConversation = useMemo(() => {
     if (!conversationId) {
@@ -789,7 +815,10 @@ export function Widget({
     setActiveBlockingExperience(null);
     setTourBlockingActive(false);
     setOutboundBlockingState({ hasPendingPost: false, hasActivePost: false });
-  }, [sessionId, visitorId, activeWorkspaceId]);
+    setSelectedHelpCollectionKey(null);
+    clearLargeArticleCollapseTimeout();
+    setIsCollapsingLargeArticle(false);
+  }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout]);
 
   useEffect(() => {
     unreadSnapshotRef.current = null;
@@ -1099,14 +1128,31 @@ export function Widget({
     if (view === "conversation" && conversationId) {
       syncConversationReadState(conversationId);
     }
+    clearLargeArticleCollapseTimeout();
+    setIsCollapsingLargeArticle(false);
     setView("launcher");
   };
 
   // ── Navigation handlers ───────────────────────────────────────────
-  const handleBackFromArticle = () => {
+  const navigateBackFromArticle = () => {
+    clearLargeArticleCollapseTimeout();
+    setIsCollapsingLargeArticle(false);
     setSelectedArticleId(null);
     setActiveTab("help");
     setView("conversation-list");
+  };
+
+  const handleBackFromArticle = () => {
+    if (selectedArticleIsLargeScreen && !isCollapsingLargeArticle) {
+      setIsCollapsingLargeArticle(true);
+      clearLargeArticleCollapseTimeout();
+      largeArticleCollapseTimeoutRef.current = window.setTimeout(() => {
+        largeArticleCollapseTimeoutRef.current = null;
+        navigateBackFromArticle();
+      }, 280);
+      return;
+    }
+    navigateBackFromArticle();
   };
 
   const handleStartConversationFromArticle = async () => {
@@ -1128,6 +1174,8 @@ export function Widget({
         setConversationId(newConv._id);
         setView("conversation");
         setSelectedArticleId(null);
+        clearLargeArticleCollapseTimeout();
+        setIsCollapsingLargeArticle(false);
       }
     } catch (error) {
       console.error("Failed to start conversation:", error);
@@ -1290,11 +1338,7 @@ export function Widget({
               conversations={visitorConversations}
               onStartConversation={handleNewConversation}
               onSelectConversation={handleSelectConversation}
-              onSelectArticle={(id) => {
-                setSelectedArticleId(id);
-                setPreviousView(view);
-                setView("article-detail");
-              }}
+              onSelectArticle={openArticleDetail}
               onSearch={(query) => {
                 setArticleSearchQuery(query);
                 setActiveTab("help");
@@ -1315,10 +1359,9 @@ export function Widget({
               articleSearchResults={articleSearchResults}
               publishedArticles={publishedArticles}
               collections={publishedCollections}
-              onSelectArticle={(id) => {
-                setSelectedArticleId(id);
-                setView("article-detail");
-              }}
+              selectedCollectionKey={selectedHelpCollectionKey}
+              onSelectedCollectionKeyChange={setSelectedHelpCollectionKey}
+              onSelectArticle={openArticleDetail}
             />
           )}
           {resolvedActiveTab === "tours" && (
@@ -1493,17 +1536,14 @@ export function Widget({
           commonIssueButtons={commonIssueButtons}
           onBack={handleBackToList}
           onClose={handleCloseWidget}
-          onSelectArticle={(id) => {
-            setSelectedArticleId(id);
-            setPreviousView(view);
-            setView("article-detail");
-          }}
+          onSelectArticle={openArticleDetail}
         />
       )}
       {view === "article-detail" && (
         <ArticleDetail
           article={selectedArticle ?? undefined}
           isLargeScreen={selectedArticleIsLargeScreen}
+          isCollapsingLargeScreen={isCollapsingLargeArticle}
           onBack={handleBackFromArticle}
           onClose={handleCloseWidget}
           onStartConversation={handleStartConversationFromArticle}
@@ -1577,10 +1617,7 @@ export function Widget({
             setActiveTab(isTabVisible(requestedTab) ? requestedTab : fallbackTab);
             setView("conversation-list");
           }}
-          onOpenArticle={(articleId) => {
-            setSelectedArticleId(articleId);
-            setView("article-detail");
-          }}
+          onOpenArticle={openArticleDetail}
         />
       )}
 
