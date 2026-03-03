@@ -277,6 +277,32 @@ OpencomWidget.destroy();
 - The token is sent with every API call and automatically refreshed when <25% lifetime remains.
 - Tokens default to 24-hour lifetime (configurable 1h-7d per workspace).
 
+### Messenger Tabs and Audience Targeting
+
+Admins can configure messenger tabs in **Settings > Messenger Home > Messenger Tabs**.
+For full policy details, see `docs/messenger-tabs-and-identification.md`.
+
+- Tabs: `home`, `messages`, `help`, `tours`, `tasks`, `tickets`
+- Per-tab controls: `enabled` and `visibleTo` (`all`, `visitors`, `users`)
+- Intercom-style invariant: `messages` is always forced on and visible to all
+- `home` only appears when Home is enabled
+- Default tab is resolved safely based on visible tabs; widget falls back to first visible tab, then `messages`
+
+### Who Counts as a "User" (Current Behavior)
+
+For tab/card audience filtering, the widget currently treats a visitor as identified when either field exists in the widget identity payload (`init.user` or `OpencomWidget.identify(...)`):
+
+- `user.userId`
+- `user.email`
+
+This means `OpencomWidget.identify({ email: "person@example.com" })` is enough for `visibleTo: "users"` rules to match, even without `userId`.
+
+### Identity Trust Level for Audience Rules
+
+- Audience classification (`users` vs `visitors`) is currently based on provided identity fields (`email` or `userId`)
+- Cryptographic verification is separate and requires `userId` + `userHash`
+- For stricter gating, use `userId` + `userHash` with required identity verification mode
+
 ### Real-Time Features
 
 The widget subscribes to Convex queries for real-time updates:
