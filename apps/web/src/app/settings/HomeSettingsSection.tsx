@@ -37,7 +37,47 @@ const CARD_TYPES = [
   { type: "announcements", label: "Announcements", icon: Bell, description: "News and updates" },
 ] as const;
 
+const TAB_TYPES = [
+  {
+    id: "home",
+    label: "Home",
+    description: "Landing space with customizable cards",
+    locked: false,
+  },
+  {
+    id: "messages",
+    label: "Messages",
+    description: "Conversation list and message composer",
+    locked: true,
+  },
+  {
+    id: "help",
+    label: "Help Center",
+    description: "Knowledge base browsing and search",
+    locked: false,
+  },
+  {
+    id: "tours",
+    label: "Product Tours",
+    description: "Interactive walkthrough launcher",
+    locked: false,
+  },
+  {
+    id: "tasks",
+    label: "Tasks",
+    description: "Checklist progress and guided tasks",
+    locked: false,
+  },
+  {
+    id: "tickets",
+    label: "Tickets",
+    description: "Support ticket list and creation",
+    locked: false,
+  },
+] as const;
+
 type CardType = (typeof CARD_TYPES)[number]["type"];
+type TabId = (typeof TAB_TYPES)[number]["id"];
 type VisibleTo = "all" | "visitors" | "users";
 type HomeCardConfigPrimitive = string | number | boolean | null;
 type HomeCardConfigObject = Record<string, HomeCardConfigPrimitive>;
@@ -54,6 +94,46 @@ interface HomeCard {
   visibleTo: VisibleTo;
 }
 
+interface HomeTab {
+  id: TabId;
+  enabled: boolean;
+  visibleTo: VisibleTo;
+}
+
+interface HomeConfigResponse {
+  enabled: boolean;
+  cards: HomeCard[];
+  defaultSpace: "home" | "messages" | "help";
+  tabs?: HomeTab[];
+}
+
+const DEFAULT_TABS: HomeTab[] = [
+  { id: "home", enabled: true, visibleTo: "all" },
+  { id: "messages", enabled: true, visibleTo: "all" },
+  { id: "help", enabled: true, visibleTo: "all" },
+  { id: "tours", enabled: true, visibleTo: "all" },
+  { id: "tasks", enabled: true, visibleTo: "all" },
+  { id: "tickets", enabled: true, visibleTo: "all" },
+];
+
+function normalizeTabs(tabs: HomeTab[] | undefined): HomeTab[] {
+  const tabsById = new Map((tabs ?? []).map((tab) => [tab.id, tab]));
+  return DEFAULT_TABS.map((defaultTab) => {
+    if (defaultTab.id === "messages") {
+      return { ...defaultTab };
+    }
+    const configuredTab = tabsById.get(defaultTab.id);
+    if (!configuredTab) {
+      return { ...defaultTab };
+    }
+    return {
+      id: defaultTab.id,
+      enabled: configuredTab.enabled,
+      visibleTo: configuredTab.visibleTo,
+    };
+  });
+}
+
 export function HomeSettingsSection({
   workspaceId,
 }: {
@@ -62,13 +142,14 @@ export function HomeSettingsSection({
   const homeConfig = useQuery(
     api.messengerSettings.getHomeConfig,
     workspaceId ? { workspaceId } : "skip"
-  );
+  ) as HomeConfigResponse | undefined;
 
   const updateHomeConfig = useMutation(api.messengerSettings.updateHomeConfig);
   const toggleHomeEnabled = useMutation(api.messengerSettings.toggleHomeEnabled);
 
   const [enabled, setEnabled] = useState(false);
   const [cards, setCards] = useState<HomeCard[]>([]);
+  const [tabs, setTabs] = useState<HomeTab[]>(DEFAULT_TABS);
   const [defaultSpace, setDefaultSpace] = useState<"home" | "messages" | "help">("messages");
   const [isSaving, setIsSaving] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
@@ -79,6 +160,7 @@ export function HomeSettingsSection({
       setEnabled(homeConfig.enabled);
       setCards(homeConfig.cards as HomeCard[]);
       setDefaultSpace(homeConfig.defaultSpace);
+      setTabs(normalizeTabs(homeConfig.tabs));
     }
   }, [homeConfig]);
 
@@ -92,6 +174,7 @@ export function HomeSettingsSection({
           enabled,
           cards,
           defaultSpace,
+          tabs: normalizeTabs(tabs),
         },
       });
     } catch (error) {
@@ -130,6 +213,19 @@ export function HomeSettingsSection({
 
   const updateCardVisibility = (id: string, visibleTo: VisibleTo) => {
     setCards(cards.map((c) => (c.id === id ? { ...c, visibleTo } : c)));
+  };
+
+  const updateTabVisibility = (id: TabId, visibleTo: VisibleTo) => {
+    setTabs(
+      tabs.map((tab) => (tab.id === id ? { ...tab, visibleTo: id === "messages" ? "all" : visibleTo } : tab))
+    );
+  };
+
+  const updateTabEnabled = (id: TabId, enabledValue: boolean) => {
+    if (id === "messages") {
+      return;
+    }
+    setTabs(tabs.map((tab) => (tab.id === id ? { ...tab, enabled: enabledValue } : tab)));
   };
 
   const handleDragStart = (index: number) => {
@@ -202,6 +298,60 @@ export function HomeSettingsSection({
               <option value="messages">Messages</option>
               <option value="help">Help Center</option>
             </select>
+          </div>
+
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Messenger Tabs</label>
+            <div className="space-y-2">
+              {TAB_TYPES.map((tabType) => {
+                const tab = tabs.find((item) => item.id === tabType.id) ?? {
+                  id: tabType.id,
+                  enabled: true,
+                  visibleTo: "all" as const,
+                };
+                const toggleDisabled = tabType.locked;
+                const visibilityDisabled = tabType.locked;
+
+                return (
+                  <div
+                    key={tabType.id}
+                    className="flex flex-col gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center sm:gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{tabType.label}</p>
+                      <p className="text-xs text-muted-foreground">{tabType.description}</p>
+                    </div>
+                    <select
+                      value={tab.visibleTo}
+                      onChange={(e) => updateTabVisibility(tabType.id, e.target.value as VisibleTo)}
+                      disabled={visibilityDisabled}
+                      className="px-2 py-1 text-xs border rounded bg-background disabled:opacity-60"
+                    >
+                      <option value="all">All</option>
+                      <option value="visitors">Visitors only</option>
+                      <option value="users">Users only</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => updateTabEnabled(tabType.id, !tab.enabled)}
+                      disabled={toggleDisabled}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        tab.enabled ? "bg-primary" : "bg-gray-300"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          tab.enabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The Messages tab stays enabled for all visitors, matching Intercom-style behavior.
+            </p>
           </div>
 
           {/* Card List */}

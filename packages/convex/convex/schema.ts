@@ -430,6 +430,7 @@ export default defineSchema({
     title: v.string(),
     slug: v.string(),
     content: v.string(),
+    widgetLargeScreen: v.optional(v.boolean()),
     status: v.union(v.literal("draft"), v.literal("published")),
     order: v.number(),
     createdAt: v.number(),
@@ -446,6 +447,26 @@ export default defineSchema({
     .index("by_slug", ["workspaceId", "slug"])
     .index("by_status", ["workspaceId", "status"])
     .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
+    .index("by_import_source_path", ["importSourceId", "importPath"]),
+
+  // Help Center - Article Assets
+  articleAssets: defineTable({
+    workspaceId: v.id("workspaces"),
+    articleId: v.optional(v.id("articles")),
+    importSourceId: v.optional(v.id("helpCenterImportSources")),
+    importPath: v.optional(v.string()),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    createdBy: v.optional(v.id("users")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_workspace", ["workspaceId"])
+    .index("by_article", ["articleId"])
+    .index("by_workspace_article", ["workspaceId", "articleId"])
+    .index("by_import_source", ["importSourceId"])
     .index("by_import_source_path", ["importSourceId", "importPath"]),
 
   // Help Center - Import Sources
@@ -1967,6 +1988,22 @@ export default defineSchema({
         ),
         defaultSpace: v.union(v.literal("home"), v.literal("messages"), v.literal("help")),
         launchDirectlyToConversation: v.optional(v.boolean()),
+        tabs: v.optional(
+          v.array(
+            v.object({
+              id: v.union(
+                v.literal("home"),
+                v.literal("messages"),
+                v.literal("help"),
+                v.literal("tours"),
+                v.literal("tasks"),
+                v.literal("tickets")
+              ),
+              enabled: v.boolean(),
+              visibleTo: v.union(v.literal("all"), v.literal("visitors"), v.literal("users")),
+            })
+          )
+        ),
       })
     ),
 

@@ -78,6 +78,16 @@ Opencom.identify({
 | **Optional** | Unverified users allowed but marked as unverified      |
 | **Required** | Unverified users rejected (widget won't load for them) |
 
+### Audience Classification vs Verification
+
+Messenger audience filtering currently classifies a visitor as a "user" when either `userId` or `email` is present on the widget identity payload (`init.user` / `identify`).
+
+- `email` only: counts as identified for `users` audience rules, but is not cryptographically verified
+- `userId` only: counts as identified, but remains unverified without `userHash`
+- `userId` + `userHash`: identified and verifiable with HMAC checks
+
+Use required verification mode plus `userId` + `userHash` when "users only" content should require trusted identity.
+
 ### Secret Rotation
 
 You can rotate the HMAC secret at any time from Settings > Security. After rotation:

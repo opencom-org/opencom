@@ -6,7 +6,17 @@ import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
-import { ArrowLeft, Plus, Pencil, Trash2, FolderOpen } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Pencil,
+  Trash2,
+  FolderOpen,
+  CornerDownRight,
+  CircleAlert,
+  CheckCircle2,
+  Info,
+} from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 
@@ -14,16 +24,54 @@ interface CollectionFormData {
   name: string;
   description: string;
   icon: string;
+  parentId: Id<"collections"> | "";
 }
+
+type NoticeTone = "info" | "success" | "warning" | "error";
+type PageNotice = {
+  tone: NoticeTone;
+  message: string;
+};
+
+const ROOT_COLLECTION_KEY = "__root__";
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Something went wrong. Please try again.";
+};
+
+const getFriendlyCollectionError = (error: unknown) => {
+  const message = getErrorMessage(error);
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("child collections")) {
+    return "This collection has child collections. Move or delete those child collections first.";
+  }
+  if (normalized.includes("with articles")) {
+    return "This collection still has articles. Move or delete those articles first.";
+  }
+  if (normalized.includes("its own parent")) {
+    return "A collection cannot be set as its own parent.";
+  }
+  if (normalized.includes("own descendant")) {
+    return "A collection cannot be moved into one of its own child collections.";
+  }
+
+  return message;
+};
 
 export default function CollectionsPage() {
   const { activeWorkspace } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<Id<"collections"> | null>(null);
+  const [notice, setNotice] = useState<PageNotice | null>(null);
   const [formData, setFormData] = useState<CollectionFormData>({
     name: "",
     description: "",
     icon: "",
+    parentId: "",
   });
 
   const collections = useQuery(
@@ -35,17 +83,148 @@ export default function CollectionsPage() {
   const updateCollection = useMutation(api.collections.update);
   const deleteCollection = useMutation(api.collections.remove);
 
+  type CollectionItem = NonNullable<typeof collections>[number];
+  type FlattenedCollectionRow = {
+    collection: CollectionItem;
+    depth: number;
+    path: string;
+    parentName: string;
+    childCount: number;
+  };
+
+  const collectionItems = collections ?? [];
+  const collectionMap = new Map(
+    collectionItems.map((collection: CollectionItem) => [collection._id, collection] as const)
+  );
+
+  const childrenByParent = new Map<string, CollectionItem[]>();
+  const childCountByCollectionId = new Map<string, number>();
+
+  for (const collection of collectionItems) {
+    const parentKey = collection.parentId ?? ROOT_COLLECTION_KEY;
+    const siblings = childrenByParent.get(parentKey);
+    if (siblings) {
+      siblings.push(collection);
+    } else {
+      childrenByParent.set(parentKey, [collection]);
+    }
+
+    if (collection.parentId) {
+      childCountByCollectionId.set(
+        collection.parentId,
+        (childCountByCollectionId.get(collection.parentId) ?? 0) + 1
+      );
+    }
+  }
+
+  for (const siblings of childrenByParent.values()) {
+    siblings.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  }
+
+  const getCollectionPath = (collectionId: Id<"collections">) => {
+    const path: string[] = [];
+    const seen = new Set<string>();
+    let cursor: Id<"collections"> | undefined = collectionId;
+
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      const collection = collectionMap.get(cursor);
+      if (!collection) {
+        break;
+      }
+      path.unshift(collection.name);
+      cursor = collection.parentId;
+    }
+
+    return path.join(" / ");
+  };
+
+  const flattenedCollections: FlattenedCollectionRow[] = [];
+  const visitedCollectionIds = new Set<string>();
+
+  const walkTree = (parentId: Id<"collections"> | undefined, depth: number) => {
+    const parentKey = parentId ?? ROOT_COLLECTION_KEY;
+    const children = childrenByParent.get(parentKey) ?? [];
+
+    for (const child of children) {
+      if (visitedCollectionIds.has(child._id)) {
+        continue;
+      }
+      visitedCollectionIds.add(child._id);
+      flattenedCollections.push({
+        collection: child,
+        depth,
+        path: getCollectionPath(child._id),
+        parentName: child.parentId ? collectionMap.get(child.parentId)?.name ?? "Unknown" : "Root",
+        childCount: childCountByCollectionId.get(child._id) ?? 0,
+      });
+      walkTree(child._id, depth + 1);
+    }
+  };
+
+  walkTree(undefined, 0);
+
+  // Guard against malformed parent relationships by rendering any leftovers.
+  for (const collection of collectionItems) {
+    if (visitedCollectionIds.has(collection._id)) {
+      continue;
+    }
+    flattenedCollections.push({
+      collection,
+      depth: 0,
+      path: getCollectionPath(collection._id) || collection.name,
+      parentName: collection.parentId ? collectionMap.get(collection.parentId)?.name ?? "Unknown" : "Root",
+      childCount: childCountByCollectionId.get(collection._id) ?? 0,
+    });
+  }
+
+  const getDescendantCollectionIds = (collectionId: Id<"collections">) => {
+    const descendants = new Set<string>();
+    const stack: Id<"collections">[] = [collectionId];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop();
+      if (!currentId) {
+        continue;
+      }
+      const children = childrenByParent.get(currentId) ?? [];
+      for (const child of children) {
+        if (descendants.has(child._id)) {
+          continue;
+        }
+        descendants.add(child._id);
+        stack.push(child._id);
+      }
+    }
+
+    return descendants;
+  };
+
+  const blockedParentIds = new Set<string>();
+  if (editingId) {
+    blockedParentIds.add(editingId);
+    const descendants = getDescendantCollectionIds(editingId);
+    for (const descendantId of descendants) {
+      blockedParentIds.add(descendantId);
+    }
+  }
+  const availableParentRows = flattenedCollections.filter(
+    (row) => !blockedParentIds.has(row.collection._id)
+  );
+
   const handleOpenModal = (collection?: NonNullable<typeof collections>[number]) => {
+    setNotice(null);
     if (collection) {
       setEditingId(collection._id);
       setFormData({
         name: collection.name,
         description: collection.description || "",
         icon: collection.icon || "",
+        parentId: collection.parentId ?? "",
       });
     } else {
       setEditingId(null);
-      setFormData({ name: "", description: "", icon: "" });
+      setFormData({ name: "", description: "", icon: "", parentId: "" });
     }
     setIsModalOpen(true);
   };
@@ -53,12 +232,13 @@ export default function CollectionsPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingId(null);
-    setFormData({ name: "", description: "", icon: "" });
+    setFormData({ name: "", description: "", icon: "", parentId: "" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeWorkspace?._id) return;
+    setNotice(null);
 
     try {
       if (editingId) {
@@ -67,6 +247,7 @@ export default function CollectionsPage() {
           name: formData.name,
           description: formData.description || undefined,
           icon: formData.icon || undefined,
+          parentId: formData.parentId || null,
         });
       } else {
         await createCollection({
@@ -74,22 +255,66 @@ export default function CollectionsPage() {
           name: formData.name,
           description: formData.description || undefined,
           icon: formData.icon || undefined,
+          parentId: formData.parentId || undefined,
         });
       }
+      setNotice({
+        tone: "success",
+        message: editingId ? "Collection updated." : "Collection created.",
+      });
       handleCloseModal();
     } catch (error) {
-      console.error("Failed to save collection:", error);
+      setNotice({
+        tone: "error",
+        message: getFriendlyCollectionError(error),
+      });
     }
   };
 
-  const handleDelete = async (id: Id<"collections">) => {
-    if (await appConfirm("Are you sure you want to delete this collection?")) {
+  const handleDelete = async (collection: CollectionItem) => {
+    const childCount = childCountByCollectionId.get(collection._id) ?? 0;
+    if (childCount > 0) {
+      setNotice({
+        tone: "warning",
+        message: `"${collection.name}" has ${childCount} child collection${
+          childCount !== 1 ? "s" : ""
+        }. Move or delete child collections first.`,
+      });
+      return;
+    }
+
+    if (collection.articleCount > 0) {
+      setNotice({
+        tone: "warning",
+        message: `"${collection.name}" still has ${collection.articleCount} article${
+          collection.articleCount !== 1 ? "s" : ""
+        }. Move or delete those articles first.`,
+      });
+      return;
+    }
+
+    if (await appConfirm(`Delete "${collection.name}"? This cannot be undone.`)) {
+      setNotice(null);
       try {
-        await deleteCollection({ id });
+        await deleteCollection({ id: collection._id });
+        setNotice({
+          tone: "info",
+          message: `Collection "${collection.name}" deleted.`,
+        });
       } catch (error) {
-        alert(error instanceof Error ? error.message : "Failed to delete collection");
+        setNotice({
+          tone: "error",
+          message: getFriendlyCollectionError(error),
+        });
       }
     }
+  };
+
+  const noticeToneClassNames: Record<NoticeTone, string> = {
+    info: "border-blue-200 bg-blue-50 text-blue-800",
+    success: "border-green-200 bg-green-50 text-green-800",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
+    error: "border-red-200 bg-red-50 text-red-800",
   };
 
   return (
@@ -113,6 +338,21 @@ export default function CollectionsPage() {
         </Button>
       </div>
 
+      {notice && (
+        <div
+          className={`mb-4 flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${noticeToneClassNames[notice.tone]}`}
+        >
+          {notice.tone === "success" ? (
+            <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+          ) : notice.tone === "error" ? (
+            <CircleAlert className="h-4 w-4 mt-0.5 shrink-0" />
+          ) : (
+            <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          )}
+          <p>{notice.message}</p>
+        </div>
+      )}
+
       {collections?.length === 0 ? (
         <div className="text-center py-12 border rounded-lg bg-white">
           <FolderOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
@@ -124,43 +364,70 @@ export default function CollectionsPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {collections?.map((collection: NonNullable<typeof collections>[number]) => (
-            <div
-              key={collection._id}
-              className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-xl">
-                    {collection.icon || "📁"}
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{collection.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {collection.articleCount} article{collection.articleCount !== 1 ? "s" : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => handleOpenModal(collection)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDelete(collection._id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-              {collection.description && (
-                <p className="mt-2 text-sm text-gray-600">{collection.description}</p>
-              )}
-            </div>
-          ))}
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">
+                    Collection
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Parent</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Children</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Articles</th>
+                  <th className="px-4 py-3 w-[120px]"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {flattenedCollections.map((row) => (
+                  <tr key={row.collection._id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <div
+                        className="flex items-start gap-3"
+                        style={{ paddingLeft: `${row.depth * 20}px` }}
+                      >
+                        {row.depth > 0 && (
+                          <CornerDownRight className="h-4 w-4 mt-1 text-gray-400 shrink-0" />
+                        )}
+                        <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center text-base shrink-0">
+                          {row.collection.icon || "📁"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{row.collection.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{row.path}</p>
+                          {row.collection.description && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                              {row.collection.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{row.parentName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{row.childCount}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">
+                      {row.collection.articleCount}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 justify-end">
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(row.collection)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(row.collection)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -189,6 +456,31 @@ export default function CollectionsPage() {
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   rows={3}
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Parent Collection
+                </label>
+                <select
+                  value={formData.parentId}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      parentId: e.target.value as Id<"collections"> | "",
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Root</option>
+                  {availableParentRows.map((row) => (
+                    <option key={row.collection._id} value={row.collection._id}>
+                      {row.path}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Choose Root for a top-level collection.
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Icon (emoji)</label>

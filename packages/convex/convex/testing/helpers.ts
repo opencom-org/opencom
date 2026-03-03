@@ -1621,6 +1621,7 @@ export const createTestArticle = internalMutation({
     title: v.string(),
     content: v.string(),
     collectionId: v.optional(v.id("collections")),
+    widgetLargeScreen: v.optional(v.boolean()),
     status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
   },
   handler: async (ctx, args) => {
@@ -1637,6 +1638,7 @@ export const createTestArticle = internalMutation({
       title: args.title,
       slug: `${slug}-${randomSuffix}`,
       content: args.content,
+      widgetLargeScreen: args.widgetLargeScreen ?? false,
       status: args.status || "draft",
       order: 0,
       createdAt: now,
@@ -1671,6 +1673,7 @@ export const updateTestArticle = internalMutation({
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     audienceRules: v.optional(v.any()),
+    widgetLargeScreen: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;

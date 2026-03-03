@@ -7,7 +7,8 @@ import { useAuthOptional } from "@/contexts/AuthContext";
 import { Button } from "@opencom/ui";
 import { ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { parseMarkdown } from "@/lib/parseMarkdown";
 
 export default function ArticlePage() {
   const params = useParams();
@@ -15,6 +16,7 @@ export default function ArticlePage() {
   const workspaceContext = useQuery(api.workspaces.getPublicWorkspaceContext, {});
   const slug = params.slug as string;
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [renderedContent, setRenderedContent] = useState("");
   const isAuthenticated = auth?.isAuthenticated ?? false;
   const isLoading = auth?.isLoading ?? false;
   const workspaceId = auth?.activeWorkspace?._id ?? workspaceContext?._id;
@@ -44,6 +46,14 @@ export default function ArticlePage() {
     await submitFeedback({ articleId: article._id, helpful });
     setFeedbackSubmitted(true);
   };
+
+  useEffect(() => {
+    if (!article || article.status !== "published") {
+      setRenderedContent("");
+      return;
+    }
+    setRenderedContent(parseMarkdown(article.renderedContent ?? article.content));
+  }, [article]);
 
   if (
     isLoading ||
@@ -134,13 +144,10 @@ export default function ArticlePage() {
         <article className="bg-white rounded-lg border p-8">
           <h1 className="text-3xl font-bold mb-6">{article.title}</h1>
 
-          <div className="prose prose-purple max-w-none">
-            {article.content.split("\n").map((paragraph: string, index: number) => (
-              <p key={index} className="mb-4">
-                {paragraph}
-              </p>
-            ))}
-          </div>
+          <div
+            className="prose prose-purple max-w-none"
+            dangerouslySetInnerHTML={{ __html: renderedContent }}
+          />
 
           <div className="mt-12 pt-8 border-t">
             <div className="text-center">

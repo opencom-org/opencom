@@ -941,7 +941,7 @@ Widget/messenger appearance and behavior customization.
 | `showLauncher`          | boolean                       | Launcher visibility                 |
 | `welcomeMessage`        | string                        | Welcome message text                |
 | `showTeammateAvatars`   | boolean                       | Show team avatars                   |
-| `homeConfig`            | object?                       | Home page card layout configuration |
+| `homeConfig`            | object?                       | Home layout config (`cards`, `tabs`, `defaultSpace`, launch mode) with per-audience visibility (`all`, `visitors`, `users`) |
 
 **Indexes:** `by_workspace`
 

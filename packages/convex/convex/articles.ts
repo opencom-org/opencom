@@ -9,7 +9,7 @@ import {
 } from "./audienceRules";
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
-import { authMutation } from "./lib/authWrappers";
+import { authMutation, authQuery } from "./lib/authWrappers";
 import { requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
 import { generateSlug, ensureUniqueSlug } from "./utils/strings";
@@ -17,6 +17,83 @@ import { throwNotAuthenticated, createError } from "./utils/errors";
 import { audienceRulesValidator } from "./validators";
 
 type HelpCenterAccessPolicy = "public" | "restricted";
+
+const ASSET_REFERENCE_PREFIX = "oc-asset://";
+const ASSET_REFERENCE_REGEX = /oc-asset:\/\/([A-Za-z0-9_-]+)/g;
+const MAX_ARTICLE_ASSET_BYTES = 5 * 1024 * 1024;
+const SUPPORTED_ARTICLE_ASSET_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+]);
+
+function normalizeAssetFileName(rawFileName: string | undefined): string {
+  const candidate = (rawFileName ?? "").trim();
+  if (!candidate) {
+    return `article-image-${Date.now()}`;
+  }
+
+  const sanitized = candidate
+    .replace(/[<>:"/\\|?*\u0000-\u001f]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return sanitized || `article-image-${Date.now()}`;
+}
+
+function getAssetReferenceIds(markdown: string): string[] {
+  const ids = new Set<string>();
+  const matches = markdown.matchAll(ASSET_REFERENCE_REGEX);
+  for (const match of matches) {
+    const id = match[1];
+    if (id) {
+      ids.add(id);
+    }
+  }
+  return Array.from(ids);
+}
+
+async function resolveAssetReferencesInContent(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">,
+  content: string
+): Promise<string> {
+  const ids = getAssetReferenceIds(content);
+  if (ids.length === 0) {
+    return content;
+  }
+
+  const resolvedUrls = new Map<string, string>();
+  for (const id of ids) {
+    const asset = await ctx.db.get(id as Id<"articleAssets">);
+    if (!asset || asset.workspaceId !== workspaceId) {
+      continue;
+    }
+    const url = await ctx.storage.getUrl(asset.storageId);
+    if (url) {
+      resolvedUrls.set(id, url);
+    }
+  }
+
+  if (resolvedUrls.size === 0) {
+    return content;
+  }
+
+  return content.replace(ASSET_REFERENCE_REGEX, (fullMatch, id) => {
+    const replacement = resolvedUrls.get(id);
+    return replacement ?? fullMatch;
+  });
+}
+
+async function withRenderedContent(ctx: QueryCtx, article: Doc<"articles">) {
+  return {
+    ...article,
+    renderedContent: await resolveAssetReferencesInContent(ctx, article.workspaceId, article.content),
+  };
+}
 
 async function canReadHelpCenterArticles(
   ctx: QueryCtx,
@@ -71,6 +148,7 @@ export const create = mutation({
       title: args.title,
       slug,
       content: args.content,
+      widgetLargeScreen: false,
       status: "draft",
       order: maxOrder + 1,
       createdAt: now,
@@ -87,6 +165,7 @@ export const update = mutation({
     id: v.id("articles"),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
+    widgetLargeScreen: v.optional(v.boolean()),
     collectionId: v.optional(v.id("collections")),
     folderId: v.optional(v.id("contentFolders")),
     audienceRules: v.optional(audienceRulesValidator),
@@ -122,6 +201,10 @@ export const update = mutation({
 
     if (args.content !== undefined) {
       updates.content = args.content;
+    }
+
+    if (args.widgetLargeScreen !== undefined) {
+      updates.widgetLargeScreen = args.widgetLargeScreen;
     }
 
     if (args.collectionId !== undefined) {
@@ -201,10 +284,11 @@ export const get = query({
     }
 
     if (articleById) {
+      const articleWithContent = await withRenderedContent(ctx, articleById);
       if (authUser) {
-        return articleById;
+        return articleWithContent;
       }
-      return articleById.status === "published" ? articleById : null;
+      return articleById.status === "published" ? articleWithContent : null;
     }
 
     const slug = args.slug;
@@ -217,10 +301,11 @@ export const get = query({
       if (!article) {
         return null;
       }
+      const articleWithContent = await withRenderedContent(ctx, article);
       if (authUser) {
-        return article;
+        return articleWithContent;
       }
-      return article.status === "published" ? article : null;
+      return article.status === "published" ? articleWithContent : null;
     }
 
     return null;
@@ -369,6 +454,202 @@ export const unpublish = authMutation({
   },
 });
 
+export const generateAssetUploadUrl = authMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  permission: "articles.create",
+  handler: async (ctx, args) => {
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) {
+      throw createError("NOT_FOUND", "Workspace not found");
+    }
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const saveAsset = authMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    articleId: v.optional(v.id("articles")),
+    importSourceId: v.optional(v.id("helpCenterImportSources")),
+    importPath: v.optional(v.string()),
+    storageId: v.id("_storage"),
+    fileName: v.optional(v.string()),
+  },
+  permission: "articles.create",
+  handler: async (ctx, args) => {
+    if (args.articleId) {
+      const article = await ctx.db.get(args.articleId);
+      if (!article || article.workspaceId !== args.workspaceId) {
+        throw createError("NOT_FOUND", "Article not found");
+      }
+    }
+
+    if (args.importSourceId) {
+      const source = await ctx.db.get(args.importSourceId);
+      if (!source || source.workspaceId !== args.workspaceId) {
+        throw createError("NOT_FOUND", "Import source not found");
+      }
+    }
+
+    const metadata = await ctx.storage.getMetadata(args.storageId);
+    if (!metadata) {
+      throw createError("NOT_FOUND", "Uploaded file not found");
+    }
+
+    const mimeType = metadata.contentType ?? "";
+    if (!SUPPORTED_ARTICLE_ASSET_MIME_TYPES.has(mimeType)) {
+      throw createError(
+        "INVALID_INPUT",
+        "Unsupported image type. Allowed: PNG, JPEG, GIF, WEBP, AVIF."
+      );
+    }
+    if (metadata.size > MAX_ARTICLE_ASSET_BYTES) {
+      throw createError("INVALID_INPUT", "Image exceeds 5MB maximum size.");
+    }
+
+    const now = Date.now();
+    const fileName = normalizeAssetFileName(args.fileName);
+
+    let assetId: Id<"articleAssets">;
+    if (args.importSourceId && args.importPath) {
+      const existingAsset = await ctx.db
+        .query("articleAssets")
+        .withIndex("by_import_source_path", (q) =>
+          q.eq("importSourceId", args.importSourceId!).eq("importPath", args.importPath!)
+        )
+        .first();
+
+      if (existingAsset) {
+        if (existingAsset.storageId !== args.storageId) {
+          await ctx.storage.delete(existingAsset.storageId);
+        }
+        await ctx.db.patch(existingAsset._id, {
+          articleId: args.articleId,
+          storageId: args.storageId,
+          fileName,
+          mimeType,
+          size: metadata.size,
+          updatedAt: now,
+        });
+        assetId = existingAsset._id;
+      } else {
+        assetId = await ctx.db.insert("articleAssets", {
+          workspaceId: args.workspaceId,
+          articleId: args.articleId,
+          importSourceId: args.importSourceId,
+          importPath: args.importPath,
+          storageId: args.storageId,
+          fileName,
+          mimeType,
+          size: metadata.size,
+          createdBy: ctx.user._id,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    } else {
+      assetId = await ctx.db.insert("articleAssets", {
+        workspaceId: args.workspaceId,
+        articleId: args.articleId,
+        importSourceId: args.importSourceId,
+        importPath: args.importPath,
+        storageId: args.storageId,
+        fileName,
+        mimeType,
+        size: metadata.size,
+        createdBy: ctx.user._id,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+
+    const url = await ctx.storage.getUrl(args.storageId);
+    return {
+      assetId,
+      reference: `${ASSET_REFERENCE_PREFIX}${assetId}`,
+      url,
+      fileName,
+      mimeType,
+      size: metadata.size,
+    };
+  },
+});
+
+export const listAssets = authQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    articleId: v.optional(v.id("articles")),
+  },
+  permission: "articles.read",
+  handler: async (ctx, args) => {
+    if (args.articleId) {
+      const article = await ctx.db.get(args.articleId);
+      if (!article || article.workspaceId !== args.workspaceId) {
+        throw createError("NOT_FOUND", "Article not found");
+      }
+    }
+
+    const assets = await ctx.db
+      .query("articleAssets")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    const filteredAssets = args.articleId
+      ? assets.filter((asset) => asset.articleId === args.articleId)
+      : assets;
+
+    const mappedAssets = await Promise.all(
+      filteredAssets.map(async (asset) => ({
+        ...asset,
+        reference: `${ASSET_REFERENCE_PREFIX}${asset._id}`,
+        url: await ctx.storage.getUrl(asset.storageId),
+      }))
+    );
+
+    return mappedAssets.sort((a, b) => b.createdAt - a.createdAt);
+  },
+});
+
+export const deleteAsset = authMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    assetId: v.id("articleAssets"),
+  },
+  permission: "articles.delete",
+  handler: async (ctx, args) => {
+    const asset = await ctx.db.get(args.assetId);
+    if (!asset || asset.workspaceId !== args.workspaceId) {
+      throw createError("NOT_FOUND", "Asset not found");
+    }
+
+    const reference = `${ASSET_REFERENCE_PREFIX}${args.assetId}`;
+    const workspaceArticles = await ctx.db
+      .query("articles")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    const referencingArticles = workspaceArticles.filter((article) =>
+      article.content.includes(reference)
+    );
+
+    if (referencingArticles.length > 0) {
+      const sampleTitles = referencingArticles
+        .slice(0, 3)
+        .map((article) => article.title)
+        .join(", ");
+      throw createError(
+        "INVALID_INPUT",
+        `Asset is still referenced by ${referencingArticles.length} article(s): ${sampleTitles}`
+      );
+    }
+
+    await ctx.storage.delete(asset.storageId);
+    await ctx.db.delete(args.assetId);
+    return { success: true };
+  },
+});
+
 export const submitFeedback = mutation({
   args: {
     articleId: v.id("articles"),
@@ -475,8 +756,8 @@ export const listForVisitor = query({
         filteredArticles.push(article);
       }
     }
-
-    return filteredArticles.sort((a, b) => a.order - b.order);
+    const sortedArticles = filteredArticles.sort((a, b) => a.order - b.order);
+    return await Promise.all(sortedArticles.map((article) => withRenderedContent(ctx, article)));
   },
 });
 
@@ -547,8 +828,8 @@ export const searchForVisitor = query({
         filteredArticles.push(article);
       }
     }
-
-    return filteredArticles.slice(0, 20);
+    const limitedArticles = filteredArticles.slice(0, 20);
+    return await Promise.all(limitedArticles.map((article) => withRenderedContent(ctx, article)));
   },
 });
 

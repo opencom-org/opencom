@@ -4,6 +4,34 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { authenticateClientForWorkspace } from "./helpers/authSession";
 
+const ONE_BY_ONE_PNG_BYTES = Uint8Array.from([
+  137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6,
+  0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 99, 248, 15, 4, 0, 9, 251, 3,
+  253, 160, 133, 37, 209, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130,
+]);
+
+async function uploadImportImage(
+  client: ConvexClient,
+  workspaceId: Id<"workspaces">
+): Promise<Id<"_storage">> {
+  const uploadUrl = await client.mutation(api.articles.generateAssetUploadUrl, {
+    workspaceId,
+  });
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "image/png",
+    },
+    body: ONE_BY_ONE_PNG_BYTES,
+  });
+  expect(response.ok).toBe(true);
+  const payload = (await response.json()) as { storageId?: Id<"_storage"> };
+  if (!payload.storageId) {
+    throw new Error("Storage upload response did not include storageId");
+  }
+  return payload.storageId;
+}
+
 describe("help center markdown imports", () => {
   let client: ConvexClient;
   let workspaceId: Id<"workspaces">;
@@ -388,6 +416,73 @@ describe("help center markdown imports", () => {
     expect(gettingStarted?.content).toContain("status: published");
     expect(gettingStarted?.content).toContain('source: "docs"');
     expect(gettingStarted?.content).toContain("Updated setup guide.");
+  });
+
+  it("rewrites local markdown image paths to internal asset references", async () => {
+    const storageId = await uploadImportImage(client, workspaceId);
+
+    const result = await client.mutation(api.helpCenterImports.syncMarkdownFolder, {
+      workspaceId,
+      sourceName: "docs-with-images",
+      rootCollectionId,
+      files: [
+        {
+          relativePath: "docs/with-image.md",
+          content: "# With Image\n\n![Diagram](images/diagram.png)\n\nImage should be mapped.",
+        },
+      ],
+      assets: [
+        {
+          relativePath: "docs/images/diagram.png",
+          storageId,
+          mimeType: "image/png",
+          size: ONE_BY_ONE_PNG_BYTES.length,
+        },
+      ],
+      publishByDefault: true,
+    });
+
+    expect(result.createdArticles).toBe(1);
+    expect(result.unresolvedImageReferences ?? []).toHaveLength(0);
+
+    const search = await client.query(api.articles.search, {
+      workspaceId,
+      query: "With Image",
+    });
+    const article = search.find((entry) => entry.title === "With Image");
+    expect(article).toBeDefined();
+    expect(article?.content).toMatch(/oc-asset:\/\/[A-Za-z0-9_-]+/);
+
+    const exportBundle = await client.query(api.helpCenterImports.exportMarkdown, {
+      workspaceId,
+      sourceId: result.sourceId,
+      includeDrafts: true,
+    });
+    const exportedMarkdown = exportBundle.files.find((file) => file.path === "with-image.md");
+    expect(exportedMarkdown).toBeDefined();
+    expect(exportedMarkdown?.content).toContain("_assets/");
+    expect(exportedMarkdown?.content).not.toContain("oc-asset://");
+    expect(exportBundle.files.some((file) => file.type === "asset")).toBe(true);
+  });
+
+  it("reports unresolved local image references during dry-run previews", async () => {
+    const preview = await client.mutation(api.helpCenterImports.syncMarkdownFolder, {
+      workspaceId,
+      sourceName: "docs-with-missing-images",
+      rootCollectionId,
+      files: [
+        {
+          relativePath: "docs/missing-image.md",
+          content: "# Missing Image\n\n![Missing](images/not-found.png)",
+        },
+      ],
+      dryRun: true,
+      publishByDefault: true,
+    });
+
+    expect(preview.dryRun).toBe(true);
+    expect(preview.unresolvedImageReferences?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(preview.unresolvedImageReferences?.[0]).toContain("not-found.png");
   });
 
   it("restores deleted content from import history", async () => {

@@ -3,6 +3,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation, useQuery } from "convex/react";
 import { Widget } from "../Widget";
 
+type MockHomeConfig = {
+  enabled: boolean;
+  defaultSpace?: "home" | "messages" | "help";
+  tabs?: Array<{
+    id: "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
+    enabled: boolean;
+    visibleTo: "all" | "visitors" | "users";
+  }>;
+};
+
+let mockedHomeConfig: MockHomeConfig = { enabled: true };
+
 vi.mock("convex/react", () => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
@@ -32,6 +44,9 @@ vi.mock("@opencom/convex", () => ({
     articles: {
       searchForVisitor: "articles.searchForVisitor",
       listForVisitor: "articles.listForVisitor",
+    },
+    collections: {
+      listHierarchy: "collections.listHierarchy",
     },
     automationSettings: {
       getOrCreate: "automationSettings.getOrCreate",
@@ -68,7 +83,7 @@ vi.mock("../main", () => ({
 
 vi.mock("../components/Home", () => ({
   Home: () => <div data-testid="home-component" />,
-  useHomeConfig: vi.fn(() => ({ enabled: true })),
+  useHomeConfig: vi.fn(() => mockedHomeConfig),
 }));
 
 vi.mock("../components/ConversationList", () => ({
@@ -114,11 +129,42 @@ vi.mock("../components/ConversationView", () => ({
 }));
 
 vi.mock("../components/HelpCenter", () => ({
-  HelpCenter: () => <div data-testid="help-center" />,
+  HelpCenter: ({
+    publishedArticles,
+    onSelectArticle,
+  }: {
+    publishedArticles?: Array<{ _id: string }>;
+    onSelectArticle: (id: string) => void;
+  }) => (
+    <div data-testid="help-center">
+      <button
+        type="button"
+        data-testid="mock-open-first-article"
+        onClick={() => {
+          const firstArticle = publishedArticles?.[0];
+          if (firstArticle) {
+            onSelectArticle(firstArticle._id);
+          }
+        }}
+      >
+        Open first article
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../components/ArticleDetail", () => ({
-  ArticleDetail: () => <div data-testid="article-detail" />,
+  ArticleDetail: ({
+    onToggleLargeScreen,
+  }: {
+    onToggleLargeScreen: () => void;
+  }) => (
+    <div data-testid="article-detail">
+      <button type="button" data-testid="mock-toggle-article-size" onClick={onToggleLargeScreen}>
+        Toggle size
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("../components/TourPicker", () => ({
@@ -201,6 +247,7 @@ describe("Widget new conversation behavior", () => {
   let createConversationMock: ReturnType<typeof vi.fn>;
   let markAsReadMock: ReturnType<typeof vi.fn>;
   let visitorConversationsResult: Array<Record<string, unknown>>;
+  let publishedArticlesResult: Array<Record<string, unknown>>;
 
   const openWidgetMessagesTab = async () => {
     fireEvent.click(screen.getByTestId("widget-launcher"));
@@ -216,8 +263,10 @@ describe("Widget new conversation behavior", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedHomeConfig = { enabled: true };
 
     visitorConversationsResult = [];
+    publishedArticlesResult = [];
     createConversationMock = vi.fn().mockResolvedValue({ _id: "conv_created_1" });
     markAsReadMock = vi.fn().mockResolvedValue(undefined);
 
@@ -252,6 +301,18 @@ describe("Widget new conversation behavior", () => {
 
       if (queryRef === "conversations.getTotalUnreadForVisitor") {
         return 0;
+      }
+
+      if (queryRef === "articles.listForVisitor") {
+        return publishedArticlesResult;
+      }
+
+      if (queryRef === "articles.searchForVisitor") {
+        return [];
+      }
+
+      if (queryRef === "collections.listHierarchy") {
+        return [];
       }
 
       if (queryRef === "automationSettings.getOrCreate") {
@@ -306,6 +367,34 @@ describe("Widget new conversation behavior", () => {
       expect(screen.getByTestId("conversation-view")).toHaveTextContent("conv_draft_1");
     });
     expect(createConversationMock).not.toHaveBeenCalled();
+  });
+
+  it("renders only configured tabs and falls back to Messages when Home is hidden", async () => {
+    mockedHomeConfig = {
+      enabled: true,
+      tabs: [
+        { id: "messages", enabled: true, visibleTo: "all" },
+        { id: "help", enabled: true, visibleTo: "all" },
+      ],
+    };
+
+    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+
+    fireEvent.click(screen.getByTestId("widget-launcher"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTitle("New conversation")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTitle("Conversations")).toBeInTheDocument();
+    expect(screen.getByTitle("Help Center")).toBeInTheDocument();
+    expect(screen.queryByTitle("Home")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Product Tours")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Tasks")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("My Tickets")).not.toBeInTheDocument();
   });
 
   it("deduplicates rapid create clicks while a new conversation request is in flight", async () => {
@@ -365,5 +454,40 @@ describe("Widget new conversation behavior", () => {
     });
 
     expect(markAsReadMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("toggles widget shell size from article header control", async () => {
+    publishedArticlesResult = [
+      {
+        _id: "article_large_1",
+        title: "Article",
+        content: "Detailed guide",
+      },
+    ];
+
+    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+
+    fireEvent.click(screen.getByTestId("widget-launcher"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTitle("Help Center"));
+    fireEvent.click(screen.getByTestId("mock-open-first-article"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("article-detail")).toBeInTheDocument();
+    });
+
+    const widgetRoot = document.querySelector(".opencom-widget");
+    expect(widgetRoot?.className).not.toContain("opencom-widget-article-large");
+
+    fireEvent.click(screen.getByTestId("mock-toggle-article-size"));
+    expect(widgetRoot?.className).toContain("opencom-widget-article-large");
+
+    fireEvent.click(screen.getByTestId("mock-toggle-article-size"));
+    await waitFor(() => {
+      expect(widgetRoot?.className).not.toContain("opencom-widget-article-large");
+    });
   });
 });

@@ -37,6 +37,23 @@
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+.opencom-widget-article-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.16);
+  animation: opencom-widget-backdrop-fade-in 0.22s ease-out;
+  pointer-events: none;
+}
+
+@keyframes opencom-widget-backdrop-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .opencom-launcher {
   position: relative;
   isolation: isolate;
@@ -140,8 +157,14 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
   animation: chatWindowOpen 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   transform-origin: bottom right;
+  transition:
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 0.2s ease;
 }
 
 @keyframes chatWindowOpen {
@@ -202,9 +225,20 @@
   background: rgba(255, 255, 255, 0.25);
 }
 
+.opencom-header-actions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .opencom-header-actions button svg {
   width: 18px;
   height: 18px;
+}
+
+@media (max-width: 900px) {
+  .opencom-article-size-toggle {
+    display: none !important;
+  }
 }
 
 .opencom-close {
@@ -1326,6 +1360,28 @@
   padding: 20px;
 }
 
+.opencom-article-detail-large {
+  padding: 28px 34px;
+}
+
+.opencom-article-detail-large .opencom-article-detail-title,
+.opencom-article-detail-large .opencom-article-detail-content,
+.opencom-article-detail-large .opencom-article-actions {
+  max-width: 68ch;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.opencom-article-detail-large .opencom-article-detail-title {
+  font-size: 24px;
+  margin-bottom: 18px;
+}
+
+.opencom-article-detail-large .opencom-article-detail-content {
+  font-size: 15px;
+  line-height: 1.8;
+}
+
 .opencom-article-detail-title {
   margin: 0 0 16px 0;
   font-size: 18px;
@@ -1346,6 +1402,14 @@
 
 .opencom-article-detail-content p:empty {
   display: none;
+}
+
+.opencom-article-detail-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0 14px 0;
+  display: block;
 }
 
 .opencom-article-detail-content h1 {
@@ -1427,6 +1491,37 @@
   margin: 0 0 12px 0;
   font-size: 14px;
   color: var(--opencom-text-muted);
+}
+
+@media (min-width: 901px) {
+  .opencom-widget-article-large .opencom-chat-article-detail.opencom-chat-article-large {
+    width: min(760px, calc(100vw - 48px));
+    height: min(88vh, 860px);
+    max-height: calc(100vh - 48px);
+    border-radius: 18px;
+    will-change: width, height, transform;
+  }
+
+  .opencom-widget-article-large
+    .opencom-chat-article-detail.opencom-chat-article-large:not(.opencom-chat-article-collapsing) {
+    animation: opencom-chat-expand-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .opencom-widget-article-large
+    .opencom-chat-article-detail.opencom-chat-article-collapsing.opencom-chat-article-large {
+    animation: opencom-chat-expand-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) reverse;
+  }
+}
+
+@keyframes opencom-chat-expand-in {
+  from {
+    width: 380px;
+    height: 560px;
+    transform: scale(0.97) translateY(12px);
+  }
+  to {
+    transform: scale(1) translateY(0);
+  }
 }
 
 /* Tour Picker Styles */
@@ -1800,6 +1895,15 @@
   .opencom-chat {
     width: min(460px, calc(100vw - 40px));
     height: min(75vh, 640px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .opencom-widget-article-backdrop,
+  .opencom-chat,
+  .opencom-widget-article-large .opencom-chat-article-detail.opencom-chat-article-large {
+    animation: none !important;
+    transition: none !important;
   }
 }
 

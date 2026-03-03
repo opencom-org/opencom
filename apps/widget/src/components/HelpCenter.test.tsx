@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { Id } from "@opencom/convex/dataModel";
 import { HelpCenter } from "./HelpCenter";
@@ -77,6 +78,49 @@ describe("HelpCenter", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Hosted Onboarding/i }));
+
+    expect(screen.getByText("Hosted Quick Start")).toBeInTheDocument();
+    expect(screen.queryByText("Uncategorized Guide")).not.toBeInTheDocument();
+  });
+
+  it("preserves selected collection across remount in controlled mode", () => {
+    function ControlledHelpCenterHarness() {
+      const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);
+      const [showHelpCenter, setShowHelpCenter] = useState(true);
+
+      return (
+        <div>
+          <button type="button" onClick={() => setShowHelpCenter((value) => !value)}>
+            Toggle Help Center
+          </button>
+          {showHelpCenter ? (
+            <HelpCenter
+              articleSearchQuery=""
+              onSearchChange={vi.fn()}
+              articleSearchResults={undefined}
+              publishedArticles={publishedArticles}
+              collections={[
+                {
+                  _id: collectionId,
+                  name: "Hosted Onboarding",
+                },
+              ]}
+              selectedCollectionKey={selectedCollectionKey}
+              onSelectedCollectionKeyChange={setSelectedCollectionKey}
+              onSelectArticle={vi.fn()}
+            />
+          ) : null}
+        </div>
+      );
+    }
+
+    render(<ControlledHelpCenterHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Hosted Onboarding/i }));
+    expect(screen.getByText("Hosted Quick Start")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Toggle Help Center/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Toggle Help Center/i }));
 
     expect(screen.getByText("Hosted Quick Start")).toBeInTheDocument();
     expect(screen.queryByText("Uncategorized Guide")).not.toBeInTheDocument();

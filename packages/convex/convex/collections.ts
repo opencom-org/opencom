@@ -72,7 +72,7 @@ export const update = authMutation({
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     icon: v.optional(v.string()),
-    parentId: v.optional(v.id("collections")),
+    parentId: v.optional(v.union(v.id("collections"), v.null())),
   },
   permission: "articles.create",
   resolveWorkspaceId: async (ctx, args) => {
@@ -90,7 +90,7 @@ export const update = authMutation({
       slug?: string;
       description?: string;
       icon?: string;
-      parentId?: typeof args.parentId;
+      parentId?: Id<"collections"> | undefined;
       updatedAt: number;
     } = {
       updatedAt: Date.now(),
@@ -120,7 +120,31 @@ export const update = authMutation({
       if (args.parentId === args.id) {
         throw new Error("Collection cannot be its own parent");
       }
-      updates.parentId = args.parentId;
+
+      if (args.parentId !== null) {
+        const parentCollection = await ctx.db.get(args.parentId);
+        if (!parentCollection || parentCollection.workspaceId !== collection.workspaceId) {
+          throw new Error("Parent collection not found");
+        }
+
+        let cursor: Id<"collections"> | undefined = parentCollection.parentId;
+        const seen = new Set<string>([parentCollection._id]);
+
+        while (cursor && !seen.has(cursor)) {
+          if (cursor === args.id) {
+            throw new Error("Collection cannot be moved into its own descendant");
+          }
+
+          seen.add(cursor);
+          const ancestor = await ctx.db.get(cursor);
+          if (!ancestor || ancestor.workspaceId !== collection.workspaceId) {
+            break;
+          }
+          cursor = ancestor.parentId;
+        }
+      }
+
+      updates.parentId = args.parentId ?? undefined;
     }
 
     await ctx.db.patch(args.id, updates);

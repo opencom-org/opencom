@@ -13,11 +13,7 @@ import { TicketsList } from "./components/TicketsList";
 import { TicketDetail } from "./components/TicketDetail";
 import { TicketCreate } from "./components/TicketCreate";
 import type { Id } from "@opencom/convex/dataModel";
-import {
-  setStartTourCallback,
-  setGetAvailableToursCallback,
-  type UserIdentification,
-} from "./main";
+import { type UserIdentification } from "./main";
 import { TourOverlay } from "./TourOverlay";
 import { OutboundOverlay } from "./OutboundOverlay";
 import { TooltipOverlay } from "./TooltipOverlay";
@@ -26,14 +22,13 @@ import { useWidgetSession } from "./hooks/useWidgetSession";
 import { useWidgetSettings } from "./hooks/useWidgetSettings";
 import { useEventTracking } from "./hooks/useEventTracking";
 import { useNavigationTracking } from "./hooks/useNavigationTracking";
+import { useWidgetShellValidation } from "./hooks/useWidgetShellValidation";
+import { useBlockingExperienceArbitration } from "./hooks/useBlockingExperienceArbitration";
+import { useWidgetTabVisibility, type MainTab, type TabConfig } from "./hooks/useWidgetTabVisibility";
+import { useWidgetUnreadCues } from "./hooks/useWidgetUnreadCues";
+import { useWidgetTourBridge } from "./hooks/useWidgetTourBridge";
 import { checkElementsAvailable } from "./utils/dom";
 import { selectSurveyForDelivery, type SurveyDeliveryCandidate } from "@opencom/sdk-core";
-import {
-  buildWidgetUnreadSnapshot,
-  getWidgetUnreadIncreases,
-  loadWidgetCuePreferences,
-  shouldSuppressWidgetCue,
-} from "./lib/widgetNotificationCues";
 
 type WidgetView =
   | "launcher"
@@ -47,9 +42,6 @@ type WidgetView =
   | "ticket-detail"
   | "ticket-create";
 
-// Main tabs that show in the bottom nav
-type MainTab = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
-type BlockingExperience = "tour" | "outbound_post" | "survey_large";
 
 interface WidgetProps {
   workspaceId?: string;
@@ -102,14 +94,15 @@ export function Widget({
   const [view, setView] = useState<WidgetView>("launcher");
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [userInfo, setUserInfo] = useState<UserIdentification | undefined>(initialUser);
-  const [originError, setOriginError] = useState<string | null>(null);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [debugWorkspaceId, setDebugWorkspaceId] = useState(_workspaceId || "");
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(_workspaceId);
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
+  const [selectedHelpCollectionKey, setSelectedHelpCollectionKey] = useState<string | null>(null);
+  const [isArticleLargeMode, setIsArticleLargeMode] = useState(false);
+  const [isCollapsingLargeArticle, setIsCollapsingLargeArticle] = useState(false);
   const [, setPreviousView] = useState<WidgetView>("conversation-list");
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
@@ -117,8 +110,6 @@ export function Widget({
   const [sessionShownSurveyIds, setSessionShownSurveyIds] = useState<Set<string>>(new Set());
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [surveyEligibilityUnavailable, setSurveyEligibilityUnavailable] = useState(false);
-  const [activeBlockingExperience, setActiveBlockingExperience] =
-    useState<BlockingExperience | null>(null);
   const [tourBlockingActive, setTourBlockingActive] = useState(false);
   const [outboundBlockingState, setOutboundBlockingState] = useState<{
     hasPendingPost: boolean;
@@ -128,13 +119,9 @@ export function Widget({
     hasActivePost: false,
   });
   const locationFetchedRef = useRef(false);
-  const widgetCuePreferencesRef = useRef({
-    browserNotifications: true,
-    sound: false,
-  });
-  const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
   const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
   const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
+  const largeArticleCollapseTimeoutRef = useRef<number | null>(null);
 
   // ── Tooltip trigger context ────────────────────────────────────────
   const [tooltipTriggerContext, setTooltipTriggerContext] = useState<{
@@ -147,15 +134,19 @@ export function Widget({
     currentUrl: typeof window !== "undefined" ? window.location.href : undefined,
   });
 
-  // Check if workspace ID looks valid (basic format check)
-  const isValidIdFormat = !!(activeWorkspaceId && /^[a-z0-9]{32}$/.test(activeWorkspaceId));
+  const {
+    isValidIdFormat,
+    workspaceValidation,
+    workspaceError,
+    originError,
+  } = useWidgetShellValidation(activeWorkspaceId);
 
-  // ── Extracted hooks ────────────────────────────────────────────────
-  // Validate workspace exists (only if ID format is valid)
-  const workspaceValidation = useQuery(
-    api.workspaces.get,
-    isValidIdFormat ? { id: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  // Shell ownership boundaries:
+  // - `useWidgetShellValidation` handles workspace + origin gating.
+  // - `useBlockingExperienceArbitration` handles blocker priority and release.
+  // - `useWidgetTabVisibility` owns tab visibility/fallback semantics.
+  // - `useWidgetUnreadCues` owns unread cue side effects and suppression rules.
+  // - `useWidgetTourBridge` owns host callback registration/update/cleanup.
 
   const { sessionId, visitorId, setVisitorId, visitorIdRef, sessionToken, sessionTokenRef } =
     useWidgetSession({
@@ -280,6 +271,32 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
+  const isLargeArticleView =
+    view === "article-detail" && (isArticleLargeMode || isCollapsingLargeArticle);
+  const clearLargeArticleCollapseTimeout = useCallback(() => {
+    if (largeArticleCollapseTimeoutRef.current !== null) {
+      window.clearTimeout(largeArticleCollapseTimeoutRef.current);
+      largeArticleCollapseTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearLargeArticleCollapseTimeout();
+    };
+  }, [clearLargeArticleCollapseTimeout]);
+
+  const openArticleDetail = useCallback(
+    (articleId: Id<"articles">) => {
+      clearLargeArticleCollapseTimeout();
+      setIsArticleLargeMode(false);
+      setIsCollapsingLargeArticle(false);
+      setSelectedArticleId(articleId);
+      setPreviousView(view);
+      setView("article-detail");
+    },
+    [clearLargeArticleCollapseTimeout, view]
+  );
 
   const selectedConversation = useMemo(() => {
     if (!conversationId) {
@@ -474,103 +491,21 @@ export function Widget({
     candidateSurvey && candidateSurvey.format === "large" && !displayedSurvey
   );
   const hasLargeSurveyBlockingActive = displayedSurvey?.format === "large";
-
-  useEffect(() => {
-    if (activeBlockingExperience !== null) {
-      return;
-    }
-
-    // Priority order for blockers:
-    // 1. tours (guided workflows), 2. outbound post, 3. large surveys.
-    if (hasTourBlockingCandidate) {
-      setActiveBlockingExperience("tour");
-      return;
-    }
-
-    if (hasOutboundPostBlockingCandidate) {
-      setActiveBlockingExperience("outbound_post");
-      return;
-    }
-
-    if (hasLargeSurveyBlockingCandidate) {
-      setActiveBlockingExperience("survey_large");
-    }
-  }, [
+  const {
     activeBlockingExperience,
+    setActiveBlockingExperience,
+    allowTourBlocking,
+    allowOutboundPostBlocking,
+    allowLargeSurveyBlocking,
+    hasAnyPendingBlockingCandidate,
+  } = useBlockingExperienceArbitration({
     hasTourBlockingCandidate,
     hasOutboundPostBlockingCandidate,
-    hasLargeSurveyBlockingCandidate,
-  ]);
-
-  useEffect(() => {
-    if (activeBlockingExperience === null) {
-      return;
-    }
-
-    if (activeBlockingExperience === "tour") {
-      if (tourBlockingActive || hasTourBlockingCandidate) {
-        return;
-      }
-      setActiveBlockingExperience(null);
-      return;
-    }
-
-    if (activeBlockingExperience === "outbound_post") {
-      if (hasOutboundPostBlockingActive || hasOutboundPostBlockingCandidate) {
-        return;
-      }
-      setActiveBlockingExperience(null);
-      return;
-    }
-
-    if (hasLargeSurveyBlockingActive || hasLargeSurveyBlockingCandidate) {
-      return;
-    }
-    setActiveBlockingExperience(null);
-  }, [
-    activeBlockingExperience,
-    tourBlockingActive,
-    hasTourBlockingCandidate,
     hasOutboundPostBlockingActive,
-    hasOutboundPostBlockingCandidate,
-    hasLargeSurveyBlockingActive,
     hasLargeSurveyBlockingCandidate,
-  ]);
-
-  const allowTourBlocking = activeBlockingExperience === "tour";
-  const allowOutboundPostBlocking = activeBlockingExperience === "outbound_post";
-  const allowLargeSurveyBlocking = activeBlockingExperience === "survey_large";
-  const hasAnyPendingBlockingCandidate =
-    hasTourBlockingCandidate || hasOutboundPostBlockingCandidate || hasLargeSurveyBlockingCandidate;
-
-  // Validate origin when workspaceId is provided (only if ID format is valid)
-  const originValidation = useQuery(
-    api.workspaces.validateOrigin,
-    isValidIdFormat
-      ? { workspaceId: activeWorkspaceId as Id<"workspaces">, origin: window.location.origin }
-      : "skip"
-  );
-
-  useEffect(() => {
-    if (!activeWorkspaceId) {
-      setWorkspaceError("workspaceId is required");
-      return;
-    }
-    if (!isValidIdFormat) {
-      setWorkspaceError("Invalid workspace ID format");
-      return;
-    }
-    if (workspaceValidation === null) {
-      setWorkspaceError("Workspace not found");
-      return;
-    }
-    setWorkspaceError(null); // Clear error if workspace is valid
-    if (originValidation && !originValidation.valid) {
-      setOriginError(originValidation.reason);
-    } else {
-      setOriginError(null);
-    }
-  }, [activeWorkspaceId, isValidIdFormat, workspaceValidation, originValidation]);
+    hasLargeSurveyBlockingActive,
+    tourBlockingActive,
+  });
 
   useEffect(() => {
     if (!(isValidIdFormat && visitorId && sessionToken && activeWorkspaceId)) {
@@ -592,116 +527,25 @@ export function Widget({
     return () => clearTimeout(timeout);
   }, [isValidIdFormat, visitorId, sessionToken, activeWorkspaceId, activeSurveys]);
 
-  const playWidgetCueSound = () => {
-    const AudioContextCtor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) {
-      return;
-    }
-
-    const context = new AudioContextCtor();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(740, context.currentTime);
-    gainNode.gain.setValueAtTime(0.045, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.16);
-    oscillator.onended = () => {
-      void context.close();
-    };
-  };
-
-  useEffect(() => {
-    const refreshCuePreferences = () => {
-      widgetCuePreferencesRef.current = loadWidgetCuePreferences(window.localStorage);
-    };
-    refreshCuePreferences();
-    window.addEventListener("storage", refreshCuePreferences);
-    return () => {
-      window.removeEventListener("storage", refreshCuePreferences);
-    };
+  const openConversation = useCallback((id: Id<"conversations">) => {
+    setConversationId(id);
+    setView("conversation");
   }, []);
 
-  useEffect(() => {
-    if (!visitorConversations) {
-      return;
-    }
+  const handleOpenConversationFromCue = useCallback(
+    (id: Id<"conversations">) => {
+      setActiveTab("messages");
+      openConversation(id);
+    },
+    [openConversation]
+  );
 
-    const previousSnapshot = unreadSnapshotRef.current;
-    const currentSnapshot = buildWidgetUnreadSnapshot(
-      visitorConversations.map((conversation) => ({
-        _id: conversation._id,
-        unreadByVisitor: conversation.unreadByVisitor,
-      }))
-    );
-    unreadSnapshotRef.current = currentSnapshot;
-
-    if (!previousSnapshot) {
-      return;
-    }
-
-    const increasedConversationIds = getWidgetUnreadIncreases({
-      previous: previousSnapshot,
-      conversations: visitorConversations.map((conversation) => ({
-        _id: conversation._id,
-        unreadByVisitor: conversation.unreadByVisitor,
-      })),
-    });
-    if (increasedConversationIds.length === 0) {
-      return;
-    }
-
-    const cueView =
-      view === "conversation" || view === "launcher" ? view : ("conversation-list" as const);
-
-    for (const increasedConversationId of increasedConversationIds) {
-      const conversation = visitorConversations.find(
-        (entry) => entry._id === increasedConversationId
-      );
-      if (!conversation) {
-        continue;
-      }
-
-      const suppressCue = shouldSuppressWidgetCue({
-        conversationId: increasedConversationId,
-        activeConversationId: conversationId,
-        widgetView: cueView,
-        isDocumentVisible: document.visibilityState === "visible",
-        hasWindowFocus: document.hasFocus(),
-      });
-      if (suppressCue) {
-        continue;
-      }
-
-      const preferences = widgetCuePreferencesRef.current;
-      if (preferences.sound) {
-        playWidgetCueSound();
-      }
-
-      if (
-        preferences.browserNotifications &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        const notification = new Notification("New message from support", {
-          body: conversation.lastMessage?.content ?? "Tap to open the conversation.",
-          tag: `opencom-widget-${conversation._id}`,
-        });
-        notification.onclick = () => {
-          window.focus();
-          setActiveTab("messages");
-          setConversationId(conversation._id);
-          setView("conversation");
-        };
-      }
-    }
-  }, [conversationId, view, visitorConversations]);
+  const { resetUnreadSnapshot } = useWidgetUnreadCues({
+    conversationId,
+    view,
+    visitorConversations,
+    onOpenConversation: handleOpenConversationFromCue,
+  });
 
   useEffect(() => {
     if (displayedSurvey || !candidateSurvey) {
@@ -741,13 +585,17 @@ export function Widget({
     setActiveBlockingExperience(null);
     setTourBlockingActive(false);
     setOutboundBlockingState({ hasPendingPost: false, hasActivePost: false });
-  }, [sessionId, visitorId, activeWorkspaceId]);
+    setSelectedHelpCollectionKey(null);
+    clearLargeArticleCollapseTimeout();
+    setIsArticleLargeMode(false);
+    setIsCollapsingLargeArticle(false);
+  }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout, setActiveBlockingExperience]);
 
   useEffect(() => {
-    unreadSnapshotRef.current = null;
+    resetUnreadSnapshot();
     latestDraftConversationIdRef.current = null;
     createConversationRequestRef.current = null;
-  }, [sessionId, visitorId, activeWorkspaceId]);
+  }, [sessionId, visitorId, activeWorkspaceId, resetUnreadSnapshot]);
 
   // Handle debug workspace ID update
   const handleDebugWorkspaceUpdate = () => {
@@ -756,11 +604,6 @@ export function Widget({
     setConversationId(null);
     setVisitorId(null);
   };
-
-  const openConversation = useCallback((id: Id<"conversations">) => {
-    setConversationId(id);
-    setView("conversation");
-  }, []);
 
   const handleNewConversation = async () => {
     const existingDraftConversationId =
@@ -867,10 +710,10 @@ export function Widget({
     }));
   }, [allTours]);
 
-  useEffect(() => {
-    setStartTourCallback(handleStartTour);
-    setGetAvailableToursCallback(handleGetAvailableTours);
-  }, [handleStartTour, handleGetAvailableTours]);
+  useWidgetTourBridge({
+    onStartTour: handleStartTour,
+    onGetAvailableTours: handleGetAvailableTours,
+  });
 
   const handleTourComplete = useCallback(() => {
     setForcedTourId(null);
@@ -939,24 +782,17 @@ export function Widget({
   // (article suggestions, email capture, message sending are now in ConversationView component)
 
   // Home configuration for customizable home page
+  const isIdentifiedVisitor = !!(userInfo?.userId || userInfo?.email);
   const homeConfig = useHomeConfig(
     isValidIdFormat ? (activeWorkspaceId as Id<"workspaces">) : undefined,
-    !!userInfo?.userId
+    isIdentifiedVisitor
   );
 
-  // Determine initial tab based on home config
-  useEffect(() => {
-    if (homeConfig !== undefined) {
-      if (!homeConfig?.enabled) {
-        const defaultSpace = homeConfig?.defaultSpace || "messages";
-        if (defaultSpace === "help") {
-          setActiveTab("help");
-        } else {
-          setActiveTab("messages");
-        }
-      }
-    }
-  }, [homeConfig]);
+  const { fallbackTab, isTabVisible } = useWidgetTabVisibility({
+    activeTab,
+    setActiveTab,
+    homeConfig: homeConfig as { enabled?: boolean; defaultSpace?: "home" | "messages" | "help"; tabs?: TabConfig[] },
+  });
 
   // Debug panel for dev mode
   const debugPanel = (
@@ -1004,28 +840,6 @@ export function Widget({
     </div>
   );
 
-  // If workspace validation failed, show error with debug option
-  if (workspaceError) {
-    console.error("[Opencom Widget] Workspace validation failed:", workspaceError);
-    return (
-      <div className="opencom-widget">
-        {showDebug && debugPanel}
-        <div className="opencom-error">
-          <p>Widget Error: {workspaceError}</p>
-          <button onClick={() => setShowDebug(!showDebug)} className="opencom-debug-toggle">
-            {showDebug ? "Hide Debug" : "Debug"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // If origin validation failed, don't render the widget
-  if (originError) {
-    console.error("[Opencom Widget] Origin validation failed:", originError);
-    return null;
-  }
-
   const handleOpenWidget = () => {
     // Always open to conversation list first
     setView("conversation-list");
@@ -1035,14 +849,58 @@ export function Widget({
     if (view === "conversation" && conversationId) {
       syncConversationReadState(conversationId);
     }
+    clearLargeArticleCollapseTimeout();
+    setIsArticleLargeMode(false);
+    setIsCollapsingLargeArticle(false);
     setView("launcher");
   };
 
   // ── Navigation handlers ───────────────────────────────────────────
-  const handleBackFromArticle = () => {
+  const navigateBackFromArticle = () => {
+    clearLargeArticleCollapseTimeout();
+    setIsArticleLargeMode(false);
+    setIsCollapsingLargeArticle(false);
     setSelectedArticleId(null);
     setActiveTab("help");
     setView("conversation-list");
+  };
+
+  const collapseLargeArticle = useCallback(
+    (onCollapsed?: () => void) => {
+      if (isCollapsingLargeArticle) {
+        return;
+      }
+      if (!isArticleLargeMode) {
+        onCollapsed?.();
+        return;
+      }
+      setIsCollapsingLargeArticle(true);
+      clearLargeArticleCollapseTimeout();
+      largeArticleCollapseTimeoutRef.current = window.setTimeout(() => {
+        largeArticleCollapseTimeoutRef.current = null;
+        setIsArticleLargeMode(false);
+        setIsCollapsingLargeArticle(false);
+        onCollapsed?.();
+      }, 280);
+    },
+    [clearLargeArticleCollapseTimeout, isArticleLargeMode, isCollapsingLargeArticle]
+  );
+
+  const handleBackFromArticle = () => {
+    collapseLargeArticle(navigateBackFromArticle);
+  };
+
+  const handleToggleArticleLargeScreen = () => {
+    if (isCollapsingLargeArticle) {
+      return;
+    }
+    if (isArticleLargeMode) {
+      collapseLargeArticle();
+      return;
+    }
+    clearLargeArticleCollapseTimeout();
+    setIsCollapsingLargeArticle(false);
+    setIsArticleLargeMode(true);
   };
 
   const handleStartConversationFromArticle = async () => {
@@ -1064,6 +922,9 @@ export function Widget({
         setConversationId(newConv._id);
         setView("conversation");
         setSelectedArticleId(null);
+        clearLargeArticleCollapseTimeout();
+        setIsArticleLargeMode(false);
+        setIsCollapsingLargeArticle(false);
       }
     } catch (error) {
       console.error("Failed to start conversation:", error);
@@ -1167,7 +1028,8 @@ export function Widget({
 
   // Get header title and actions based on active tab
   const getTabHeader = () => {
-    switch (activeTab) {
+    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
+    switch (resolvedActiveTab) {
       case "home":
         return { title: "Home", showNew: false };
       case "messages":
@@ -1187,6 +1049,7 @@ export function Widget({
 
   // ── Main tabbed shell ──────────────────────────────────────────────
   const renderMainShell = () => {
+    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
     const header = getTabHeader();
     return (
       <div className="opencom-chat">
@@ -1208,12 +1071,12 @@ export function Widget({
           </div>
         </div>
         <div className="opencom-tab-content">
-          {activeTab === "home" && homeConfig?.enabled && (
+          {resolvedActiveTab === "home" && homeConfig?.enabled && (
             <HomeComponent
               workspaceId={activeWorkspaceId as Id<"workspaces">}
               visitorId={visitorId}
               sessionToken={sessionToken}
-              isIdentified={!!userInfo?.userId}
+              isIdentified={isIdentifiedVisitor}
               settings={{
                 primaryColor: messengerSettings.primaryColor,
                 backgroundColor: messengerSettings.backgroundColor,
@@ -1224,41 +1087,36 @@ export function Widget({
               conversations={visitorConversations}
               onStartConversation={handleNewConversation}
               onSelectConversation={handleSelectConversation}
-              onSelectArticle={(id) => {
-                setSelectedArticleId(id);
-                setPreviousView(view);
-                setView("article-detail");
-              }}
+              onSelectArticle={openArticleDetail}
               onSearch={(query) => {
                 setArticleSearchQuery(query);
                 setActiveTab("help");
               }}
             />
           )}
-          {activeTab === "messages" && (
+          {resolvedActiveTab === "messages" && (
             <ConversationList
               conversations={visitorConversations}
               onSelectConversation={handleSelectConversation}
               onNewConversation={handleNewConversation}
             />
           )}
-          {activeTab === "help" && (
+          {resolvedActiveTab === "help" && (
             <HelpCenter
               articleSearchQuery={articleSearchQuery}
               onSearchChange={setArticleSearchQuery}
               articleSearchResults={articleSearchResults}
               publishedArticles={publishedArticles}
               collections={publishedCollections}
-              onSelectArticle={(id) => {
-                setSelectedArticleId(id);
-                setView("article-detail");
-              }}
+              selectedCollectionKey={selectedHelpCollectionKey}
+              onSelectedCollectionKeyChange={setSelectedHelpCollectionKey}
+              onSelectArticle={openArticleDetail}
             />
           )}
-          {activeTab === "tours" && (
+          {resolvedActiveTab === "tours" && (
             <TourPicker allTours={allTours} onSelectTour={handleSelectTour} />
           )}
-          {activeTab === "tasks" && (
+          {resolvedActiveTab === "tasks" && (
             <TasksList
               visitorId={visitorId}
               activeWorkspaceId={activeWorkspaceId}
@@ -1268,7 +1126,7 @@ export function Widget({
               onStartTour={handleStartTour}
             />
           )}
-          {activeTab === "tickets" && (
+          {resolvedActiveTab === "tickets" && (
             <div className="opencom-tickets-view">
               <TicketsList
                 tickets={visitorTickets}
@@ -1294,78 +1152,111 @@ export function Widget({
           )}
         </div>
         <div className="opencom-bottom-nav">
-          {homeConfig?.enabled && (
+          {isTabVisible("home") && (
             <button
               onClick={() => setActiveTab("home")}
-              className={`opencom-nav-item ${activeTab === "home" ? "opencom-nav-item-active" : ""}`}
+              className={`opencom-nav-item ${resolvedActiveTab === "home" ? "opencom-nav-item-active" : ""}`}
               title="Home"
             >
               <Home />
               <span>Home</span>
             </button>
           )}
-          <button
-            onClick={() => setActiveTab("messages")}
-            className={`opencom-nav-item ${activeTab === "messages" ? "opencom-nav-item-active" : ""}`}
-            title="Conversations"
-          >
-            <MessageCircle />
-            <span>Messages</span>
-            {normalizedUnreadCount > 0 && (
-              <span className="opencom-nav-badge opencom-nav-badge-alert">
-                {normalizedUnreadCount > 99 ? "99+" : normalizedUnreadCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("help")}
-            className={`opencom-nav-item ${activeTab === "help" ? "opencom-nav-item-active" : ""}`}
-            title="Help Center"
-          >
-            <Search />
-            <span>Help</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("tours")}
-            className={`opencom-nav-item ${activeTab === "tours" ? "opencom-nav-item-active" : ""}`}
-            title="Product Tours"
-          >
-            <Map />
-            <span>Tours</span>
-            {(() => {
-              const availableCount =
-                allTours?.filter((t: { elementSelectors: string[] }) =>
-                  checkElementsAvailable(t.elementSelectors)
-                ).length || 0;
-              return availableCount > 0 ? (
-                <span className="opencom-nav-badge">{availableCount}</span>
-              ) : null;
-            })()}
-          </button>
-          <button
-            onClick={() => setActiveTab("tasks")}
-            className={`opencom-nav-item ${activeTab === "tasks" ? "opencom-nav-item-active" : ""}`}
-            title="Tasks"
-          >
-            <CheckSquare />
-            <span>Tasks</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("tickets")}
-            className={`opencom-nav-item ${activeTab === "tickets" ? "opencom-nav-item-active" : ""}`}
-            title="My Tickets"
-          >
-            <Ticket />
-            <span>Tickets</span>
-          </button>
+          {isTabVisible("messages") && (
+            <button
+              onClick={() => setActiveTab("messages")}
+              className={`opencom-nav-item ${resolvedActiveTab === "messages" ? "opencom-nav-item-active" : ""}`}
+              title="Conversations"
+            >
+              <MessageCircle />
+              <span>Messages</span>
+              {normalizedUnreadCount > 0 && (
+                <span className="opencom-nav-badge opencom-nav-badge-alert">
+                  {normalizedUnreadCount > 99 ? "99+" : normalizedUnreadCount}
+                </span>
+              )}
+            </button>
+          )}
+          {isTabVisible("help") && (
+            <button
+              onClick={() => setActiveTab("help")}
+              className={`opencom-nav-item ${resolvedActiveTab === "help" ? "opencom-nav-item-active" : ""}`}
+              title="Help Center"
+            >
+              <Search />
+              <span>Help</span>
+            </button>
+          )}
+          {isTabVisible("tours") && (
+            <button
+              onClick={() => setActiveTab("tours")}
+              className={`opencom-nav-item ${resolvedActiveTab === "tours" ? "opencom-nav-item-active" : ""}`}
+              title="Product Tours"
+            >
+              <Map />
+              <span>Tours</span>
+              {(() => {
+                const availableCount =
+                  allTours?.filter((t: { elementSelectors: string[] }) =>
+                    checkElementsAvailable(t.elementSelectors)
+                  ).length || 0;
+                return availableCount > 0 ? (
+                  <span className="opencom-nav-badge">{availableCount}</span>
+                ) : null;
+              })()}
+            </button>
+          )}
+          {isTabVisible("tasks") && (
+            <button
+              onClick={() => setActiveTab("tasks")}
+              className={`opencom-nav-item ${resolvedActiveTab === "tasks" ? "opencom-nav-item-active" : ""}`}
+              title="Tasks"
+            >
+              <CheckSquare />
+              <span>Tasks</span>
+            </button>
+          )}
+          {isTabVisible("tickets") && (
+            <button
+              onClick={() => setActiveTab("tickets")}
+              className={`opencom-nav-item ${resolvedActiveTab === "tickets" ? "opencom-nav-item-active" : ""}`}
+              title="My Tickets"
+            >
+              <Ticket />
+              <span>Tickets</span>
+            </button>
+          )}
         </div>
       </div>
     );
   };
 
+  if (workspaceError) {
+    console.error("[Opencom Widget] Workspace validation failed:", workspaceError);
+    return (
+      <div className="opencom-widget">
+        {showDebug && debugPanel}
+        <div className="opencom-error">
+          <p>Widget Error: {workspaceError}</p>
+          <button onClick={() => setShowDebug(!showDebug)} className="opencom-debug-toggle">
+            {showDebug ? "Hide Debug" : "Debug"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (originError) {
+    console.error("[Opencom Widget] Origin validation failed:", originError);
+    return null;
+  }
+
   // ── Return ─────────────────────────────────────────────────────────
   return (
-    <div className={`opencom-widget ${effectiveTheme === "dark" ? "opencom-theme-dark" : ""}`}>
+    <div
+      className={`opencom-widget ${effectiveTheme === "dark" ? "opencom-theme-dark" : ""} ${isLargeArticleView ? "opencom-widget-article-large" : ""}`}
+    >
+      {isLargeArticleView && <div className="opencom-widget-article-backdrop" aria-hidden="true" />}
       {showDebug && debugPanel}
       {view === "launcher" && messengerSettings.showLauncher && (
         <button
@@ -1414,16 +1305,15 @@ export function Widget({
           commonIssueButtons={commonIssueButtons}
           onBack={handleBackToList}
           onClose={handleCloseWidget}
-          onSelectArticle={(id) => {
-            setSelectedArticleId(id);
-            setPreviousView(view);
-            setView("article-detail");
-          }}
+          onSelectArticle={openArticleDetail}
         />
       )}
       {view === "article-detail" && (
         <ArticleDetail
           article={selectedArticle ?? undefined}
+          isLargeScreen={isLargeArticleView}
+          isCollapsingLargeScreen={isCollapsingLargeArticle}
+          onToggleLargeScreen={handleToggleArticleLargeScreen}
           onBack={handleBackFromArticle}
           onClose={handleCloseWidget}
           onStartConversation={handleStartConversationFromArticle}
@@ -1493,13 +1383,11 @@ export function Widget({
             handleNewConversation();
           }}
           onNavigateTab={(tabId) => {
-            setActiveTab(tabId as MainTab);
+            const requestedTab = tabId as MainTab;
+            setActiveTab(isTabVisible(requestedTab) ? requestedTab : fallbackTab);
             setView("conversation-list");
           }}
-          onOpenArticle={(articleId) => {
-            setSelectedArticleId(articleId);
-            setView("article-detail");
-          }}
+          onOpenArticle={openArticleDetail}
         />
       )}
 

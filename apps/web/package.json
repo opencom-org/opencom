@@ -21,6 +21,7 @@
     "dompurify": "^3.3.1",
     "fflate": "^0.8.2",
     "lucide-react": "^0.469.0",
+    "markdown-it": "^14.1.1",
     "next": "^15.5.10",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^20.10.0",
     "@types/react": "^19.2.9",
     "@types/react-dom": "^19.2.3",

@@ -17,11 +17,18 @@ interface HomeCard {
   visibleTo: "all" | "visitors" | "users";
 }
 
+interface HomeTab {
+  id: "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
+  enabled: boolean;
+  visibleTo: "all" | "visitors" | "users";
+}
+
 interface HomeConfig {
   enabled: boolean;
   cards: HomeCard[];
   defaultSpace: "home" | "messages" | "help";
   launchDirectlyToConversation: boolean;
+  tabs?: HomeTab[];
 }
 
 interface Conversation {
@@ -271,6 +278,14 @@ const DEFAULT_HOME_CONFIG: HomeConfig = {
   ],
   defaultSpace: "home",
   launchDirectlyToConversation: false,
+  tabs: [
+    { id: "home", enabled: true, visibleTo: "all" },
+    { id: "messages", enabled: true, visibleTo: "all" },
+    { id: "help", enabled: true, visibleTo: "all" },
+    { id: "tours", enabled: true, visibleTo: "all" },
+    { id: "tasks", enabled: true, visibleTo: "all" },
+    { id: "tickets", enabled: true, visibleTo: "all" },
+  ],
 };
 
 export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdentified: boolean) {
@@ -279,5 +294,10 @@ export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdent
     workspaceId ? { workspaceId, isIdentified } : "skip"
   ) as HomeConfig | undefined;
 
-  return homeConfig ?? DEFAULT_HOME_CONFIG;
+  const resolvedConfig = homeConfig ?? DEFAULT_HOME_CONFIG;
+  return {
+    ...resolvedConfig,
+    launchDirectlyToConversation: resolvedConfig.launchDirectlyToConversation ?? false,
+    tabs: resolvedConfig.tabs ?? DEFAULT_HOME_CONFIG.tabs,
+  };
 }

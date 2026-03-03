@@ -33,6 +33,9 @@ vi.mock("@opencom/convex", () => ({
       searchForVisitor: "articles.searchForVisitor",
       listForVisitor: "articles.listForVisitor",
     },
+    collections: {
+      listHierarchy: "collections.listHierarchy",
+    },
     automationSettings: {
       getOrCreate: "automationSettings.getOrCreate",
     },
@@ -206,6 +209,10 @@ describe("Widget tour launch behavior", () => {
 
       if (queryRef === "tourProgress.getAvailableTours") {
         return availableToursResult;
+      }
+
+      if (queryRef === "collections.listHierarchy") {
+        return [];
       }
 
       if (queryRef === "tours.listAll") {
