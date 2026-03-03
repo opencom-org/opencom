@@ -1058,6 +1058,33 @@ export const cleanupTestData = internalMutation({
       await ctx.db.delete(article._id);
     }
 
+    // Clean up collections
+    const collections = await ctx.db
+      .query("collections")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+    for (const collection of collections) {
+      await ctx.db.delete(collection._id);
+    }
+
+    // Clean up help center import archives
+    const importArchives = await ctx.db
+      .query("helpCenterImportArchives")
+      .withIndex("by_workspace_deleted_at", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+    for (const archive of importArchives) {
+      await ctx.db.delete(archive._id);
+    }
+
+    // Clean up help center import sources
+    const importSources = await ctx.db
+      .query("helpCenterImportSources")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+    for (const source of importSources) {
+      await ctx.db.delete(source._id);
+    }
+
     // Clean up snippets
     const snippets = await ctx.db
       .query("snippets")

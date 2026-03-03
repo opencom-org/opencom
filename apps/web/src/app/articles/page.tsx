@@ -1,20 +1,86 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
 import { api } from "@opencom/convex";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
-import { Plus, Search, FileText, Pencil, Trash2, Eye, EyeOff } from "lucide-react";
+import {
+  Plus,
+  Search,
+  FileText,
+  Pencil,
+  Trash2,
+  Eye,
+  EyeOff,
+  Upload,
+  History,
+  Download,
+} from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { strToU8, zipSync } from "fflate";
+
+type ImportSelectionItem = {
+  file: File;
+  relativePath: string;
+};
+
+type MarkdownImportPreview = {
+  dryRun: boolean;
+  createdCollections: number;
+  updatedCollections: number;
+  createdArticles: number;
+  updatedArticles: number;
+  deletedArticles: number;
+  deletedCollections: number;
+  totalFiles: number;
+  strippedRootFolder?: string;
+  preview: {
+    collections: {
+      create: string[];
+      update: string[];
+      delete: string[];
+    };
+    articles: {
+      create: string[];
+      update: string[];
+      delete: string[];
+    };
+  };
+};
+
+type DeleteArticleTarget = {
+  id: Id<"articles">;
+  title: string;
+};
 
 function ArticlesContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [importSourceName, setImportSourceName] = useState("");
+  const [importTargetCollectionId, setImportTargetCollectionId] = useState<
+    Id<"collections"> | undefined
+  >(undefined);
+  const [selectedImportItems, setSelectedImportItems] = useState<ImportSelectionItem[]>([]);
+  const [importPreview, setImportPreview] = useState<MarkdownImportPreview | null>(null);
+  const [previewSignature, setPreviewSignature] = useState<string | null>(null);
+  const [isPreviewingImport, setIsPreviewingImport] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportSourceId, setExportSourceId] = useState<Id<"helpCenterImportSources"> | undefined>(
+    undefined
+  );
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [restoringRunId, setRestoringRunId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteArticleTarget | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeletingArticle, setIsDeletingArticle] = useState(false);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
   const articles = useQuery(
     api.articles.list,
@@ -25,11 +91,32 @@ function ArticlesContent() {
     api.collections.listHierarchy,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
+  const importSources = useQuery(
+    api.helpCenterImports.listSources,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+  const importHistory = useQuery(
+    api.helpCenterImports.listHistory,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, limit: 10 } : "skip"
+  );
+  const markdownExport = useQuery(
+    api.helpCenterImports.exportMarkdown,
+    isExporting && activeWorkspace?._id
+      ? {
+          workspaceId: activeWorkspace._id,
+          sourceId: exportSourceId,
+          includeDrafts: true,
+        }
+      : "skip"
+  );
 
   const createArticle = useMutation(api.articles.create);
   const deleteArticle = useMutation(api.articles.remove);
   const publishArticle = useMutation(api.articles.publish);
   const unpublishArticle = useMutation(api.articles.unpublish);
+  const syncMarkdownFolder = useMutation(api.helpCenterImports.syncMarkdownFolder);
+  const restoreImportRun = useMutation(api.helpCenterImports.restoreRun);
+  const logExport = useMutation(api.auditLogs.logExport);
 
   const handleCreateArticle = async () => {
     if (!activeWorkspace?._id) return;
@@ -41,9 +128,34 @@ function ArticlesContent() {
     router.push(`/articles/${articleId}`);
   };
 
-  const handleDelete = async (id: Id<"articles">) => {
-    if (confirm("Are you sure you want to delete this article?")) {
-      await deleteArticle({ id });
+  const handleDeleteRequest = (id: Id<"articles">, title: string) => {
+    setDeleteError(null);
+    setDeleteTarget({ id, title });
+  };
+
+  const handleDeleteCancel = () => {
+    if (isDeletingArticle) {
+      return;
+    }
+    setDeleteError(null);
+    setDeleteTarget(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setIsDeletingArticle(true);
+    setDeleteError(null);
+    try {
+      await deleteArticle({ id: deleteTarget.id });
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error("Failed to delete article:", error);
+      setDeleteError(error instanceof Error ? error.message : "Failed to delete article.");
+    } finally {
+      setIsDeletingArticle(false);
     }
   };
 
@@ -54,6 +166,267 @@ function ArticlesContent() {
       await publishArticle({ id });
     }
   };
+
+  const getRawImportRelativePath = (file: File): string => {
+    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+    const fallback = relativePath && relativePath.length > 0 ? relativePath : file.name;
+    return fallback
+      .replace(/\\/g, "/")
+      .trim()
+      .replace(/^\/+|\/+$/g, "");
+  };
+
+  const deriveDefaultSourceName = (paths: string[]): string => {
+    if (paths.length === 0) {
+      return "docs";
+    }
+    const firstSegment = paths[0]?.split("/")[0] ?? "docs";
+    return firstSegment.replace(/\.(md|markdown)$/i, "") || "docs";
+  };
+
+  const buildImportSignature = (
+    sourceName: string,
+    targetCollectionId: Id<"collections"> | undefined,
+    items: ImportSelectionItem[]
+  ): string => {
+    const normalizedSourceName = sourceName.trim().toLowerCase();
+    const normalizedTarget = targetCollectionId ?? "root";
+    const normalizedItems = items
+      .map((item) => `${item.relativePath}:${item.file.size}:${item.file.lastModified}`)
+      .sort((a, b) => a.localeCompare(b));
+    return [normalizedSourceName, normalizedTarget, ...normalizedItems].join("::");
+  };
+
+  const currentImportSignature = buildImportSignature(
+    importSourceName,
+    importTargetCollectionId,
+    selectedImportItems
+  );
+
+  const buildImportPayload = async () =>
+    Promise.all(
+      selectedImportItems.map(async (item) => ({
+        relativePath: item.relativePath,
+        content: await item.file.text(),
+      }))
+    );
+
+  const handleImportFolderSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const markdownFiles = files.filter((file) => /\.(md|markdown)$/i.test(file.name));
+
+    if (markdownFiles.length === 0) {
+      setSelectedImportItems([]);
+      setImportPreview(null);
+      setPreviewSignature(null);
+      setImportError("No markdown files found in selection.");
+      setImportNotice(null);
+      return;
+    }
+
+    const rawPaths = markdownFiles.map(getRawImportRelativePath);
+
+    const items = markdownFiles.map((file, index) => ({
+      file,
+      relativePath: rawPaths[index]!,
+    }));
+    setSelectedImportItems(items);
+    setImportPreview(null);
+    setPreviewSignature(null);
+    setImportError(null);
+    setImportNotice(null);
+    if (!importSourceName.trim()) {
+      setImportSourceName(deriveDefaultSourceName(rawPaths));
+    }
+  };
+
+  const handleImportSourceNameChange = (value: string) => {
+    setImportSourceName(value);
+    setImportPreview(null);
+    setPreviewSignature(null);
+  };
+
+  const handleImportTargetCollectionChange = (value: string) => {
+    setImportTargetCollectionId(value ? (value as Id<"collections">) : undefined);
+    setImportPreview(null);
+    setPreviewSignature(null);
+  };
+
+  const handlePreviewImport = async () => {
+    if (!activeWorkspace?._id || selectedImportItems.length === 0) {
+      return;
+    }
+
+    const sourceName = importSourceName.trim();
+    if (!sourceName) {
+      setImportError("Import source name is required.");
+      setImportNotice(null);
+      return;
+    }
+
+    const signatureAtPreview = currentImportSignature;
+    setIsPreviewingImport(true);
+    setImportError(null);
+    setImportNotice(null);
+
+    try {
+      const files = await buildImportPayload();
+
+      const result = await syncMarkdownFolder({
+        workspaceId: activeWorkspace._id,
+        sourceName,
+        rootCollectionId: importTargetCollectionId,
+        files,
+        publishByDefault: true,
+        dryRun: true,
+      });
+
+      setImportPreview(result as MarkdownImportPreview);
+      setPreviewSignature(signatureAtPreview);
+      const rootStripSuffix = result.strippedRootFolder
+        ? ` Upload root "${result.strippedRootFolder}" will be ignored.`
+        : "";
+      setImportNotice(
+        `Preview ready. Create ${result.createdArticles} articles / ${result.createdCollections} collections, update ${result.updatedArticles} articles / ${result.updatedCollections} collections, delete ${result.deletedArticles} articles / ${result.deletedCollections} collections.${rootStripSuffix}`
+      );
+    } catch (error) {
+      console.error("Failed to preview markdown import:", error);
+      setImportPreview(null);
+      setPreviewSignature(null);
+      setImportError(
+        error instanceof Error ? error.message : "Failed to preview markdown folder sync."
+      );
+    } finally {
+      setIsPreviewingImport(false);
+    }
+  };
+
+  const handleStartImport = async () => {
+    if (!activeWorkspace?._id || selectedImportItems.length === 0) {
+      return;
+    }
+
+    const sourceName = importSourceName.trim();
+    if (!sourceName) {
+      setImportError("Import source name is required.");
+      setImportNotice(null);
+      return;
+    }
+
+    if (!importPreview || previewSignature !== currentImportSignature) {
+      setImportError("Run Preview Changes before applying import.");
+      setImportNotice(null);
+      return;
+    }
+
+    setIsImporting(true);
+    setImportError(null);
+    setImportNotice(null);
+
+    try {
+      const files = await buildImportPayload();
+
+      const result = await syncMarkdownFolder({
+        workspaceId: activeWorkspace._id,
+        sourceName,
+        rootCollectionId: importTargetCollectionId,
+        files,
+        publishByDefault: true,
+      });
+
+      const rootStripSuffix = result.strippedRootFolder
+        ? ` Ignored upload root folder "${result.strippedRootFolder}".`
+        : "";
+      setImportNotice(
+        `Synced ${result.totalFiles} markdown files. Added ${result.createdArticles}, updated ${result.updatedArticles}, removed ${result.deletedArticles}.${rootStripSuffix}`
+      );
+      setSelectedImportItems([]);
+      setImportPreview(null);
+      setPreviewSignature(null);
+      if (folderInputRef.current) {
+        folderInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Failed to import markdown folder:", error);
+      setImportError(error instanceof Error ? error.message : "Failed to sync markdown folder.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleRestoreRun = async (sourceId: Id<"helpCenterImportSources">, importRunId: string) => {
+    if (!activeWorkspace?._id) {
+      return;
+    }
+    setRestoringRunId(importRunId);
+    setImportError(null);
+    setImportNotice(null);
+    try {
+      const result = await restoreImportRun({
+        workspaceId: activeWorkspace._id,
+        sourceId,
+        importRunId,
+      });
+      setImportNotice(
+        `Restored ${result.restoredArticles} articles and ${result.restoredCollections} collections from history.`
+      );
+    } catch (error) {
+      console.error("Failed to restore import history run:", error);
+      setImportError(error instanceof Error ? error.message : "Failed to restore history run.");
+    } finally {
+      setRestoringRunId(null);
+    }
+  };
+
+  const handleExportMarkdown = () => {
+    if (!activeWorkspace?._id) {
+      return;
+    }
+    setImportError(null);
+    setImportNotice(null);
+    setIsExporting(true);
+  };
+
+  useEffect(() => {
+    if (!markdownExport || !isExporting || !activeWorkspace?._id) {
+      return;
+    }
+
+    try {
+      const archiveFiles: Record<string, Uint8Array> = {};
+      for (const file of markdownExport.files) {
+        archiveFiles[file.path] = strToU8(file.content);
+      }
+
+      const zipped = zipSync(archiveFiles, { level: 6 });
+      const zipBytes = new Uint8Array(zipped);
+      const blob = new Blob([zipBytes], { type: "application/zip" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = markdownExport.fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+
+      logExport({
+        workspaceId: activeWorkspace._id,
+        exportType: "helpCenterMarkdown",
+        recordCount: markdownExport.count,
+      }).catch((error) => {
+        console.error("Failed to log markdown export:", error);
+      });
+
+      setImportNotice(`Exported ${markdownExport.count} markdown files.`);
+      setImportError(null);
+    } catch (error) {
+      console.error("Failed to create markdown export archive:", error);
+      setImportError(error instanceof Error ? error.message : "Failed to export markdown.");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [activeWorkspace?._id, isExporting, logExport, markdownExport]);
 
   const getCollectionName = (collectionId?: Id<"collections">) => {
     if (!collectionId || !collections) return "Uncategorized";
@@ -66,6 +439,33 @@ function ArticlesContent() {
   const filteredArticles = articles?.filter((article: NonNullable<typeof articles>[number]) =>
     article.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const selectedImportPaths = selectedImportItems.map((item) => item.relativePath);
+  const hasCurrentPreview = Boolean(
+    importPreview && previewSignature && previewSignature === currentImportSignature
+  );
+  const isPreviewStale = Boolean(importPreview && previewSignature !== currentImportSignature);
+
+  const collectionMap = new Map(
+    (collections ?? []).map((collection: NonNullable<typeof collections>[number]) => [
+      collection._id,
+      collection,
+    ])
+  );
+  const getCollectionLabel = (collectionId: Id<"collections">): string => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    let cursor: Id<"collections"> | undefined = collectionId;
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      const collection = collectionMap.get(cursor);
+      if (!collection) {
+        break;
+      }
+      names.unshift(collection.name);
+      cursor = collection.parentId;
+    }
+    return names.join(" / ");
+  };
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString("en-US", {
@@ -73,6 +473,15 @@ function ArticlesContent() {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const formatPreviewPathSample = (paths: string[]): string => {
+    const sample = paths.slice(0, 4);
+    if (sample.length === 0) {
+      return "";
+    }
+    const remaining = paths.length - sample.length;
+    return remaining > 0 ? `${sample.join(", ")} (+${remaining} more)` : sample.join(", ");
   };
 
   return (
@@ -91,6 +500,283 @@ function ArticlesContent() {
             New Article
           </Button>
         </div>
+      </div>
+
+      <div className="mb-6 border rounded-lg bg-white p-4 space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-lg font-semibold">Import Markdown Folder</h2>
+            <p className="text-sm text-gray-500">
+              Sync markdown files into Help Center collections. Reuploading overwrites matching
+              paths, adds new files, and archives removed paths for restore. Preview changes before
+              applying.
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Imports normalize folder uploads on the backend so the selected upload root folder
+              does not become an extra collection level.
+            </p>
+          </div>
+          <input
+            data-testid="markdown-import-folder-input"
+            ref={(node) => {
+              folderInputRef.current = node;
+              if (node) {
+                node.setAttribute("webkitdirectory", "");
+                node.setAttribute("directory", "");
+              }
+            }}
+            type="file"
+            className="hidden"
+            multiple
+            onChange={handleImportFolderSelection}
+          />
+          <Button variant="outline" onClick={() => folderInputRef.current?.click()}>
+            <Upload className="h-4 w-4 mr-2" />
+            Choose Folder
+          </Button>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Source Name</label>
+            <Input
+              value={importSourceName}
+              onChange={(e) => handleImportSourceNameChange(e.target.value)}
+              placeholder="docs"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Import Into Collection
+            </label>
+            <select
+              value={importTargetCollectionId ?? ""}
+              onChange={(e) => handleImportTargetCollectionChange(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">Workspace root</option>
+              {collections?.map((collection: NonNullable<typeof collections>[number]) => (
+                <option key={collection._id} value={collection._id}>
+                  {getCollectionLabel(collection._id)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {selectedImportPaths.length > 0 && (
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+            <div
+              data-testid="markdown-import-selection-count"
+              className="text-sm text-gray-700 mb-1"
+            >
+              {selectedImportPaths.length} markdown file
+              {selectedImportPaths.length !== 1 ? "s" : ""} selected
+            </div>
+            <div className="text-xs text-gray-500 space-y-1 max-h-24 overflow-auto">
+              {selectedImportPaths.slice(0, 6).map((path) => (
+                <div key={path} className="font-mono">
+                  {path}
+                </div>
+              ))}
+              {selectedImportPaths.length > 6 && (
+                <div>+ {selectedImportPaths.length - 6} more...</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {hasCurrentPreview && importPreview && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-2">
+            <div className="text-sm font-medium text-blue-900">Import Preview</div>
+            <div className="grid gap-2 text-xs text-blue-900 md:grid-cols-2">
+              <div>
+                Collections: +{importPreview.createdCollections} / ~
+                {importPreview.updatedCollections} / -{importPreview.deletedCollections}
+              </div>
+              <div>
+                Articles: +{importPreview.createdArticles} / ~{importPreview.updatedArticles} / -
+                {importPreview.deletedArticles}
+              </div>
+            </div>
+            {importPreview.strippedRootFolder && (
+              <div className="text-xs text-blue-800">
+                Upload root folder &ldquo;{importPreview.strippedRootFolder}&rdquo; will be ignored.
+              </div>
+            )}
+            <div className="grid gap-2 text-xs md:grid-cols-2">
+              <div>
+                <div className="font-medium text-blue-900">Article Changes</div>
+                <div className="text-blue-800">
+                  Create: {importPreview.preview.articles.create.length}, Update:{" "}
+                  {importPreview.preview.articles.update.length}, Delete:{" "}
+                  {importPreview.preview.articles.delete.length}
+                </div>
+              </div>
+              <div>
+                <div className="font-medium text-blue-900">Collection Changes</div>
+                <div className="text-blue-800">
+                  Create: {importPreview.preview.collections.create.length}, Update:{" "}
+                  {importPreview.preview.collections.update.length}, Delete:{" "}
+                  {importPreview.preview.collections.delete.length}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-1 text-xs text-blue-900">
+              {importPreview.preview.articles.delete.length > 0 && (
+                <div>
+                  Articles to delete:{" "}
+                  <span className="font-mono">
+                    {formatPreviewPathSample(importPreview.preview.articles.delete)}
+                  </span>
+                </div>
+              )}
+              {importPreview.preview.articles.create.length > 0 && (
+                <div>
+                  Articles to create:{" "}
+                  <span className="font-mono">
+                    {formatPreviewPathSample(importPreview.preview.articles.create)}
+                  </span>
+                </div>
+              )}
+              {importPreview.preview.collections.create.length > 0 && (
+                <div>
+                  Collections to create:{" "}
+                  <span className="font-mono">
+                    {formatPreviewPathSample(importPreview.preview.collections.create)}
+                  </span>
+                </div>
+              )}
+              {importPreview.preview.collections.delete.length > 0 && (
+                <div>
+                  Collections to delete:{" "}
+                  <span className="font-mono">
+                    {formatPreviewPathSample(importPreview.preview.collections.delete)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isPreviewStale && (
+          <div className="text-sm text-amber-700 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+            Import inputs changed after preview. Run Preview Changes again before applying.
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            data-testid="markdown-import-preview-button"
+            variant="outline"
+            onClick={handlePreviewImport}
+            disabled={isPreviewingImport || isImporting || selectedImportItems.length === 0}
+          >
+            {isPreviewingImport ? "Previewing..." : "Preview Changes"}
+          </Button>
+          <Button
+            data-testid="markdown-import-sync-button"
+            onClick={handleStartImport}
+            disabled={
+              isImporting ||
+              isPreviewingImport ||
+              selectedImportItems.length === 0 ||
+              !hasCurrentPreview
+            }
+          >
+            {isImporting ? "Applying..." : "Apply Import"}
+          </Button>
+          <select
+            value={exportSourceId ?? ""}
+            onChange={(e) =>
+              setExportSourceId(
+                e.target.value ? (e.target.value as Id<"helpCenterImportSources">) : undefined
+              )
+            }
+            className="px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="">Export all docs</option>
+            {importSources?.map((source: NonNullable<typeof importSources>[number]) => (
+              <option key={source._id} value={source._id}>
+                {source.sourceName}
+              </option>
+            ))}
+          </select>
+          <Button
+            data-testid="markdown-export-button"
+            variant="outline"
+            onClick={handleExportMarkdown}
+            disabled={isExporting}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {isExporting ? "Preparing Export..." : "Export Markdown"}
+          </Button>
+        </div>
+
+        {importError && (
+          <div className="text-sm text-red-600 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+            {importError}
+          </div>
+        )}
+        {importNotice && (
+          <div className="text-sm text-green-700 rounded-md border border-green-200 bg-green-50 px-3 py-2">
+            {importNotice}
+          </div>
+        )}
+
+        {(importSources?.length ?? 0) > 0 && (
+          <div className="pt-2 border-t">
+            <h3 className="text-sm font-semibold mb-2">Active Import Sources</h3>
+            <div className="space-y-1 text-sm text-gray-600">
+              {importSources?.map((source: NonNullable<typeof importSources>[number]) => (
+                <div key={source._id} className="flex items-center justify-between">
+                  <span>
+                    {source.sourceName}
+                    {source.rootCollectionName ? ` -> ${source.rootCollectionName}` : " -> root"}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {source.lastImportedFileCount ?? 0} files
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(importHistory?.length ?? 0) > 0 && (
+          <div className="pt-2 border-t">
+            <div className="flex items-center gap-2 mb-2">
+              <History className="h-4 w-4 text-gray-500" />
+              <h3 className="text-sm font-semibold">Deletion History</h3>
+            </div>
+            <div className="space-y-2">
+              {importHistory?.map((run: NonNullable<typeof importHistory>[number]) => (
+                <div
+                  key={`${run.sourceId}-${run.importRunId}`}
+                  className="border rounded-md px-3 py-2 flex items-center justify-between gap-3"
+                >
+                  <div>
+                    <div className="text-sm font-medium">{run.sourceName}</div>
+                    <div className="text-xs text-gray-500">
+                      Removed {run.deletedArticles} article{run.deletedArticles !== 1 ? "s" : ""}
+                      {" + "}
+                      {run.deletedCollections} collection
+                      {run.deletedCollections !== 1 ? "s" : ""}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={run.restorableEntries === 0 || restoringRunId === run.importRunId}
+                    onClick={() => handleRestoreRun(run.sourceId, run.importRunId)}
+                  >
+                    {restoringRunId === run.importRunId ? "Restoring..." : "Restore"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-4 mb-6">
@@ -178,7 +864,7 @@ function ArticlesContent() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(article._id)}
+                        onClick={() => handleDeleteRequest(article._id, article.title)}
                         className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -189,6 +875,35 @@ function ArticlesContent() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-semibold mb-2">Delete Article</h2>
+            <p className="text-sm text-gray-600">
+              Are you sure you want to delete <strong>{deleteTarget.title}</strong>? This action
+              cannot be undone.
+            </p>
+            {deleteError && (
+              <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {deleteError}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={handleDeleteCancel} disabled={isDeletingArticle}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteConfirm}
+                disabled={isDeletingArticle}
+              >
+                {isDeletingArticle ? "Deleting..." : "Delete Article"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

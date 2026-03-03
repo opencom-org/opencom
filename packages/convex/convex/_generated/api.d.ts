@@ -32,6 +32,7 @@ import type * as emailChannel from "../emailChannel.js";
 import type * as emailTemplates from "../emailTemplates.js";
 import type * as embeddings from "../embeddings.js";
 import type * as events from "../events.js";
+import type * as helpCenterImports from "../helpCenterImports.js";
 import type * as http from "../http.js";
 import type * as identityVerification from "../identityVerification.js";
 import type * as internalArticles from "../internalArticles.js";
@@ -117,6 +118,7 @@ declare const fullApi: ApiFromModules<{
   emailTemplates: typeof emailTemplates;
   embeddings: typeof embeddings;
   events: typeof events;
+  helpCenterImports: typeof helpCenterImports;
   http: typeof http;
   identityVerification: typeof identityVerification;
   internalArticles: typeof internalArticles;
