@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -91,14 +92,14 @@ function InternalArticleEditorContent() {
   };
 
   const handleArchive = async () => {
-    if (confirm("Are you sure you want to archive this article?")) {
+    if (await appConfirm("Are you sure you want to archive this article?")) {
       await archiveArticle({ id: articleId });
       router.push("/knowledge");
     }
   };
 
   const handleDelete = async () => {
-    if (confirm("Are you sure you want to delete this article? This cannot be undone.")) {
+    if (await appConfirm("Are you sure you want to delete this article? This cannot be undone.")) {
       await deleteArticle({ id: articleId });
       router.push("/knowledge");
     }

@@ -170,6 +170,61 @@ describe("help center markdown imports", () => {
     );
   });
 
+  it("adopts manually created articles by matching collection and article names", async () => {
+    const manualCollectionId = await client.mutation(api.collections.create, {
+      workspaceId,
+      name: "Manual Guides",
+      parentId: rootCollectionId,
+    });
+    const manualArticleId = await client.mutation(api.articles.create, {
+      workspaceId,
+      collectionId: manualCollectionId,
+      title: "Hosted Quick Start",
+      content: "Old manual content",
+    });
+
+    const result = await client.mutation(api.helpCenterImports.syncMarkdownFolder, {
+      workspaceId,
+      sourceName: "manual-adoption-source",
+      rootCollectionId,
+      files: [
+        {
+          relativePath: "manual-guides/hosted-quick-start.md",
+          content: "# Hosted Quick Start\n\nUpdated from markdown import.",
+        },
+        {
+          relativePath: "root-index.md",
+          content: "# Root Index\n\nKeeps top-level folder matching explicit.",
+        },
+      ],
+      publishByDefault: true,
+    });
+
+    expect(result.createdCollections).toBe(0);
+    expect(result.updatedCollections).toBe(1);
+    expect(result.createdArticles).toBe(1);
+    expect(result.updatedArticles).toBe(1);
+
+    const article = await client.query(api.articles.get, {
+      id: manualArticleId,
+      workspaceId,
+    });
+    expect(article).not.toBeNull();
+    expect(article?._id).toBe(manualArticleId);
+    expect(article?.title).toBe("Hosted Quick Start");
+    expect(article?.content).toContain("Updated from markdown import.");
+    expect(article?.importPath).toBe("manual-guides/hosted-quick-start.md");
+    expect(article?.collectionId).toBe(manualCollectionId);
+
+    const collections = await client.query(api.collections.listHierarchy, {
+      workspaceId,
+    });
+    const manualCollection = collections.find(
+      (collection) => collection._id === manualCollectionId
+    );
+    expect(manualCollection?.importPath).toBe("manual-guides");
+  });
+
   it("migrates legacy root-prefixed paths without creating duplicate docs", async () => {
     const sourceName = "legacy-docs";
 

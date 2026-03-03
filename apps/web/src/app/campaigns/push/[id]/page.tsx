@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import { ArrowLeft, Save, Send, Smartphone, BarChart3 } from "lucide-react";
@@ -64,7 +65,7 @@ function PushCampaignEditor() {
   };
 
   const handleSend = async () => {
-    if (!confirm("Are you sure you want to send this push notification?")) return;
+    if (!(await appConfirm("Are you sure you want to send this push notification?"))) return;
     await sendCampaign({ id: campaignId });
     router.push("/campaigns");
   };

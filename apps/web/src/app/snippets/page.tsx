@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -83,7 +84,7 @@ function SnippetsContent() {
   };
 
   const handleDelete = async (id: Id<"snippets">) => {
-    if (confirm("Are you sure you want to delete this snippet?")) {
+    if (await appConfirm("Are you sure you want to delete this snippet?")) {
       await deleteSnippet({ id });
     }
   };

@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -124,7 +125,7 @@ function TooltipsContent() {
   };
 
   const handleDelete = async (id: Id<"tooltips">) => {
-    if (confirm("Are you sure you want to delete this tooltip?")) {
+    if (await appConfirm("Are you sure you want to delete this tooltip?")) {
       await deleteTooltip({ id });
     }
   };

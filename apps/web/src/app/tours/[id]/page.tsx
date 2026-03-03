@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { Button, Input } from "@opencom/ui";
 import {
   ArrowLeft,
@@ -285,7 +286,7 @@ export default function TourEditorPage() {
   };
 
   const handleDeleteStep = async (stepId: Id<"tourSteps">) => {
-    if (confirm("Are you sure you want to delete this step?")) {
+    if (await appConfirm("Are you sure you want to delete this step?")) {
       await deleteStep({ id: stepId });
     }
   };

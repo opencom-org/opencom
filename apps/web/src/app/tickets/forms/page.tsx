@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { Button, Input } from "@opencom/ui";
 import {
   Plus,
@@ -92,7 +93,7 @@ function TicketFormsContent(): React.JSX.Element | null {
   };
 
   const handleDeleteForm = async (formId: Id<"ticketForms">) => {
-    if (!confirm("Are you sure you want to delete this form?")) return;
+    if (!(await appConfirm("Are you sure you want to delete this form?"))) return;
     try {
       await deleteForm({ id: formId });
       if (selectedFormId === formId) {

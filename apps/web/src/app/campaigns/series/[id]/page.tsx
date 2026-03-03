@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -373,7 +374,7 @@ function SeriesEditor() {
   };
 
   const handleDeleteBlock = async (blockId: string) => {
-    if (!confirm("Delete this block?")) return;
+    if (!(await appConfirm("Delete this block?"))) return;
     await removeBlock({ id: blockId as Id<"seriesBlocks"> });
     setSelectedBlockId(null);
   };

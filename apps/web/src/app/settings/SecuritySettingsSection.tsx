@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
 import { Shield, Copy, Check } from "lucide-react";
 import { api } from "@opencom/convex";
+import { appConfirm } from "@/lib/appConfirm";
 import type { Id } from "@opencom/convex/dataModel";
 
 export function AuditLogViewer({
@@ -504,7 +505,8 @@ export function SecuritySettingsSection({
   };
 
   const handleRotateSecret = async () => {
-    if (!confirm("Are you sure? Users with the old secret will no longer be verified.")) return;
+    if (!(await appConfirm("Are you sure? Users with the old secret will no longer be verified.")))
+      return;
     setIsSaving(true);
     try {
       const result = await rotateSecret({ workspaceId });
