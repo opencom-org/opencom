@@ -14,6 +14,8 @@
     "build": "pnpm run --filter './apps/*' build",
     "build:web": "pnpm --filter @opencom/web build",
     "build:widget": "bash scripts/build-widget-for-tests.sh",
+    "build:mobile:android": "cd apps/mobile && ANDROID_HOME=/Users/jack/Library/Android/sdk eas build --platform android --local",
+    "build:mobile:ios": "cd apps/mobile && eas build --platform ios --local",
     "build:landing": "pnpm --filter @opencom/landing build",
     "build:sdk-core": "pnpm --filter @opencom/sdk-core build",
     "build:rn-sdk": "pnpm --filter @opencom/react-native-sdk build",
@@ -43,7 +45,8 @@
     "test:clear": "node scripts/test-summary.js clear",
     "test:e2e:prod": "E2E_USE_PROD_BUILD=true pn web:test:e2e",
     "seed:landing": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts",
-    "seed:landing:cleanup": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts --cleanup"
+    "seed:landing:cleanup": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts --cleanup",
+    "export:landing:md": "tsx scripts/export-landing-content-to-md.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
