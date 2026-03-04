@@ -343,7 +343,7 @@ describe("TourOverlay", () => {
       await waitFor(() => {
         expect(advanceMock).toHaveBeenCalledTimes(1);
       });
-      expect(stepTwoScrollIntoViewMock).toHaveBeenCalledTimes(1);
+      await waitFor(() => { expect(stepTwoScrollIntoViewMock).toHaveBeenCalledTimes(1); });
 
       expect(screen.queryByText("Second step")).not.toBeInTheDocument();
       expect(screen.queryByTestId("tour-step-card")).not.toBeInTheDocument();
