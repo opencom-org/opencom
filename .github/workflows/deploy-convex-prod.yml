@@ -49,11 +49,45 @@ jobs:
       - name: Convex backend typecheck
         run: pnpm --filter @opencom/convex run typecheck
 
+      - name: Show Convex CLI version
+        run: pnpm --filter @opencom/convex exec convex --version
+
       - name: Deploy Convex production backend
         shell: bash
         run: |
           set -euo pipefail
-          if ! pnpm --filter @opencom/convex exec convex deploy --yes; then
-            echo "::error::Convex production deploy failed"
+          max_attempts=4
+          attempt=1
+          log_file="$(mktemp)"
+
+          while [ "${attempt}" -le "${max_attempts}" ]; do
+            echo "Starting Convex deploy attempt ${attempt}/${max_attempts}"
+
+            if pnpm --filter @opencom/convex exec convex deploy --yes --verbose 2>&1 | tee "${log_file}"; then
+              echo "Convex production deploy succeeded on attempt ${attempt}"
+              exit 0
+            fi
+
+            is_transient_failure=false
+            if grep -Eq '/api/deploy2/(evaluate_push|start_push)' "${log_file}" \
+              && grep -Eq '(50[0-9]|502 Bad Gateway|503 Service Unavailable|504 Gateway Timeout)' "${log_file}"; then
+              is_transient_failure=true
+            elif grep -Eq '(ECONNRESET|ETIMEDOUT|ENOTFOUND)' "${log_file}"; then
+              is_transient_failure=true
+            fi
+
+            if [ "${is_transient_failure}" = true ] && [ "${attempt}" -lt "${max_attempts}" ]; then
+              backoff_seconds=$((attempt * 20))
+              echo "::warning::Transient Convex deploy failure detected on attempt ${attempt}/${max_attempts}. Retrying in ${backoff_seconds}s."
+              sleep "${backoff_seconds}"
+              attempt=$((attempt + 1))
+              continue
+            fi
+
+            if [ "${is_transient_failure}" = true ]; then
+              echo "::error::Convex production deploy failed after ${max_attempts} attempts"
+            else
+              echo "::error::Convex production deploy failed with a non-retryable error"
+            fi
             exit 1
-          fi
+          done
