@@ -17,7 +17,20 @@ const SUPPORTED_AI_PROVIDERS = new Set(["openai"]);
 const GENERATION_FAILURE_FALLBACK_RESPONSE =
   "I'm having trouble processing your request right now. Let me connect you with a human agent.";
 const EMPTY_RESPONSE_RETRY_LIMIT = 1;
-const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 1800;
+const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 2000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 2000;
+const GPT5_REASONING_MAX_OUTPUT_TOKENS = 10000;
+
+const supportsTemperatureControl = (provider: string, model: string): boolean => {
+  // OpenAI GPT-5 reasoning models reject temperature and emit warnings.
+  if (provider === "openai" && model.toLowerCase().startsWith("gpt-5")) {
+    return false;
+  }
+  return true;
+};
+
+const isGPT5ReasoningModel = (provider: string, model: string): boolean =>
+  provider === "openai" && model.toLowerCase().startsWith("gpt-5");
 
 // Parse model string to get provider and model name
 export const parseModel = (modelString: string): { provider: string; model: string } => {
@@ -92,12 +105,13 @@ IMPORTANT GUIDELINES:
 7. Never make up information that isn't in the knowledge context
 8. Respond in plain text with at least one complete sentence
 9. Never return an empty or whitespace-only response
+10. Do not suggest connecting to a human agent if you already provided a complete, relevant answer
 
 ${personality ? `PERSONALITY: ${personality}\n` : ""}
 KNOWLEDGE CONTEXT:
 ${knowledgeContext}
 
-If the knowledge context is empty or doesn't contain relevant information, politely explain that you don't have the information and offer to connect them with a human agent. If you are unsure, use that handoff message instead of returning blank output.`;
+Only suggest human handoff when: (a) the customer explicitly asks for a human, or (b) the knowledge context is not sufficient to answer accurately. Do not append a handoff offer to otherwise resolved answers.`;
 
   return basePrompt;
 };
@@ -123,8 +137,6 @@ const calculateConfidence = (
     "i'm not sure",
     "i cannot find",
     "i don't have enough information",
-    "let me connect you",
-    "human agent",
   ];
 
   const lowerResponse = response.toLowerCase();
@@ -189,7 +201,21 @@ const shouldHandoff = (
 
   // Check if AI response indicates it can't help
   const lowerResponse = response.toLowerCase();
-  if (lowerResponse.includes("let me connect you") || lowerResponse.includes("human agent")) {
+  const mentionsHumanEscalation =
+    lowerResponse.includes("let me connect you") ||
+    lowerResponse.includes("human agent") ||
+    lowerResponse.includes("talk to a human") ||
+    lowerResponse.includes("speak to a human");
+  const indicatesCannotResolve =
+    lowerResponse.includes("i don't have enough information") ||
+    lowerResponse.includes("i do not have enough information") ||
+    lowerResponse.includes("i cannot find") ||
+    lowerResponse.includes("i can't find") ||
+    lowerResponse.includes("i'm not sure") ||
+    lowerResponse.includes("i am not sure") ||
+    lowerResponse.includes("i don't know") ||
+    lowerResponse.includes("i do not know");
+  if (mentionsHumanEscalation && indicatesCannotResolve) {
     return { handoff: true, reason: "AI indicated handoff needed" };
   }
 
@@ -358,6 +384,8 @@ export const generateResponse = action({
       diagnosticCode: string,
       diagnosticMessage: string
     ) => {
+      const generationTimeMs = Date.now() - startTime;
+
       try {
         await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
           workspaceId: args.workspaceId,
@@ -378,6 +406,30 @@ export const generateResponse = action({
           reason,
         });
 
+        try {
+          await ctx.runMutation(api.aiAgent.storeResponse, {
+            conversationId: args.conversationId,
+            visitorId: args.visitorId,
+            sessionToken: args.sessionToken,
+            messageId: handoff.messageId,
+            query: args.query,
+            response: handoff.handoffMessage,
+            sources: [],
+            confidence: 0,
+            handedOff: true,
+            handoffReason: reason,
+            generationTimeMs,
+            tokensUsed,
+            model: settings.model,
+            provider,
+          });
+        } catch (persistenceError) {
+          console.error(
+            "Failed to persist AI response metadata after generation failure handoff:",
+            persistenceError
+          );
+        }
+
         return {
           response: handoff.handoffMessage,
           confidence: 0,
@@ -395,6 +447,30 @@ export const generateResponse = action({
         senderId: "ai-agent",
         content: GENERATION_FAILURE_FALLBACK_RESPONSE,
       });
+
+      try {
+        await ctx.runMutation(api.aiAgent.storeResponse, {
+          conversationId: args.conversationId,
+          visitorId: args.visitorId,
+          sessionToken: args.sessionToken,
+          messageId,
+          query: args.query,
+          response: GENERATION_FAILURE_FALLBACK_RESPONSE,
+          sources: [],
+          confidence: 0,
+          handedOff: true,
+          handoffReason: reason,
+          generationTimeMs,
+          tokensUsed,
+          model: settings.model,
+          provider,
+        });
+      } catch (persistenceError) {
+        console.error(
+          "Failed to persist AI response metadata after fallback message persistence:",
+          persistenceError
+        );
+      }
 
       return {
         response: GENERATION_FAILURE_FALLBACK_RESPONSE,
@@ -418,13 +494,31 @@ export const generateResponse = action({
       const retrySuffix = retryingAfterEmptyResponse
         ? "\n\nRETRY INSTRUCTION: Your first attempt returned empty text. Respond now with at least one complete plain-text sentence."
         : "";
+      const useReasoningProfile = isGPT5ReasoningModel(provider, model);
+      const maxOutputTokens = useReasoningProfile
+        ? GPT5_REASONING_MAX_OUTPUT_TOKENS
+        : DEFAULT_MAX_OUTPUT_TOKENS;
 
       const result = await generateText({
         model: aiClient(model),
         system: `${systemPrompt}${retrySuffix}`,
         messages,
-        maxOutputTokens: 1000,
-        temperature: retryingAfterEmptyResponse ? 0.2 : 0.7,
+        maxOutputTokens,
+        ...(useReasoningProfile
+          ? {
+              providerOptions: {
+                openai: {
+                  // Allocate a larger completion budget so reasoning models still emit text.
+                  maxCompletionTokens: maxOutputTokens,
+                  reasoningEffort: retryingAfterEmptyResponse ? "minimal" : "high",
+                  textVerbosity: retryingAfterEmptyResponse ? "high" : "medium",
+                },
+              },
+            }
+          : {}),
+        ...(supportsTemperatureControl(provider, model)
+          ? { temperature: retryingAfterEmptyResponse ? 0.2 : 0.7 }
+          : {}),
       });
 
       const responseText = (result.text ?? "").trim();
@@ -539,7 +633,7 @@ export const generateResponse = action({
     }));
 
     if (handoff) {
-      // Persist only the precanned handoff message so visitors see one assistant message.
+      // Preserve both generated and delivered contexts while keeping one visitor-facing handoff message.
       const handoffResult = await ctx.runMutation(api.aiAgent.handoffToHuman, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
@@ -554,6 +648,9 @@ export const generateResponse = action({
         messageId: handoffResult.messageId,
         query: args.query,
         response: handoffResult.handoffMessage,
+        generatedCandidateResponse: responseText,
+        generatedCandidateSources: sources,
+        generatedCandidateConfidence: confidence,
         sources: [],
         confidence,
         handedOff: true,

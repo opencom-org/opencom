@@ -182,6 +182,12 @@ test.describe("Inbox AI deterministic workflow", () => {
       visitorSessionToken: handoffFixture.visitorSessionToken,
       query: "Can you help with billing?",
       response: "I should connect you with a human specialist for billing support.",
+      generatedCandidateResponse:
+        "You can manage billing in Settings > Billing, but I should connect you with a specialist.",
+      generatedCandidateSources: [
+        { type: "article", id: "article_billing_candidate", title: "Billing Specialist Guide" },
+      ],
+      generatedCandidateConfidence: 0.22,
       confidence: 0.22,
       handedOff: true,
       handoffReason,
@@ -220,6 +226,10 @@ test.describe("Inbox AI deterministic workflow", () => {
 
     const reviewPanel = page.getByTestId("inbox-ai-review-panel");
     await expect(reviewPanel).toContainText("AI handoff");
+    await expect(reviewPanel).toContainText("Delivered to visitor (handoff message)");
+    await expect(reviewPanel).toContainText("Generated candidate response (not sent)");
+    await expect(reviewPanel).toContainText("Billing Specialist Guide");
+    await expect(reviewPanel).toContainText("Candidate confidence 22%");
     await expect(reviewPanel).toContainText(`Handoff reason: ${handoffReason}`);
     await expect(reviewPanel).toContainText("Feedback not helpful");
   });

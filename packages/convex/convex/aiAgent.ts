@@ -42,9 +42,7 @@ const DEFAULT_AI_SETTINGS = {
   lastConfigError: null,
 };
 
-function withAISettingDefaults(
-  settings: Doc<"aiAgentSettings"> | null
-): {
+function withAISettingDefaults(settings: Doc<"aiAgentSettings"> | null): {
   _id?: Id<"aiAgentSettings">;
   _creationTime?: number;
   workspaceId?: Id<"workspaces">;
@@ -471,6 +469,17 @@ export const storeResponse = mutation({
     messageId: v.id("messages"),
     query: v.string(),
     response: v.string(),
+    generatedCandidateResponse: v.optional(v.string()),
+    generatedCandidateSources: v.optional(
+      v.array(
+        v.object({
+          type: v.string(),
+          id: v.string(),
+          title: v.string(),
+        })
+      )
+    ),
+    generatedCandidateConfidence: v.optional(v.number()),
     sources: v.array(
       v.object({
         type: v.string(),
@@ -498,6 +507,9 @@ export const storeResponse = mutation({
       messageId: args.messageId,
       query: args.query,
       response: args.response,
+      generatedCandidateResponse: args.generatedCandidateResponse,
+      generatedCandidateSources: args.generatedCandidateSources,
+      generatedCandidateConfidence: args.generatedCandidateConfidence,
       sources: args.sources,
       confidence: args.confidence,
       handedOff: args.handedOff,
@@ -559,10 +571,27 @@ export const getConversationResponses = query({
       sessionToken: args.sessionToken,
     });
 
-    return await ctx.db
+    const responses = await ctx.db
       .query("aiResponses")
       .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
       .collect();
+
+    return responses.map((response) => ({
+      ...response,
+      deliveredResponseContext: {
+        response: response.response,
+        sources: response.sources,
+        confidence: response.handedOff ? null : response.confidence,
+      },
+      generatedResponseContext:
+        response.generatedCandidateResponse === undefined
+          ? null
+          : {
+              response: response.generatedCandidateResponse,
+              sources: response.generatedCandidateSources ?? [],
+              confidence: response.generatedCandidateConfidence ?? response.confidence,
+            },
+    }));
   },
 });
 
@@ -604,10 +633,7 @@ export const handoffToHuman = mutation({
     sessionToken: v.optional(v.string()),
     reason: v.optional(v.string()),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<{ messageId: Id<"messages">; handoffMessage: string }> => {
+  handler: async (ctx, args): Promise<{ messageId: Id<"messages">; handoffMessage: string }> => {
     const conversation = await requireConversationAccess(ctx, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
