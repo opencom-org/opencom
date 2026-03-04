@@ -59,6 +59,7 @@ export {
 } from "./push";
 
 // Re-export types from sdk-core
+export { OpencomConvexCompatibilityError } from "@opencom/sdk-core";
 export type {
   SDKConfig,
   UserIdentification,

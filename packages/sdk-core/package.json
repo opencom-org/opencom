@@ -1,25 +1,35 @@
 {
   "name": "@opencom/sdk-core",
-  "version": "0.1.0",
-  "private": true,
-  "main": "./src/index.ts",
-  "module": "./src/index.ts",
-  "types": "./src/index.ts",
+  "version": "1.0.0",
+  "private": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts",
-      "require": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "prepack": "pnpm build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config ./vitest.config.ts",
     "test:watch": "vitest --config ./vitest.config.ts"
   },
   "dependencies": {
+    "@opencom/convex": "^1.0.0",
     "convex": "^1.31.7"
   },
   "devDependencies": {
@@ -27,7 +37,20 @@
     "typescript": "^5.3.0",
     "vitest": "^4.0.17"
   },
-  "peerDependencies": {
-    "@opencom/convex": "workspace:*"
+  "opencom": {
+    "release": {
+      "supportTier": "supported",
+      "releaseChannels": [
+        "latest",
+        "next"
+      ],
+      "convexCompatibility": {
+        "minimum": "1.0.0",
+        "current": "1.0.0",
+        "maximum": "1.x"
+      },
+      "compatibilityTestCommand": "pnpm --filter @opencom/sdk-core test -- --run tests/compatibility.test.ts",
+      "releaseTestCommand": "pnpm --filter @opencom/sdk-core test -- --run tests/contracts.test.ts tests/client.test.ts tests/compatibility.test.ts"
+    }
   }
 }

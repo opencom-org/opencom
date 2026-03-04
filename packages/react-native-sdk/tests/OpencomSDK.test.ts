@@ -43,6 +43,8 @@ vi.mock("@opencom/sdk-core", () => ({
   getMessages: vi.fn(() => []),
   getConversations: vi.fn(() => []),
   sendMessage: vi.fn(),
+  assertConvexContractCompatibility: vi.fn(),
+  discoverBackendContractVersion: vi.fn(async () => "1.0.0"),
 }));
 
 // Mock AsyncStorage
@@ -90,6 +92,31 @@ describe("OpencomSDK", () => {
       });
     });
 
+    it("should fail with deterministic compatibility error when backend contract is unsupported", async () => {
+      const { assertConvexContractCompatibility, bootSession } = await import("@opencom/sdk-core");
+      const { OpencomSDK } = await import("../src/OpencomSDK");
+
+      vi.mocked(assertConvexContractCompatibility).mockImplementationOnce(() => {
+        const error = new Error("unsupported");
+        (error as Error & { code: string }).code = "OPENCOM_UNSUPPORTED_CONVEX_CONTRACT";
+        throw error;
+      });
+      vi.mocked(bootSession).mockResolvedValue({
+        visitor: { _id: "visitor_123" as any },
+        sessionToken: "wst_test123",
+        expiresAt: Date.now() + 3600000,
+      } as any);
+
+      await expect(
+        OpencomSDK.initialize({
+          workspaceId: "test-workspace",
+          convexUrl: "https://test.convex.cloud",
+        })
+      ).rejects.toMatchObject({
+        code: "OPENCOM_UNSUPPORTED_CONVEX_CONTRACT",
+      });
+    });
+
     it("should throw error without workspaceId", async () => {
       const { OpencomSDK } = await import("../src/OpencomSDK");
 
@@ -110,6 +137,34 @@ describe("OpencomSDK", () => {
           convexUrl: "",
         })
       ).rejects.toThrow();
+    });
+
+    it("should validate compatibility with the matrix contract version when provided", async () => {
+      const {
+        assertConvexContractCompatibility,
+        discoverBackendContractVersion,
+        bootSession,
+      } = await import("@opencom/sdk-core");
+      const { OpencomSDK } = await import("../src/OpencomSDK");
+
+      vi.mocked(discoverBackendContractVersion).mockResolvedValueOnce(
+        process.env.OPENCOM_CONVEX_CONTRACT_VERSION ?? "1.0.0"
+      );
+      vi.mocked(bootSession).mockResolvedValue({
+        visitor: { _id: "visitor_123" as any },
+        sessionToken: "wst_test123",
+        expiresAt: Date.now() + 3600000,
+      } as any);
+
+      await OpencomSDK.initialize({
+        workspaceId: "test-workspace",
+        convexUrl: "https://test.convex.cloud",
+      });
+
+      expect(assertConvexContractCompatibility).toHaveBeenCalledWith(
+        process.env.OPENCOM_CONVEX_CONTRACT_VERSION ?? "1.0.0",
+        expect.objectContaining({ packageName: "@opencom/react-native-sdk" })
+      );
     });
   });
 

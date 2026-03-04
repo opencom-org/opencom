@@ -1,20 +1,32 @@
 {
   "name": "@opencom/convex",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
   "main": "./convex/_generated/api.js",
   "types": "./convex/_generated/api.d.ts",
   "exports": {
     ".": {
       "types": "./convex/_generated/api.d.ts",
       "import": "./convex/_generated/api.js",
-      "require": "./convex/_generated/api.js"
+      "require": "./runtime/api.cjs"
     },
     "./dataModel": {
       "types": "./convex/_generated/dataModel.d.ts",
-      "import": "./convex/_generated/dataModel.js",
-      "require": "./convex/_generated/dataModel.js"
+      "import": "./runtime/dataModel.js",
+      "require": "./runtime/dataModel.cjs"
     }
+  },
+  "files": [
+    "convex/_generated/api.d.ts",
+    "convex/_generated/api.js",
+    "convex/_generated/dataModel.d.ts",
+    "runtime",
+    "convex/README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "scripts": {
     "dev": "convex dev",
@@ -40,5 +52,16 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^4.0.17"
+  },
+  "opencom": {
+    "release": {
+      "supportTier": "supported",
+      "releaseChannels": [
+        "latest",
+        "next"
+      ],
+      "releaseTestCommand": "pnpm --filter @opencom/convex test -- --run tests/discovery.test.ts",
+      "notes": "Generated backend contract package consumed by public SDK packages."
+    }
   }
 }

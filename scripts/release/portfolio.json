@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "firstCohort": [
+    "@opencom/convex",
+    "@opencom/sdk-core",
+    "@opencom/react-native-sdk"
+  ],
+  "publishTopology": [
+    "@opencom/convex",
+    "@opencom/sdk-core",
+    "@opencom/react-native-sdk"
+  ],
+  "releaseGovernance": {
+    "defaultBranch": "main",
+    "maintenanceBranchPattern": "^release\\/\\d+\\.\\d+$",
+    "tagPrefix": "sdk-v",
+    "distTags": {
+      "stable": "latest",
+      "prerelease": "next"
+    },
+    "supportedMajorLines": 2,
+    "criticalFixWindowDays": 180
+  },
+  "deprecationPolicy": {
+    "announceDaysBeforeEndOfSupport": 60,
+    "publishMigrationNotesBeforeMajor": true,
+    "distTagRollbackRule": "Repoint latest/next to last-known-good release when rollback is required."
+  },
+  "packages": {
+    "@opencom/convex": {
+      "path": "packages/convex",
+      "classification": "public-supported",
+      "owner": "Backend Team",
+      "supportTier": "supported",
+      "releaseChannels": [
+        "latest",
+        "next"
+      ],
+      "description": "Generated Convex contract package consumed by public SDK packages."
+    },
+    "@opencom/sdk-core": {
+      "path": "packages/sdk-core",
+      "classification": "public-supported",
+      "owner": "SDK Team",
+      "supportTier": "supported",
+      "releaseChannels": [
+        "latest",
+        "next"
+      ],
+      "convexCompatibility": {
+        "minimum": "1.0.0",
+        "current": "1.0.0",
+        "maximum": "1.x"
+      }
+    },
+    "@opencom/react-native-sdk": {
+      "path": "packages/react-native-sdk",
+      "classification": "public-supported",
+      "owner": "Mobile SDK Team",
+      "supportTier": "supported",
+      "releaseChannels": [
+        "latest",
+        "next"
+      ],
+      "convexCompatibility": {
+        "minimum": "1.0.0",
+        "current": "1.0.0",
+        "maximum": "1.x"
+      }
+    },
+    "@opencom/types": {
+      "path": "packages/types",
+      "classification": "internal-only",
+      "owner": "Core Platform Team"
+    },
+    "@opencom/ui": {
+      "path": "packages/ui",
+      "classification": "internal-only",
+      "owner": "Web Team"
+    },
+    "@opencom/web": {
+      "path": "apps/web",
+      "classification": "internal-only",
+      "owner": "Web Team"
+    },
+    "@opencom/mobile": {
+      "path": "apps/mobile",
+      "classification": "internal-only",
+      "owner": "Mobile App Team"
+    },
+    "@opencom/widget": {
+      "path": "apps/widget",
+      "classification": "internal-only",
+      "owner": "Widget Team"
+    },
+    "@opencom/landing": {
+      "path": "apps/landing",
+      "classification": "internal-only",
+      "owner": "Growth Team"
+    }
+  }
+}

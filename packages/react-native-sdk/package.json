@@ -1,7 +1,7 @@
 {
   "name": "@opencom/react-native-sdk",
-  "version": "0.1.0",
-  "private": true,
+  "version": "1.0.0",
+  "private": false,
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
   "types": "lib/typescript/index.d.ts",
@@ -27,6 +27,10 @@
     "!**/__fixtures__",
     "!**/__mocks__"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "bob build",
     "build:plugin": "tsc -p plugin/tsconfig.json",
@@ -37,8 +41,8 @@
     "clean": "rm -rf lib"
   },
   "dependencies": {
-    "@opencom/convex": "workspace:*",
-    "@opencom/sdk-core": "workspace:*",
+    "@opencom/convex": "^1.0.0",
+    "@opencom/sdk-core": "^1.0.0",
     "@react-native-async-storage/async-storage": "^1.23.0",
     "convex": "^1.31.7",
     "react-native-safe-area-context": "^5.6.2",
@@ -93,5 +97,21 @@
         }
       ]
     ]
+  },
+  "opencom": {
+    "release": {
+      "supportTier": "supported",
+      "releaseChannels": [
+        "latest",
+        "next"
+      ],
+      "convexCompatibility": {
+        "minimum": "1.0.0",
+        "current": "1.0.0",
+        "maximum": "1.x"
+      },
+      "compatibilityTestCommand": "pnpm --filter @opencom/react-native-sdk test -- --run tests/OpencomSDK.test.ts",
+      "releaseTestCommand": "pnpm --filter @opencom/react-native-sdk test -- --run tests/OpencomSDK.test.ts tests/push.test.ts"
+    }
   }
 }

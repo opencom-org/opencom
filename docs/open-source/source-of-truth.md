@@ -25,7 +25,9 @@ When two sources disagree, use this precedence order:
 | Frontend/backend connection behavior          | `apps/web/src/contexts/BackendContext.tsx`, `apps/mobile/src/contexts/BackendContext.tsx`                        | `docs/open-source/setup-self-host-and-deploy.md`            |
 | Widget runtime contract                       | `apps/widget/src/**`                                                                                             | `docs/open-source/architecture-and-repo-map.md`             |
 | Deployment scripts                            | `scripts/setup.sh`, `scripts/update-env.sh`, `scripts/build-widget-for-tests.sh`, `scripts/deploy-widget-cdn.sh` | `docs/open-source/setup-self-host-and-deploy.md`            |
-| OSS release operations process                | `docs/open-source/security-and-operations.md`                                                                    | `docs/open-source/security-and-operations.md`               |
+| OSS release operations process                | `.github/workflows/publish-mobile-sdk-packages.yml`, `scripts/release/**`, `scripts/release/portfolio.json`    | `docs/open-source/mobile-sdk-release-runbook.md`            |
+| Public package inventory and support tiers    | `scripts/release/portfolio.json`, first-cohort package `package.json` metadata                                  | `docs/open-source/public-package-matrix.md`                 |
+| Convex compatibility range contract           | `packages/*/package.json` (`opencom.release.convexCompatibility`), `packages/sdk-core/src/compatibility.ts`     | `docs/open-source/convex-compatibility.md`                  |
 
 ## Update Triggers
 

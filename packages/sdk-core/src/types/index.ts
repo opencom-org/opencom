@@ -39,6 +39,8 @@ export interface SDKConfig {
   workspaceId: string;
   convexUrl: string;
   debug?: boolean;
+  backendContractVersion?: string;
+  skipCompatibilityCheck?: boolean;
 }
 
 export interface VisitorState {

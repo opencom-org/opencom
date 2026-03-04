@@ -121,6 +121,9 @@ import { OpencomSDK } from "@opencom/react-native-sdk";
 await OpencomSDK.initialize({
   workspaceId: "your-workspace-id",
   convexUrl: "https://your-deployment.convex.cloud",
+  // Optional explicit backend contract version override.
+  // When omitted, SDK attempts discovery from /.well-known/opencom.json.
+  backendContractVersion: "1.0.0",
   debug: true,
 });
 ```
