@@ -103,7 +103,16 @@ pnpm security:convex-auth-guard
 pnpm security:convex-any-args-gate
 pnpm --filter @opencom/convex test
 pnpm web:test:e2e
+pnpm release:validate -- --base <base-ref> --head <head-ref> --tag sdk-vX.Y.Z
+pnpm release:validate:convex-compat
+pnpm release:smoke -- --pack-dir artifacts/release-tarballs
 ```
+
+For public npm package release policy and automation details, see:
+
+- [`./mobile-sdk-release-runbook.md`](./mobile-sdk-release-runbook.md)
+- [`./public-package-matrix.md`](./public-package-matrix.md)
+- [`./convex-compatibility.md`](./convex-compatibility.md)
 
 ## Incident and Vulnerability Reporting
 

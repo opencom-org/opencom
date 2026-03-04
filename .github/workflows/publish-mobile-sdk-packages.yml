@@ -1,0 +1,156 @@
+name: Publish Mobile SDK Packages
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Base ref for changed-package detection (optional)
+        required: false
+        type: string
+      head_ref:
+        description: Head ref for changed-package detection (optional)
+        required: false
+        default: HEAD
+        type: string
+      release_tag:
+        description: Release tag to validate against (optional, defaults to pushed tag)
+        required: false
+        type: string
+      dry_run:
+        description: Run release validation and publish in dry-run mode
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  publish-mobile-sdk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: publish-mobile-sdk-packages
+      cancel-in-progress: false
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      NPM_CONFIG_PROVENANCE: "true"
+
+    steps:
+      - name: Checkout
+        # actions/checkout pinned to v4.3.1: https://github.com/actions/checkout/releases/tag/v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        # pnpm/action-setup pinned to v4.2.0: https://github.com/pnpm/action-setup/releases/tag/v4.2.0
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
+
+      - name: Setup Node.js
+        # actions/setup-node pinned to v4.4.0: https://github.com/actions/setup-node/releases/tag/v4.4.0
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve release context
+        id: release_context
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG_NAME=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG_NAME="${GITHUB_REF_NAME}"
+          elif [ -n "${{ inputs.release_tag }}" ]; then
+            TAG_NAME="${{ inputs.release_tag }}"
+          fi
+
+          HEAD_REF="${{ inputs.head_ref }}"
+          if [ -z "$HEAD_REF" ] || [ "$HEAD_REF" = "HEAD" ]; then
+            if [ -n "$TAG_NAME" ]; then
+              HEAD_REF="$TAG_NAME"
+            else
+              HEAD_REF="HEAD"
+            fi
+          fi
+
+          BASE_REF="${{ inputs.base_ref }}"
+          if [ -z "$BASE_REF" ] && [ -n "$TAG_NAME" ]; then
+            if git describe --tags --match "sdk-v*" --abbrev=0 "${TAG_NAME}^" >/dev/null 2>&1; then
+              BASE_REF="$(git describe --tags --match "sdk-v*" --abbrev=0 "${TAG_NAME}^")"
+            else
+              BASE_REF="$(git rev-list --max-parents=0 HEAD)"
+            fi
+          elif [ -z "$BASE_REF" ]; then
+            BASE_REF="HEAD~1"
+          fi
+
+          DRY_RUN="1"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            DRY_RUN="0"
+          elif [ "${{ inputs.dry_run }}" = "false" ]; then
+            DRY_RUN="0"
+          fi
+
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+      - name: Validate publish secret configuration
+        if: steps.release_context.outputs.dry_run != '1'
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error::Missing required secret: NPM_TOKEN"
+            exit 1
+          fi
+
+      - name: Compute release plan
+        run: >
+          node scripts/release/compute-release-plan.js
+          --base "${{ steps.release_context.outputs.base_ref }}"
+          --head "${{ steps.release_context.outputs.head_ref }}"
+          --output artifacts/release-plan.json
+
+      - name: Validate release governance
+        run: |
+          args=(--base "${{ steps.release_context.outputs.base_ref }}" --head "${{ steps.release_context.outputs.head_ref }}")
+          if [ -n "${{ steps.release_context.outputs.tag_name }}" ]; then
+            args+=(--tag "${{ steps.release_context.outputs.tag_name }}")
+          fi
+          node scripts/release/validate-release-governance.js "${args[@]}"
+
+      - name: Validate Convex compatibility matrix
+        run: node scripts/release/validate-convex-compatibility.js
+
+      - name: Publish package cohort
+        run: |
+          args=(--base "${{ steps.release_context.outputs.base_ref }}" --head "${{ steps.release_context.outputs.head_ref }}" --pack-dir artifacts/release-tarballs)
+          if [ "${{ steps.release_context.outputs.dry_run }}" = "1" ]; then
+            args+=(--dry-run)
+          fi
+          if [ -n "${{ steps.release_context.outputs.tag_name }}" ]; then
+            args+=(--tag "${{ steps.release_context.outputs.tag_name }}")
+          fi
+          node scripts/release/publish-packages.js "${args[@]}"
+
+      - name: Upload release artifacts
+        if: always()
+        # actions/upload-artifact pinned to v4.6.2: https://github.com/actions/upload-artifact/releases/tag/v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mobile-sdk-release-artifacts
+          path: |
+            artifacts/release-plan.json
+            artifacts/release-tarballs
+          if-no-files-found: warn
+          retention-days: 14

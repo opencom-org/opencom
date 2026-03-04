@@ -8,6 +8,9 @@ Opencom provides native SDKs for embedding customer messaging into mobile apps. 
 | iOS          | Swift      | `packages/ios-sdk`          | SPM + CocoaPods |
 | Android      | Kotlin     | `packages/android-sdk`      | Maven / Gradle  |
 
+For npm package ownership/support tiers and release channels, see
+`docs/open-source/public-package-matrix.md`.
+
 ## Shared Concepts
 
 All SDKs follow the same lifecycle:
@@ -29,6 +32,9 @@ Source: `packages/react-native-sdk/`
 ```bash
 pnpm add @opencom/react-native-sdk
 ```
+
+`@opencom/react-native-sdk` installs `@opencom/sdk-core` and `@opencom/convex`
+as registry dependencies for backend contract alignment.
 
 ### Provider Setup
 
@@ -57,6 +63,9 @@ import { OpencomSDK } from "@opencom/react-native-sdk";
 await OpencomSDK.initialize({
   workspaceId: "...",
   convexUrl: "...",
+  // Optional override when you already know backend contract version.
+  // If omitted, the SDK attempts discovery via /.well-known/opencom.json.
+  backendContractVersion: "1.0.0",
 });
 
 await OpencomSDK.identify({

@@ -300,3 +300,13 @@ Files in `security/` configure CI gate behavior:
 | `pnpm deploy:widget:cdn`    | Deploy widget to CDN       |
 | `pnpm seed:landing`         | Seed landing demo data     |
 | `pnpm seed:landing:cleanup` | Clean up landing demo data |
+
+### Package Release
+
+| Command                             | Description                                            |
+| ----------------------------------- | ------------------------------------------------------ |
+| `pnpm release:plan`                 | Compute changed first-cohort package release plan      |
+| `pnpm release:validate`             | Validate package metadata, SemVer policy, and topology |
+| `pnpm release:validate:convex-compat` | Validate Convex compatibility matrix for public SDKs |
+| `pnpm release:smoke`                | Smoke-install packed SDK artifacts in clean fixtures   |
+| `pnpm release:publish`              | Run full release automation and publish flow           |

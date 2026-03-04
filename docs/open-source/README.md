@@ -23,6 +23,9 @@ this is the next stop.
 | Setup, self-hosting, deployment paths           | [`./setup-self-host-and-deploy.md`](./setup-self-host-and-deploy.md) |
 | Testing and verification flows                  | [`./testing-and-verification.md`](./testing-and-verification.md)     |
 | Security controls and operational readiness     | [`./security-and-operations.md`](./security-and-operations.md)       |
+| Public package release runbook                  | [`./mobile-sdk-release-runbook.md`](./mobile-sdk-release-runbook.md) |
+| Public package portfolio matrix                 | [`./public-package-matrix.md`](./public-package-matrix.md)           |
+| Convex compatibility contract guidance          | [`./convex-compatibility.md`](./convex-compatibility.md)             |
 | Documentation ownership / source-of-truth model | [`./source-of-truth.md`](./source-of-truth.md)                       |
 
 ### Reference Documentation (`docs/`)

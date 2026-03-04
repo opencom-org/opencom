@@ -96,6 +96,9 @@ pnpm security:headers-check
 pnpm --filter @opencom/convex test
 pnpm --filter @opencom/web build
 pnpm web:test:e2e
+pnpm release:validate -- --base <base-ref> --head <head-ref> --tag sdk-vX.Y.Z
+pnpm release:validate:convex-compat
+pnpm release:smoke -- --pack-dir artifacts/release-tarballs
 ```
 
 ## Reliability/Debug Utilities

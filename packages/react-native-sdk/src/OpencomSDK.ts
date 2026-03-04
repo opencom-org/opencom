@@ -36,9 +36,12 @@ import {
   type UserIdentification,
   type EventProperties,
   type DeviceInfo,
+  type ConvexCompatibilityRange,
   type VisitorId,
   type SDKEventListener,
   type ConversationId,
+  assertConvexContractCompatibility,
+  discoverBackendContractVersion,
 } from "@opencom/sdk-core";
 
 // Storage adapter using AsyncStorage
@@ -63,7 +66,12 @@ const HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
 const REFRESH_MARGIN_MS = 60000; // refresh 60s before expiry
 const SESSION_TOKEN_KEY = "opencom_session_token";
 const SESSION_EXPIRES_AT_KEY = "opencom_session_expires_at";
-const REACT_NATIVE_SDK_VERSION = "0.1.0";
+const REACT_NATIVE_SDK_VERSION = "1.0.0";
+const REACT_NATIVE_SDK_CONVEX_COMPATIBILITY: ConvexCompatibilityRange = {
+  minimum: "1.0.0",
+  current: "1.0.0",
+  maximum: "1.x",
+};
 
 function emitSurveyTriggerEvent(eventName: string): void {
   for (const listener of surveyTriggerListeners) {
@@ -158,6 +166,22 @@ export const OpencomSDK = {
     if (isSDKInitialized) {
       console.warn("[OpencomSDK] SDK already initialized");
       return;
+    }
+
+    if (!config.skipCompatibilityCheck) {
+      const detectedContractVersion =
+        config.backendContractVersion ?? (await discoverBackendContractVersion(config.convexUrl));
+
+      if (detectedContractVersion) {
+        assertConvexContractCompatibility(detectedContractVersion, {
+          packageName: "@opencom/react-native-sdk",
+          range: REACT_NATIVE_SDK_CONVEX_COMPATIBILITY,
+        });
+      } else if (config.debug) {
+        console.warn(
+          "[OpencomSDK] Unable to detect backend contract version. Continuing without compatibility assertion."
+        );
+      }
     }
 
     // Set up storage adapter for sdk-core
