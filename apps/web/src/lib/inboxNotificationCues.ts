@@ -4,9 +4,10 @@ export interface InboxCuePreferences {
 }
 
 const STORAGE_KEY = "opencom.web.inboxCuePreferences";
+export const INBOX_CUE_PREFERENCES_UPDATED_EVENT = "opencom:inbox-cue-preferences-updated";
 const DEFAULT_PREFERENCES: InboxCuePreferences = {
   browserNotifications: false,
-  sound: false,
+  sound: true,
 };
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
@@ -41,6 +42,15 @@ export function saveInboxCuePreferences(
   }
 
   storage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+}
+
+type EventDispatcher = Pick<Window, "dispatchEvent">;
+
+export function broadcastInboxCuePreferencesUpdated(eventDispatcher?: EventDispatcher): void {
+  if (!eventDispatcher) {
+    return;
+  }
+  eventDispatcher.dispatchEvent(new Event(INBOX_CUE_PREFERENCES_UPDATED_EVENT));
 }
 
 export function buildUnreadSnapshot(

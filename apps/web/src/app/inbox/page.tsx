@@ -36,11 +36,13 @@ import {
   useIsCompactViewport,
 } from "@/components/ResponsiveLayout";
 import {
+  INBOX_CUE_PREFERENCES_UPDATED_EVENT,
   buildUnreadSnapshot,
   getUnreadIncreases,
   loadInboxCuePreferences,
   shouldSuppressAttentionCue,
 } from "@/lib/inboxNotificationCues";
+import { playInboxBingSound } from "@/lib/playInboxBingSound";
 
 function PresenceIndicator({ visitorId }: { visitorId: Id<"visitors"> }) {
   const isOnline = useQuery(api.visitors.isOnline, { visitorId });
@@ -123,7 +125,7 @@ function InboxContent(): React.JSX.Element | null {
     sound: boolean;
   }>({
     browserNotifications: false,
-    sound: false,
+    sound: true,
   });
   const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
   const defaultTitleRef = useRef<string | null>(null);
@@ -257,34 +259,6 @@ function InboxContent(): React.JSX.Element | null {
 
   const toggleAuxiliaryPanel = (panel: "ai-review" | "suggestions") => {
     setActiveCompactPanel((current) => (current === panel ? null : panel));
-  };
-
-  const playInboxCueSound = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const AudioContextCtor =
-      window.AudioContext ||
-      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) {
-      return;
-    }
-
-    const context = new AudioContextCtor();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, context.currentTime);
-    gainNode.gain.setValueAtTime(0.05, context.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
-
-    oscillator.connect(gainNode);
-    gainNode.connect(context.destination);
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.18);
-    oscillator.onended = () => {
-      void context.close();
-    };
   };
 
   // Keyboard shortcut for knowledge search (Ctrl+K / Cmd+K)
@@ -472,8 +446,10 @@ function InboxContent(): React.JSX.Element | null {
     };
     refreshCuePreferences();
     window.addEventListener("storage", refreshCuePreferences);
+    window.addEventListener(INBOX_CUE_PREFERENCES_UPDATED_EVENT, refreshCuePreferences);
     return () => {
       window.removeEventListener("storage", refreshCuePreferences);
+      window.removeEventListener(INBOX_CUE_PREFERENCES_UPDATED_EVENT, refreshCuePreferences);
     };
   }, []);
 
@@ -547,7 +523,7 @@ function InboxContent(): React.JSX.Element | null {
 
       const preferences = inboxCuePreferencesRef.current;
       if (preferences.sound) {
-        playInboxCueSound();
+        playInboxBingSound();
       }
 
       if (

@@ -6,7 +6,11 @@ import { Bell } from "lucide-react";
 import { Button, Card } from "@opencom/ui";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
-import { loadInboxCuePreferences, saveInboxCuePreferences } from "@/lib/inboxNotificationCues";
+import {
+  broadcastInboxCuePreferencesUpdated,
+  loadInboxCuePreferences,
+  saveInboxCuePreferences,
+} from "@/lib/inboxNotificationCues";
 
 interface NotificationSettingsSectionProps {
   workspaceId?: Id<"workspaces">;
@@ -130,6 +134,7 @@ export function NotificationSettingsSection({
         },
         window.localStorage
       );
+      broadcastInboxCuePreferencesUpdated(window);
     } finally {
       setSavingCues(false);
     }

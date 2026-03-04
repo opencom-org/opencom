@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  INBOX_CUE_PREFERENCES_UPDATED_EVENT,
+  broadcastInboxCuePreferencesUpdated,
   buildUnreadSnapshot,
   getUnreadIncreases,
   loadInboxCuePreferences,
@@ -22,7 +24,7 @@ describe("inboxNotificationCues", () => {
     const storage = createStorage();
     expect(loadInboxCuePreferences(storage as Storage)).toEqual({
       browserNotifications: false,
-      sound: false,
+      sound: true,
     });
   });
 
@@ -82,5 +84,19 @@ describe("inboxNotificationCues", () => {
         hasWindowFocus: true,
       })
     ).toBe(false);
+  });
+
+  it("broadcasts cue preference updates for same-tab listeners", () => {
+    const seenEvents: string[] = [];
+    const dispatcher = {
+      dispatchEvent: (event: Event) => {
+        seenEvents.push(event.type);
+        return true;
+      },
+    };
+
+    broadcastInboxCuePreferencesUpdated(dispatcher);
+
+    expect(seenEvents).toEqual([INBOX_CUE_PREFERENCES_UPDATED_EVENT]);
   });
 });
