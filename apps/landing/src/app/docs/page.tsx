@@ -1,24 +1,27 @@
-import type { Metadata } from "next";
+import { Metadata } from "next";
 import Link from "next/link";
 import {
-  Terminal,
-  Server,
   BookOpen,
   Code2,
-  ExternalLink,
+  Server,
   Smartphone,
-  Bot,
+  Terminal,
   Layout,
   Blocks,
   Sparkles,
+  ExternalLink,
+  Bot,
 } from "lucide-react";
 import { buttonVariants, cn } from "@opencom/ui";
-import { Section, SectionHeader, FeatureCard, Screenshot } from "@/components/sections";
+import { Section, SectionHeader, FeatureCard } from "@/components/sections";
 import {
   OPENCOM_GITHUB_DOCS_URL,
   OPENCOM_GITHUB_REPO_URL,
   OPENCOM_HOSTED_ONBOARDING_URL,
 } from "@/lib/links";
+
+import { WidgetHomeGraphic } from "@/components/landing/graphics/widget-home-graphic";
+import { ToursGraphic } from "@/components/landing/graphics/tours-graphic";
 import { createLandingPageMetadata } from "@/lib/metadata";
 
 export const metadata: Metadata = createLandingPageMetadata({
@@ -221,8 +224,18 @@ export default function DocsPage() {
             </a>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
-            <Screenshot src="/screenshots/widget-tab-home.png" alt="Widget home tab" />
-            <Screenshot src="/screenshots/widget-tour-post-step.png" alt="Widget product tour" />
+            <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden h-full min-h-[400px]">
+              <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
+              <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative w-full h-full">
+                <WidgetHomeGraphic />
+              </div>
+            </div>
+            <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden h-full min-h-[400px]">
+              <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
+              <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative w-full h-full">
+                <ToursGraphic />
+              </div>
+            </div>
           </div>
         </div>
       </Section>

@@ -17,7 +17,7 @@ import {
   Check,
   Sparkles,
 } from "lucide-react";
-import { Section, SectionHeader, FeatureCard, Screenshot, CTA } from "@/components/sections";
+import { Section, SectionHeader, FeatureCard, CTA } from "@/components/sections";
 import { OPENCOM_GITHUB_DOCS_URL, OPENCOM_HOSTED_ONBOARDING_URL } from "@/lib/links";
 
 import { InboxGraphic } from "@/components/landing/graphics/inbox-graphic";
@@ -27,6 +27,9 @@ import { TicketsGraphic } from "@/components/landing/graphics/tickets-graphic";
 import { SurveysGraphic } from "@/components/landing/graphics/surveys-graphic";
 import { CampaignsGraphic } from "@/components/landing/graphics/campaigns-graphic";
 import { ReportsGraphic } from "@/components/landing/graphics/reports-graphic";
+import { KnowledgeBaseGraphic } from "@/components/landing/graphics/knowledge-graphic";
+import { ChecklistsGraphic } from "@/components/landing/graphics/checklists-graphic";
+import { TooltipsGraphic } from "@/components/landing/graphics/tooltips-graphic";
 
 export const metadata: Metadata = {
   title: "Features | Opencom",
@@ -71,7 +74,7 @@ const featureCategories = [
     title: "Knowledge Hub",
     description: "Self-service help center with searchable articles, snippets, and folders.",
     icon: BookOpen,
-    screenshot: "/screenshots/web-knowledge.png",
+    Graphic: KnowledgeBaseGraphic,
     features: [
       "Article management with folders",
       "Saved reply snippets",
@@ -146,7 +149,7 @@ const featureCategories = [
     title: "Checklists",
     description: "Guide users through onboarding with task lists.",
     icon: ListChecks,
-    screenshot: "/screenshots/web-checklists.png",
+    Graphic: ChecklistsGraphic,
     features: [
       "Multi-step onboarding checklists",
       "Task completion tracking",
@@ -161,7 +164,7 @@ const featureCategories = [
     title: "Tooltips",
     description: "Contextual hints attached to page elements.",
     icon: MousePointerClick,
-    screenshot: "/screenshots/web-tooltips.png",
+    Graphic: TooltipsGraphic,
     features: [
       "On-hover tooltips",
       "Click-triggered beacons",
@@ -263,18 +266,14 @@ export default function FeaturesPage() {
               </ul>
             </div>
             <div className={index % 2 === 1 ? "lg:order-1" : ""}>
-              {category.Graphic ? (
-                <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden">
-                  {/* Subtle inner glow */}
-                  <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
-                  
-                  <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative aspect-[16/10]">
-                    <category.Graphic />
-                  </div>
+              <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden">
+                {/* Subtle inner glow */}
+                <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
+                
+                <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative aspect-[16/10]">
+                  <category.Graphic />
                 </div>
-              ) : (
-                <Screenshot src={category.screenshot} alt={`${category.title} screenshot`} />
-              )}
+              </div>
             </div>
           </div>
         </Section>
