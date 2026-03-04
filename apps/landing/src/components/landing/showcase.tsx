@@ -1,22 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Image from "next/image";
 import { useRef } from "react";
+import { InboxGraphic } from "./graphics/inbox-graphic";
+import { ToursGraphic } from "./graphics/tours-graphic";
 
 const showcaseItems = [
   {
     title: "High-performance Inbox",
     description:
       "Keyboard-first navigation, real-time sync, and intelligent routing. Built to handle scale without breaking a sweat.",
-    image: "/screenshots/web-inbox.png",
+    graphic: InboxGraphic,
     tourTarget: "showcase-inbox",
   },
   {
     title: "Native Product Tours",
     description:
       "Design multi-step interactive tours directly within your app. No fragile CSS selectors or third-party iframe overlays.",
-    image: "/screenshots/widget-tour-post-step.png",
+    graphic: ToursGraphic,
     tourTarget: "showcase-product-tour",
   },
 ];
@@ -86,7 +87,7 @@ export function Showcase() {
                         transition={{ type: "spring", stiffness: 100, damping: 20 }}
                         className="w-full h-full"
                       >
-                        <Image src={item.image} alt={item.title} fill className="object-cover" />
+                        <item.graphic />
                       </motion.div>
                     </div>
                   </div>

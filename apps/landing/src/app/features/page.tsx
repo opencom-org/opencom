@@ -19,14 +19,20 @@ import {
 } from "lucide-react";
 import { Section, SectionHeader, FeatureCard, Screenshot, CTA } from "@/components/sections";
 import { OPENCOM_GITHUB_DOCS_URL, OPENCOM_HOSTED_ONBOARDING_URL } from "@/lib/links";
-import { createLandingPageMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = createLandingPageMetadata({
+import { InboxGraphic } from "@/components/landing/graphics/inbox-graphic";
+import { ToursGraphic } from "@/components/landing/graphics/tours-graphic";
+import { OutboundGraphic } from "@/components/landing/graphics/outbound-graphic";
+import { TicketsGraphic } from "@/components/landing/graphics/tickets-graphic";
+import { SurveysGraphic } from "@/components/landing/graphics/surveys-graphic";
+import { CampaignsGraphic } from "@/components/landing/graphics/campaigns-graphic";
+import { ReportsGraphic } from "@/components/landing/graphics/reports-graphic";
+
+export const metadata: Metadata = {
   title: "Features | Opencom",
   description:
     "Explore Opencom features across chat, inbox, tours, knowledge base, tickets, surveys, campaigns, reports, and mobile SDKs.",
-  path: "/features",
-});
+};
 
 const featureCategories = [
   {
@@ -35,7 +41,7 @@ const featureCategories = [
     description:
       "Real-time customer conversations with a shared team inbox and embeddable chat widget.",
     icon: MessageCircle,
-    screenshot: "/screenshots/web-inbox.png",
+    Graphic: InboxGraphic,
     features: [
       "Real-time messaging with typing indicators",
       "Shared team inbox with snooze and assignment",
@@ -50,7 +56,7 @@ const featureCategories = [
     title: "Product Tours",
     description: "Guide users through your product with interactive walkthroughs.",
     icon: Map,
-    screenshot: "/screenshots/web-tours.png",
+    Graphic: ToursGraphic,
     features: [
       "Step-by-step guided tours",
       "Pointer steps and post steps",
@@ -80,7 +86,7 @@ const featureCategories = [
     title: "Outbound Messages",
     description: "Proactively engage users with in-app chats, posts, and banners.",
     icon: Send,
-    screenshot: "/screenshots/web-outbound.png",
+    Graphic: OutboundGraphic,
     features: [
       "In-app chat messages",
       "Post announcements",
@@ -95,7 +101,7 @@ const featureCategories = [
     title: "Tickets",
     description: "Customer support ticketing with priorities, statuses, and custom forms.",
     icon: Ticket,
-    screenshot: "/screenshots/web-tickets.png",
+    Graphic: TicketsGraphic,
     features: [
       "Priority levels (Urgent, High, Normal, Low)",
       "Status tracking (Submitted, In Progress, Resolved)",
@@ -110,7 +116,7 @@ const featureCategories = [
     title: "Surveys",
     description: "Collect feedback and measure customer sentiment.",
     icon: ClipboardCheck,
-    screenshot: "/screenshots/web-surveys.png",
+    Graphic: SurveysGraphic,
     features: [
       "NPS surveys",
       "Custom satisfaction surveys",
@@ -125,7 +131,7 @@ const featureCategories = [
     title: "Campaigns",
     description: "Orchestrate multi-channel outreach campaigns.",
     icon: Mail,
-    screenshot: "/screenshots/web-campaigns.png",
+    Graphic: CampaignsGraphic,
     features: [
       "Email campaigns with templates",
       "Push notifications",
@@ -170,7 +176,7 @@ const featureCategories = [
     title: "Reports & Analytics",
     description: "Analytics and insights for your support operations.",
     icon: BarChart3,
-    screenshot: "/screenshots/web-reports.png",
+    Graphic: ReportsGraphic,
     features: [
       "Conversation volume metrics",
       "Response and resolution times",
@@ -257,7 +263,18 @@ export default function FeaturesPage() {
               </ul>
             </div>
             <div className={index % 2 === 1 ? "lg:order-1" : ""}>
-              <Screenshot src={category.screenshot} alt={`${category.title} screenshot`} />
+              {category.Graphic ? (
+                <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden">
+                  {/* Subtle inner glow */}
+                  <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
+                  
+                  <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative aspect-[16/10]">
+                    <category.Graphic />
+                  </div>
+                </div>
+              ) : (
+                <Screenshot src={category.screenshot} alt={`${category.title} screenshot`} />
+              )}
             </div>
           </div>
         </Section>
