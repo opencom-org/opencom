@@ -232,7 +232,7 @@ export function Hero() {
             </Link>
           </motion.div>
 
-          {/* Hosting Options & Apps */}
+          {/* Hosting Options */}
           <motion.div variants={item} className="flex flex-col gap-6 w-full mt-4">
             <div className="flex flex-col gap-3">
               <p className="text-sm font-semibold text-foreground/90 uppercase tracking-wider">
@@ -259,28 +259,6 @@ export function Hero() {
                 </li>
               </ul>
             </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-4 border-t border-border/60 mt-2">
-              <span className="text-sm font-medium text-foreground/80 whitespace-nowrap">
-                Manage inbox on the go:
-              </span>
-              <div className="flex items-center gap-3">
-                <Link
-                  href="https://apps.apple.com/us/app/opencom/id6759488331"
-                  target="_blank"
-                  className="transition-transform hover:scale-105 active:scale-95"
-                >
-                  <img src="/app-store-badge.svg" alt="Download on the App Store" className="h-[40px] w-auto" />
-                </Link>
-                <Link
-                  href="https://play.google.com/store/apps/details?id=com.opencom.app"
-                  target="_blank"
-                  className="transition-transform hover:scale-105 active:scale-95"
-                >
-                  <img src="/google-play-badge.png" alt="Get it on Google Play" className="h-[58px] w-auto -ml-2" />
-                </Link>
-              </div>
-            </div>
           </motion.div>
         </motion.div>
 
@@ -293,7 +271,7 @@ export function Hero() {
         >
           {/* Diffusion Shadow Backdrop */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-primary/10 dark:bg-primary/5 blur-[120px] rounded-full pointer-events-none" />
-
+          
           {/* Bento Cluster Container */}
           <div className="relative w-full max-w-md mx-auto z-10">
             {/* The Intelligent List Card */}
@@ -304,6 +282,30 @@ export function Hero() {
             {/* The Command Input Card */}
             <div className="relative z-20 -mt-8 ml-8 mr-[-2rem]">
               <CommandInput />
+            </div>
+            
+            {/* App Store Links */}
+            <div className="mt-12 flex flex-col items-center justify-center gap-3 w-full">
+              <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                Manage inbox on the go
+              </span>
+              <div className="flex items-center justify-center gap-3 bg-white/50 dark:bg-card/50 backdrop-blur-md px-6 py-4 rounded-2xl border border-border/50 shadow-sm">
+                <Link
+                  href="https://apps.apple.com/us/app/opencom/id6759488331"
+                  target="_blank"
+                  className="transition-transform hover:scale-105 active:scale-95"
+                >
+                  <img src="/app-store-badge.svg" alt="Download on the App Store" className="h-[40px] w-auto" />
+                </Link>
+                <div className="w-px h-8 bg-border/80 mx-1" />
+                <Link
+                  href="https://play.google.com/store/apps/details?id=com.opencom.app"
+                  target="_blank"
+                  className="transition-transform hover:scale-105 active:scale-95"
+                >
+                  <img src="/google-play-badge.png" alt="Get it on Google Play" className="h-[58px] w-auto -ml-1" />
+                </Link>
+              </div>
             </div>
           </div>
         </motion.div>
