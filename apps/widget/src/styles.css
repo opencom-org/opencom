@@ -449,7 +449,7 @@
   background: var(--opencom-bg-surface);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
 }
 
 .opencom-conversation-status {
@@ -474,7 +474,7 @@
 }
 
 .opencom-input-container {
-  padding: 16px 20px 20px;
+  padding: 6px 10px 10px;
   display: flex;
   gap: 10px;
   background: var(--opencom-bg-surface);
@@ -1068,8 +1068,15 @@
   }
 }
 
+.opencom-email-capture-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .opencom-email-capture p {
-  margin: 0 0 8px 0;
+  margin: 0;
   font-size: 13px;
   color: #6d28d9;
   font-weight: 500;
@@ -1112,13 +1119,12 @@
 }
 
 .opencom-email-skip {
-  margin-top: 6px;
   background: none;
   border: none;
   color: #64748b;
   font-size: 12px;
   cursor: pointer;
-  padding: 4px 0;
+  padding: 0;
   transition: color 0.2s;
 }
 
@@ -1717,7 +1723,7 @@
   border: none;
   cursor: pointer;
   border-radius: var(--opencom-radius-sm);
-  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background-color 0.2s, color 0.2s;
   color: var(--opencom-text-muted);
   position: relative;
   min-width: 64px;
@@ -1727,6 +1733,8 @@
   width: 22px;
   height: 22px;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .opencom-nav-item span:not(.opencom-nav-badge) {
@@ -4394,6 +4402,8 @@
 /* Search Card */
 .opencom-home-search {
   padding: 12px;
+  position: relative;
+  z-index: 20;
 }
 
 .opencom-home-search-input-wrapper {
@@ -4434,7 +4444,11 @@
 }
 
 .opencom-home-search-results {
-  margin-top: 12px;
+  position: absolute;
+  top: calc(100% - 8px);
+  left: 12px;
+  right: 12px;
+  margin-top: 0;
   border-radius: var(--opencom-radius-sm);
   overflow: hidden;
   background: var(--opencom-bg-surface);

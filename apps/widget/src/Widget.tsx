@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
@@ -99,6 +100,7 @@ export function Widget({
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(_workspaceId);
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [articleSearchQuery, setArticleSearchQuery] = useState("");
+  const debouncedArticleSearchQuery = useDebouncedValue(articleSearchQuery, 300);
   const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
   const [selectedHelpCollectionKey, setSelectedHelpCollectionKey] = useState<string | null>(null);
   const [isArticleLargeMode, setIsArticleLargeMode] = useState(false);
@@ -241,12 +243,12 @@ export function Widget({
 
   const articleSearchResults = useQuery(
     api.articles.searchForVisitor,
-    isValidIdFormat && visitorId && sessionToken && articleSearchQuery.length >= 2
+    isValidIdFormat && visitorId && sessionToken && debouncedArticleSearchQuery.length >= 2
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
           visitorId,
           sessionToken,
-          query: articleSearchQuery,
+          query: debouncedArticleSearchQuery,
         }
       : "skip"
   );

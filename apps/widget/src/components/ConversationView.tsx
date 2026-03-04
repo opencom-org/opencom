@@ -671,7 +671,12 @@ export function ConversationView({
           <>
             {showEmailCapture && (
               <div className="opencom-email-capture">
-                <p>Get notified when we reply:</p>
+                <div className="opencom-email-capture-header">
+                  <p>Get notified when we reply:</p>
+                  <button onClick={handleEmailDismiss} className="opencom-email-skip" type="button">
+                    Skip
+                  </button>
+                </div>
                 <div className="opencom-email-input-row">
                   <input
                     type="email"
@@ -694,9 +699,6 @@ export function ConversationView({
                     Save
                   </button>
                 </div>
-                <button onClick={handleEmailDismiss} className="opencom-email-skip" type="button">
-                  Skip
-                </button>
               </div>
             )}
 

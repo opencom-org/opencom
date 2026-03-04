@@ -1,3 +1,4 @@
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@opencom/convex";
@@ -80,6 +81,7 @@ export function Home({
   onSearch,
 }: HomeProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
 
   const homeConfig = useQuery(api.messengerSettings.getPublicHomeConfig, {
     workspaceId,
@@ -93,8 +95,8 @@ export function Home({
 
   const searchResults = useQuery(
     api.articles.searchForVisitor,
-    visitorId && sessionToken && searchQuery.length >= 2
-      ? { workspaceId, visitorId, sessionToken, query: searchQuery }
+    visitorId && sessionToken && debouncedSearchQuery.length >= 2
+      ? { workspaceId, visitorId, sessionToken, query: debouncedSearchQuery }
       : "skip"
   ) as Article[] | undefined;
 
