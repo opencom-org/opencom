@@ -227,6 +227,8 @@ test.describe("Inbox AI deterministic workflow", () => {
     const reviewPanel = page.getByTestId("inbox-ai-review-panel");
     await expect(reviewPanel).toContainText("AI handoff");
     await expect(reviewPanel).toContainText("Delivered to visitor (handoff message)");
+    await expect(reviewPanel).toContainText("Visitor message that triggered this handoff");
+    await expect(reviewPanel).toContainText("Can you help with billing?");
     await expect(reviewPanel).toContainText("Generated candidate response (not sent)");
     await expect(reviewPanel).toContainText("Billing Specialist Guide");
     await expect(reviewPanel).toContainText("Candidate confidence 22%");

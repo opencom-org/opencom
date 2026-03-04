@@ -1592,6 +1592,15 @@ function InboxContent(): React.JSX.Element | null {
                                   </p>
                                 </div>
 
+                                {response.handedOff && response.query.trim().length > 0 && (
+                                  <div className="space-y-1 rounded bg-muted px-2 py-2">
+                                    <p className="text-xs text-muted-foreground">
+                                      Visitor message that triggered this handoff
+                                    </p>
+                                    <p className="text-sm whitespace-pre-wrap">{response.query}</p>
+                                  </div>
+                                )}
+
                                 {response.handedOff && generatedContext && (
                                   <div className="space-y-1 rounded bg-blue-50 px-2 py-2 text-blue-900">
                                     <p className="text-xs font-medium text-blue-800">
