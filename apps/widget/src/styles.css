@@ -6,26 +6,31 @@
   --opencom-launcher-position-left: auto;
   --opencom-launcher-bottom: 20px;
   --opencom-text-on-primary: white;
-  --opencom-text-color: #1f2937;
-  --opencom-text-muted: #6b7280;
-  --opencom-bg-surface: white;
-  --opencom-bg-muted: #f3f4f6;
-  --opencom-border-color: #e5e7eb;
+  --opencom-text-color: #0f172a;
+  --opencom-text-muted: #64748b;
+  --opencom-bg-surface: #ffffff;
+  --opencom-bg-muted: #f8fafc;
+  --opencom-border-color: rgba(0, 0, 0, 0.08);
   --opencom-bg-elevated: #ffffff;
-  --opencom-bg-hover: #f3f4f6;
-  --opencom-shadow-color: rgba(0, 0, 0, 0.1);
+  --opencom-bg-hover: #f1f5f9;
+  --opencom-shadow-color: rgba(0, 0, 0, 0.06);
+  
+  --opencom-radius-lg: 24px;
+  --opencom-radius-md: 16px;
+  --opencom-radius-sm: 12px;
+  --opencom-radius-xs: 8px;
 }
 
 /* Dark theme overrides */
 .opencom-theme-dark {
-  --opencom-text-color: #f9fafb;
-  --opencom-text-muted: #d1d5db;
-  --opencom-bg-surface: #111827;
-  --opencom-bg-muted: #1f2937;
-  --opencom-border-color: #374151;
-  --opencom-bg-elevated: #1f2937;
-  --opencom-bg-hover: #374151;
-  --opencom-shadow-color: rgba(0, 0, 0, 0.4);
+  --opencom-text-color: #f8fafc;
+  --opencom-text-muted: #94a3b8;
+  --opencom-bg-surface: #0f172a;
+  --opencom-bg-muted: #1e293b;
+  --opencom-border-color: rgba(255, 255, 255, 0.08);
+  --opencom-bg-elevated: #1e293b;
+  --opencom-bg-hover: #334155;
+  --opencom-shadow-color: rgba(0, 0, 0, 0.3);
 }
 
 .opencom-widget {
@@ -35,54 +40,62 @@
   left: var(--opencom-launcher-position-left);
   z-index: 10000010;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .opencom-widget-article-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.16);
-  animation: opencom-widget-backdrop-fade-in 0.22s ease-out;
+  background: rgba(15, 23, 42, 0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: opencom-widget-backdrop-fade-in 0.3s ease-out;
   pointer-events: none;
 }
 
 @keyframes opencom-widget-backdrop-fade-in {
   from {
     opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
   }
   to {
     opacity: 1;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
 }
 
 .opencom-launcher {
   position: relative;
   isolation: isolate;
-  width: 62px;
-  height: 62px;
+  width: 64px;
+  height: 64px;
   border-radius: 999px;
   background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--opencom-primary-color) 90%, white 9%) 0%,
-    color-mix(in srgb, var(--opencom-primary-color) 80%, black 10%) 100%
+    135deg,
+    color-mix(in srgb, var(--opencom-primary-color) 85%, white 15%) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 85%, black 15%) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 55%, white 25%);
+  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 40%, white 30%);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--opencom-text-on-primary);
   box-shadow:
-    0 12px 24px color-mix(in srgb, var(--opencom-primary-color) 38%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
-  transition: transform 0.18s ease, box-shadow 0.22s ease, filter 0.2s ease;
+    0 8px 24px color-mix(in srgb, var(--opencom-primary-color) 35%, transparent),
+    inset 0 1px 1px color-mix(in srgb, white 40%, transparent);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
 }
 
 .opencom-launcher::before {
   content: "";
   position: absolute;
-  inset: 2px;
+  inset: 1px;
   border-radius: 999px;
-  background: radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.35), transparent 50%);
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.3), transparent 60%);
   z-index: 0;
 }
 
@@ -92,85 +105,86 @@
 }
 
 .opencom-launcher svg {
-  width: 29px;
-  height: 29px;
-  stroke-width: 2.2;
+  width: 28px;
+  height: 28px;
+  stroke-width: 2;
 }
 
 .opencom-launcher-icon {
-  width: 29px;
-  height: 29px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
 }
 
 .opencom-launcher:hover {
-  transform: translateY(-1px) scale(1.03);
+  transform: translateY(-2px) scale(1.05);
   box-shadow:
-    0 16px 30px color-mix(in srgb, var(--opencom-primary-color) 44%, transparent),
-    inset 0 1px 0 color-mix(in srgb, white 40%, transparent);
-  filter: saturate(1.06);
+    0 12px 32px color-mix(in srgb, var(--opencom-primary-color) 45%, transparent),
+    inset 0 1px 1px color-mix(in srgb, white 50%, transparent);
 }
 
 .opencom-launcher:active {
-  transform: scale(0.97);
+  transform: scale(0.95);
 }
 
 .opencom-launcher:focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 3px color-mix(in srgb, white 94%, transparent),
-    0 0 0 6px color-mix(in srgb, var(--opencom-primary-color) 38%, transparent),
+    0 0 0 2px var(--opencom-bg-surface),
+    0 0 0 4px var(--opencom-primary-color),
     0 12px 24px color-mix(in srgb, var(--opencom-primary-color) 36%, transparent);
 }
 
 .opencom-launcher-has-unread::after {
   content: "";
   position: absolute;
-  inset: -5px;
+  inset: -6px;
   border-radius: 999px;
-  border: 2px solid color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
+  border: 2px solid color-mix(in srgb, var(--opencom-primary-color) 40%, transparent);
   z-index: 0;
-  animation: opencom-launcher-pulse 2s ease-out infinite;
+  animation: opencom-launcher-pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @keyframes opencom-launcher-pulse {
   0% {
-    opacity: 0.72;
-    transform: scale(0.96);
+    opacity: 1;
+    transform: scale(0.95);
   }
-  70% {
+  50% {
     opacity: 0;
-    transform: scale(1.14);
+    transform: scale(1.15);
   }
   100% {
     opacity: 0;
-    transform: scale(1.14);
+    transform: scale(1.15);
   }
 }
 
 .opencom-chat {
-  width: 380px;
-  height: 560px;
+  width: 390px;
+  height: 620px;
   background: var(--opencom-bg-surface);
-  border-radius: 16px;
-  box-shadow: 0 12px 40px var(--opencom-shadow-color), 0 0 0 1px var(--opencom-border-color);
+  border-radius: var(--opencom-radius-lg);
+  box-shadow: 
+    0 12px 48px -12px var(--opencom-shadow-color),
+    0 0 0 1px var(--opencom-border-color),
+    0 24px 64px -16px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: relative;
   z-index: 1;
-  animation: chatWindowOpen 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: chatWindowOpen 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: bottom right;
   transition:
-    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
-    border-radius 0.2s ease;
+    width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes chatWindowOpen {
   from {
     opacity: 0;
-    transform: scale(0.9) translateY(10px);
+    transform: scale(0.92) translateY(16px);
   }
   to {
     opacity: 1;
@@ -181,14 +195,17 @@
 .opencom-header {
   background: var(--opencom-background-color);
   color: var(--opencom-text-on-primary);
-  padding: 14px 16px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
-  font-size: 15px;
-  min-height: 52px;
+  font-size: 16px;
+  min-height: 64px;
   box-sizing: border-box;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
 }
 
 /* Ensure all header icons/buttons are white */
@@ -307,23 +324,23 @@
 }
 
 .opencom-message {
-  max-width: 80%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  font-size: 14px;
-  line-height: 1.5;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  max-width: 82%;
+  padding: 14px 18px;
+  border-radius: var(--opencom-radius-md);
+  font-size: 14.5px;
+  line-height: 1.55;
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
   word-wrap: break-word;
 }
 
 .opencom-message-animated {
-  animation: messageSlideIn 0.25s ease-out;
+  animation: messageSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes messageSlideIn {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(12px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -335,16 +352,17 @@
   align-self: flex-start;
   background: var(--opencom-bg-muted);
   color: var(--opencom-text-color);
-  border-bottom-left-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border-bottom-left-radius: 4px;
+  border: 1px solid var(--opencom-border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .opencom-message-user {
   align-self: flex-end;
-  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, var(--opencom-primary-color) 100%);
+  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, color-mix(in srgb, var(--opencom-primary-color) 85%, black 15%) 100%);
   color: var(--opencom-text-on-primary);
-  border-bottom-right-radius: 6px;
-  box-shadow: 0 2px 4px color-mix(in srgb, var(--opencom-primary-color) 25%, transparent);
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--opencom-primary-color) 25%, transparent);
 }
 
 .opencom-message-content {
@@ -456,22 +474,25 @@
 }
 
 .opencom-input-container {
-  padding: 12px 16px 16px;
+  padding: 16px 20px 20px;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   background: var(--opencom-bg-surface);
+  position: relative;
+  z-index: 10;
 }
 
 .opencom-input {
   flex: 1;
-  padding: 12px 16px;
-  border: 2px solid var(--opencom-border-color);
-  border-radius: 24px;
-  font-size: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--opencom-border-color);
+  border-radius: var(--opencom-radius-lg);
+  font-size: 15px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  transition: all 0.2s ease;
   background-color: var(--opencom-bg-muted);
   color: var(--opencom-text-color);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
 }
 
 .opencom-input::placeholder {
@@ -480,38 +501,47 @@
 }
 
 .opencom-input:hover {
-  border-color: var(--opencom-border-color);
   background-color: var(--opencom-bg-surface);
+  border-color: color-mix(in srgb, var(--opencom-border-color) 80%, var(--opencom-primary-color) 20%);
 }
 
 .opencom-input:focus {
   border-color: var(--opencom-primary-color);
   background-color: var(--opencom-bg-surface);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--opencom-primary-color) 10%, transparent);
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.02),
+    0 0 0 3px color-mix(in srgb, var(--opencom-primary-color) 15%, transparent);
 }
 
 .opencom-send {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, var(--opencom-primary-color) 100%);
+  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, color-mix(in srgb, var(--opencom-primary-color) 85%, black 15%) 100%);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--opencom-text-on-primary);
-  transition: transform 0.15s, box-shadow 0.2s;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--opencom-primary-color) 35%, transparent);
+  flex-shrink: 0;
 }
 
 .opencom-send:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 10px rgba(121, 44, 212, 0.4);
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--opencom-primary-color) 45%, transparent);
 }
 
 .opencom-send:active {
   transform: scale(0.95);
+}
+
+.opencom-send svg {
+  width: 20px;
+  height: 20px;
+  margin-left: -2px; /* slight visual balance for send icon */
 }
 
 .opencom-error {
@@ -645,30 +675,32 @@
 .opencom-conversation-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .opencom-conversation-item {
   width: 100%;
-  padding: 14px;
+  padding: 16px;
   border: 1px solid var(--opencom-border-color);
   background: var(--opencom-bg-elevated);
   cursor: pointer;
   text-align: left;
-  border-radius: 12px;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  border-radius: var(--opencom-radius-sm);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--opencom-shadow-color) 45%, transparent);
+  gap: 14px;
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-conversation-item:hover {
   background: var(--opencom-bg-hover);
-  border-color: color-mix(in srgb, var(--opencom-primary-color) 24%, var(--opencom-border-color));
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--opencom-shadow-color) 48%, transparent);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  box-shadow: 0 6px 16px var(--opencom-shadow-color);
+  transform: translateY(-2px);
 }
 
 .opencom-conversation-item:active {
@@ -677,42 +709,43 @@
 }
 
 .opencom-conversation-item-unread {
-  border-color: color-mix(in srgb, var(--opencom-primary-color) 26%, var(--opencom-border-color));
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 40%, var(--opencom-border-color));
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--opencom-primary-color) 6%, var(--opencom-bg-elevated)) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 8%, var(--opencom-bg-elevated)) 0%,
     var(--opencom-bg-elevated) 70%
   );
   box-shadow:
-    0 8px 18px color-mix(in srgb, var(--opencom-primary-color) 16%, transparent),
-    0 1px 3px color-mix(in srgb, var(--opencom-shadow-color) 35%, transparent);
+    0 8px 24px color-mix(in srgb, var(--opencom-primary-color) 12%, transparent),
+    0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-conversation-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--opencom-radius-xs);
   background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--opencom-primary-color) 22%, white 78%) 0%,
-    color-mix(in srgb, var(--opencom-primary-color) 10%, white 90%) 100%
+    135deg,
+    color-mix(in srgb, var(--opencom-primary-color) 15%, var(--opencom-bg-surface)) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 5%, var(--opencom-bg-surface)) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 22%, var(--opencom-border-color));
+  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 20%, var(--opencom-border-color));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: color-mix(in srgb, var(--opencom-primary-color) 88%, #1f2937);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  color: var(--opencom-primary-color);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4);
 }
 
 .opencom-conversation-item-unread .opencom-conversation-icon {
   background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--opencom-primary-color) 20%, white 80%) 0%,
-    color-mix(in srgb, var(--opencom-primary-color) 8%, white 92%) 100%
+    135deg,
+    color-mix(in srgb, var(--opencom-primary-color) 25%, var(--opencom-bg-surface)) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 15%, var(--opencom-bg-surface)) 100%
   );
-  color: color-mix(in srgb, var(--opencom-primary-color) 92%, black 10%);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 35%, var(--opencom-border-color));
+  color: color-mix(in srgb, var(--opencom-primary-color) 90%, black 10%);
 }
 
 .opencom-conversation-preview {
@@ -1122,15 +1155,19 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--opencom-bg-muted);
 }
 
 .opencom-search-input-container {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 16px;
+  background: var(--opencom-bg-surface);
   border-bottom: 1px solid var(--opencom-border-color);
-  background: var(--opencom-bg-muted);
+  box-shadow: 0 1px 2px var(--opencom-shadow-color);
+  position: relative;
+  z-index: 10;
 }
 
 .opencom-search-input-container svg {
@@ -1142,7 +1179,7 @@
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   outline: none;
   color: var(--opencom-text-color);
 }
@@ -1155,9 +1192,10 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 8px;
+  padding: 12px;
   overflow-y: auto;
   min-height: 0;
+  gap: 8px;
 }
 
 .opencom-collection-list-title {
@@ -1170,26 +1208,28 @@
 .opencom-collection-item {
   width: 100%;
   border: 1px solid var(--opencom-border-color);
-  border-radius: 12px;
+  border-radius: var(--opencom-radius-md);
   background: var(--opencom-bg-elevated);
-  padding: 14px;
-  margin-bottom: 8px;
+  padding: 16px;
   text-align: left;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
-  box-shadow: 0 1px 2px var(--opencom-shadow-color);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-collection-item:hover {
   background: var(--opencom-bg-hover);
-  box-shadow: 0 2px 6px var(--opencom-shadow-color);
+  box-shadow: 0 6px 12px var(--opencom-shadow-color);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  transform: translateY(-2px);
 }
 
 .opencom-collection-item:active {
+  transform: scale(0.985);
   background: var(--opencom-bg-muted);
 }
 
@@ -1197,7 +1237,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .opencom-collection-item-title {
@@ -1209,7 +1249,7 @@
 
 .opencom-collection-item-description {
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--opencom-text-muted);
 }
 
@@ -1249,31 +1289,33 @@
 
 .opencom-article-item {
   width: 100%;
-  padding: 12px 14px;
-  border: none;
+  padding: 14px 16px;
+  border: 1px solid var(--opencom-border-color);
   background: var(--opencom-bg-elevated);
   cursor: pointer;
   text-align: left;
-  border-radius: 10px;
-  transition: background 0.2s, box-shadow 0.2s;
+  border-radius: var(--opencom-radius-sm);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 6px;
-  box-shadow: 0 1px 2px var(--opencom-shadow-color);
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-article-item:hover {
   background: var(--opencom-bg-hover);
-  box-shadow: 0 2px 6px var(--opencom-shadow-color);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  box-shadow: 0 6px 12px var(--opencom-shadow-color);
+  transform: translateY(-2px);
 }
 
 .opencom-article-item:active {
+  transform: scale(0.985);
   background: var(--opencom-bg-muted);
 }
 
 .opencom-article-item svg {
-  color: var(--opencom-text-muted);
+  color: var(--opencom-primary-color);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -1357,11 +1399,12 @@
 .opencom-article-detail {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 24px;
+  background: var(--opencom-bg-surface);
 }
 
 .opencom-article-detail-large {
-  padding: 28px 34px;
+  padding: 32px 40px;
 }
 
 .opencom-article-detail-large .opencom-article-detail-title,
@@ -1373,31 +1416,33 @@
 }
 
 .opencom-article-detail-large .opencom-article-detail-title {
-  font-size: 24px;
-  margin-bottom: 18px;
+  font-size: 28px;
+  margin-bottom: 24px;
+  line-height: 1.3;
 }
 
 .opencom-article-detail-large .opencom-article-detail-content {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.8;
 }
 
 .opencom-article-detail-title {
-  margin: 0 0 16px 0;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 20px 0;
+  font-size: 22px;
+  font-weight: 700;
   color: var(--opencom-text-color);
-  line-height: 1.4;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
 }
 
 .opencom-article-detail-content {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.7;
   color: var(--opencom-text-color);
 }
 
 .opencom-article-detail-content p {
-  margin: 0 0 12px 0;
+  margin: 0 0 16px 0;
 }
 
 .opencom-article-detail-content p:empty {
@@ -1432,20 +1477,22 @@
 
 .opencom-article-detail-content pre {
   background: var(--opencom-bg-muted);
-  border-radius: 8px;
-  padding: 12px 16px;
+  border-radius: var(--opencom-radius-sm);
+  padding: 16px 20px;
   overflow-x: auto;
-  margin: 0 0 12px 0;
-  font-size: 13px;
+  margin: 0 0 16px 0;
+  font-size: 13.5px;
   line-height: 1.5;
+  border: 1px solid var(--opencom-border-color);
 }
 
 .opencom-article-detail-content code {
   background: var(--opencom-bg-muted);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 13px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 13.5px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  border: 1px solid var(--opencom-border-color);
 }
 
 .opencom-article-detail-content pre code {
@@ -1465,10 +1512,12 @@
 }
 
 .opencom-article-detail-content blockquote {
-  border-left: 3px solid var(--opencom-border-color);
-  margin: 0 0 12px 0;
-  padding: 4px 16px;
+  border-left: 4px solid var(--opencom-primary-color);
+  margin: 0 0 16px 0;
+  padding: 8px 20px;
   color: var(--opencom-text-muted);
+  background: color-mix(in srgb, var(--opencom-primary-color) 4%, transparent);
+  border-radius: 0 var(--opencom-radius-sm) var(--opencom-radius-sm) 0;
 }
 
 .opencom-article-detail-content strong {
@@ -1528,50 +1577,57 @@
 .opencom-tour-picker {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 16px;
 }
 
 .opencom-tour-item {
   width: 100%;
   padding: 16px;
-  border: none;
+  border: 1px solid var(--opencom-border-color);
   background: var(--opencom-bg-elevated);
   cursor: pointer;
   text-align: left;
-  border-radius: 12px;
-  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  border-radius: var(--opencom-radius-md);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 6px var(--opencom-shadow-color);
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-tour-item:hover:not(:disabled) {
   background: var(--opencom-bg-hover);
-  box-shadow: 0 4px 12px var(--opencom-shadow-color);
-  transform: translateY(-1px);
+  box-shadow: 0 6px 12px var(--opencom-shadow-color);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  transform: translateY(-2px);
 }
 
 .opencom-tour-item:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.985);
 }
 
 .opencom-tour-item-unavailable {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .opencom-tour-item-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: var(--opencom-bg-muted);
+  width: 48px;
+  height: 48px;
+  border-radius: var(--opencom-radius-sm);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--opencom-primary-color) 12%, var(--opencom-bg-surface)) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 4%, var(--opencom-bg-surface)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 15%, var(--opencom-border-color));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   color: var(--opencom-primary-color);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4);
 }
 
 .opencom-tour-item-icon svg {
@@ -1642,41 +1698,49 @@
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 8px 4px;
-  background: var(--opencom-bg-elevated);
+  padding: 10px 8px;
+  background: var(--opencom-bg-surface);
   border-top: 1px solid var(--opencom-border-color);
   flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .opencom-nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 8px 12px;
   background: none;
   border: none;
   cursor: pointer;
-  border-radius: 10px;
-  transition: background 0.15s, color 0.15s;
+  border-radius: var(--opencom-radius-sm);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   color: var(--opencom-text-muted);
   position: relative;
-  min-width: 56px;
+  min-width: 64px;
 }
 
 .opencom-nav-item svg {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .opencom-nav-item span:not(.opencom-nav-badge) {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
 }
 
 .opencom-nav-item:hover {
   background: var(--opencom-bg-hover);
   color: var(--opencom-text-color);
+}
+
+.opencom-nav-item:hover svg {
+  transform: translateY(-2px);
 }
 
 .opencom-nav-item-active {
@@ -1735,44 +1799,52 @@
 .opencom-tickets-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 16px;
 }
 
 .opencom-ticket-item {
   width: 100%;
-  padding: 14px 16px;
-  border: none;
+  padding: 16px;
+  border: 1px solid var(--opencom-border-color);
   background: var(--opencom-bg-elevated);
   cursor: pointer;
   text-align: left;
-  border-radius: 12px;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  border-radius: var(--opencom-radius-md);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px var(--opencom-shadow-color);
+  gap: 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-ticket-item:hover {
   background: var(--opencom-bg-hover);
-  box-shadow: 0 2px 8px var(--opencom-shadow-color);
+  box-shadow: 0 6px 12px var(--opencom-shadow-color);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  transform: translateY(-2px);
 }
 
 .opencom-ticket-item:active {
-  transform: scale(0.98);
+  transform: scale(0.985);
 }
 
 .opencom-ticket-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--opencom-bg-muted);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--opencom-radius-sm);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--opencom-primary-color) 12%, var(--opencom-bg-surface)) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 4%, var(--opencom-bg-surface)) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 15%, var(--opencom-border-color));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   color: var(--opencom-primary-color);
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4);
 }
 
 .opencom-ticket-content {
@@ -2932,11 +3004,18 @@
 }
 
 .opencom-checklist {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
+  background: var(--opencom-bg-surface);
+  border-radius: var(--opencom-radius-md);
+  border: 1px solid var(--opencom-border-color);
   margin-bottom: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.opencom-checklist:hover {
+  box-shadow: 0 4px 12px var(--opencom-shadow-color);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
 }
 
 .opencom-checklist.complete {
@@ -2953,20 +3032,21 @@
   border: none;
   cursor: pointer;
   text-align: left;
+  transition: background 0.2s;
 }
 
 .opencom-checklist-header:hover {
-  background: #f9fafb;
+  background: var(--opencom-bg-hover);
 }
 
 .opencom-checklist-header-content {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .opencom-checklist-header-content svg {
-  color: #6b7280;
+  color: var(--opencom-text-muted);
 }
 
 .opencom-checklist-header-content svg.complete {
@@ -2976,17 +3056,19 @@
 .opencom-checklist-info {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .opencom-checklist-name {
+  font-size: 15px;
   font-weight: 600;
-  font-size: 14px;
-  color: #111;
+  color: var(--opencom-text-color);
+  line-height: 1.3;
 }
 
 .opencom-checklist-progress-text {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  color: var(--opencom-text-muted);
 }
 
 .opencom-checklist-header-right {
@@ -3031,82 +3113,96 @@
 }
 
 .opencom-checklist-tasks {
-  border-top: 1px solid #e5e7eb;
-  padding: 12px;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .opencom-checklist-description {
-  font-size: 13px;
-  color: #6b7280;
-  margin: 0 0 12px;
-  padding: 0 4px;
+  font-size: 14px;
+  color: var(--opencom-text-muted);
+  margin: 0 0 16px 0;
+  padding: 0;
+  line-height: 1.5;
 }
 
 .opencom-checklist-task {
-  width: 100%;
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 12px;
-  background: none;
-  border: none;
-  border-radius: 8px;
+  border-radius: var(--opencom-radius-sm);
+  background: var(--opencom-bg-elevated);
+  border: 1px solid var(--opencom-border-color);
   cursor: pointer;
-  text-align: left;
-  transition: background 0.2s;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 2px var(--opencom-shadow-color);
 }
 
 .opencom-checklist-task:hover {
-  background: #f3f4f6;
+  background: var(--opencom-bg-hover);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  box-shadow: 0 4px 8px var(--opencom-shadow-color);
+  transform: translateY(-1px);
 }
 
 .opencom-checklist-task.completed {
   opacity: 0.6;
+  background: var(--opencom-bg-surface);
+  box-shadow: none;
+  border-color: var(--opencom-border-color);
+  transform: none;
 }
 
 .opencom-task-checkbox {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #d1d5db;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--opencom-border-color);
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: var(--opencom-bg-surface);
 }
 
 .opencom-task-checkbox.checked {
-  background: #792cd4;
-  border-color: #792cd4;
-  color: white;
+  background: var(--opencom-primary-color);
+  border-color: var(--opencom-primary-color);
+  color: var(--opencom-text-on-primary);
 }
 
 .opencom-task-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .opencom-task-title {
   font-size: 14px;
   font-weight: 500;
-  color: #111;
+  color: var(--opencom-text-color);
+  line-height: 1.4;
 }
 
 .opencom-checklist-task.completed .opencom-task-title {
   text-decoration: line-through;
+  color: var(--opencom-text-muted);
 }
 
 .opencom-task-description {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  color: var(--opencom-text-muted);
+  line-height: 1.4;
 }
 
 .opencom-task-action-icon {
-  color: #9ca3af;
+  color: var(--opencom-text-muted);
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 /* Tickets Styles */
@@ -4201,25 +4297,28 @@
 /* ==================== HOME COMPONENT STYLES ==================== */
 
 .opencom-home {
-  padding: 0;
+  padding: 16px;
   overflow-y: auto;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--opencom-bg-muted);
 }
 
 .opencom-home-card {
   padding: 16px;
-  border-bottom: 1px solid var(--opencom-border-color);
-}
-
-.opencom-home-card:last-child {
-  border-bottom: none;
+  background: var(--opencom-bg-surface);
+  border: 1px solid var(--opencom-border-color);
+  border-radius: var(--opencom-radius-md);
+  box-shadow: 0 2px 4px var(--opencom-shadow-color);
 }
 
 .opencom-home-card-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 14px;
   font-weight: 600;
   color: var(--opencom-text-color);
@@ -4228,60 +4327,90 @@
 .opencom-home-card-title svg {
   width: 18px;
   height: 18px;
-  opacity: 0.7;
+  color: var(--opencom-primary-color);
 }
 
 /* Welcome Card */
 .opencom-home-welcome {
   padding: 0;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 4px 12px var(--opencom-shadow-color);
 }
 
 .opencom-home-welcome-header {
-  padding: 20px 16px;
+  padding: 24px 20px;
   color: white;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.opencom-home-welcome-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.05) 100%);
+  pointer-events: none;
 }
 
 .opencom-home-logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--opencom-radius-sm);
   object-fit: contain;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  position: relative;
+  z-index: 1;
 }
 
 .opencom-home-greeting {
   flex: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .opencom-home-welcome-text {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .opencom-home-team-intro {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   opacity: 0.9;
+  line-height: 1.4;
 }
 
 /* Search Card */
 .opencom-home-search {
-  background: var(--opencom-bg-muted);
+  padding: 12px;
 }
 
 .opencom-home-search-input-wrapper {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--opencom-bg-muted);
+  border: 1px solid transparent;
+  border-radius: var(--opencom-radius-sm);
+  transition: all 0.2s ease;
+}
+
+.opencom-home-search-input-wrapper:focus-within {
   background: var(--opencom-bg-surface);
-  border: 1px solid var(--opencom-border-color);
-  border-radius: 8px;
+  border-color: var(--opencom-primary-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--opencom-primary-color) 15%, transparent);
 }
 
 .opencom-home-search-input-wrapper svg {
@@ -4295,7 +4424,7 @@
   flex: 1;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--opencom-text-color);
   outline: none;
 }
@@ -4306,18 +4435,19 @@
 
 .opencom-home-search-results {
   margin-top: 12px;
-  border-radius: 8px;
+  border-radius: var(--opencom-radius-sm);
   overflow: hidden;
   background: var(--opencom-bg-surface);
   border: 1px solid var(--opencom-border-color);
+  box-shadow: 0 4px 12px var(--opencom-shadow-color);
 }
 
 .opencom-home-search-result {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 12px;
+  padding: 14px 16px;
   background: transparent;
   border: none;
   border-bottom: 1px solid var(--opencom-border-color);
@@ -4336,7 +4466,15 @@
   background: var(--opencom-bg-hover);
 }
 
-.opencom-home-search-result svg {
+.opencom-home-search-result svg:first-child {
+  width: 18px;
+  height: 18px;
+  color: var(--opencom-primary-color);
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.opencom-home-search-result svg:last-child {
   width: 16px;
   height: 16px;
   color: var(--opencom-text-muted);
@@ -4348,50 +4486,52 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 /* Conversations Card */
 .opencom-home-conversations-list {
-  border: 1px solid var(--opencom-border-color);
-  border-radius: 8px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .opencom-home-conversation-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 12px;
+  padding: 14px 16px;
   background: var(--opencom-bg-surface);
-  border: none;
-  border-bottom: 1px solid var(--opencom-border-color);
+  border: 1px solid var(--opencom-border-color);
+  border-radius: var(--opencom-radius-sm);
   cursor: pointer;
   text-align: left;
-  transition: background 0.15s;
-}
-
-.opencom-home-conversation-item:last-child {
-  border-bottom: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px var(--opencom-shadow-color);
 }
 
 .opencom-home-conversation-item:hover {
   background: var(--opencom-bg-hover);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--opencom-shadow-color);
 }
 
 .opencom-home-conversation-item-unread {
-  background: color-mix(in srgb, var(--opencom-primary-color) 7%, var(--opencom-bg-surface));
+  background: color-mix(in srgb, var(--opencom-primary-color) 4%, var(--opencom-bg-surface));
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 40%, var(--opencom-border-color));
 }
 
 .opencom-home-conversation-item-unread:hover {
-  background: color-mix(in srgb, var(--opencom-primary-color) 10%, var(--opencom-bg-hover));
+  background: color-mix(in srgb, var(--opencom-primary-color) 8%, var(--opencom-bg-hover));
 }
 
 .opencom-home-conversation-preview {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -4402,26 +4542,26 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 .opencom-home-conversation-text-unread {
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .opencom-home-unread-badge {
   background: linear-gradient(
-    160deg,
-    color-mix(in srgb, var(--opencom-primary-color) 88%, white 6%) 0%,
-    color-mix(in srgb, var(--opencom-primary-color) 84%, black 8%) 100%
+    135deg,
+    color-mix(in srgb, var(--opencom-primary-color) 90%, white 10%) 0%,
+    color-mix(in srgb, var(--opencom-primary-color) 90%, black 10%) 100%
   );
-  color: white;
-  font-size: 10px;
+  color: var(--opencom-text-on-primary);
+  font-size: 11px;
   font-weight: 700;
-  min-width: 20px;
-  height: 20px;
+  min-width: 22px;
+  height: 22px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 65%, white 35%);
-  box-shadow: 0 4px 10px color-mix(in srgb, var(--opencom-primary-color) 22%, transparent);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
   padding: 0 6px;
   display: flex;
   align-items: center;
@@ -4430,15 +4570,18 @@
 }
 
 .opencom-home-conversation-item svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: var(--opencom-text-muted);
   flex-shrink: 0;
 }
 
 /* Start Conversation Card */
 .opencom-home-start {
-  padding: 20px 16px;
+  padding: 16px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 .opencom-home-start-button {
@@ -4447,54 +4590,61 @@
   justify-content: center;
   gap: 10px;
   width: 100%;
-  padding: 14px 20px;
+  padding: 16px 24px;
   border: none;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: var(--opencom-radius-md);
+  font-size: 16px;
   font-weight: 600;
-  color: white;
+  color: var(--opencom-text-on-primary);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
 }
 
 .opencom-home-start-button:hover {
-  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--opencom-primary-color) 40%, transparent);
+  filter: brightness(1.05);
+}
+
+.opencom-home-start-button:active {
+  transform: translateY(0);
 }
 
 .opencom-home-start-button svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 /* Featured Articles Card */
 .opencom-home-articles-list {
-  border: 1px solid var(--opencom-border-color);
-  border-radius: 8px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .opencom-home-article-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 12px;
+  padding: 14px 16px;
   background: var(--opencom-bg-surface);
-  border: none;
-  border-bottom: 1px solid var(--opencom-border-color);
+  border: 1px solid var(--opencom-border-color);
+  border-radius: var(--opencom-radius-sm);
   cursor: pointer;
   text-align: left;
   font-size: 14px;
   color: var(--opencom-text-color);
-  transition: background 0.15s;
-}
-
-.opencom-home-article-item:last-child {
-  border-bottom: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px var(--opencom-shadow-color);
 }
 
 .opencom-home-article-item:hover {
   background: var(--opencom-bg-hover);
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 30%, var(--opencom-border-color));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--opencom-shadow-color);
 }
 
 .opencom-home-article-item span {
@@ -4502,11 +4652,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
 }
 
 .opencom-home-article-item svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: var(--opencom-text-muted);
   flex-shrink: 0;
 }
@@ -4514,15 +4665,11 @@
 /* Empty States */
 .opencom-home-empty-text {
   margin: 0;
-  padding: 16px;
+  padding: 24px 16px;
   text-align: center;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--opencom-text-muted);
   background: var(--opencom-bg-muted);
-  border-radius: 8px;
-}
-
-/* Announcements Card */
-.opencom-home-announcements {
-  background: var(--opencom-bg-surface);
+  border-radius: var(--opencom-radius-sm);
+  border: 1px dashed var(--opencom-border-color);
 }
