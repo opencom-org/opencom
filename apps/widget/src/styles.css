@@ -4320,6 +4320,7 @@
   border: 1px solid var(--opencom-border-color);
   border-radius: var(--opencom-radius-md);
   box-shadow: 0 2px 4px var(--opencom-shadow-color);
+  flex-shrink: 0;
 }
 
 .opencom-home-card-title {
