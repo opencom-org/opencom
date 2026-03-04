@@ -632,6 +632,13 @@ export async function seedInboxAIResponse(
     visitorSessionToken: string;
     query: string;
     response: string;
+    generatedCandidateResponse?: string;
+    generatedCandidateSources?: Array<{
+      type: string;
+      id: string;
+      title: string;
+    }>;
+    generatedCandidateConfidence?: number;
     confidence?: number;
     handedOff?: boolean;
     handoffReason?: string;
@@ -663,6 +670,9 @@ export async function seedInboxAIResponse(
     messageId,
     query: options.query,
     response: options.response,
+    generatedCandidateResponse: options.generatedCandidateResponse,
+    generatedCandidateSources: options.generatedCandidateSources,
+    generatedCandidateConfidence: options.generatedCandidateConfidence,
     sources: options.sources ?? [],
     confidence: options.confidence ?? 0.75,
     handedOff: options.handedOff ?? false,

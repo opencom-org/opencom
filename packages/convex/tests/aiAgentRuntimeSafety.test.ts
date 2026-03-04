@@ -362,10 +362,81 @@ describe("aiAgentActions runtime safety", () => {
     );
   });
 
-  it("stores only the handoff message when AI output requires a handoff", async () => {
-    const handoffMessage = "Let me connect you with a human agent who can help you better.";
+  it("omits temperature for gpt-5 reasoning models", async () => {
     mockGenerateText.mockResolvedValue({
-      text: "I don't have enough information to answer that question. Let me connect you with a human agent.",
+      text: "Open Settings and update your profile details under Account.",
+      usage: { totalTokens: 21 },
+    } as any);
+
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if ("query" in args) {
+        return [];
+      }
+      if ("workspaceId" in args && "conversationId" in args === false) {
+        return {
+          enabled: true,
+          model: "openai/gpt-5-nano",
+          confidenceThreshold: 0.2,
+          knowledgeSources: ["articles"],
+          personality: null,
+        };
+      }
+      return {
+        conversationId: "conversation_1",
+        workspaceId: "workspace_1",
+        visitorId: "visitor_1",
+      };
+    });
+
+    const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "workspaceId" in args) {
+        return "cleared";
+      }
+      if ("senderId" in args && "content" in args) {
+        return "ai_message_1";
+      }
+      if ("query" in args && "response" in args) {
+        return "ai_response_1";
+      }
+      if ("reason" in args) {
+        return {
+          messageId: "handoff_message_1",
+          handoffMessage: "Routing you to a human agent.",
+        };
+      }
+      throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
+    });
+
+    await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "How do I update my profile?",
+      }
+    );
+
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(mockGenerateText.mock.calls[0]?.[0]).toMatchObject({
+      maxOutputTokens: 10000,
+      providerOptions: {
+        openai: expect.objectContaining({
+          maxCompletionTokens: 10000,
+        }),
+      },
+    });
+    expect(mockGenerateText.mock.calls[0]?.[0]).not.toHaveProperty("temperature");
+  });
+
+  it("stores the handoff message while retaining generated candidate context", async () => {
+    const handoffMessage = "Let me connect you with a human agent who can help you better.";
+    const generatedCandidateResponse =
+      "I don't have enough information to answer that question. Let me connect you with a human agent.";
+    mockGenerateText.mockResolvedValue({
+      text: generatedCandidateResponse,
       usage: { totalTokens: 33 },
     } as any);
 
@@ -428,6 +499,9 @@ describe("aiAgentActions runtime safety", () => {
       expect.objectContaining({
         query: "Who should I vote for?",
         response: handoffMessage,
+        generatedCandidateResponse,
+        generatedCandidateSources: [],
+        generatedCandidateConfidence: expect.any(Number),
         messageId: "handoff_message_single_1",
         handedOff: true,
       })
@@ -436,6 +510,80 @@ describe("aiAgentActions runtime safety", () => {
       expect.anything(),
       expect.objectContaining({
         senderId: "ai-agent",
+      })
+    );
+  });
+
+  it("does not hand off when a resolved answer includes an optional human escalation offer", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "Opencom includes inbox, tickets, outbound campaigns, tours, and reporting. If you want, I can connect you with a human agent for deeper guidance.",
+      usage: { totalTokens: 48 },
+    } as any);
+
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if ("query" in args) {
+        return [];
+      }
+      if ("workspaceId" in args && "conversationId" in args === false) {
+        return {
+          enabled: true,
+          model: "openai/gpt-5-nano",
+          confidenceThreshold: 0.2,
+          knowledgeSources: ["articles"],
+          personality: null,
+        };
+      }
+      return {
+        conversationId: "conversation_1",
+        workspaceId: "workspace_1",
+        visitorId: "visitor_1",
+      };
+    });
+
+    const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "workspaceId" in args) {
+        return "cleared";
+      }
+      if ("senderId" in args && "content" in args) {
+        return "ai_message_no_handoff_1";
+      }
+      if ("query" in args && "response" in args) {
+        return "ai_response_no_handoff_1";
+      }
+      if ("reason" in args) {
+        return {
+          messageId: "handoff_message_1",
+          handoffMessage: "Routing you to a human agent.",
+        };
+      }
+      throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
+    });
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "what features does opencom have",
+      }
+    );
+
+    expect(result.handoff).toBe(false);
+    expect(result.messageId).toBe("ai_message_no_handoff_1");
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: "what features does opencom have",
+        handedOff: false,
+      })
+    );
+    expect(runMutation).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        reason: expect.any(String),
       })
     );
   });
@@ -476,6 +624,9 @@ describe("aiAgentActions runtime safety", () => {
           handoffMessage: "Routing you to a human agent.",
         };
       }
+      if ("query" in args && "response" in args) {
+        return "ai_response_generation_failed_1";
+      }
       if ("senderId" in args && "content" in args) {
         return "fallback_message_1";
       }
@@ -502,6 +653,15 @@ describe("aiAgentActions runtime safety", () => {
       expect.objectContaining({
         workspaceId: "workspace_1",
         code: "GENERATION_FAILED",
+      })
+    );
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: "How do I get started?",
+        response: "Routing you to a human agent.",
+        handedOff: true,
+        handoffReason: "AI generation failed",
       })
     );
   });
@@ -539,6 +699,9 @@ describe("aiAgentActions runtime safety", () => {
       if ("reason" in args) {
         throw new Error("handoff unavailable");
       }
+      if ("query" in args && "response" in args) {
+        return "ai_response_fallback_1";
+      }
       if ("senderId" in args && "content" in args) {
         return "fallback_message_1";
       }
@@ -560,6 +723,15 @@ describe("aiAgentActions runtime safety", () => {
     expect(result.handoff).toBe(true);
     expect(result.messageId).toBe("fallback_message_1");
     expect(result.response).toMatch(/having trouble processing your request/i);
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: "Need help",
+        response: expect.stringMatching(/having trouble processing your request/i),
+        handedOff: true,
+        handoffReason: "AI generation failed",
+      })
+    );
   });
 
   it("treats empty model output as a generation failure and hands off", async () => {
@@ -626,6 +798,9 @@ describe("aiAgentActions runtime safety", () => {
           handoffMessage: "Routing you to a human agent.",
         };
       }
+      if ("query" in args && "response" in args) {
+        return "ai_response_empty_1";
+      }
       if ("senderId" in args && "content" in args) {
         return "fallback_message_1";
       }
@@ -656,10 +831,13 @@ describe("aiAgentActions runtime safety", () => {
         message: expect.stringContaining("generationMetadata="),
       })
     );
-    expect(runMutation).not.toHaveBeenCalledWith(
+    expect(runMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         query: "How do I get started?",
+        response: "Routing you to a human agent.",
+        handedOff: true,
+        handoffReason: "AI returned an empty response",
       })
     );
   });

@@ -2095,6 +2095,17 @@ export const seedTestAIResponse = internalMutation({
     conversationId: v.id("conversations"),
     query: v.string(),
     response: v.string(),
+    generatedCandidateResponse: v.optional(v.string()),
+    generatedCandidateSources: v.optional(
+      v.array(
+        v.object({
+          type: v.string(),
+          id: v.string(),
+          title: v.string(),
+        })
+      )
+    ),
+    generatedCandidateConfidence: v.optional(v.number()),
     confidence: v.optional(v.number()),
     handedOff: v.optional(v.boolean()),
     handoffReason: v.optional(v.string()),
@@ -2132,6 +2143,9 @@ export const seedTestAIResponse = internalMutation({
       messageId,
       query: args.query,
       response: args.response,
+      generatedCandidateResponse: args.generatedCandidateResponse,
+      generatedCandidateSources: args.generatedCandidateSources,
+      generatedCandidateConfidence: args.generatedCandidateConfidence,
       sources: args.sources ?? [],
       confidence,
       feedback: args.feedback,

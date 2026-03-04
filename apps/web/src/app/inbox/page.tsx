@@ -1011,7 +1011,9 @@ function InboxContent(): React.JSX.Element | null {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => router.push(`/visitors/${selectedConversation.visitorId}`)}
+                            onClick={() =>
+                              router.push(`/visitors/${selectedConversation.visitorId}`)
+                            }
                             data-testid="inbox-open-visitor-profile"
                             title="View visitor profile"
                           >
@@ -1530,81 +1532,146 @@ function InboxContent(): React.JSX.Element | null {
                         </p>
                       ) : (
                         orderedAiResponses.map(
-                          (response: NonNullable<typeof orderedAiResponses>[number]) => (
-                            <article
-                              key={response._id}
-                              className="rounded-lg border p-3 space-y-2"
-                              data-testid={`inbox-ai-review-entry-${response._id}`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span
-                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
-                                    response.handedOff
-                                      ? "bg-amber-100 text-amber-700"
-                                      : "bg-blue-100 text-blue-700"
-                                  }`}
-                                >
-                                  <Bot className="h-3 w-3" />
-                                  {response.handedOff ? "AI handoff" : "AI handled"}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {new Date(response.createdAt).toLocaleTimeString()}
-                                </span>
-                              </div>
+                          (response: NonNullable<typeof orderedAiResponses>[number]) => {
+                            const deliveredContext = response.deliveredResponseContext ?? {
+                              response: response.response,
+                              sources: response.sources,
+                              confidence: response.handedOff ? null : response.confidence,
+                            };
+                            const generatedContext = response.generatedResponseContext;
+                            const confidenceValue =
+                              generatedContext?.confidence ?? response.confidence;
+                            const confidenceLabel =
+                              response.handedOff && generatedContext
+                                ? "Candidate confidence"
+                                : "Confidence";
+                            const sourceLabel =
+                              response.handedOff && generatedContext
+                                ? "Candidate sources"
+                                : "Sources";
+                            const sourcesToShow =
+                              response.handedOff && generatedContext
+                                ? generatedContext.sources
+                                : response.sources;
+                            const isGenerationFailureHandoff =
+                              response.handoffReason === "AI returned an empty response" ||
+                              response.handoffReason === "AI generation failed" ||
+                              response.handoffReason ===
+                                "AI returned an empty response and retry failed";
 
-                              <p className="text-sm whitespace-pre-wrap">{response.response}</p>
-
-                              <div className="flex flex-wrap items-center gap-2 text-xs">
-                                <span className="rounded bg-muted px-2 py-0.5">
-                                  Confidence {Math.round(response.confidence * 100)}%
-                                </span>
-                                {response.feedback && (
-                                  <span className="rounded bg-muted px-2 py-0.5">
-                                    Feedback{" "}
-                                    {response.feedback === "helpful" ? "helpful" : "not helpful"}
+                            return (
+                              <article
+                                key={response._id}
+                                className="rounded-lg border p-3 space-y-2"
+                                data-testid={`inbox-ai-review-entry-${response._id}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                                      response.handedOff
+                                        ? "bg-amber-100 text-amber-700"
+                                        : "bg-blue-100 text-blue-700"
+                                    }`}
+                                  >
+                                    <Bot className="h-3 w-3" />
+                                    {response.handedOff ? "AI handoff" : "AI handled"}
                                   </span>
-                                )}
-                              </div>
-
-                              {response.sources.length > 0 && (
-                                <div className="space-y-1">
-                                  <p className="text-xs text-muted-foreground">Sources</p>
-                                  <ul className="flex flex-wrap gap-1">
-                                    {response.sources.map((source, index) => (
-                                      <li
-                                        key={`${response._id}-${source.id}-${index}`}
-                                        className="rounded border px-2 py-0.5 text-xs"
-                                      >
-                                        {source.title}
-                                      </li>
-                                    ))}
-                                  </ul>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(response.createdAt).toLocaleTimeString()}
+                                  </span>
                                 </div>
-                              )}
 
-                              {response.handedOff && (
-                                <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                                  Handoff reason:{" "}
-                                  {response.handoffReason ??
-                                    selectedConversation?.aiWorkflow?.handoffReason ??
-                                    "Not specified"}
-                                </p>
-                              )}
+                                <div className="space-y-1">
+                                  {response.handedOff && (
+                                    <p className="text-xs text-muted-foreground">
+                                      Delivered to visitor (handoff message)
+                                    </p>
+                                  )}
+                                  <p className="text-sm whitespace-pre-wrap">
+                                    {deliveredContext.response}
+                                  </p>
+                                </div>
 
-                              <div className="flex justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-xs"
-                                  onClick={() => jumpToMessage(response.messageId)}
-                                  data-testid={`inbox-ai-review-jump-${response._id}`}
-                                >
-                                  View in thread
-                                  <ArrowUpRight className="h-3 w-3 ml-1" />
-                                </Button>
-                              </div>
-                            </article>
-                          )
+                                {response.handedOff && response.query.trim().length > 0 && (
+                                  <div className="space-y-1 rounded bg-muted px-2 py-2">
+                                    <p className="text-xs text-muted-foreground">
+                                      Visitor message that triggered this handoff
+                                    </p>
+                                    <p className="text-sm whitespace-pre-wrap">{response.query}</p>
+                                  </div>
+                                )}
+
+                                {response.handedOff && generatedContext && (
+                                  <div className="space-y-1 rounded bg-blue-50 px-2 py-2 text-blue-900">
+                                    <p className="text-xs font-medium text-blue-800">
+                                      Generated candidate response (not sent)
+                                    </p>
+                                    <p className="text-sm whitespace-pre-wrap">
+                                      {generatedContext.response}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {response.handedOff && !generatedContext && (
+                                  <p className="rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+                                    {isGenerationFailureHandoff
+                                      ? "No generated candidate response was produced for this handoff."
+                                      : "Generated candidate response unavailable for this legacy handoff record."}
+                                  </p>
+                                )}
+
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="rounded bg-muted px-2 py-0.5">
+                                    {confidenceLabel} {Math.round(confidenceValue * 100)}%
+                                  </span>
+                                  {response.feedback && (
+                                    <span className="rounded bg-muted px-2 py-0.5">
+                                      Feedback{" "}
+                                      {response.feedback === "helpful" ? "helpful" : "not helpful"}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {sourcesToShow.length > 0 && (
+                                  <div className="space-y-1">
+                                    <p className="text-xs text-muted-foreground">{sourceLabel}</p>
+                                    <ul className="flex flex-wrap gap-1">
+                                      {sourcesToShow.map((source, index) => (
+                                        <li
+                                          key={`${response._id}-${source.id}-${index}`}
+                                          className="rounded border px-2 py-0.5 text-xs"
+                                        >
+                                          {source.title}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {response.handedOff && (
+                                  <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                                    Handoff reason:{" "}
+                                    {response.handoffReason ??
+                                      selectedConversation?.aiWorkflow?.handoffReason ??
+                                      "Not specified"}
+                                  </p>
+                                )}
+
+                                <div className="flex justify-end">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    onClick={() => jumpToMessage(response.messageId)}
+                                    data-testid={`inbox-ai-review-jump-${response._id}`}
+                                  >
+                                    View in thread
+                                    <ArrowUpRight className="h-3 w-3 ml-1" />
+                                  </Button>
+                                </div>
+                              </article>
+                            );
+                          }
                         )
                       )}
                     </div>

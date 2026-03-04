@@ -1837,6 +1837,17 @@ export default defineSchema({
     messageId: v.id("messages"),
     query: v.string(),
     response: v.string(),
+    generatedCandidateResponse: v.optional(v.string()),
+    generatedCandidateSources: v.optional(
+      v.array(
+        v.object({
+          type: v.string(),
+          id: v.string(),
+          title: v.string(),
+        })
+      )
+    ),
+    generatedCandidateConfidence: v.optional(v.number()),
     sources: v.array(
       v.object({
         type: v.string(),
