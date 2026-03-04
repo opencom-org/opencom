@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { Clock3, LifeBuoy, MessageCircle, MousePointerClick } from "lucide-react";
-import { Screenshot, Section, SectionHeader } from "@/components/sections";
+import { Section, SectionHeader } from "@/components/sections";
 import { WidgetCtaPanel } from "@/components/support/widget-cta-panel";
 import { createLandingPageMetadata } from "@/lib/metadata";
+
+import { WidgetHomeGraphic } from "@/components/landing/graphics/widget-home-graphic";
+import { WidgetChatGraphic } from "@/components/landing/graphics/widget-chat-graphic";
 
 export const metadata: Metadata = createLandingPageMetadata({
   title: "Support | Opencom",
@@ -64,8 +67,18 @@ export default function SupportPage() {
           </div>
 
           <div className="space-y-6">
-            <Screenshot src="/screenshots/widget-tab-home.png" alt="Opencom widget Home tab" />
-            <Screenshot src="/screenshots/widget-outbound-chat.png" alt="Opencom widget chat view" />
+            <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden h-full min-h-[400px]">
+              <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
+              <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative w-full h-full flex items-center justify-center p-8">
+                <WidgetHomeGraphic />
+              </div>
+            </div>
+            <div className="rounded-[2.5rem] bg-[#f9fafb] dark:bg-card border border-slate-200/50 dark:border-white/5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_80px_-20px_rgba(0,0,0,0.5)] p-2 relative overflow-hidden h-full min-h-[400px]">
+              <div className="absolute inset-0 rounded-[2.5rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] pointer-events-none z-10" />
+              <div className="rounded-[2rem] overflow-hidden border border-border/50 bg-muted/20 dark:bg-black relative w-full h-full flex items-center justify-center p-8">
+                <WidgetChatGraphic />
+              </div>
+            </div>
           </div>
         </div>
       </Section>
