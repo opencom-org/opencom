@@ -16,6 +16,12 @@ Recently completed slices:
 - Convex schema domain fragmentation (`convex`)
 - Convex visitors domain decomposition (`convex`)
 - Convex reporting domain decomposition (`convex`)
+- Convex campaign delivery domains decomposition (`convex`)
+- Widget tour overlay controller decomposition (`widget`)
+- Widget shell controller decomposition (`widget`)
+- Widget conversation view decomposition (`widget`)
+- Widget survey overlay decomposition (`widget`)
+- Convex auth-wrapper adoption (`convex`)
 
 Open active OpenSpec changes unrelated to this refactor map (product tracks) remain in progress:
 
@@ -29,12 +35,7 @@ Open active OpenSpec changes unrelated to this refactor map (product tracks) rem
 
 ## Canonical High-Impact Slice List (Remaining)
 
-1. `decompose-widget-shell-controller` (`apps/widget/src/Widget.tsx`)
-2. `decompose-widget-tour-overlay-controller` (`apps/widget/src/TourOverlay.tsx`)
-3. `decompose-widget-conversation-view` (`apps/widget/src/components/ConversationView.tsx`)
-4. `decompose-widget-survey-overlay` (`apps/widget/src/SurveyOverlay.tsx`)
-5. `decompose-convex-campaign-delivery-domains` (`packages/convex/convex/carousels.ts` + `packages/convex/convex/surveys.ts`)
-6. `expand-convex-auth-wrapper-adoption` (`workspaces.ts`, `workspaceMembers.ts`, `identityVerification.ts`, `segments.ts`, `assignmentRules.ts`, `commonIssueButtons.ts`)
+No remaining canonical high-impact slices.
 
 ## 1) UI Decomposition: Web Monoliths (High)
 
@@ -50,34 +51,34 @@ Recently reduced:
 
 Recommended next proposal tracks:
 
-- `decompose-widget-shell-controller`
-- `decompose-convex-campaign-delivery-domains`
+- `centralize-trigger-and-outbound-contracts`
+- `split-convex-schema-high-concentration-tables`
 
 ## 2) UI Decomposition: Widget Monoliths (High)
 
-- `apps/widget/src/Widget.tsx` (~1427 lines)
-- `apps/widget/src/TourOverlay.tsx` (~1428 lines)
-- `apps/widget/src/components/ConversationView.tsx` (~830 lines)
-- `apps/widget/src/SurveyOverlay.tsx` (~723 lines)
+- `apps/widget/src/Widget.tsx` (~1285 lines after shell-frame decomposition)
+- `apps/widget/src/TourOverlay.tsx` (~996 lines after controller decomposition; helper/view modules extracted)
+- `apps/widget/src/components/ConversationView.tsx` (~515 lines after message/footer extraction)
+- `apps/widget/src/SurveyOverlay.tsx` (~245 lines after survey renderer/container extraction)
 
 Recommended next proposal tracks:
 
-- `decompose-widget-tour-overlay-controller`
-- `decompose-widget-conversation-view`
+- `centralize-trigger-and-outbound-contracts`
+- `split-convex-schema-high-concentration-tables`
 
 ## 3) Convex Domain Decomposition (High)
 
 Highest concentration modules:
 
-- `packages/convex/convex/carousels.ts` (~1038 lines)
-- `packages/convex/convex/surveys.ts` (~968 lines)
 - `packages/convex/convex/schema/campaignTables.ts` (~538 lines)
 - `packages/convex/convex/schema/operationsTables.ts` (~417 lines)
+- `packages/convex/convex/carousels/authoring.ts` (~307 lines)
+- `packages/convex/convex/surveys/authoring.ts` (~364 lines)
 
 Recommended next proposal tracks:
 
-- `decompose-convex-campaign-delivery-domains`
-- `expand-convex-auth-wrapper-adoption`
+- `centralize-trigger-and-outbound-contracts`
+- `split-convex-schema-high-concentration-tables`
 
 ## 4) Cross-Surface Contract Convergence (Medium)
 
@@ -108,8 +109,20 @@ Recommended proposal track:
    - Domain modules can be decomposed without changing generated API names/signatures.
 7. Reporting-domain extraction confirms the same re-export pattern scales across query/mutation-heavy modules.
    - Shared helper modules can absorb auth/limit/date logic without endpoint contract drift.
+8. Campaign-delivery decomposition highlights generated API type-depth limits in large module graphs.
+   - Wrapper-level `runQuery/runMutation` call sites may require bounded typing strategies to keep downstream package typechecks stable.
+9. Widget tour-overlay decomposition confirms view extraction can preserve behavioral selectors while reducing controller concentration.
+   - Keeping mutation/scroll orchestration local while moving render branches lowers blast radius without changing external contracts.
+10. Widget shell decomposition confirms shell chrome (header/nav/unread cues) can be separated without changing routing or overlay sequencing.
+   - Shared tab-header/tab-resolution helpers reduce duplication and make shell behavior easier to reason about.
+11. Conversation-view decomposition confirms large message/footer render branches can be extracted without changing AI/handoff behavior.
+   - Keeping actions/queries in the controller while delegating render branches significantly lowers change blast radius.
+12. Survey-overlay decomposition confirms question-renderer extraction can retain survey interaction behavior while reducing controller concentration.
+   - Answer normalization and question/container rendering now have clear module boundaries for future changes.
+13. Convex auth-wrapper adoption completed without endpoint contract drift across targeted domains.
+   - Wrapper adoption and resolver-based workspace authorization can be expanded while preserving intentional soft-fail read behavior.
 
 ## Suggested Immediate Next Refactor
 
-1. Start `decompose-convex-campaign-delivery-domains` while convex decomposition patterns are fresh.
-2. Follow with `decompose-widget-tour-overlay-controller` to reduce client-side controller complexity.
+1. Start `centralize-trigger-and-outbound-contracts` for medium-priority cross-surface contract convergence.
+2. Follow with `split-convex-schema-high-concentration-tables` to reduce remaining schema concentration risk.

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
-import { MessageCircle, X, Plus, Search, Map, CheckSquare, Ticket, Home } from "./icons";
+import { MessageCircle, Plus } from "./icons";
 import { Home as HomeComponent, useHomeConfig } from "./components/Home";
 import { ConversationList } from "./components/ConversationList";
 import { ConversationView } from "./components/ConversationView";
@@ -30,56 +30,13 @@ import { useWidgetUnreadCues } from "./hooks/useWidgetUnreadCues";
 import { useWidgetTourBridge } from "./hooks/useWidgetTourBridge";
 import { checkElementsAvailable } from "./utils/dom";
 import { selectSurveyForDelivery, type SurveyDeliveryCandidate } from "@opencom/sdk-core";
-
-type WidgetView =
-  | "launcher"
-  | "conversation-list"
-  | "conversation"
-  | "article-search"
-  | "article-detail"
-  | "tour-picker"
-  | "checklist"
-  | "tickets"
-  | "ticket-detail"
-  | "ticket-create";
-
-
-interface WidgetProps {
-  workspaceId?: string;
-  initialUser?: UserIdentification;
-  convexUrl?: string;
-  trackPageViews?: boolean;
-  onboardingVerificationToken?: string;
-  verificationToken?: string; // Deprecated alias
-  clientVersion?: string;
-  clientIdentifier?: string;
-}
-
-type TicketFormValue = string | number | boolean | string[] | null;
-type TicketFormData = Record<string, TicketFormValue>;
-
-function normalizeTicketFormData(formData: Record<string, unknown>): TicketFormData {
-  const normalized: TicketFormData = {};
-  for (const [key, value] of Object.entries(formData)) {
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      value === null
-    ) {
-      normalized[key] = value;
-      continue;
-    }
-
-    if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
-      normalized[key] = value;
-      continue;
-    }
-
-    normalized[key] = null;
-  }
-  return normalized;
-}
+import {
+  getWidgetTabHeader,
+  normalizeTicketFormData,
+  resolveWidgetActiveTab,
+} from "./widgetShell/helpers";
+import type { WidgetProps, WidgetView } from "./widgetShell/types";
+import { WidgetMainShell } from "./widgetShell/WidgetMainShell";
 
 export function Widget({
   workspaceId: _workspaceId,
@@ -1038,209 +995,110 @@ export function Widget({
     setTooltipTriggerContext((prev) => ({ ...prev, firedEventName: undefined }));
   };
 
-  // Get header title and actions based on active tab
-  const getTabHeader = () => {
-    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
-    switch (resolvedActiveTab) {
-      case "home":
-        return { title: "Home", showNew: false };
-      case "messages":
-        return { title: "Conversations", showNew: true };
-      case "help":
-        return { title: "Help Center", showNew: false };
-      case "tours":
-        return { title: "Product Tours", showNew: false };
-      case "tasks":
-        return { title: "Tasks", showNew: false };
-      case "tickets":
-        return { title: "My Tickets", showNew: false };
-      default:
-        return { title: "Home", showNew: false };
-    }
-  };
+  const availableTourCount = useMemo(
+    () =>
+      allTours?.filter((tour: { elementSelectors: string[] }) =>
+        checkElementsAvailable(tour.elementSelectors)
+      ).length || 0,
+    [allTours]
+  );
 
   // ── Main tabbed shell ──────────────────────────────────────────────
   const renderMainShell = () => {
-    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
-    const header = getTabHeader();
+    const resolvedActiveTab = resolveWidgetActiveTab(activeTab, fallbackTab, isTabVisible);
+    const header = getWidgetTabHeader(resolvedActiveTab);
+
     return (
-      <div className="opencom-chat">
-        <div className="opencom-header">
-          <span>{header.title}</span>
-          <div className="opencom-header-actions">
-            {header.showNew && (
+      <WidgetMainShell
+        title={header.title}
+        showNewConversationAction={header.showNew}
+        resolvedActiveTab={resolvedActiveTab}
+        isTabVisible={isTabVisible}
+        onNewConversation={handleNewConversation}
+        onCloseWidget={handleCloseWidget}
+        onTabChange={setActiveTab}
+        normalizedUnreadCount={normalizedUnreadCount}
+        availableTourCount={availableTourCount}
+      >
+        {resolvedActiveTab === "home" && homeConfig?.enabled && (
+          <HomeComponent
+            workspaceId={activeWorkspaceId as Id<"workspaces">}
+            visitorId={visitorId}
+            sessionToken={sessionToken}
+            isIdentified={isIdentifiedVisitor}
+            settings={{
+              primaryColor: messengerSettings.primaryColor,
+              backgroundColor: messengerSettings.backgroundColor,
+              logo: messengerSettings.logo,
+              welcomeMessage: messengerSettings.welcomeMessage,
+              teamIntroduction: messengerSettings.teamIntroduction,
+            }}
+            conversations={visitorConversations}
+            onStartConversation={handleNewConversation}
+            onSelectConversation={handleSelectConversation}
+            onSelectArticle={openArticleDetail}
+            onSearch={(query) => {
+              setArticleSearchQuery(query);
+              setActiveTab("help");
+            }}
+          />
+        )}
+        {resolvedActiveTab === "messages" && (
+          <ConversationList
+            conversations={visitorConversations}
+            onSelectConversation={handleSelectConversation}
+            onNewConversation={handleNewConversation}
+          />
+        )}
+        {resolvedActiveTab === "help" && (
+          <HelpCenter
+            articleSearchQuery={articleSearchQuery}
+            onSearchChange={setArticleSearchQuery}
+            articleSearchResults={articleSearchResults}
+            publishedArticles={publishedArticles}
+            collections={publishedCollections}
+            selectedCollectionKey={selectedHelpCollectionKey}
+            onSelectedCollectionKeyChange={setSelectedHelpCollectionKey}
+            onSelectArticle={openArticleDetail}
+          />
+        )}
+        {resolvedActiveTab === "tours" && <TourPicker allTours={allTours} onSelectTour={handleSelectTour} />}
+        {resolvedActiveTab === "tasks" && (
+          <TasksList
+            visitorId={visitorId}
+            activeWorkspaceId={activeWorkspaceId}
+            sessionToken={sessionToken}
+            isValidIdFormat={isValidIdFormat}
+            eligibleChecklists={eligibleChecklists}
+            onStartTour={handleStartTour}
+          />
+        )}
+        {resolvedActiveTab === "tickets" && (
+          <div className="opencom-tickets-view">
+            <TicketsList
+              tickets={visitorTickets}
+              onSelectTicket={(id) => {
+                setSelectedTicketId(id);
+                setView("ticket-detail");
+              }}
+            />
+            <div className="opencom-ticket-create-btn-container">
               <button
-                onClick={handleNewConversation}
-                className="opencom-new-conv"
-                title="New conversation"
+                className="opencom-ticket-create-btn"
+                onClick={() => {
+                  setTicketErrorFeedback(null);
+                  setSelectedTicketId(null);
+                  setView("ticket-create");
+                }}
+                type="button"
               >
                 <Plus />
+                <span>New Ticket</span>
               </button>
-            )}
-            <button onClick={handleCloseWidget} className="opencom-close">
-              <X />
-            </button>
-          </div>
-        </div>
-        <div className="opencom-tab-content">
-          {resolvedActiveTab === "home" && homeConfig?.enabled && (
-            <HomeComponent
-              workspaceId={activeWorkspaceId as Id<"workspaces">}
-              visitorId={visitorId}
-              sessionToken={sessionToken}
-              isIdentified={isIdentifiedVisitor}
-              settings={{
-                primaryColor: messengerSettings.primaryColor,
-                backgroundColor: messengerSettings.backgroundColor,
-                logo: messengerSettings.logo,
-                welcomeMessage: messengerSettings.welcomeMessage,
-                teamIntroduction: messengerSettings.teamIntroduction,
-              }}
-              conversations={visitorConversations}
-              onStartConversation={handleNewConversation}
-              onSelectConversation={handleSelectConversation}
-              onSelectArticle={openArticleDetail}
-              onSearch={(query) => {
-                setArticleSearchQuery(query);
-                setActiveTab("help");
-              }}
-            />
-          )}
-          {resolvedActiveTab === "messages" && (
-            <ConversationList
-              conversations={visitorConversations}
-              onSelectConversation={handleSelectConversation}
-              onNewConversation={handleNewConversation}
-            />
-          )}
-          {resolvedActiveTab === "help" && (
-            <HelpCenter
-              articleSearchQuery={articleSearchQuery}
-              onSearchChange={setArticleSearchQuery}
-              articleSearchResults={articleSearchResults}
-              publishedArticles={publishedArticles}
-              collections={publishedCollections}
-              selectedCollectionKey={selectedHelpCollectionKey}
-              onSelectedCollectionKeyChange={setSelectedHelpCollectionKey}
-              onSelectArticle={openArticleDetail}
-            />
-          )}
-          {resolvedActiveTab === "tours" && (
-            <TourPicker allTours={allTours} onSelectTour={handleSelectTour} />
-          )}
-          {resolvedActiveTab === "tasks" && (
-            <TasksList
-              visitorId={visitorId}
-              activeWorkspaceId={activeWorkspaceId}
-              sessionToken={sessionToken}
-              isValidIdFormat={isValidIdFormat}
-              eligibleChecklists={eligibleChecklists}
-              onStartTour={handleStartTour}
-            />
-          )}
-          {resolvedActiveTab === "tickets" && (
-            <div className="opencom-tickets-view">
-              <TicketsList
-                tickets={visitorTickets}
-                onSelectTicket={(id) => {
-                  setSelectedTicketId(id);
-                  setView("ticket-detail");
-                }}
-              />
-              <div className="opencom-ticket-create-btn-container">
-                <button
-                  className="opencom-ticket-create-btn"
-                  onClick={() => {
-                    setTicketErrorFeedback(null);
-                    setSelectedTicketId(null);
-                    setView("ticket-create");
-                  }}
-                  type="button"
-                >
-                  <Plus />
-                  <span>New Ticket</span>
-                </button>
-              </div>
             </div>
-          )}
-        </div>
-        <div className="opencom-bottom-nav">
-          {isTabVisible("home") && (
-            <button
-              onClick={() => setActiveTab("home")}
-              className={`opencom-nav-item ${resolvedActiveTab === "home" ? "opencom-nav-item-active" : ""}`}
-              title="Home"
-            >
-              <Home />
-              <span>Home</span>
-            </button>
-          )}
-          {isTabVisible("messages") && (
-            <button
-              onClick={() => setActiveTab("messages")}
-              className={`opencom-nav-item ${resolvedActiveTab === "messages" ? "opencom-nav-item-active" : ""}`}
-              title="Conversations"
-            >
-              <MessageCircle />
-              <span>Messages</span>
-              {normalizedUnreadCount > 0 && (
-                <span className="opencom-nav-badge opencom-nav-badge-alert">
-                  {normalizedUnreadCount > 99 ? "99+" : normalizedUnreadCount}
-                </span>
-              )}
-            </button>
-          )}
-          {isTabVisible("help") && (
-            <button
-              onClick={() => setActiveTab("help")}
-              className={`opencom-nav-item ${resolvedActiveTab === "help" ? "opencom-nav-item-active" : ""}`}
-              title="Help Center"
-            >
-              <Search />
-              <span>Help</span>
-            </button>
-          )}
-          {isTabVisible("tours") && (
-            <button
-              onClick={() => setActiveTab("tours")}
-              className={`opencom-nav-item ${resolvedActiveTab === "tours" ? "opencom-nav-item-active" : ""}`}
-              title="Product Tours"
-            >
-              <Map />
-              <span>Tours</span>
-              {(() => {
-                const availableCount =
-                  allTours?.filter((t: { elementSelectors: string[] }) =>
-                    checkElementsAvailable(t.elementSelectors)
-                  ).length || 0;
-                return availableCount > 0 ? (
-                  <span className="opencom-nav-badge">{availableCount}</span>
-                ) : null;
-              })()}
-            </button>
-          )}
-          {isTabVisible("tasks") && (
-            <button
-              onClick={() => setActiveTab("tasks")}
-              className={`opencom-nav-item ${resolvedActiveTab === "tasks" ? "opencom-nav-item-active" : ""}`}
-              title="Tasks"
-            >
-              <CheckSquare />
-              <span>Tasks</span>
-            </button>
-          )}
-          {isTabVisible("tickets") && (
-            <button
-              onClick={() => setActiveTab("tickets")}
-              className={`opencom-nav-item ${resolvedActiveTab === "tickets" ? "opencom-nav-item-active" : ""}`}
-              title="My Tickets"
-            >
-              <Ticket />
-              <span>Tickets</span>
-            </button>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </WidgetMainShell>
     );
   };
 

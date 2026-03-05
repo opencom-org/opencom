@@ -252,6 +252,7 @@ export const generateResponse = action({
   }> => {
     const startTime = Date.now();
 
+    // @ts-ignore Generated API reference can exceed TS instantiation depth in large monorepos.
     const access = await ctx.runQuery(internal.aiAgent.authorizeConversationAccess, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -286,6 +287,7 @@ export const generateResponse = action({
     if (!settings.enabled) {
       const reason = "AI Agent is disabled";
       try {
+        // @ts-ignore Generated API reference can exceed TS instantiation depth in large monorepos.
         const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,

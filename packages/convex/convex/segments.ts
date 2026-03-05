@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
 import { AudienceRule, countMatchingVisitors, validateAudienceRule } from "./audienceRules";
 import { getAuthenticatedUserFromSession } from "./auth";
-import { hasPermission, requirePermission } from "./permissions";
+import { hasPermission } from "./permissions";
+import { authMutation } from "./lib/authWrappers";
 import { audienceRulesValidator } from "./validators";
 
 function getSegmentId(rules: unknown): string | undefined {
@@ -27,7 +28,7 @@ function clampLimit(limit: number | undefined, defaultValue: number, maxValue: n
   return Math.min(Math.floor(normalized), maxValue);
 }
 
-export const create = mutation({
+export const create = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     name: v.string(),
@@ -35,13 +36,9 @@ export const create = mutation({
     audienceRules: audienceRulesValidator,
     createdBy: v.optional(v.id("users")),
   },
+  permission: "settings.workspace",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.workspace");
-    if (args.createdBy && args.createdBy !== user._id) {
+    if (args.createdBy && args.createdBy !== ctx.user._id) {
       throw new Error("Cannot create segment on behalf of another user");
     }
 
@@ -65,25 +62,22 @@ export const create = mutation({
   },
 });
 
-export const update = mutation({
+export const update = authMutation({
   args: {
     id: v.id("segments"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     audienceRules: v.optional(audienceRulesValidator),
   },
-  handler: async (ctx, args) => {
+  permission: "settings.workspace",
+  resolveWorkspaceId: async (ctx, args) => {
     const segment = await ctx.db.get(args.id);
     if (!segment) {
       throw new Error("Segment not found");
     }
-
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, segment.workspaceId, "settings.workspace");
-
+    return segment.workspaceId;
+  },
+  handler: async (ctx, args) => {
     if (args.audienceRules !== undefined && !validateAudienceRule(args.audienceRules)) {
       throw new Error("Invalid audience rules");
     }
@@ -101,22 +95,19 @@ export const update = mutation({
   },
 });
 
-export const remove = mutation({
+export const remove = authMutation({
   args: {
     id: v.id("segments"),
   },
-  handler: async (ctx, args) => {
+  permission: "settings.workspace",
+  resolveWorkspaceId: async (ctx, args) => {
     const segment = await ctx.db.get(args.id);
     if (!segment) {
       throw new Error("Segment not found");
     }
-
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, segment.workspaceId, "settings.workspace");
-
+    return segment.workspaceId;
+  },
+  handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
   },

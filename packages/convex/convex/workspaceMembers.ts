@@ -1,9 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { sendEmail, emailTemplates } from "./email";
-import { authAction } from "./lib/authWrappers";
+import { authAction, authMutation } from "./lib/authWrappers";
 import {
   hasPermission,
   requirePermission,
@@ -81,19 +81,14 @@ export const listByWorkspace = query({
   },
 });
 
-export const add = mutation({
+export const add = authMutation({
   args: {
     userId: v.id("users"),
     workspaceId: v.id("workspaces"),
     role: assignableRoleValidator,
   },
+  permission: "users.invite",
   handler: async (ctx, args) => {
-    const actor = await getAuthenticatedUserFromSession(ctx);
-    if (!actor) {
-      throw new Error("Unauthorized");
-    }
-    await requirePermission(ctx, actor._id, args.workspaceId, "users.invite");
-
     const targetUser = await ctx.db.get(args.userId);
     if (!targetUser) {
       throw new Error("User not found");
@@ -124,7 +119,7 @@ export const add = mutation({
 
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: actor._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "user.invited",
       resourceType: "workspaceMember",
@@ -140,24 +135,24 @@ export const add = mutation({
   },
 });
 
-export const updateRole = mutation({
+export const updateRole = authMutation({
   args: {
     membershipId: v.id("workspaceMembers"),
     role: assignableRoleValidator,
   },
-  handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
+  permission: "users.manage",
+  resolveWorkspaceId: async (ctx, args) => {
     const membership = await ctx.db.get(args.membershipId);
     if (!membership) {
       throw new Error("Membership not found");
     }
-
-    // Check permission to manage users
-    await requirePermission(ctx, user._id, membership.workspaceId, "users.manage");
+    return membership.workspaceId;
+  },
+  handler: async (ctx, args) => {
+    const membership = await ctx.db.get(args.membershipId);
+    if (!membership) {
+      throw new Error("Membership not found");
+    }
 
     // Cannot change owner role (owner transfer is separate)
     if (membership.role === "owner") {
@@ -165,13 +160,13 @@ export const updateRole = mutation({
     }
 
     // Prevent privilege escalation: non-owners cannot make someone admin
-    const isOwner = await isWorkspaceOwner(ctx, user._id, membership.workspaceId);
+    const isOwner = await isWorkspaceOwner(ctx, ctx.user._id, membership.workspaceId);
     if (args.role === "admin" && !isOwner) {
       // Check if current user is admin - admins can promote to admin
       const userMembership = await ctx.db
         .query("workspaceMembers")
         .withIndex("by_user_workspace", (q) =>
-          q.eq("userId", user._id).eq("workspaceId", membership.workspaceId)
+          q.eq("userId", ctx.user._id).eq("workspaceId", membership.workspaceId)
         )
         .first();
       if (userMembership?.role !== "admin" && userMembership?.role !== "owner") {
@@ -188,7 +183,7 @@ export const updateRole = mutation({
 
     await logAudit(ctx, {
       workspaceId: membership.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "user.role.changed",
       resourceType: "workspaceMember",
@@ -204,23 +199,23 @@ export const updateRole = mutation({
   },
 });
 
-export const remove = mutation({
+export const remove = authMutation({
   args: {
     membershipId: v.id("workspaceMembers"),
   },
-  handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
+  permission: "users.remove",
+  resolveWorkspaceId: async (ctx, args) => {
     const membership = await ctx.db.get(args.membershipId);
     if (!membership) {
       throw new Error("Membership not found");
     }
-
-    // Check permission to remove users
-    await requirePermission(ctx, user._id, membership.workspaceId, "users.remove");
+    return membership.workspaceId;
+  },
+  handler: async (ctx, args) => {
+    const membership = await ctx.db.get(args.membershipId);
+    if (!membership) {
+      throw new Error("Membership not found");
+    }
 
     // Cannot remove owner
     if (membership.role === "owner") {
@@ -231,7 +226,7 @@ export const remove = mutation({
 
     await logAudit(ctx, {
       workspaceId: membership.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "user.removed",
       resourceType: "workspaceMember",
@@ -367,12 +362,13 @@ export const inviteToWorkspace = authAction({
   },
   permission: "users.invite",
   handler: async (ctx, args): Promise<{ status: "added" | "invited" }> => {
-    const result = await ctx.runMutation(internal.workspaceMembers.createInvitation, {
+    // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
+    const result = await (ctx as any).runMutation((internal as any).workspaceMembers.createInvitation, {
       inviterId: ctx.user._id,
       workspaceId: args.workspaceId,
       email: args.email,
       role: args.role,
-    });
+    } as any);
 
     if (result.status === "added") {
       const template = emailTemplates.workspaceAdded(
@@ -394,22 +390,17 @@ export const inviteToWorkspace = authAction({
   },
 });
 
-export const acceptInvitation = mutation({
+export const acceptInvitation = authMutation({
   args: {
     invitationId: v.id("workspaceInvitations"),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
     const invitation = await ctx.db.get(args.invitationId);
     if (!invitation) {
       throw new Error("Invitation not found");
     }
 
-    if (invitation.email !== user.email) {
+    if (invitation.email !== ctx.user.email) {
       throw new Error("This invitation is not for you");
     }
 
@@ -418,7 +409,7 @@ export const acceptInvitation = mutation({
     }
 
     await ctx.db.insert("workspaceMembers", {
-      userId: user._id,
+      userId: ctx.user._id,
       workspaceId: invitation.workspaceId,
       role: invitation.role,
       createdAt: Date.now(),
@@ -428,7 +419,7 @@ export const acceptInvitation = mutation({
 
     await logAudit(ctx, {
       workspaceId: invitation.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "user.invited",
       resourceType: "workspaceInvitation",
@@ -511,29 +502,29 @@ export const getWorkspacePendingInvitations = query({
   },
 });
 
-export const cancelInvitation = mutation({
+export const cancelInvitation = authMutation({
   args: {
     invitationId: v.id("workspaceInvitations"),
   },
-  handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
+  permission: "users.manage",
+  resolveWorkspaceId: async (ctx, args) => {
+    const invitation = await ctx.db.get(args.invitationId);
+    if (!invitation) {
+      throw new Error("Invitation not found");
     }
-
+    return invitation.workspaceId;
+  },
+  handler: async (ctx, args) => {
     const invitation = await ctx.db.get(args.invitationId);
     if (!invitation) {
       throw new Error("Invitation not found");
     }
 
-    // Check permission to manage users (cancel invitations)
-    await requirePermission(ctx, user._id, invitation.workspaceId, "users.manage");
-
     await ctx.db.patch(args.invitationId, { status: "declined" });
 
     await logAudit(ctx, {
       workspaceId: invitation.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "user.removed",
       resourceType: "workspaceInvitation",
@@ -549,19 +540,14 @@ export const cancelInvitation = mutation({
 });
 
 // Transfer workspace ownership (task 3.2)
-export const transferOwnership = mutation({
+export const transferOwnership = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     newOwnerId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
     // Only current owner can transfer ownership
-    const isOwner = await isWorkspaceOwner(ctx, user._id, args.workspaceId);
+    const isOwner = await isWorkspaceOwner(ctx, ctx.user._id, args.workspaceId);
     if (!isOwner) {
       throw new Error("Only the workspace owner can transfer ownership");
     }
@@ -582,7 +568,7 @@ export const transferOwnership = mutation({
     const currentOwnerMembership = await ctx.db
       .query("workspaceMembers")
       .withIndex("by_user_workspace", (q) =>
-        q.eq("userId", user._id).eq("workspaceId", args.workspaceId)
+        q.eq("userId", ctx.user._id).eq("workspaceId", args.workspaceId)
       )
       .first();
 
@@ -606,13 +592,13 @@ export const transferOwnership = mutation({
 
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "user.ownership.transferred",
       resourceType: "workspaceMember",
       resourceId: newOwnerMembership._id,
       metadata: {
-        previousOwnerId: user._id,
+        previousOwnerId: ctx.user._id,
         newOwnerId: args.newOwnerId,
       },
     });

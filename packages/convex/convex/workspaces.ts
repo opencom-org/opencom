@@ -2,7 +2,8 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
-import { requirePermission, getWorkspaceMembership } from "./permissions";
+import { authMutation } from "./lib/authWrappers";
+import { getWorkspaceMembership } from "./permissions";
 import { matchesAllowedOrigin, validateVisitorOrigin } from "./originValidation";
 import { logAudit } from "./auditLogs";
 
@@ -281,16 +282,11 @@ export const getByName = query({
   },
 });
 
-export const create = mutation({
+export const create = authMutation({
   args: {
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-
     const found = await ctx.db
       .query("workspaces")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -307,7 +303,7 @@ export const create = mutation({
 
     // Add the creating user as owner
     await ctx.db.insert("workspaceMembers", {
-      userId: user._id,
+      userId: ctx.user._id,
       workspaceId,
       role: "owner",
       createdAt: Date.now(),
@@ -315,7 +311,7 @@ export const create = mutation({
 
     await logAudit(ctx, {
       workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "workspace.settings.changed",
       resourceType: "workspace",
@@ -330,17 +326,12 @@ export const create = mutation({
   },
 });
 
-export const getOrCreateDefault = mutation({
+export const getOrCreateDefault = authMutation({
   args: {},
   handler: async (ctx) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-
     // Return user's own workspace if they have one
-    if (user.workspaceId) {
-      const workspace = await ctx.db.get(user.workspaceId);
+    if (ctx.user.workspaceId) {
+      const workspace = await ctx.db.get(ctx.user.workspaceId);
       if (workspace) return workspace;
     }
 
@@ -352,7 +343,7 @@ export const getOrCreateDefault = mutation({
 
     // Add user as owner
     await ctx.db.insert("workspaceMembers", {
-      userId: user._id,
+      userId: ctx.user._id,
       workspaceId: id,
       role: "owner",
       createdAt: Date.now(),
@@ -360,7 +351,7 @@ export const getOrCreateDefault = mutation({
 
     await logAudit(ctx, {
       workspaceId: id,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "workspace.settings.changed",
       resourceType: "workspace",
@@ -451,18 +442,12 @@ export const getHostedOnboardingIntegrationSignals = query({
   },
 });
 
-export const startHostedOnboarding = mutation({
+export const startHostedOnboarding = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
   },
+  permission: "conversations.read",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "conversations.read");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -489,18 +474,12 @@ export const startHostedOnboarding = mutation({
   },
 });
 
-export const issueHostedOnboardingVerificationToken = mutation({
+export const issueHostedOnboardingVerificationToken = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
   },
+  permission: "conversations.read",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "conversations.read");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -583,19 +562,13 @@ export const recordHostedOnboardingVerificationEvent = mutation({
   },
 });
 
-export const completeHostedOnboardingWidgetStep = mutation({
+export const completeHostedOnboardingWidgetStep = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     token: v.optional(v.string()),
   },
+  permission: "conversations.read",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "conversations.read");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -644,25 +617,20 @@ export const completeHostedOnboardingWidgetStep = mutation({
   },
 });
 
-export const updateAllowedOrigins = mutation({
+export const updateAllowedOrigins = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     allowedOrigins: v.array(v.string()),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
-
     await ctx.db.patch(args.workspaceId, {
       allowedOrigins: args.allowedOrigins,
     });
 
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "workspace.security.changed",
       resourceType: "workspace",
@@ -675,20 +643,15 @@ export const updateAllowedOrigins = mutation({
   },
 });
 
-export const updateSignupSettings = mutation({
+export const updateSignupSettings = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     signupMode: v.union(v.literal("invite-only"), v.literal("domain-allowlist")),
     allowedDomains: v.optional(v.array(v.string())),
     authMethods: v.optional(v.array(v.union(v.literal("password"), v.literal("otp")))),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -716,7 +679,7 @@ export const updateSignupSettings = mutation({
 
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "workspace.security.changed",
       resourceType: "workspace",
@@ -731,25 +694,20 @@ export const updateSignupSettings = mutation({
   },
 });
 
-export const updateHelpCenterAccessPolicy = mutation({
+export const updateHelpCenterAccessPolicy = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     policy: v.union(v.literal("public"), v.literal("restricted")),
   },
+  permission: "settings.workspace",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.workspace");
-
     await ctx.db.patch(args.workspaceId, {
       helpCenterAccessPolicy: args.policy,
     });
 
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "workspace.settings.changed",
       resourceType: "workspace",

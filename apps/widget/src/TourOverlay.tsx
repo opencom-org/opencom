@@ -4,225 +4,32 @@ import { getPortalTarget } from "./portal";
 import { useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
-
-type StepType = "pointer" | "post" | "video";
-type Position = "auto" | "left" | "right" | "above" | "below";
-type Size = "small" | "large";
-type AdvanceOn = "click" | "elementClick" | "fieldFill";
-type DiagnosticReason =
-  | "mode_mismatch"
-  | "element_click_required"
-  | "field_fill_required"
-  | "field_fill_invalid"
-  | "route_mismatch"
-  | "checkpoint_invalid_route"
-  | "selector_missing";
-
-interface TourStep {
-  _id: Id<"tourSteps">;
-  tourId: Id<"tours">;
-  type: StepType;
-  order: number;
-  title?: string;
-  content: string;
-  elementSelector?: string;
-  routePath?: string;
-  position?: Position;
-  size?: Size;
-  advanceOn?: AdvanceOn;
-  customButtonText?: string;
-  mediaUrl?: string;
-  mediaType?: "image" | "video";
-}
-
-interface Tour {
-  _id: Id<"tours">;
-  name: string;
-  displayMode?: "first_time_only" | "until_dismissed";
-  buttonColor?: string;
-  showConfetti?: boolean;
-  allowSnooze?: boolean;
-  allowRestart?: boolean;
-}
-
-interface TourData {
-  tour: Tour;
-  steps: TourStep[];
-  progress?: {
-    currentStep: number;
-    status: string;
-    checkpointRoute?: string;
-    checkpointSelector?: string;
-  };
-}
-
-interface TourOverlayProps {
-  workspaceId: Id<"workspaces">;
-  visitorId: Id<"visitors">;
-  sessionToken?: string | null;
-  availableTours: TourData[];
-  forcedTourId?: Id<"tours"> | null;
-  allowBlockingTour?: boolean;
-  onBlockingActiveChange?: (isActive: boolean) => void;
-  onTourComplete?: () => void;
-  onTourDismiss?: () => void;
-}
-
-interface ElementPosition {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
-
-interface TooltipPosition {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
-  layout: "anchored" | "fallback";
-}
-
-interface VisualViewportBounds {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-}
-
-const SCROLL_SETTLE_DELAY_MS = 150;
-const SCROLL_SETTLE_MAX_WAIT_MS = 1400;
-
-function getVisualViewportBounds(): VisualViewportBounds {
-  if (typeof window === "undefined") {
-    return {
-      top: 0,
-      left: 0,
-      width: 0,
-      height: 0,
-    };
-  }
-
-  const visualViewport = window.visualViewport;
-  return {
-    top: visualViewport?.offsetTop ?? 0,
-    left: visualViewport?.offsetLeft ?? 0,
-    width: visualViewport?.width ?? window.innerWidth,
-    height: visualViewport?.height ?? window.innerHeight,
-  };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  if (max < min) {
-    return min;
-  }
-  return Math.min(Math.max(value, min), max);
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function wildcardMatch(pattern: string, value: string): boolean {
-  const regex = new RegExp(`^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`);
-  return regex.test(value);
-}
-
-function evaluateRouteMatch(
-  routePath: string | undefined,
-  currentUrl: string
-): { matches: boolean; invalidRoute: boolean } {
-  const normalizedRoute = routePath?.trim();
-  if (!normalizedRoute) {
-    return { matches: true, invalidRoute: false };
-  }
-
-  let parsedCurrent: URL;
-  try {
-    parsedCurrent = new URL(currentUrl);
-  } catch {
-    return { matches: false, invalidRoute: false };
-  }
-
-  const currentAbsolute = `${parsedCurrent.origin}${parsedCurrent.pathname}${parsedCurrent.search}`;
-  const currentPath = `${parsedCurrent.pathname}${parsedCurrent.search}`;
-
-  if (/^https?:\/\//i.test(normalizedRoute)) {
-    let parsedRoute: URL;
-    try {
-      parsedRoute = new URL(normalizedRoute);
-    } catch {
-      return { matches: false, invalidRoute: true };
-    }
-
-    const routeAbsolute = `${parsedRoute.origin}${parsedRoute.pathname}${parsedRoute.search}`;
-    if (routeAbsolute.includes("*")) {
-      return { matches: wildcardMatch(routeAbsolute, currentAbsolute), invalidRoute: false };
-    }
-
-    return { matches: routeAbsolute === currentAbsolute, invalidRoute: false };
-  }
-
-  if (normalizedRoute.startsWith("/")) {
-    if (normalizedRoute.includes("*")) {
-      return { matches: wildcardMatch(normalizedRoute, currentPath), invalidRoute: false };
-    }
-
-    return {
-      matches: normalizedRoute === currentPath || normalizedRoute === parsedCurrent.pathname,
-      invalidRoute: false,
-    };
-  }
-
-  if (normalizedRoute.includes("*")) {
-    return {
-      matches:
-        wildcardMatch(normalizedRoute, currentAbsolute) ||
-        wildcardMatch(normalizedRoute, currentPath),
-      invalidRoute: false,
-    };
-  }
-
-  return {
-    matches:
-      normalizedRoute === currentAbsolute ||
-      normalizedRoute === currentPath ||
-      normalizedRoute === parsedCurrent.pathname,
-    invalidRoute: false,
-  };
-}
-
-function getBlockedReasonMessage(reason?: string | null): string | null {
-  switch (reason) {
-    case "mode_mismatch":
-      return "This step needs a different interaction to continue.";
-    case "element_click_required":
-      return "Click the highlighted element to continue.";
-    case "field_fill_required":
-    case "field_fill_invalid":
-      return "Fill in the highlighted field to continue.";
-    case "route_mismatch":
-      return "Navigate to the required page to continue this tour.";
-    case "checkpoint_invalid_route":
-      return "This tour step route is invalid and was skipped.";
-    case "selector_missing":
-      return "The target element was not found. The step was skipped.";
-    default:
-      return null;
-  }
-}
-
-function getAdvanceGuidance(step?: TourStep): string | null {
-  if (!step) return null;
-  const mode = step.advanceOn ?? "click";
-  if (mode === "elementClick") {
-    return "Click the highlighted element to continue.";
-  }
-  if (mode === "fieldFill") {
-    return "Fill in the highlighted field to continue.";
-  }
-  return null;
-}
+import {
+  TourConfettiLayer,
+  TourEmergencyCloseButton,
+  TourPointerBackdrop,
+  TourPointerStepCard,
+  TourPostBackdrop,
+  TourPostStepCard,
+  TourRecoveryModal,
+  TourRouteHintModal,
+} from "./tourOverlay/components";
+import { getAdvanceGuidance, getBlockedReasonMessage } from "./tourOverlay/messages";
+import { evaluateRouteMatch } from "./tourOverlay/routeMatching";
+import type {
+  AdvanceOn,
+  DiagnosticReason,
+  ElementPosition,
+  TooltipPosition,
+  TourData,
+  TourOverlayProps,
+} from "./tourOverlay/types";
+import {
+  clamp,
+  getVisualViewportBounds,
+  SCROLL_SETTLE_DELAY_MS,
+  SCROLL_SETTLE_MAX_WAIT_MS,
+} from "./tourOverlay/viewport";
 
 export function TourOverlay({
   workspaceId,
@@ -1088,340 +895,101 @@ export function TourOverlay({
 
   if (!activeTour || !currentStep) return null;
 
+  const totalSteps = activeTour.steps.length;
   const buttonColor = activeTour.tour.buttonColor || "#792cd4";
   const isPostStep = currentStep.type === "post";
   const buttonText =
-    currentStep.customButtonText ||
-    (currentStepIndex === activeTour.steps.length - 1 ? "Done" : "Next");
+    currentStep.customButtonText || (currentStepIndex === totalSteps - 1 ? "Done" : "Next");
   const canUseClickButton = (currentStep.advanceOn ?? "click") === "click";
   const showRecoveryModal = Boolean(
     !routeHint && (failureHint || (isPointerStep && elementPosition && !tooltipPosition))
   );
+  const showDontShowAgain = activeTour.tour.displayMode === "until_dismissed";
+  const showSnooze = Boolean(activeTour.tour.allowSnooze);
+  const showRestart = Boolean(activeTour.tour.allowRestart && currentStepIndex > 0);
 
   return createPortal(
     <div className="opencom-tour-overlay" data-testid="tour-overlay">
-      <button
-        type="button"
-        data-testid="tour-emergency-close"
-        onClick={() => void handleDismiss()}
-        style={{
-          position: "fixed",
-          top: 12,
-          right: 12,
-          zIndex: 1000003,
-          pointerEvents: "auto",
-          border: "none",
-          borderRadius: 999,
-          background: "rgba(0, 0, 0, 0.8)",
-          color: "#fff",
-          padding: "8px 12px",
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
-      >
-        Exit tour
-      </button>
+      <TourEmergencyCloseButton onDismiss={handleDismiss} />
 
       {showRecoveryModal && (
-        <div
-          className="opencom-tour-modal"
-          style={{ maxWidth: 460, zIndex: 1000002 }}
-          data-testid="tour-recovery-hint"
-        >
-          <h3 className="opencom-tour-title">Tour paused</h3>
-          <div className="opencom-tour-content">
-            {failureHint ??
-              "We couldn't render this tour step properly. You can retry, skip this step, or close the tour."}
-          </div>
-          <div className="opencom-tour-footer">
-            <div className="opencom-tour-progress">
-              {currentStepIndex + 1} / {activeTour.steps.length}
-            </div>
-            <div className="opencom-tour-actions">
-              <button
-                onClick={() => {
-                  setFailureHint(null);
-                  updateElementPosition();
-                }}
-                className="opencom-tour-btn-secondary"
-              >
-                Retry
-              </button>
-              <button
-                onClick={() => void handleSkipCurrentStep("selector_missing")}
-                className="opencom-tour-btn-secondary"
-              >
-                Skip step
-              </button>
-              <button
-                onClick={() => void handleDismiss()}
-                className="opencom-tour-btn-primary"
-                style={{ backgroundColor: buttonColor }}
-              >
-                Close tour
-              </button>
-            </div>
-          </div>
-          <button
-            onClick={() => void handleDismiss()}
-            className="opencom-tour-close"
-            aria-label="Dismiss tour"
-          >
-            ×
-          </button>
-        </div>
+        <TourRecoveryModal
+          failureHint={failureHint}
+          currentStepIndex={currentStepIndex}
+          totalSteps={totalSteps}
+          buttonColor={buttonColor}
+          onRetry={() => {
+            setFailureHint(null);
+            updateElementPosition();
+          }}
+          onSkipStep={() => handleSkipCurrentStep("selector_missing")}
+          onDismiss={handleDismiss}
+        />
       )}
 
       {routeHint && (
-        <div
-          className="opencom-tour-modal"
-          style={{ maxWidth: 420, zIndex: 1000001 }}
-          data-testid="tour-route-hint"
-        >
-          <div className="opencom-tour-body">
-            <h3 className="opencom-tour-title">Continue Tour</h3>
-            <div className="opencom-tour-content">{routeHint}</div>
-          </div>
-          <div className="opencom-tour-footer">
-            <div className="opencom-tour-progress">
-              {currentStepIndex + 1} / {activeTour.steps.length}
-            </div>
-          </div>
-          <button onClick={handleDismiss} className="opencom-tour-close" aria-label="Dismiss tour">
-            ×
-          </button>
-        </div>
+        <TourRouteHintModal
+          routeHint={routeHint}
+          currentStepIndex={currentStepIndex}
+          totalSteps={totalSteps}
+          onDismiss={handleDismiss}
+        />
       )}
 
       {!routeHint && isPointerStep && elementPosition && (
-        <div className="opencom-tour-backdrop">
-          <svg width="100%" height="100%" style={{ position: "absolute", top: 0, left: 0 }}>
-            <defs>
-              <mask id="tour-mask">
-                <rect width="100%" height="100%" fill="white" />
-                <rect
-                  x={elementPosition.left}
-                  y={elementPosition.top}
-                  width={elementPosition.width}
-                  height={elementPosition.height}
-                  rx="4"
-                  fill="black"
-                />
-              </mask>
-            </defs>
-            <rect width="100%" height="100%" fill="rgba(0,0,0,0.5)" mask="url(#tour-mask)" />
-          </svg>
-
-          <div
-            className="opencom-tour-highlight"
-            style={{
-              top: elementPosition.top,
-              left: elementPosition.left,
-              width: elementPosition.width,
-              height: elementPosition.height,
-              borderColor: buttonColor,
-            }}
-          />
-        </div>
+        <TourPointerBackdrop elementPosition={elementPosition} buttonColor={buttonColor} />
       )}
 
-      {!routeHint && isPostStep && (
-        <div className="opencom-tour-backdrop opencom-tour-backdrop-full" />
-      )}
+      {!routeHint && isPostStep && <TourPostBackdrop />}
 
       {!routeHint && isPointerStep && tooltipPosition && (
-        <div
-          className={`opencom-tour-tooltip opencom-tour-tooltip-${currentStep.size || "small"} ${
-            tooltipPosition.layout === "fallback" ? "opencom-tour-tooltip-fallback" : ""
-          }`}
-          style={{
-            top: tooltipPosition.top,
-            left: tooltipPosition.left,
-            width: tooltipPosition.width,
-            maxHeight: tooltipPosition.maxHeight,
-          }}
-          data-testid="tour-step-card"
-          data-tour-layout={tooltipPosition.layout}
-        >
-          <div className="opencom-tour-body">
-            {currentStep.title && (
-              <h3 className="opencom-tour-title" data-testid="tour-step-title">
-                {currentStep.title}
-              </h3>
-            )}
-            <div className="opencom-tour-content">{currentStep.content}</div>
-
-            {currentStep.type === "video" && currentStep.mediaUrl && (
-              <video
-                src={currentStep.mediaUrl}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="opencom-tour-video"
-              />
-            )}
-
-            {advanceHint && (
-              <div
-                className="opencom-tour-content"
-                style={{ marginTop: 8 }}
-                data-testid="tour-advance-guidance"
-              >
-                {advanceHint}
-              </div>
-            )}
-          </div>
-
-          <div className="opencom-tour-footer">
-            <div className="opencom-tour-progress" data-testid="tour-step-progress">
-              {currentStepIndex + 1} / {activeTour.steps.length}
-            </div>
-            <div className="opencom-tour-actions">
-              {hasSecondaryActions && (
-                <div className="opencom-tour-more-container" ref={moreMenuRef}>
-                  <button
-                    onClick={() => setShowMoreMenu(!showMoreMenu)}
-                    className="opencom-tour-btn-more"
-                    aria-label="More options"
-                  >
-                    ⋯
-                  </button>
-                  {showMoreMenu && (
-                    <div className="opencom-tour-more-menu">
-                      {activeTour.tour.displayMode === "until_dismissed" && (
-                        <button onClick={handleDismissPermanentlyWithClose}>
-                          Don&apos;t show again
-                        </button>
-                      )}
-                      {activeTour.tour.allowSnooze && (
-                        <button onClick={handleSnoozeWithClose}>Remind me later</button>
-                      )}
-                      {activeTour.tour.allowRestart && currentStepIndex > 0 && (
-                        <button onClick={handleRestart}>Restart</button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {canUseClickButton && (
-                <button
-                  onClick={() => void handleNext({ mode: "click" })}
-                  className="opencom-tour-btn-primary"
-                  style={{ backgroundColor: buttonColor }}
-                  data-testid="tour-primary-action"
-                >
-                  {buttonText}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <button onClick={handleDismiss} className="opencom-tour-close" aria-label="Dismiss tour">
-            ×
-          </button>
-        </div>
+        <TourPointerStepCard
+          currentStep={currentStep}
+          currentStepIndex={currentStepIndex}
+          totalSteps={totalSteps}
+          tooltipPosition={tooltipPosition}
+          advanceHint={advanceHint}
+          hasSecondaryActions={Boolean(hasSecondaryActions)}
+          showMoreMenu={showMoreMenu}
+          moreMenuRef={moreMenuRef}
+          buttonColor={buttonColor}
+          buttonText={buttonText}
+          canUseClickButton={canUseClickButton}
+          showDontShowAgain={showDontShowAgain}
+          showSnooze={showSnooze}
+          showRestart={showRestart}
+          onToggleMoreMenu={() => setShowMoreMenu((prev) => !prev)}
+          onDismissPermanentlyWithClose={handleDismissPermanentlyWithClose}
+          onSnoozeWithClose={handleSnoozeWithClose}
+          onRestart={handleRestart}
+          onNextClick={() => handleNext({ mode: "click" })}
+          onDismiss={handleDismiss}
+        />
       )}
 
       {!routeHint && isPostStep && (
-        <div className="opencom-tour-modal" data-testid="tour-step-card">
-          <div className="opencom-tour-body">
-            {currentStep.title && (
-              <h3 className="opencom-tour-title" data-testid="tour-step-title">
-                {currentStep.title}
-              </h3>
-            )}
-
-            {currentStep.mediaUrl && currentStep.mediaType === "image" && (
-              <img src={currentStep.mediaUrl} alt="" className="opencom-tour-image" />
-            )}
-            {currentStep.mediaUrl && currentStep.mediaType === "video" && (
-              <video
-                src={currentStep.mediaUrl}
-                autoPlay
-                controls
-                playsInline
-                className="opencom-tour-video"
-              />
-            )}
-
-            <div className="opencom-tour-content">{currentStep.content}</div>
-            {advanceHint && (
-              <div
-                className="opencom-tour-content"
-                style={{ marginTop: 8 }}
-                data-testid="tour-advance-guidance"
-              >
-                {advanceHint}
-              </div>
-            )}
-          </div>
-
-          <div className="opencom-tour-footer">
-            <div className="opencom-tour-progress" data-testid="tour-step-progress">
-              {currentStepIndex + 1} / {activeTour.steps.length}
-            </div>
-            <div className="opencom-tour-actions">
-              {hasSecondaryActions && (
-                <div className="opencom-tour-more-container" ref={moreMenuRef}>
-                  <button
-                    onClick={() => setShowMoreMenu(!showMoreMenu)}
-                    className="opencom-tour-btn-more"
-                    aria-label="More options"
-                  >
-                    ⋯
-                  </button>
-                  {showMoreMenu && (
-                    <div className="opencom-tour-more-menu">
-                      {activeTour.tour.displayMode === "until_dismissed" && (
-                        <button onClick={handleDismissPermanentlyWithClose}>
-                          Don&apos;t show again
-                        </button>
-                      )}
-                      {activeTour.tour.allowSnooze && (
-                        <button onClick={handleSnoozeWithClose}>Remind me later</button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-              {canUseClickButton && (
-                <button
-                  onClick={() => void handleNext({ mode: "click" })}
-                  className="opencom-tour-btn-primary"
-                  style={{ backgroundColor: buttonColor }}
-                  data-testid="tour-primary-action"
-                >
-                  {buttonText}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <button onClick={handleDismiss} className="opencom-tour-close" aria-label="Dismiss tour">
-            ×
-          </button>
-        </div>
+        <TourPostStepCard
+          currentStep={currentStep}
+          currentStepIndex={currentStepIndex}
+          totalSteps={totalSteps}
+          advanceHint={advanceHint}
+          hasSecondaryActions={Boolean(hasSecondaryActions)}
+          showMoreMenu={showMoreMenu}
+          moreMenuRef={moreMenuRef}
+          buttonColor={buttonColor}
+          buttonText={buttonText}
+          canUseClickButton={canUseClickButton}
+          showDontShowAgain={showDontShowAgain}
+          showSnooze={showSnooze}
+          onToggleMoreMenu={() => setShowMoreMenu((prev) => !prev)}
+          onDismissPermanentlyWithClose={handleDismissPermanentlyWithClose}
+          onSnoozeWithClose={handleSnoozeWithClose}
+          onNextClick={() => handleNext({ mode: "click" })}
+          onDismiss={handleDismiss}
+        />
       )}
 
-      {showConfetti && (
-        <div className="opencom-tour-confetti">
-          {Array.from({ length: 50 }).map((_, i) => (
-            <div
-              key={i}
-              className="opencom-confetti-piece"
-              style={{
-                left: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 0.5}s`,
-                backgroundColor: ["#ff0", "#f0f", "#0ff", "#f00", "#0f0", "#00f"][
-                  Math.floor(Math.random() * 6)
-                ],
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {showConfetti && <TourConfettiLayer />}
     </div>,
     getPortalTarget()
   );

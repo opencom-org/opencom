@@ -74,7 +74,8 @@ async function getWorkspaceIdForPermission<
 }
 
 async function getActionUser(ctx: ActionCtx): Promise<AuthenticatedUser> {
-  const currentUser = await ctx.runQuery(api.auth.currentUser, {});
+  // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
+  const currentUser = await (ctx as any).runQuery((api as any).auth.currentUser, {} as any);
   if (!currentUser?.user) {
     throw new Error("Not authenticated");
   }
@@ -169,11 +170,12 @@ export function authAction<ArgsValidator extends PropertyValidators, ReturnValue
           }
           throw new Error("Auth wrapper misconfigured: missing workspace resolver");
         }
-        await ctx.runQuery(internal.permissions.requirePermissionForAction, {
+        // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
+        await (ctx as any).runQuery((internal as any).permissions.requirePermissionForAction, {
           userId: user._id,
           workspaceId,
           permission: options.permission,
-        });
+        } as any);
       }
 
       return options.handler(withUser(ctx, user), args);
