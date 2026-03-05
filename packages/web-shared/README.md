@@ -40,3 +40,19 @@ Shared browser-focused utilities for `apps/web` and `apps/widget`.
   - missing-field behavior for legacy payloads
 - Do not re-implement snapshot/increase/suppression loops in app-level cue files.
 - Add shared invariant tests in this package before changing cue logic.
+
+## Error Feedback Core Ownership
+
+- Source of truth for unknown-error normalization lives in `src/errorFeedback.ts`.
+- Shared behavior covered here:
+  - safe extraction of human-readable error messages from unknown thrown values
+  - fallback messaging when no trusted detail is available
+  - optional actionable next-step guidance (`nextAction`)
+
+## Error Feedback Extension Rules
+
+- Use `normalizeUnknownError` in web/widget catch paths before rendering UI error feedback.
+- Keep message extraction and fallback rules centralized in this package.
+- Surface-specific rendering can vary (banner, inline callout), but should consume the shared
+  `ErrorFeedbackMessage` contract.
+- Do not introduce new raw `alert(...)` calls in covered user-facing settings/ticket flows.

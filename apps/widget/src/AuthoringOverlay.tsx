@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { scoreSelectorQuality } from "@opencom/sdk-core";
+import { ErrorFeedbackBanner } from "./components/ErrorFeedbackBanner";
 
 interface TourStep {
   _id: Id<"tourSteps">;
@@ -131,6 +133,7 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
   const [selectorWarnings, setSelectorWarnings] = useState<string[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSelecting, setIsSelecting] = useState(true);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
   const [previewPosition, setPreviewPosition] = useState<{ top: number; left: number } | null>(
     null
   );
@@ -277,6 +280,7 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
 
   const handleConfirmSelector = useCallback(async () => {
     if (!currentStep || !selectedSelector) return;
+    setErrorFeedback(null);
 
     try {
       await updateStepMutation({
@@ -297,7 +301,12 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
       handleCancelSelection();
     } catch (error) {
       console.error("Failed to save selector:", error);
-      alert("Failed to save selector");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save selector.",
+          nextAction: "Try selecting the target element again.",
+        })
+      );
     }
   }, [
     currentStep,
@@ -308,6 +317,7 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
     steps,
     setCurrentStepMutation,
     handleCancelSelection,
+    setErrorFeedback,
   ]);
 
   const handlePreviousStep = useCallback(async () => {
@@ -391,6 +401,11 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
           </button>
         </div>
       </div>
+      {errorFeedback && (
+        <div className="opencom-authoring-feedback">
+          <ErrorFeedbackBanner feedback={errorFeedback} />
+        </div>
+      )}
 
       {/* Step info panel */}
       <div className="opencom-authoring-step-panel">

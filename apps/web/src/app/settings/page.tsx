@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { Button, Card, Input } from "@opencom/ui";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import {
   Copy,
   Check,
@@ -23,6 +24,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useBackend } from "@/contexts/BackendContext";
 import { AppLayout } from "@/components/AppLayout";
+import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
 import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import type { Id } from "@opencom/convex/dataModel";
@@ -123,6 +125,20 @@ function SettingsContent(): React.JSX.Element | null {
     currentRole: string;
     newRole: string;
   } | null>(null);
+  const [pageErrorFeedback, setPageErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
+
+  const setSettingsErrorFeedback = (
+    error: unknown,
+    fallbackMessage: string,
+    nextAction: string
+  ): void => {
+    setPageErrorFeedback(
+      normalizeUnknownError(error, {
+        fallbackMessage,
+        nextAction,
+      })
+    );
+  };
 
   useEffect(() => {
     if (workspace) {
@@ -146,10 +162,14 @@ function SettingsContent(): React.JSX.Element | null {
 
   const handleSaveSignupSettings = async () => {
     if (!activeWorkspace?._id) return;
+    setPageErrorFeedback(null);
 
     // Ensure at least one auth method is enabled
     if (!authMethodPassword && !authMethodOtp) {
-      alert("At least one authentication method must be enabled.");
+      setPageErrorFeedback({
+        message: "At least one authentication method must be enabled.",
+        nextAction: "Enable Password or OTP, then save again.",
+      });
       return;
     }
 
@@ -171,7 +191,11 @@ function SettingsContent(): React.JSX.Element | null {
         authMethods,
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save signup settings");
+      setSettingsErrorFeedback(
+        err,
+        "Failed to save signup settings",
+        "Review signup settings and try again."
+      );
     } finally {
       setIsSavingSignup(false);
     }
@@ -179,6 +203,7 @@ function SettingsContent(): React.JSX.Element | null {
 
   const handleSaveHelpCenterAccessPolicy = async () => {
     if (!activeWorkspace?._id) return;
+    setPageErrorFeedback(null);
 
     setIsSavingHelpCenterPolicy(true);
     try {
@@ -187,7 +212,11 @@ function SettingsContent(): React.JSX.Element | null {
         policy: helpCenterAccessPolicy,
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save help center access policy");
+      setSettingsErrorFeedback(
+        err,
+        "Failed to save help center access policy",
+        "Confirm access policy values and try again."
+      );
     } finally {
       setIsSavingHelpCenterPolicy(false);
     }
@@ -279,27 +308,34 @@ function SettingsContent(): React.JSX.Element | null {
     membershipId: Id<"workspaceMembers">,
     newRole: "admin" | "agent" | "viewer"
   ) => {
+    setPageErrorFeedback(null);
     try {
       await updateRole({ membershipId, role: newRole });
       setShowRoleConfirm(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to update role");
+      setSettingsErrorFeedback(err, "Failed to update role", "Refresh the member list and try again.");
     }
   };
 
   const handleTransferOwnership = async () => {
     if (!activeWorkspace?._id || !transferTargetId) return;
+    setPageErrorFeedback(null);
 
     try {
       await transferOwnership({ workspaceId: activeWorkspace._id, newOwnerId: transferTargetId });
       setShowTransferOwnership(false);
       setTransferTargetId(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to transfer ownership");
+      setSettingsErrorFeedback(
+        err,
+        "Failed to transfer ownership",
+        "Verify target admin permissions and try again."
+      );
     }
   };
 
   const handleRemoveMember = async (membershipId: Id<"workspaceMembers">, memberName: string) => {
+    setPageErrorFeedback(null);
     if (!(await appConfirm(`Are you sure you want to remove ${memberName} from this workspace?`))) {
       return;
     }
@@ -307,15 +343,16 @@ function SettingsContent(): React.JSX.Element | null {
     try {
       await removeMember({ membershipId });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to remove member");
+      setSettingsErrorFeedback(err, "Failed to remove member", "Try again in a moment.");
     }
   };
 
   const handleCancelInvitation = async (invitationId: Id<"workspaceInvitations">) => {
+    setPageErrorFeedback(null);
     try {
       await cancelInvitation({ invitationId });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to cancel invitation");
+      setSettingsErrorFeedback(err, "Failed to cancel invitation", "Refresh invitations and retry.");
     }
   };
 
@@ -333,6 +370,7 @@ function SettingsContent(): React.JSX.Element | null {
 
   const handleSaveEmailSettings = async () => {
     if (!activeWorkspace?._id) return;
+    setPageErrorFeedback(null);
 
     setIsSavingEmail(true);
     try {
@@ -344,7 +382,7 @@ function SettingsContent(): React.JSX.Element | null {
         enabled: emailEnabled,
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save email settings");
+      setSettingsErrorFeedback(err, "Failed to save email settings", "Review email fields and try again.");
     } finally {
       setIsSavingEmail(false);
     }
@@ -510,6 +548,7 @@ function SettingsContent(): React.JSX.Element | null {
             Manage workspace configuration, security, and channels.
           </p>
         </header>
+        {pageErrorFeedback && <ErrorFeedbackBanner feedback={pageErrorFeedback} />}
 
         <div className="space-y-8">
           <SettingsSectionContainer

@@ -2336,6 +2336,15 @@
   z-index: 10000000;
 }
 
+.opencom-authoring-feedback {
+  position: fixed;
+  top: 64px;
+  left: 16px;
+  right: 16px;
+  max-width: 560px;
+  z-index: 10000001;
+}
+
 .opencom-authoring-toolbar-left,
 .opencom-authoring-toolbar-center,
 .opencom-authoring-toolbar-right {
@@ -3390,6 +3399,27 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.opencom-error-feedback {
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  padding: 10px 12px;
+}
+
+.opencom-error-feedback-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #b91c1c;
+}
+
+.opencom-error-feedback-next-action {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #dc2626;
 }
 
 .opencom-ticket-form-description {

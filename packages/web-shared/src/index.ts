@@ -13,3 +13,8 @@ export {
   type CuePreferenceAdapter,
   type CuePreferences,
 } from "./notificationCues";
+export {
+  normalizeUnknownError,
+  type ErrorFeedbackMessage,
+  type NormalizeUnknownErrorOptions,
+} from "./errorFeedback";

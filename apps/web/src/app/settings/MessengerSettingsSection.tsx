@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { Button, Card, Input } from "@opencom/ui";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { Palette, Upload, Eye, X } from "lucide-react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
 
 const SUPPORTED_LANGUAGES = [
   { code: "en", name: "English" },
@@ -67,6 +69,7 @@ export function MessengerSettingsSection({
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
 
   useEffect(() => {
     if (messengerSettings) {
@@ -90,6 +93,7 @@ export function MessengerSettingsSection({
 
   const handleSave = async () => {
     if (!workspaceId) return;
+    setErrorFeedback(null);
     setIsSaving(true);
     try {
       await upsertSettings({
@@ -111,7 +115,12 @@ export function MessengerSettingsSection({
       });
     } catch (error) {
       console.error("Failed to save messenger settings:", error);
-      alert(error instanceof Error ? error.message : "Failed to save settings");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save messenger settings",
+          nextAction: "Review your changes and try again.",
+        })
+      );
     } finally {
       setIsSaving(false);
     }
@@ -120,16 +129,23 @@ export function MessengerSettingsSection({
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !workspaceId) return;
+    setErrorFeedback(null);
 
     // Validate file size (max 100KB)
     if (file.size > 100 * 1024) {
-      alert("Logo must be under 100KB");
+      setErrorFeedback({
+        message: "Logo must be under 100KB.",
+        nextAction: "Choose a smaller PNG or JPG and upload again.",
+      });
       return;
     }
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      alert("Please upload an image file");
+      setErrorFeedback({
+        message: "Please upload an image file.",
+        nextAction: "Use a PNG or JPG logo.",
+      });
       return;
     }
 
@@ -150,7 +166,12 @@ export function MessengerSettingsSection({
       reader.readAsDataURL(file);
     } catch (error) {
       console.error("Failed to upload logo:", error);
-      alert("Failed to upload logo");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to upload logo",
+          nextAction: "Try again with a valid image file.",
+        })
+      );
     } finally {
       setIsUploadingLogo(false);
     }
@@ -158,11 +179,18 @@ export function MessengerSettingsSection({
 
   const handleDeleteLogo = async () => {
     if (!workspaceId) return;
+    setErrorFeedback(null);
     try {
       await deleteLogo({ workspaceId });
       setLogoPreview(null);
     } catch (error) {
       console.error("Failed to delete logo:", error);
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to delete logo",
+          nextAction: "Try again in a moment.",
+        })
+      );
     }
   };
 
@@ -194,6 +222,7 @@ export function MessengerSettingsSection({
       <p className="text-sm text-muted-foreground mb-6">
         Customize the appearance of your messenger widget and mobile SDK to match your brand.
       </p>
+      {errorFeedback && <ErrorFeedbackBanner feedback={errorFeedback} className="mb-4" />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Settings Column */}

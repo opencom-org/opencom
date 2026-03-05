@@ -3,6 +3,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { scoreSelectorQuality, type SelectorQualityMetadata } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
+import { ErrorFeedbackBanner } from "./components/ErrorFeedbackBanner";
 
 interface TooltipAuthoringOverlayProps {
   token: string;
@@ -96,6 +98,7 @@ export function TooltipAuthoringOverlay({
   const [selectedSelector, setSelectedSelector] = useState<string>("");
   const [selectorQuality, setSelectorQuality] = useState<SelectorQualityMetadata | null>(null);
   const [isSelecting, setIsSelecting] = useState(true);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
   const [previewPosition, setPreviewPosition] = useState<{ top: number; left: number } | null>(
     null
   );
@@ -218,6 +221,7 @@ export function TooltipAuthoringOverlay({
 
   const handleConfirmSelector = async () => {
     if (!selectedSelector) return;
+    setErrorFeedback(null);
 
     try {
       await updateSelectorMutation({
@@ -231,7 +235,12 @@ export function TooltipAuthoringOverlay({
       onExit();
     } catch (error) {
       console.error("Failed to save selector:", error);
-      alert("Failed to save selector");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save selector.",
+          nextAction: "Try selecting the target element again.",
+        })
+      );
     }
   };
 
@@ -290,6 +299,11 @@ export function TooltipAuthoringOverlay({
           </button>
         </div>
       </div>
+      {errorFeedback && (
+        <div className="opencom-authoring-feedback">
+          <ErrorFeedbackBanner feedback={errorFeedback} />
+        </div>
+      )}
 
       {/* Instructions panel */}
       <div className="opencom-authoring-step-panel">

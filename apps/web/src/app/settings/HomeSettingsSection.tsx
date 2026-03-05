@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { Home, Plus, X, GripVertical, Search, MessageSquare, FileText, Bell } from "lucide-react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
 
 // Card type definitions for Home settings
 const CARD_TYPES = [
@@ -154,6 +156,7 @@ export function HomeSettingsSection({
   const [isSaving, setIsSaving] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
 
   useEffect(() => {
     if (homeConfig) {
@@ -166,6 +169,7 @@ export function HomeSettingsSection({
 
   const handleSave = async () => {
     if (!workspaceId) return;
+    setErrorFeedback(null);
     setIsSaving(true);
     try {
       await updateHomeConfig({
@@ -179,7 +183,12 @@ export function HomeSettingsSection({
       });
     } catch (error) {
       console.error("Failed to save home settings:", error);
-      alert(error instanceof Error ? error.message : "Failed to save settings");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save home settings",
+          nextAction: "Review home tab/card changes and try again.",
+        })
+      );
     } finally {
       setIsSaving(false);
     }
@@ -283,6 +292,7 @@ export function HomeSettingsSection({
         Configure a customizable Home space as the default entry point for your messenger. Add cards
         to help visitors find answers and take action.
       </p>
+      {errorFeedback && <ErrorFeedbackBanner feedback={errorFeedback} className="mb-4" />}
 
       {enabled && (
         <div className="space-y-6">

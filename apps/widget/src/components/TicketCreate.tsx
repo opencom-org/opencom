@@ -1,5 +1,7 @@
 import { useState } from "react";
+import type { ErrorFeedbackMessage } from "@opencom/web-shared";
 import { ChevronLeft, X } from "../icons";
+import { ErrorFeedbackBanner } from "./ErrorFeedbackBanner";
 
 type FormField = {
   id: string;
@@ -22,6 +24,7 @@ interface TicketCreateProps {
   onClose: () => void;
   onSubmit: (formData: Record<string, unknown>) => Promise<void>;
   isSubmitting: boolean;
+  errorFeedback: ErrorFeedbackMessage | null;
 }
 
 const fallbackFields: FormField[] = [
@@ -47,6 +50,7 @@ export function TicketCreate({
   onClose,
   onSubmit,
   isSubmitting,
+  errorFeedback,
 }: TicketCreateProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
 
@@ -71,6 +75,7 @@ export function TicketCreate({
         </div>
       </div>
       <div className="opencom-ticket-form">
+        {errorFeedback && <ErrorFeedbackBanner feedback={errorFeedback} />}
         {ticketForm?.description && (
           <p className="opencom-ticket-form-description">{ticketForm.description}</p>
         )}

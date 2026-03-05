@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { MessageCircle, X, Plus, Search, Map, CheckSquare, Ticket, Home } from "./icons";
 import { Home as HomeComponent, useHomeConfig } from "./components/Home";
 import { ConversationList } from "./components/ConversationList";
@@ -107,6 +108,7 @@ export function Widget({
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
   const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
+  const [ticketErrorFeedback, setTicketErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
   const [sessionShownSurveyIds, setSessionShownSurveyIds] = useState<Set<string>>(new Set());
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [surveyEligibilityUnavailable, setSurveyEligibilityUnavailable] = useState(false);
@@ -936,6 +938,7 @@ export function Widget({
   };
 
   const handleBackFromTickets = () => {
+    setTicketErrorFeedback(null);
     if (view === "ticket-detail") {
       setSelectedTicketId(null);
     }
@@ -945,6 +948,7 @@ export function Widget({
 
   const handleSubmitTicket = async (formData: Record<string, unknown>) => {
     if (!visitorId || !activeWorkspaceId || isSubmittingTicket) return;
+    setTicketErrorFeedback(null);
 
     const ticketFields = (ticketForm?.fields ?? []) as Array<{ id: string; label?: string }>;
     const getFieldValueByHint = (hints: string[]): string | undefined => {
@@ -969,7 +973,10 @@ export function Widget({
       getFieldValueByHint(["description", "details", "message"]);
 
     if (!subject.trim()) {
-      alert("Please provide a subject for your ticket");
+      setTicketErrorFeedback({
+        message: "Please provide a subject for your ticket.",
+        nextAction: "Add a short subject, then submit again.",
+      });
       return;
     }
 
@@ -988,7 +995,12 @@ export function Widget({
       setView("ticket-detail");
     } catch (error) {
       console.error("Failed to create ticket:", error);
-      alert("Failed to submit ticket. Please try again.");
+      setTicketErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to submit ticket.",
+          nextAction: "Please try again.",
+        })
+      );
     } finally {
       setIsSubmittingTicket(false);
     }
@@ -1139,6 +1151,7 @@ export function Widget({
                 <button
                   className="opencom-ticket-create-btn"
                   onClick={() => {
+                    setTicketErrorFeedback(null);
                     setSelectedTicketId(null);
                     setView("ticket-create");
                   }}
@@ -1326,6 +1339,7 @@ export function Widget({
           onClose={handleCloseWidget}
           onSubmit={handleSubmitTicket}
           isSubmitting={isSubmittingTicket}
+          errorFeedback={ticketErrorFeedback}
         />
       )}
       {view === "ticket-detail" && (
