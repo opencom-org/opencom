@@ -668,14 +668,20 @@ export const handoffToHuman = mutation({
       aiLastResponseAt: now,
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+      eventType: "chat_message",
+      domain: "chat",
+      audience: "agent",
+      workspaceId: conversation.workspaceId,
+      actorType: "bot",
       conversationId: args.conversationId,
-      messageContent: handoffMessage,
-      senderType: "bot",
-      messageId,
-      senderId: "ai-agent",
-      sentAt: now,
-      channel: "chat",
+      title: "AI handoff",
+      body: handoffMessage,
+      data: {
+        conversationId: args.conversationId,
+        type: "ai_handoff",
+      },
+      eventKey: `chat_handoff:${messageId}`,
     });
 
     return { messageId, handoffMessage };

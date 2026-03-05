@@ -9,6 +9,7 @@ describe("aiAgent.handoffToHuman persistence path", () => {
     expect(source).not.toContain('senderId: "system"');
     expect(source).toContain("lastMessageAt: now");
     expect(source).toContain("unreadByAgent: (conversation.unreadByAgent || 0) + 1");
-    expect(source).toContain("internal.notifications.notifyNewMessage");
+    expect(source).toContain("internal.notifications.routeEvent");
+    expect(source).toContain('audience: "agent"');
   });
 });

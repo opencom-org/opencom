@@ -62,6 +62,8 @@ type ConversationUiPatch = {
   optimisticLastMessage?: string;
 };
 
+const HANDOFF_REASON_FALLBACK = "Reason not provided by handoff trigger";
+
 function sortInboxConversations(
   left: { _id: string; createdAt: number; lastMessageAt?: number },
   right: { _id: string; createdAt: number; lastMessageAt?: number }
@@ -84,6 +86,13 @@ function getConversationIdentityLabel(conversation: {
     name: conversation.visitor?.name,
     email: conversation.visitor?.email,
   });
+}
+
+function getHandoffReasonLabel(reason: string | null | undefined): string {
+  const normalizedReason = reason?.trim();
+  return normalizedReason && normalizedReason.length > 0
+    ? normalizedReason
+    : HANDOFF_REASON_FALLBACK;
 }
 
 function InboxContent(): React.JSX.Element | null {
@@ -1037,8 +1046,7 @@ function InboxContent(): React.JSX.Element | null {
                           <Bot className="h-3 w-3" />
                           <span className="font-medium">AI handoff</span>
                           <span className="truncate">
-                            {selectedConversation.aiWorkflow.handoffReason ??
-                              "Reason not provided by handoff trigger"}
+                            {getHandoffReasonLabel(selectedConversation.aiWorkflow.handoffReason)}
                           </span>
                         </div>
                       )}
@@ -1523,8 +1531,7 @@ function InboxContent(): React.JSX.Element | null {
                             </p>
                             <p className="text-xs text-amber-800">
                               Handoff reason:{" "}
-                              {selectedConversation.aiWorkflow.handoffReason ??
-                                "Reason not provided by handoff trigger"}
+                              {getHandoffReasonLabel(selectedConversation.aiWorkflow.handoffReason)}
                             </p>
                           </div>
                         ) : (
@@ -1656,9 +1663,10 @@ function InboxContent(): React.JSX.Element | null {
                                 {response.handedOff && (
                                   <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
                                     Handoff reason:{" "}
-                                    {response.handoffReason ??
-                                      selectedConversation?.aiWorkflow?.handoffReason ??
-                                      "Not specified"}
+                                    {getHandoffReasonLabel(
+                                      response.handoffReason ??
+                                        selectedConversation?.aiWorkflow?.handoffReason
+                                    )}
                                   </p>
                                 )}
 

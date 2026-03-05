@@ -13,6 +13,7 @@ vi.mock("@opencom/convex", () => ({
   api: {
     messages: {
       list: "messages.list",
+      send: "messages.send",
     },
     conversations: {
       get: "conversations.get",
