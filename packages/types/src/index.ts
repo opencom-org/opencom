@@ -532,6 +532,58 @@ export interface CarouselImpression {
   createdAt: number;
 }
 
+export type AudienceRuleCountOperator = "at_least" | "at_most" | "exactly";
+
+export interface AudienceRuleEventFilter {
+  name: string;
+  countOperator?: AudienceRuleCountOperator;
+  count?: number;
+  withinDays?: number;
+}
+
+export type AudienceRulePropertySource = "system" | "custom" | "event";
+
+export interface AudienceRulePropertyReference {
+  source: AudienceRulePropertySource;
+  key: string;
+  eventFilter?: AudienceRuleEventFilter;
+}
+
+export type AudienceRuleOperator =
+  | "equals"
+  | "not_equals"
+  | "contains"
+  | "not_contains"
+  | "starts_with"
+  | "ends_with"
+  | "greater_than"
+  | "less_than"
+  | "greater_than_or_equals"
+  | "less_than_or_equals"
+  | "is_set"
+  | "is_not_set";
+
+export interface AudienceRuleCondition {
+  type: "condition";
+  property: AudienceRulePropertyReference;
+  operator: AudienceRuleOperator;
+  value?: string | number | boolean;
+}
+
+export interface AudienceRuleGroup {
+  type: "group";
+  operator: "and" | "or";
+  conditions: AudienceRule[];
+}
+
+export type AudienceRule = AudienceRuleCondition | AudienceRuleGroup;
+
+export interface SegmentReference {
+  segmentId: string;
+}
+
+export type AudienceRuleOrSegment = AudienceRule | SegmentReference;
+
 // Series Types
 export type SeriesId = string;
 export type SeriesBlockId = string;
@@ -563,9 +615,9 @@ export interface Series {
   workspaceId: WorkspaceId;
   name: string;
   description?: string;
-  entryRules?: unknown;
-  exitRules?: unknown;
-  goalRules?: unknown;
+  entryRules?: AudienceRuleOrSegment;
+  exitRules?: AudienceRuleOrSegment;
+  goalRules?: AudienceRuleOrSegment;
   status: SeriesStatus;
   stats?: SeriesStats;
   createdAt: number;
@@ -578,7 +630,7 @@ export interface SeriesBlockPosition {
 }
 
 export interface SeriesBlockConfig {
-  rules?: unknown;
+  rules?: AudienceRuleOrSegment;
   waitType?: WaitType;
   waitDuration?: number;
   waitUnit?: WaitUnit;

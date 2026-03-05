@@ -6,6 +6,10 @@ import { resolveVisitorFromSession } from "./widgetSessions";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { eventPropertiesValidator } from "./validators";
+import {
+  scheduleSeriesEvaluateEnrollment,
+  scheduleSeriesResumeWaitingForEvent,
+} from "./lib/seriesRuntimeAdapter";
 
 const AUTO_EVENT_TYPES = ["page_view", "screen_view", "session_start", "session_end"] as const;
 type AutoEventType = (typeof AUTO_EVENT_TYPES)[number];
@@ -22,7 +26,7 @@ async function scheduleSeriesEventRuntime(
     eventName: string;
   }
 ): Promise<void> {
-  await ctx.scheduler.runAfter(0, (internal as any).series.evaluateEnrollmentForVisitor, {
+  await scheduleSeriesEvaluateEnrollment(ctx, {
     workspaceId: args.workspaceId,
     visitorId: args.visitorId,
     triggerContext: {
@@ -31,7 +35,7 @@ async function scheduleSeriesEventRuntime(
     },
   });
 
-  await ctx.scheduler.runAfter(0, (internal as any).series.resumeWaitingForEvent, {
+  await scheduleSeriesResumeWaitingForEvent(ctx, {
     workspaceId: args.workspaceId,
     visitorId: args.visitorId,
     eventName: args.eventName,

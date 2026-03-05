@@ -7,12 +7,15 @@ import {
   MutationCtx,
   QueryCtx,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { evaluateRule, AudienceRule, validateAudienceRule } from "./audienceRules";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { audienceRulesOrSegmentValidator, seriesRulesValidator } from "./validators";
+import {
+  runSeriesEvaluateEntry,
+  scheduleSeriesProcessProgress,
+} from "./lib/seriesRuntimeAdapter";
 
 const DEFAULT_SERIES_LIST_LIMIT = 100;
 const MAX_SERIES_LIST_LIMIT = 500;
@@ -1347,7 +1350,8 @@ async function processProgressRecord(
         idempotencyKeyContext: `${progress._id}:${block._id}:retry:${attemptCount}`,
       });
 
-      await ctx.scheduler.runAfter(retryDelay, (internal as any).series.processProgress, {
+      await scheduleSeriesProcessProgress(ctx, {
+        delayMs: retryDelay,
         progressId: progress._id,
       });
       return { processed: true, status: "waiting", reason: "retry_scheduled" };
@@ -1371,7 +1375,8 @@ async function processProgressRecord(
 
       if (execution.waitUntil) {
         const delay = Math.max(0, execution.waitUntil - now);
-        await ctx.scheduler.runAfter(delay, (internal as any).series.processProgress, {
+        await scheduleSeriesProcessProgress(ctx, {
+          delayMs: delay,
           progressId: progress._id,
         });
       }
@@ -1998,7 +2003,7 @@ export const evaluateEnrollmentForVisitor = internalMutation({
 
     let entered = 0;
     for (const series of activeSeries) {
-      const result = await ctx.runMutation((internal as any).series.evaluateEntry, {
+      const result = await runSeriesEvaluateEntry(ctx, {
         seriesId: series._id,
         visitorId: args.visitorId,
         triggerContext: args.triggerContext,

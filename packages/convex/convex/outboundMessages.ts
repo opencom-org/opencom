@@ -7,7 +7,7 @@ import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
-import { audienceRulesValidator } from "./validators";
+import { audienceRulesOrSegmentValidator, audienceRulesValidator } from "./validators";
 
 // Task 2.1: Create outbound message
 export const create = authMutation({
@@ -580,7 +580,7 @@ export const sendPushForCampaign = authAction({
       data: {
         type: "outbound_message",
         messageId: args.messageId,
-        imageUrl: message.content.imageUrl,
+        ...(message.content.imageUrl ? { imageUrl: message.content.imageUrl } : {}),
       },
       recipientVisitorIds: visitorIds,
       eventKey: `outbound_message:${args.messageId}:${message.updatedAt}`,
@@ -599,7 +599,7 @@ export const sendPushForCampaign = authAction({
 export const getEligibleVisitorsForPush = authQuery({
   args: {
     workspaceId: v.id("workspaces"),
-    targeting: v.optional(audienceRulesValidator),
+    targeting: v.optional(audienceRulesOrSegmentValidator),
   },
   permission: "settings.workspace",
   handler: async (ctx, args) => {
