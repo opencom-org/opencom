@@ -7,6 +7,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
@@ -660,9 +661,21 @@ export const handoffToHuman = mutation({
     await ctx.db.patch(args.conversationId, {
       status: "open",
       updatedAt: now,
+      lastMessageAt: now,
+      unreadByAgent: (conversation.unreadByAgent || 0) + 1,
       aiWorkflowState: "handoff",
       aiHandoffReason: args.reason,
       aiLastResponseAt: now,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+      conversationId: args.conversationId,
+      messageContent: handoffMessage,
+      senderType: "bot",
+      messageId,
+      senderId: "ai-agent",
+      sentAt: now,
+      channel: "chat",
     });
 
     return { messageId, handoffMessage };

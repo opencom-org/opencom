@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { ConversationView } from "./ConversationView";
@@ -64,6 +64,12 @@ describe("ConversationView personas", () => {
   let messagesResult: MessageFixture[];
   let aiResponsesResult: AiResponseFixture[];
   let conversationResult: { aiWorkflowState?: "none" | "ai_handled" | "handoff" } | null;
+  let sendMessageMutationMock: ReturnType<typeof vi.fn>;
+  let identifyVisitorMutationMock: ReturnType<typeof vi.fn>;
+  let submitAiFeedbackMutationMock: ReturnType<typeof vi.fn>;
+  let handoffToHumanMutationMock: ReturnType<typeof vi.fn>;
+  let generateAiResponseActionMock: ReturnType<typeof vi.fn>;
+  let searchSuggestionsActionMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -73,11 +79,40 @@ describe("ConversationView personas", () => {
     aiResponsesResult = [];
     conversationResult = { aiWorkflowState: "none" };
 
+    sendMessageMutationMock = vi.fn().mockResolvedValue(undefined);
+    identifyVisitorMutationMock = vi.fn().mockResolvedValue(undefined);
+    submitAiFeedbackMutationMock = vi.fn().mockResolvedValue(undefined);
+    handoffToHumanMutationMock = vi.fn().mockResolvedValue(undefined);
+    generateAiResponseActionMock = vi.fn().mockResolvedValue(undefined);
+    searchSuggestionsActionMock = vi.fn().mockResolvedValue([]);
+
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
-    mockedUseMutation.mockReturnValue(vi.fn().mockResolvedValue(undefined));
+    mockedUseMutation.mockImplementation((mutationRef: unknown) => {
+      if (mutationRef === "messages.send") {
+        return sendMessageMutationMock;
+      }
+      if (mutationRef === "visitors.identify") {
+        return identifyVisitorMutationMock;
+      }
+      if (mutationRef === "aiAgent.submitFeedback") {
+        return submitAiFeedbackMutationMock;
+      }
+      if (mutationRef === "aiAgent.handoffToHuman") {
+        return handoffToHumanMutationMock;
+      }
+      return vi.fn().mockResolvedValue(undefined);
+    });
 
     const mockedUseAction = useAction as unknown as ReturnType<typeof vi.fn>;
-    mockedUseAction.mockReturnValue(vi.fn().mockResolvedValue([]));
+    mockedUseAction.mockImplementation((actionRef: unknown) => {
+      if (actionRef === "aiAgentActions.generateResponse") {
+        return generateAiResponseActionMock;
+      }
+      if (actionRef === "suggestions.searchForWidget") {
+        return searchSuggestionsActionMock;
+      }
+      return vi.fn().mockResolvedValue([]);
+    });
 
     const mockedUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
     mockedUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
@@ -276,5 +311,22 @@ describe("ConversationView personas", () => {
     renderSubject();
 
     expect(screen.queryByTestId("widget-waiting-human-divider")).toBeNull();
+  });
+
+  it("passes explicit handoff reason when visitor clicks talk to human", async () => {
+    renderSubject();
+
+    fireEvent.click(screen.getByTestId("widget-talk-to-human"));
+
+    await waitFor(() => {
+      expect(handoffToHumanMutationMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: "conv_1",
+          visitorId: "visitor_1",
+          sessionToken: "wst_test",
+          reason: "Visitor clicked Talk to human button",
+        })
+      );
+    });
   });
 });

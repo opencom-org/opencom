@@ -1029,6 +1029,19 @@ function InboxContent(): React.JSX.Element | null {
                           </Button>
                         )}
                       </div>
+                      {selectedConversation?.aiWorkflow?.state === "handoff" && (
+                        <div
+                          className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+                          data-testid="inbox-handoff-context-banner"
+                        >
+                          <Bot className="h-3 w-3" />
+                          <span className="font-medium">AI handoff</span>
+                          <span className="truncate">
+                            {selectedConversation.aiWorkflow.handoffReason ??
+                              "Reason not provided by handoff trigger"}
+                          </span>
+                        </div>
+                      )}
                       {isCompactViewport && (
                         <div
                           className="flex items-center gap-2"
@@ -1500,12 +1513,28 @@ function InboxContent(): React.JSX.Element | null {
                           Loading AI responses...
                         </p>
                       ) : !orderedAiResponses || orderedAiResponses.length === 0 ? (
-                        <p
-                          className="text-sm text-muted-foreground"
-                          data-testid="inbox-ai-review-empty"
-                        >
-                          No AI responses in this conversation yet.
-                        </p>
+                        selectedConversation?.aiWorkflow?.state === "handoff" ? (
+                          <div
+                            className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3"
+                            data-testid="inbox-ai-review-handoff-only"
+                          >
+                            <p className="text-sm font-medium text-amber-800">
+                              Conversation was handed off before an AI response record was stored.
+                            </p>
+                            <p className="text-xs text-amber-800">
+                              Handoff reason:{" "}
+                              {selectedConversation.aiWorkflow.handoffReason ??
+                                "Reason not provided by handoff trigger"}
+                            </p>
+                          </div>
+                        ) : (
+                          <p
+                            className="text-sm text-muted-foreground"
+                            data-testid="inbox-ai-review-empty"
+                          >
+                            No AI responses in this conversation yet.
+                          </p>
+                        )
                       ) : (
                         orderedAiResponses.map(
                           (response: NonNullable<typeof orderedAiResponses>[number]) => {
