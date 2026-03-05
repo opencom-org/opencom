@@ -18,3 +18,4 @@ export {
   type ErrorFeedbackMessage,
   type NormalizeUnknownErrorOptions,
 } from "./errorFeedback";
+export { resolveArticleSourceId, type AISourceMetadata } from "./aiSourceLinks";

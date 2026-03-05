@@ -30,6 +30,13 @@ type KnowledgeResult = {
   relevanceScore: number;
 };
 
+const aiResponseSourceValidator = v.object({
+  type: v.string(),
+  id: v.string(),
+  title: v.string(),
+  articleId: v.optional(v.string()),
+});
+
 const DEFAULT_AI_SETTINGS = {
   enabled: false,
   knowledgeSources: ["articles"] as KnowledgeSource[],
@@ -472,22 +479,10 @@ export const storeResponse = mutation({
     response: v.string(),
     generatedCandidateResponse: v.optional(v.string()),
     generatedCandidateSources: v.optional(
-      v.array(
-        v.object({
-          type: v.string(),
-          id: v.string(),
-          title: v.string(),
-        })
-      )
+      v.array(aiResponseSourceValidator)
     ),
     generatedCandidateConfidence: v.optional(v.number()),
-    sources: v.array(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-        title: v.string(),
-      })
-    ),
+    sources: v.array(aiResponseSourceValidator),
     confidence: v.number(),
     handedOff: v.boolean(),
     handoffReason: v.optional(v.string()),

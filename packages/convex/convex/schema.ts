@@ -1844,6 +1844,7 @@ export default defineSchema({
           type: v.string(),
           id: v.string(),
           title: v.string(),
+          articleId: v.optional(v.string()),
         })
       )
     ),
@@ -1853,6 +1854,7 @@ export default defineSchema({
         type: v.string(),
         id: v.string(),
         title: v.string(),
+        articleId: v.optional(v.string()),
       })
     ),
     confidence: v.number(),

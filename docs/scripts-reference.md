@@ -264,12 +264,18 @@ Files in `security/` configure CI gate behavior:
 
 ### Quality
 
-| Command             | Description            |
-| ------------------- | ---------------------- |
-| `pnpm lint`         | Lint all packages      |
-| `pnpm format`       | Format all files       |
-| `pnpm format:check` | Check formatting       |
-| `pnpm typecheck`    | Typecheck all packages |
+| Command                  | Description                                       |
+| ------------------------ | ------------------------------------------------- |
+| `pnpm web:lint`          | Lint `@opencom/web` using ESLint CLI             |
+| `pnpm convex:lint`       | Lint `@opencom/convex` Help Center import/export modules |
+| `pnpm quality:lint`      | Run standardized lint gates for web + convex     |
+| `pnpm web:typecheck`     | Typecheck `@opencom/web`                         |
+| `pnpm convex:typecheck`  | Typecheck `@opencom/convex`                      |
+| `pnpm quality:typecheck` | Run standardized typecheck gates for web + convex |
+| `pnpm lint`              | Lint all packages (workspace-wide)               |
+| `pnpm format`            | Format all files                                 |
+| `pnpm format:check`      | Check formatting                                 |
+| `pnpm typecheck`         | Typecheck all packages                           |
 
 ### Testing
 
@@ -300,3 +306,9 @@ Files in `security/` configure CI gate behavior:
 | `pnpm deploy:widget:cdn`    | Deploy widget to CDN       |
 | `pnpm seed:landing`         | Seed landing demo data     |
 | `pnpm seed:landing:cleanup` | Clean up landing demo data |
+
+## Migration Notes
+
+- `@opencom/web` lint now runs via explicit ESLint CLI (`eslint src --ext .ts,.tsx`) instead of deprecated `next lint`.
+- `@opencom/convex` now exposes a canonical `lint` script so package-level quality gates can run consistently.
+- Root `pnpm test:e2e:prod` now resolves through `pnpm web:test:e2e` (previous `pn` typo removed).

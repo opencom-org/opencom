@@ -3968,6 +3968,44 @@
   color: #6b7280;
   font-size: 11px;
   margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.opencom-ai-source-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.opencom-ai-source-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.opencom-ai-source-link {
+  border: none;
+  background: none;
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.opencom-ai-source-link:hover {
+  color: #1d4ed8;
+}
+
+.opencom-ai-source-text {
+  color: #6b7280;
   font-style: italic;
 }
 

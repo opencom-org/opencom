@@ -31,11 +31,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
+      - name: Lint (web + convex)
+        run: pnpm quality:lint
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Typecheck (web + convex)
+        run: pnpm quality:typecheck
 
       - name: Convex raw auth guard
         run: pnpm security:convex-auth-guard
@@ -50,7 +50,7 @@ jobs:
         run: pnpm security:headers-check
 
       - name: Convex backend tests
-        run: pnpm --filter @opencom/convex test
+        run: pnpm test:convex
 
       - name: Web production build
         run: pnpm --filter @opencom/web build

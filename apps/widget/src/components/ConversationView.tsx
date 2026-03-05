@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { resolveArticleSourceId } from "@opencom/web-shared";
 import { ChevronLeft, X, Send, Bot, ThumbsUp, ThumbsDown, User, Book } from "../icons";
 import { CsatPrompt } from "../CsatPrompt";
 import { formatTime } from "../utils/format";
@@ -574,10 +575,48 @@ export function ConversationView({
                       <div className="opencom-ai-feedback">
                         {aiData.sources && aiData.sources.length > 0 && (
                           <div className="opencom-ai-sources">
-                            Sources:{" "}
-                            {aiData.sources
-                              .map((s: { type: string; id: string; title: string }) => s.title)
-                              .join(", ")}
+                            <span>Sources:</span>
+                            <ul className="opencom-ai-source-list">
+                              {aiData.sources.map(
+                                (
+                                  source: {
+                                    type: string;
+                                    id: string;
+                                    title: string;
+                                    articleId?: string;
+                                  },
+                                  index: number
+                                ) => {
+                                  const articleSourceId = resolveArticleSourceId(source);
+                                  return (
+                                    <li
+                                      key={`${aiData._id}-${source.id}-${index}`}
+                                      className="opencom-ai-source-item"
+                                    >
+                                      {articleSourceId ? (
+                                        <button
+                                          type="button"
+                                          className="opencom-ai-source-link"
+                                          data-testid={`widget-ai-source-link-${aiData._id}-${index}`}
+                                          onClick={() =>
+                                            onSelectArticle(articleSourceId as Id<"articles">)
+                                          }
+                                        >
+                                          {source.title}
+                                        </button>
+                                      ) : (
+                                        <span
+                                          className="opencom-ai-source-text"
+                                          data-testid={`widget-ai-source-text-${aiData._id}-${index}`}
+                                        >
+                                          {source.title}
+                                        </span>
+                                      )}
+                                    </li>
+                                  );
+                                }
+                              )}
+                            </ul>
                           </div>
                         )}
                         {!feedbackGiven ? (

@@ -245,7 +245,7 @@ export const generateResponse = action({
   ): Promise<{
     response: string;
     confidence: number;
-    sources: Array<{ type: string; id: string; title: string }>;
+    sources: Array<{ type: string; id: string; title: string; articleId?: string }>;
     handoff: boolean;
     handoffReason: string | null;
     messageId: string | null;
@@ -630,6 +630,7 @@ export const generateResponse = action({
       type: r.type,
       id: r.id,
       title: r.title,
+      articleId: r.type === "article" ? r.id : undefined,
     }));
 
     if (handoff) {

@@ -57,7 +57,7 @@ type AiResponseFixture = {
   _id: string;
   messageId: string;
   feedback?: "helpful" | "not_helpful";
-  sources: Array<{ type: string; id: string; title: string }>;
+  sources: Array<{ type: string; id: string; title: string; articleId?: string }>;
   handedOff?: boolean;
 };
 
@@ -71,6 +71,7 @@ describe("ConversationView personas", () => {
   let handoffToHumanMutationMock: ReturnType<typeof vi.fn>;
   let generateAiResponseActionMock: ReturnType<typeof vi.fn>;
   let searchSuggestionsActionMock: ReturnType<typeof vi.fn>;
+  let onSelectArticleMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -86,6 +87,7 @@ describe("ConversationView personas", () => {
     handoffToHumanMutationMock = vi.fn().mockResolvedValue(undefined);
     generateAiResponseActionMock = vi.fn().mockResolvedValue(undefined);
     searchSuggestionsActionMock = vi.fn().mockResolvedValue([]);
+    onSelectArticleMock = vi.fn();
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
@@ -171,7 +173,7 @@ describe("ConversationView personas", () => {
         commonIssueButtons={undefined}
         onBack={vi.fn()}
         onClose={vi.fn()}
-        onSelectArticle={vi.fn()}
+        onSelectArticle={onSelectArticleMock as any}
       />
     );
   };
@@ -329,5 +331,69 @@ describe("ConversationView personas", () => {
         })
       );
     });
+  });
+
+  it("renders article sources as clickable links and opens the article", () => {
+    messagesResult = [
+      {
+        _id: "m_ai_linked",
+        _creationTime: 1700000045000,
+        senderType: "bot",
+        senderId: "ai-agent",
+        content: "Try this guide.",
+      },
+    ];
+    aiResponsesResult = [
+      {
+        _id: "r_ai_linked",
+        messageId: "m_ai_linked",
+        sources: [
+          {
+            type: "article",
+            id: "legacy-article-id",
+            articleId: "article_link_123",
+            title: "Setup Guide",
+          },
+        ],
+      },
+    ];
+
+    renderSubject();
+
+    fireEvent.click(screen.getByTestId("widget-ai-source-link-r_ai_linked-0"));
+
+    expect(onSelectArticleMock).toHaveBeenCalledWith("article_link_123");
+  });
+
+  it("keeps non-article sources as non-clickable attribution text", () => {
+    messagesResult = [
+      {
+        _id: "m_ai_fallback",
+        _creationTime: 1700000050000,
+        senderType: "bot",
+        senderId: "ai-agent",
+        content: "Based on snippets.",
+      },
+    ];
+    aiResponsesResult = [
+      {
+        _id: "r_ai_fallback",
+        messageId: "m_ai_fallback",
+        sources: [
+          {
+            type: "snippet",
+            id: "snippet_1",
+            title: "Snippet Reference",
+          },
+        ],
+      },
+    ];
+
+    renderSubject();
+
+    expect(screen.getByTestId("widget-ai-source-text-r_ai_fallback-0")).toHaveTextContent(
+      "Snippet Reference"
+    );
+    expect(screen.queryByTestId("widget-ai-source-link-r_ai_fallback-0")).toBeNull();
   });
 });

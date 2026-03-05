@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@opencom/convex";
+import { resolveArticleSourceId } from "@opencom/web-shared";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   Send,
@@ -1333,14 +1334,34 @@ function InboxContent(): React.JSX.Element | null {
                                   <div className="space-y-1">
                                     <p className="text-xs text-muted-foreground">{sourceLabel}</p>
                                     <ul className="flex flex-wrap gap-1">
-                                      {sourcesToShow.map((source, index) => (
-                                        <li
-                                          key={`${response._id}-${source.id}-${index}`}
-                                          className="rounded border px-2 py-0.5 text-xs"
-                                        >
-                                          {source.title}
-                                        </li>
-                                      ))}
+                                      {sourcesToShow.map((source, index) => {
+                                        const articleSourceId = resolveArticleSourceId(source);
+                                        return (
+                                          <li
+                                            key={`${response._id}-${source.id}-${index}`}
+                                            className="rounded border px-2 py-0.5 text-xs"
+                                          >
+                                            {articleSourceId ? (
+                                              <button
+                                                type="button"
+                                                className="text-blue-700 underline"
+                                                data-testid={`inbox-ai-review-source-link-${response._id}-${index}`}
+                                                onClick={() =>
+                                                  router.push(`/articles/${articleSourceId}`)
+                                                }
+                                              >
+                                                {source.title}
+                                              </button>
+                                            ) : (
+                                              <span
+                                                data-testid={`inbox-ai-review-source-text-${response._id}-${index}`}
+                                              >
+                                                {source.title}
+                                              </span>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
                                     </ul>
                                   </div>
                                 )}

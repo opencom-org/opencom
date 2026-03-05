@@ -13,6 +13,7 @@ const seedTestAIResponse = internalMutation({
           type: v.string(),
           id: v.string(),
           title: v.string(),
+          articleId: v.optional(v.string()),
         })
       )
     ),
@@ -27,6 +28,7 @@ const seedTestAIResponse = internalMutation({
           type: v.string(),
           id: v.string(),
           title: v.string(),
+          articleId: v.optional(v.string()),
         })
       )
     ),

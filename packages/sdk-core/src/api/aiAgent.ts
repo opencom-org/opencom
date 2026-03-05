@@ -31,6 +31,7 @@ export interface AIResponseData {
     type: string;
     id: string;
     title: string;
+    articleId?: string;
   }>;
   confidence: number;
   handedOff: boolean;
