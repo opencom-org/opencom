@@ -647,22 +647,23 @@ export const handoffToHuman = mutation({
     const handoffMessage =
       settings?.handoffMessage ?? "Let me connect you with a human agent who can help you better.";
 
+    const now = Date.now();
+
     const messageId: Id<"messages"> = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: "ai-agent",
       content: handoffMessage,
       senderType: "bot",
-      createdAt: Date.now(),
+      createdAt: now,
     });
-
-    const now = Date.now();
 
     // Update conversation to ensure it's open and visible to agents
     await ctx.db.patch(args.conversationId, {
       status: "open",
       updatedAt: now,
       lastMessageAt: now,
-      unreadByAgent: (conversation.unreadByAgent || 0) + 1,
+      // Preserve existing visitor-unread count while ensuring handoff-only threads surface to agents.
+      unreadByAgent: Math.max(conversation.unreadByAgent || 0, 1),
       aiWorkflowState: "handoff",
       aiHandoffReason: args.reason,
       aiLastResponseAt: now,
