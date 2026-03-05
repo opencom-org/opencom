@@ -21,6 +21,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
+import {
+  toInlineAudienceRule,
+  toInlineAudienceRuleFromBuilder,
+  type InlineAudienceRule,
+} from "@/lib/audienceRules";
 
 type MessageType = "chat" | "post" | "banner";
 
@@ -117,7 +122,7 @@ function MessageBuilderContent() {
   }>({ type: "immediate" });
   const [frequency, setFrequency] = useState<"once" | "once_per_session" | "always">("once");
   const [showPreview, setShowPreview] = useState(false);
-  const [audienceRules, setAudienceRules] = useState<AudienceRule | null>(null);
+  const [audienceRules, setAudienceRules] = useState<InlineAudienceRule | null>(null);
   const [clickActionType, setClickActionType] = useState<string>("open_messenger");
   const [clickActionTabId, setClickActionTabId] = useState<string>("");
   const [clickActionArticleId, setClickActionArticleId] = useState<string>("");
@@ -148,7 +153,7 @@ function MessageBuilderContent() {
       setContent(message.content);
       setTriggers(message.triggers || { type: "immediate" });
       setFrequency(message.frequency || "once");
-      setAudienceRules((message.audienceRules ?? message.targeting) as AudienceRule | null);
+      setAudienceRules(toInlineAudienceRule(message.audienceRules ?? message.targeting));
       const ca = message.content.clickAction;
       if (ca) {
         setClickActionType(ca.type);
@@ -201,6 +206,10 @@ function MessageBuilderContent() {
   }, [message]);
 
   const handleSave = async () => {
+    if (!message) {
+      return;
+    }
+
     const clickAction: MessageClickAction = {
       type: clickActionType as MessageClickActionType,
       ...(clickActionType === "open_widget_tab" && clickActionTabId
@@ -850,9 +859,12 @@ function MessageBuilderContent() {
             </p>
             <AudienceRuleBuilder
               value={audienceRules}
-              onChange={setAudienceRules}
+              onChange={(rules: AudienceRule | null) =>
+                setAudienceRules(toInlineAudienceRuleFromBuilder(rules))
+              }
               eventNames={eventNames ?? []}
               workspaceId={activeWorkspace?._id}
+              showSegmentSelector={false}
             />
           </div>
         </div>

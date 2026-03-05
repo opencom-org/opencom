@@ -1,4 +1,5 @@
 export * from "./backend";
+export * from "./audienceRules";
 export * from "./backendValidation";
 export * from "./homeConfig";
 export * from "./visitorReadableId";

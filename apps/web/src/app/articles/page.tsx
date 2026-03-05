@@ -503,7 +503,9 @@ function ArticlesContent() {
             archiveFiles[file.path] = bytes;
             continue;
           }
-          archiveFiles[file.path] = strToU8(file.content ?? "");
+          if (file.type === "markdown") {
+            archiveFiles[file.path] = strToU8(file.content ?? "");
+          }
         }
 
         const zipped = zipSync(archiveFiles, { level: 6 });
