@@ -3,6 +3,11 @@ import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import { formatReadableVisitorId } from "../visitorReadableId";
+import {
+  runSeriesEvaluateEnrollmentForVisitor as runSeriesEvaluateEnrollmentForVisitorInternal,
+  runSeriesProcessWaitingProgress as runSeriesProcessWaitingProgressInternal,
+  runSeriesResumeWaitingForEvent as runSeriesResumeWaitingForEventInternal,
+} from "../series/scheduler";
 
 const seriesEntryTriggerTestValidator = v.object({
   source: v.union(
@@ -94,7 +99,7 @@ export const runSeriesEvaluateEnrollmentForVisitor: ReturnType<typeof internalMu
       triggerContext: seriesEntryTriggerTestValidator,
     },
     handler: async (ctx, args): Promise<unknown> => {
-      return await ctx.runMutation((internal as any).series.evaluateEnrollmentForVisitor, args);
+      return await runSeriesEvaluateEnrollmentForVisitorInternal(ctx, args);
     },
   });
 
@@ -109,7 +114,7 @@ export const runSeriesResumeWaitingForEvent: ReturnType<typeof internalMutation>
       eventName: v.string(),
     },
     handler: async (ctx, args): Promise<unknown> => {
-      return await ctx.runMutation((internal as any).series.resumeWaitingForEvent, args);
+      return await runSeriesResumeWaitingForEventInternal(ctx, args);
     },
   }
 );
@@ -124,7 +129,7 @@ export const runSeriesProcessWaitingProgress: ReturnType<typeof internalMutation
       waitingLimitPerSeries: v.optional(v.number()),
     },
     handler: async (ctx, args): Promise<unknown> => {
-      return await ctx.runMutation((internal as any).series.processWaitingProgress, args);
+      return await runSeriesProcessWaitingProgressInternal(ctx, args);
     },
   });
 

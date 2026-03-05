@@ -9,6 +9,7 @@ import { resolveVisitorFromSession } from "./widgetSessions";
 import { customAttributesValidator } from "./validators";
 import { formatReadableVisitorId } from "./visitorReadableId";
 import { logAudit } from "./auditLogs";
+import { scheduleSeriesEvaluateEnrollment } from "./series/scheduler";
 
 const locationValidator = v.optional(
   v.object({
@@ -160,7 +161,7 @@ async function scheduleSeriesTriggerChanges(
   }
 ): Promise<void> {
   for (const change of args.changes) {
-    await ctx.scheduler.runAfter(0, (internal as any).series.evaluateEnrollmentForVisitor, {
+    await scheduleSeriesEvaluateEnrollment(ctx, {
       workspaceId: args.workspaceId,
       visitorId: args.visitorId,
       triggerContext: {

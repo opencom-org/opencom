@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 
 const TARGET_FILES = [
   "../convex/events.ts",
-  "../convex/series.ts",
+  "../convex/series/runtime.ts",
+  "../convex/series/scheduler.ts",
   "../convex/lib/authWrappers.ts",
 ];
 
@@ -17,13 +18,16 @@ describe("runtime type hardening guards", () => {
 
   it("routes series runtime internal calls through typed adapters", () => {
     const eventsSource = readFileSync(new URL("../convex/events.ts", import.meta.url), "utf8");
-    const seriesSource = readFileSync(new URL("../convex/series.ts", import.meta.url), "utf8");
+    const seriesRuntimeSource = readFileSync(
+      new URL("../convex/series/runtime.ts", import.meta.url),
+      "utf8"
+    );
 
     expect(eventsSource).not.toContain("(internal as any).series");
-    expect(seriesSource).not.toContain("(internal as any).series");
+    expect(seriesRuntimeSource).not.toContain("(internal as any).series");
     expect(eventsSource).toContain("scheduleSeriesEvaluateEnrollment");
     expect(eventsSource).toContain("scheduleSeriesResumeWaitingForEvent");
-    expect(seriesSource).toContain("scheduleSeriesProcessProgress");
-    expect(seriesSource).toContain("runSeriesEvaluateEntry");
+    expect(seriesRuntimeSource).toContain("scheduleSeriesProcessProgress");
+    expect(seriesRuntimeSource).toContain("runSeriesEvaluateEntry");
   });
 });

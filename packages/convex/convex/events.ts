@@ -9,7 +9,7 @@ import { eventPropertiesValidator } from "./validators";
 import {
   scheduleSeriesEvaluateEnrollment,
   scheduleSeriesResumeWaitingForEvent,
-} from "./lib/seriesRuntimeAdapter";
+} from "./series/scheduler";
 
 const AUTO_EVENT_TYPES = ["page_view", "screen_view", "session_start", "session_end"] as const;
 type AutoEventType = (typeof AUTO_EVENT_TYPES)[number];
