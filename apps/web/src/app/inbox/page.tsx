@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@opencom/convex";
 import { Button, Card, Input } from "@opencom/ui";
@@ -35,14 +35,14 @@ import {
   ResponsiveSecondaryRegion,
   useIsCompactViewport,
 } from "@/components/ResponsiveLayout";
+import { useInboxSelectionSync } from "./hooks/useInboxSelectionSync";
+import { useInboxCompactPanels } from "./hooks/useInboxCompactPanels";
+import { useInboxSuggestionsCount } from "./hooks/useInboxSuggestionsCount";
+import { useInboxAttentionCues } from "./hooks/useInboxAttentionCues";
 import {
-  INBOX_CUE_PREFERENCES_UPDATED_EVENT,
-  buildUnreadSnapshot,
-  getUnreadIncreases,
-  loadInboxCuePreferences,
-  shouldSuppressAttentionCue,
-} from "@/lib/inboxNotificationCues";
-import { playInboxBingSound } from "@/lib/playInboxBingSound";
+  useInboxMessageActions,
+  type ConversationUiPatch,
+} from "./hooks/useInboxMessageActions";
 
 function PresenceIndicator({ visitorId }: { visitorId: Id<"visitors"> }) {
   const isOnline = useQuery(api.visitors.isOnline, { visitorId });
@@ -52,15 +52,6 @@ function PresenceIndicator({ visitorId }: { visitorId: Id<"visitors"> }) {
     />
   );
 }
-
-type ConversationStatus = "open" | "closed" | "snoozed";
-
-type ConversationUiPatch = {
-  unreadByAgent?: number;
-  status?: ConversationStatus;
-  lastMessageAt?: number;
-  optimisticLastMessage?: string;
-};
 
 const HANDOFF_REASON_FALLBACK = "Reason not provided by handoff trigger";
 
@@ -118,27 +109,12 @@ function InboxContent(): React.JSX.Element | null {
   const [isSending, setIsSending] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
   const [isConvertingTicket, setIsConvertingTicket] = useState(false);
-  const [suggestionsCount, setSuggestionsCount] = useState(0);
-  const [isSuggestionsCountLoading, setIsSuggestionsCountLoading] = useState(false);
   const [readSyncConversationId, setReadSyncConversationId] = useState<Id<"conversations"> | null>(
     null
   );
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<"messages"> | null>(null);
-  const [activeCompactPanel, setActiveCompactPanel] = useState<"ai-review" | "suggestions" | null>(
-    null
-  );
   const messageHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyInputRef = useRef<HTMLInputElement | null>(null);
-  const inboxCuePreferencesRef = useRef<{
-    browserNotifications: boolean;
-    sound: boolean;
-  }>({
-    browserNotifications: false,
-    sound: true,
-  });
-  const unreadSnapshotRef = useRef<Record<string, number> | null>(null);
-  const defaultTitleRef = useRef<string | null>(null);
-  const lastAppliedQueryConversationIdRef = useRef<Id<"conversations"> | null>(null);
 
   const inboxQueryArgs = activeWorkspace?._id
     ? {
@@ -234,11 +210,6 @@ function InboxContent(): React.JSX.Element | null {
   const selectedConversation =
     conversations?.find((conversation) => conversation._id === selectedConversationId) ?? null;
   const isConversationsLoading = conversationsData === undefined;
-  const queryConversationId = useMemo<Id<"conversations"> | null>(() => {
-    const requestedConversationId =
-      searchParams.get("conversationId") ?? searchParams.get("conversation");
-    return requestedConversationId ? (requestedConversationId as Id<"conversations">) : null;
-  }, [searchParams]);
   const isSidecarEnabled = aiSettings?.suggestionsEnabled === true;
   const orderedAiResponses = useMemo(() => {
     if (!aiResponses) {
@@ -248,9 +219,6 @@ function InboxContent(): React.JSX.Element | null {
   }, [aiResponses]);
   const showConversationListPane = !isCompactViewport || !selectedConversationId;
   const showThreadPane = !isCompactViewport || Boolean(selectedConversationId);
-  const aiReviewPanelOpen = Boolean(selectedConversationId) && activeCompactPanel === "ai-review";
-  const suggestionsPanelOpen =
-    Boolean(selectedConversationId) && isSidecarEnabled && activeCompactPanel === "suggestions";
 
   const focusReplyInput = () => {
     if (typeof window === "undefined") {
@@ -260,15 +228,39 @@ function InboxContent(): React.JSX.Element | null {
       replyInputRef.current?.focus();
     });
   };
-
-  const closeCompactPanel = () => {
-    setActiveCompactPanel(null);
-    focusReplyInput();
-  };
-
-  const toggleAuxiliaryPanel = (panel: "ai-review" | "suggestions") => {
-    setActiveCompactPanel((current) => (current === panel ? null : panel));
-  };
+  const clearWorkflowError = useCallback(() => {
+    setWorkflowError(null);
+  }, []);
+  const {
+    activeCompactPanel,
+    aiReviewPanelOpen,
+    suggestionsPanelOpen,
+    closeCompactPanel,
+    toggleAuxiliaryPanel,
+    resetCompactPanel,
+  } = useInboxCompactPanels({
+    isCompactViewport,
+    selectedConversationId,
+    isSidecarEnabled,
+    focusReplyInput,
+  });
+  useInboxSelectionSync({
+    conversations,
+    isConversationsLoading,
+    selectedConversationId,
+    setSelectedConversationId,
+    resetCompactPanel,
+    clearWorkflowError,
+    searchParams,
+    router,
+  });
+  const { suggestionsCount, isSuggestionsCountLoading, setSuggestionsCount } =
+    useInboxSuggestionsCount({
+      selectedConversationId,
+      isSidecarEnabled,
+      messageCountSignal: messages?.length ?? 0,
+      getSuggestionsForConversation,
+    });
 
   // Keyboard shortcut for knowledge search (Ctrl+K / Cmd+K)
   useEffect(() => {
@@ -284,111 +276,6 @@ function InboxContent(): React.JSX.Element | null {
     document.addEventListener("keydown", handleGlobalKeyDown);
     return () => document.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (!selectedConversationId || !conversations) {
-      return;
-    }
-    if (!conversations.some((conversation) => conversation._id === selectedConversationId)) {
-      setSelectedConversationId(null);
-      setActiveCompactPanel(null);
-    }
-  }, [conversations, selectedConversationId]);
-
-  useEffect(() => {
-    if (!conversations) {
-      return;
-    }
-    const queryHasChanged = lastAppliedQueryConversationIdRef.current !== queryConversationId;
-    if (!queryHasChanged) {
-      return;
-    }
-    lastAppliedQueryConversationIdRef.current = queryConversationId;
-    if (!queryConversationId) {
-      if (selectedConversationId !== null) {
-        setSelectedConversationId(null);
-        setActiveCompactPanel(null);
-      }
-      return;
-    }
-    if (!conversations.some((conversation) => conversation._id === queryConversationId)) {
-      return;
-    }
-    if (selectedConversationId !== queryConversationId) {
-      setSelectedConversationId(queryConversationId);
-      setWorkflowError(null);
-    }
-  }, [conversations, queryConversationId, selectedConversationId]);
-
-  useEffect(() => {
-    if (isConversationsLoading) {
-      return;
-    }
-    if (
-      selectedConversationId === null &&
-      queryConversationId &&
-      conversations?.some((conversation) => conversation._id === queryConversationId)
-    ) {
-      return;
-    }
-    if (selectedConversationId === queryConversationId) {
-      return;
-    }
-    const nextSearchParams = new URLSearchParams(searchParams.toString());
-    if (selectedConversationId) {
-      nextSearchParams.set("conversationId", selectedConversationId);
-    } else {
-      nextSearchParams.delete("conversationId");
-    }
-    nextSearchParams.delete("conversation");
-    const nextQuery = nextSearchParams.toString();
-    router.replace(nextQuery ? `/inbox?${nextQuery}` : "/inbox", { scroll: false });
-  }, [
-    conversations,
-    isConversationsLoading,
-    queryConversationId,
-    router,
-    searchParams,
-    selectedConversationId,
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchSuggestionsCount = async () => {
-      if (!selectedConversationId || !isSidecarEnabled) {
-        setSuggestionsCount(0);
-        setIsSuggestionsCountLoading(false);
-        return;
-      }
-
-      setIsSuggestionsCountLoading(true);
-      try {
-        const results = await getSuggestionsForConversation({
-          conversationId: selectedConversationId,
-          limit: 5,
-        });
-        if (!cancelled) {
-          setSuggestionsCount(results.length);
-        }
-      } catch (error) {
-        console.error("Failed to fetch suggestions count:", error);
-        if (!cancelled) {
-          setSuggestionsCount(0);
-        }
-      } finally {
-        if (!cancelled) {
-          setIsSuggestionsCountLoading(false);
-        }
-      }
-    };
-
-    void fetchSuggestionsCount();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [getSuggestionsForConversation, isSidecarEnabled, selectedConversationId, messages?.length]);
 
   useEffect(() => {
     if (!selectedConversationId || !messages || messages.length === 0) {
@@ -432,202 +319,52 @@ function InboxContent(): React.JSX.Element | null {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!isCompactViewport || !selectedConversationId) {
-      setActiveCompactPanel(null);
-    }
-  }, [isCompactViewport, selectedConversationId]);
-
-  useEffect(() => {
-    if (!isSidecarEnabled && activeCompactPanel === "suggestions") {
-      setActiveCompactPanel(null);
-    }
-  }, [activeCompactPanel, isSidecarEnabled]);
-
-  useEffect(() => {
+  const handleOpenConversationFromNotification = useCallback((conversationId: Id<"conversations">) => {
     if (typeof window === "undefined") {
       return;
     }
-
-    const refreshCuePreferences = () => {
-      inboxCuePreferencesRef.current = loadInboxCuePreferences(window.localStorage);
-    };
-    refreshCuePreferences();
-    window.addEventListener("storage", refreshCuePreferences);
-    window.addEventListener(INBOX_CUE_PREFERENCES_UPDATED_EVENT, refreshCuePreferences);
-    return () => {
-      window.removeEventListener("storage", refreshCuePreferences);
-      window.removeEventListener(INBOX_CUE_PREFERENCES_UPDATED_EVENT, refreshCuePreferences);
-    };
+    const url = new URL(window.location.href);
+    url.pathname = "/inbox";
+    url.searchParams.set("conversationId", conversationId);
+    window.location.assign(url.toString());
   }, []);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    if (!defaultTitleRef.current) {
-      defaultTitleRef.current = document.title;
-    }
-
-    const totalUnread =
-      conversations?.reduce((sum, conversation) => sum + (conversation.unreadByAgent ?? 0), 0) ?? 0;
-    const baseTitle = defaultTitleRef.current || "Inbox";
-    document.title = totalUnread > 0 ? `(${totalUnread}) ${baseTitle}` : baseTitle;
-  }, [conversations]);
-
-  useEffect(() => {
-    return () => {
-      if (typeof document !== "undefined" && defaultTitleRef.current) {
-        document.title = defaultTitleRef.current;
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!conversations || typeof window === "undefined" || typeof document === "undefined") {
-      return;
-    }
-
-    const previousSnapshot = unreadSnapshotRef.current;
-    const currentSnapshot = buildUnreadSnapshot(
-      conversations.map((conversation) => ({
-        _id: conversation._id,
-        unreadByAgent: conversation.unreadByAgent,
-      }))
-    );
-    unreadSnapshotRef.current = currentSnapshot;
-
-    if (!previousSnapshot) {
-      return;
-    }
-
-    const increasedConversationIds = getUnreadIncreases({
-      previous: previousSnapshot,
-      conversations: conversations.map((conversation) => ({
-        _id: conversation._id,
-        unreadByAgent: conversation.unreadByAgent,
-      })),
-    });
-    if (increasedConversationIds.length === 0) {
-      return;
-    }
-
-    for (const conversationId of increasedConversationIds) {
-      const conversation = conversations.find((item) => item._id === conversationId);
-      if (!conversation) {
-        continue;
-      }
-
-      const suppressCue = shouldSuppressAttentionCue({
-        conversationId,
-        selectedConversationId,
-        isDocumentVisible: document.visibilityState === "visible",
-        hasWindowFocus: document.hasFocus(),
-      });
-      if (suppressCue) {
-        continue;
-      }
-
-      const preferences = inboxCuePreferencesRef.current;
-      if (preferences.sound) {
-        playInboxBingSound();
-      }
-
-      if (
-        preferences.browserNotifications &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        const notification = new Notification("New inbox message", {
-          body: `${getConversationIdentityLabel(conversation)}: ${conversation.lastMessage?.content ?? "Open inbox to view details."}`,
-          tag: `opencom-inbox-${conversation._id}`,
-        });
-        notification.onclick = () => {
-          window.focus();
-          const url = new URL(window.location.href);
-          url.pathname = "/inbox";
-          url.searchParams.set("conversationId", conversation._id);
-          window.location.assign(url.toString());
-        };
-      }
-    }
-  }, [conversations, selectedConversationId]);
-
-  const patchConversationState = (
-    conversationId: Id<"conversations">,
-    patch: ConversationUiPatch
-  ) => {
-    setConversationPatches((previousState) => ({
-      ...previousState,
-      [conversationId]: {
-        ...(previousState[conversationId] ?? {}),
-        ...patch,
-      },
-    }));
-  };
-
-  const handleSelectConversation = async (convId: Id<"conversations">) => {
-    setWorkflowError(null);
-    setSelectedConversationId(convId);
-    const previousUnreadCount =
-      conversations?.find((conversation) => conversation._id === convId)?.unreadByAgent ?? 0;
-    patchConversationState(convId, { unreadByAgent: 0 });
-    setReadSyncConversationId(convId);
-
-    try {
-      await markAsRead({ id: convId, readerType: "agent" });
-    } catch (error) {
-      console.error("Failed to mark conversation as read:", error);
-      patchConversationState(convId, { unreadByAgent: previousUnreadCount });
-      setWorkflowError("Failed to sync read state. Please retry.");
-    } finally {
-      setReadSyncConversationId((current) => (current === convId ? null : current));
-    }
-  };
-
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || !selectedConversationId || !user) return;
-
-    const content = inputValue.trim();
-    const conversationId = selectedConversationId;
-    const previousPatch = conversationPatches[conversationId];
-    const now = Date.now();
-
-    setWorkflowError(null);
-    setIsSending(true);
-    setInputValue("");
-    patchConversationState(conversationId, {
-      unreadByAgent: 0,
-      lastMessageAt: now,
-      optimisticLastMessage: content,
-    });
-
-    try {
-      await sendMessage({
-        conversationId,
-        senderId: user._id,
-        senderType: "agent",
-        content,
-      });
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      setInputValue(content);
-      setWorkflowError("Failed to send reply. Please try again.");
-      setConversationPatches((previousState) => {
-        const nextState = { ...previousState };
-        if (previousPatch) {
-          nextState[conversationId] = previousPatch;
-        } else {
-          delete nextState[conversationId];
-        }
-        return nextState;
-      });
-    } finally {
-      setIsSending(false);
-    }
-  };
+  useInboxAttentionCues({
+    conversations,
+    selectedConversationId,
+    getConversationIdentityLabel,
+    onOpenConversation: handleOpenConversationFromNotification,
+  });
+  const {
+    handleSelectConversation,
+    handleSendMessage,
+    handleResolveConversation,
+    handleConvertToTicket,
+  } = useInboxMessageActions({
+    api: {
+      markAsRead,
+      sendMessage,
+      updateStatus,
+      convertToTicket,
+    },
+    state: {
+      inputValue,
+      setInputValue,
+      setIsSending,
+      setIsResolving,
+      setIsConvertingTicket,
+      conversationPatches,
+      setConversationPatches,
+      setReadSyncConversationId,
+      setSelectedConversationId,
+      setWorkflowError,
+    },
+    context: {
+      userId: user?._id ?? null,
+      selectedConversationId,
+      conversations,
+      onTicketCreated: (ticketId) => router.push(`/tickets/${ticketId}`),
+    },
+  });
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -651,58 +388,6 @@ function InboxContent(): React.JSX.Element | null {
     setInputValue(content);
     setShowSnippetPicker(false);
     setSnippetSearch("");
-  };
-
-  const handleConvertToTicket = async () => {
-    if (!selectedConversationId) return;
-    setWorkflowError(null);
-    setIsConvertingTicket(true);
-    try {
-      const ticketId = await convertToTicket({
-        conversationId: selectedConversationId,
-      });
-      router.push(`/tickets/${ticketId}`);
-    } catch (error) {
-      console.error("Failed to convert to ticket:", error);
-      setWorkflowError(
-        "Failed to convert to ticket. A ticket may already exist for this conversation."
-      );
-    } finally {
-      setIsConvertingTicket(false);
-    }
-  };
-
-  const handleResolveConversation = async () => {
-    if (!selectedConversationId) return;
-    const previousPatch = conversationPatches[selectedConversationId];
-
-    setWorkflowError(null);
-    setIsResolving(true);
-    patchConversationState(selectedConversationId, {
-      status: "closed",
-      unreadByAgent: 0,
-    });
-
-    try {
-      await updateStatus({
-        id: selectedConversationId,
-        status: "closed",
-      });
-    } catch (error) {
-      console.error("Failed to resolve conversation:", error);
-      setWorkflowError("Failed to resolve conversation. Please retry.");
-      setConversationPatches((previousState) => {
-        const nextState = { ...previousState };
-        if (previousPatch) {
-          nextState[selectedConversationId] = previousPatch;
-        } else {
-          delete nextState[selectedConversationId];
-        }
-        return nextState;
-      });
-    } finally {
-      setIsResolving(false);
-    }
   };
 
   const jumpToMessage = (messageId: Id<"messages">) => {
@@ -955,7 +640,7 @@ function InboxContent(): React.JSX.Element | null {
                             size="sm"
                             onClick={() => {
                               setSelectedConversationId(null);
-                              setActiveCompactPanel(null);
+                              resetCompactPanel();
                             }}
                             data-testid="inbox-back-to-list"
                             title="Back to conversations"
