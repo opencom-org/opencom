@@ -366,6 +366,9 @@ importers:
       '@convex-dev/auth':
         specifier: ^0.0.90
         version: 0.0.90(@auth/core@0.41.1)(convex@1.31.7(react@19.2.3))(react@19.2.3)
+      '@opencom/types':
+        specifier: workspace:*
+        version: link:../types
       ai:
         specifier: ^6.0.48
         version: 6.0.48(zod@4.3.5)

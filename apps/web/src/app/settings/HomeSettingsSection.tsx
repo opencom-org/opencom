@@ -4,6 +4,17 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
+import {
+  getDefaultHomeTabs,
+  normalizeHomeTabs,
+  type HomeCard,
+  type HomeCardType,
+  type HomeConfig,
+  type HomeDefaultSpace,
+  type HomeTab,
+  type HomeTabId,
+  type HomeVisibility,
+} from "@opencom/types";
 import { Home, Plus, X, GripVertical, Search, MessageSquare, FileText, Bell } from "lucide-react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
@@ -37,7 +48,12 @@ const CARD_TYPES = [
     description: "Curated help content",
   },
   { type: "announcements", label: "Announcements", icon: Bell, description: "News and updates" },
-] as const;
+] as const satisfies ReadonlyArray<{
+  type: HomeCardType;
+  label: string;
+  icon: typeof Home;
+  description: string;
+}>;
 
 const TAB_TYPES = [
   {
@@ -76,65 +92,12 @@ const TAB_TYPES = [
     description: "Support ticket list and creation",
     locked: false,
   },
-] as const;
-
-type CardType = (typeof CARD_TYPES)[number]["type"];
-type TabId = (typeof TAB_TYPES)[number]["id"];
-type VisibleTo = "all" | "visitors" | "users";
-type HomeCardConfigPrimitive = string | number | boolean | null;
-type HomeCardConfigObject = Record<string, HomeCardConfigPrimitive>;
-type HomeCardConfigValue =
-  | HomeCardConfigPrimitive
-  | HomeCardConfigPrimitive[]
-  | HomeCardConfigObject;
-type HomeCardConfig = Record<string, HomeCardConfigValue>;
-
-interface HomeCard {
-  id: string;
-  type: CardType;
-  config?: HomeCardConfig;
-  visibleTo: VisibleTo;
-}
-
-interface HomeTab {
-  id: TabId;
-  enabled: boolean;
-  visibleTo: VisibleTo;
-}
-
-interface HomeConfigResponse {
-  enabled: boolean;
-  cards: HomeCard[];
-  defaultSpace: "home" | "messages" | "help";
-  tabs?: HomeTab[];
-}
-
-const DEFAULT_TABS: HomeTab[] = [
-  { id: "home", enabled: true, visibleTo: "all" },
-  { id: "messages", enabled: true, visibleTo: "all" },
-  { id: "help", enabled: true, visibleTo: "all" },
-  { id: "tours", enabled: true, visibleTo: "all" },
-  { id: "tasks", enabled: true, visibleTo: "all" },
-  { id: "tickets", enabled: true, visibleTo: "all" },
-];
-
-function normalizeTabs(tabs: HomeTab[] | undefined): HomeTab[] {
-  const tabsById = new Map((tabs ?? []).map((tab) => [tab.id, tab]));
-  return DEFAULT_TABS.map((defaultTab) => {
-    if (defaultTab.id === "messages") {
-      return { ...defaultTab };
-    }
-    const configuredTab = tabsById.get(defaultTab.id);
-    if (!configuredTab) {
-      return { ...defaultTab };
-    }
-    return {
-      id: defaultTab.id,
-      enabled: configuredTab.enabled,
-      visibleTo: configuredTab.visibleTo,
-    };
-  });
-}
+] as const satisfies ReadonlyArray<{
+  id: HomeTabId;
+  label: string;
+  description: string;
+  locked: boolean;
+}>;
 
 export function HomeSettingsSection({
   workspaceId,
@@ -144,15 +107,15 @@ export function HomeSettingsSection({
   const homeConfig = useQuery(
     api.messengerSettings.getHomeConfig,
     workspaceId ? { workspaceId } : "skip"
-  ) as HomeConfigResponse | undefined;
+  ) as HomeConfig | undefined;
 
   const updateHomeConfig = useMutation(api.messengerSettings.updateHomeConfig);
   const toggleHomeEnabled = useMutation(api.messengerSettings.toggleHomeEnabled);
 
   const [enabled, setEnabled] = useState(false);
   const [cards, setCards] = useState<HomeCard[]>([]);
-  const [tabs, setTabs] = useState<HomeTab[]>(DEFAULT_TABS);
-  const [defaultSpace, setDefaultSpace] = useState<"home" | "messages" | "help">("messages");
+  const [tabs, setTabs] = useState<HomeTab[]>(() => getDefaultHomeTabs());
+  const [defaultSpace, setDefaultSpace] = useState<HomeDefaultSpace>("messages");
   const [isSaving, setIsSaving] = useState(false);
   const [showAddCard, setShowAddCard] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -161,9 +124,9 @@ export function HomeSettingsSection({
   useEffect(() => {
     if (homeConfig) {
       setEnabled(homeConfig.enabled);
-      setCards(homeConfig.cards as HomeCard[]);
+      setCards(homeConfig.cards);
       setDefaultSpace(homeConfig.defaultSpace);
-      setTabs(normalizeTabs(homeConfig.tabs));
+      setTabs(normalizeHomeTabs(homeConfig.tabs));
     }
   }, [homeConfig]);
 
@@ -178,7 +141,7 @@ export function HomeSettingsSection({
           enabled,
           cards,
           defaultSpace,
-          tabs: normalizeTabs(tabs),
+          tabs: normalizeHomeTabs(tabs),
         },
       });
     } catch (error) {
@@ -206,7 +169,7 @@ export function HomeSettingsSection({
     }
   };
 
-  const addCard = (type: CardType) => {
+  const addCard = (type: HomeCardType) => {
     const newCard: HomeCard = {
       id: `${type}-${Date.now()}`,
       type,
@@ -220,17 +183,17 @@ export function HomeSettingsSection({
     setCards(cards.filter((c) => c.id !== id));
   };
 
-  const updateCardVisibility = (id: string, visibleTo: VisibleTo) => {
+  const updateCardVisibility = (id: string, visibleTo: HomeVisibility) => {
     setCards(cards.map((c) => (c.id === id ? { ...c, visibleTo } : c)));
   };
 
-  const updateTabVisibility = (id: TabId, visibleTo: VisibleTo) => {
+  const updateTabVisibility = (id: HomeTabId, visibleTo: HomeVisibility) => {
     setTabs(
       tabs.map((tab) => (tab.id === id ? { ...tab, visibleTo: id === "messages" ? "all" : visibleTo } : tab))
     );
   };
 
-  const updateTabEnabled = (id: TabId, enabledValue: boolean) => {
+  const updateTabEnabled = (id: HomeTabId, enabledValue: boolean) => {
     if (id === "messages") {
       return;
     }
@@ -256,12 +219,12 @@ export function HomeSettingsSection({
     setDraggedIndex(null);
   };
 
-  const getCardIcon = (type: CardType) => {
+  const getCardIcon = (type: HomeCardType) => {
     const cardDef = CARD_TYPES.find((c) => c.type === type);
     return cardDef?.icon ?? Home;
   };
 
-  const getCardLabel = (type: CardType) => {
+  const getCardLabel = (type: HomeCardType) => {
     const cardDef = CARD_TYPES.find((c) => c.type === type);
     return cardDef?.label ?? type;
   };
@@ -301,7 +264,7 @@ export function HomeSettingsSection({
             <label className="text-sm font-medium">Default Space (when Home is disabled)</label>
             <select
               value={defaultSpace}
-              onChange={(e) => setDefaultSpace(e.target.value as typeof defaultSpace)}
+              onChange={(e) => setDefaultSpace(e.target.value as HomeDefaultSpace)}
               className="w-full px-3 py-2 border rounded-md text-sm bg-background"
             >
               <option value="home">Home</option>
@@ -333,7 +296,9 @@ export function HomeSettingsSection({
                     </div>
                     <select
                       value={tab.visibleTo}
-                      onChange={(e) => updateTabVisibility(tabType.id, e.target.value as VisibleTo)}
+                      onChange={(e) =>
+                        updateTabVisibility(tabType.id, e.target.value as HomeVisibility)
+                      }
                       disabled={visibilityDisabled}
                       className="px-2 py-1 text-xs border rounded bg-background disabled:opacity-60"
                     >
@@ -429,7 +394,9 @@ export function HomeSettingsSection({
                       </div>
                       <select
                         value={card.visibleTo}
-                        onChange={(e) => updateCardVisibility(card.id, e.target.value as VisibleTo)}
+                        onChange={(e) =>
+                          updateCardVisibility(card.id, e.target.value as HomeVisibility)
+                        }
                         className="px-2 py-1 text-xs border rounded bg-background"
                       >
                         <option value="all">All</option>

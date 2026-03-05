@@ -4,6 +4,14 @@ import type { Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { audienceRulesValidator, jsonObjectValidator } from "./validators";
+import {
+  getDefaultHomeTabs,
+  isVisibleToAudience,
+  normalizeHomeConfig as normalizeSharedHomeConfig,
+  resolveDefaultHomeSpace,
+  type HomeConfig,
+  type HomeTab,
+} from "@opencom/types";
 
 // Default settings for new workspaces
 const DEFAULT_SETTINGS = {
@@ -405,44 +413,6 @@ export const deleteLogo = mutation({
   },
 });
 
-// Home Configuration Types
-type HomeCardType =
-  | "welcome"
-  | "search"
-  | "conversations"
-  | "startConversation"
-  | "featuredArticles"
-  | "announcements";
-type HomeTabId = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
-type HomeVisibility = "all" | "visitors" | "users";
-type HomeCardConfigPrimitive = string | number | boolean | null;
-type HomeCardConfigObject = Record<string, HomeCardConfigPrimitive>;
-type HomeCardConfigValue =
-  | HomeCardConfigPrimitive
-  | HomeCardConfigPrimitive[]
-  | HomeCardConfigObject;
-
-interface HomeCard {
-  id: string;
-  type: HomeCardType;
-  config?: Record<string, HomeCardConfigValue>;
-  visibleTo: HomeVisibility;
-}
-
-interface HomeTab {
-  id: HomeTabId;
-  enabled: boolean;
-  visibleTo: HomeVisibility;
-}
-
-interface HomeConfig {
-  enabled: boolean;
-  cards: HomeCard[];
-  defaultSpace: "home" | "messages" | "help";
-  launchDirectlyToConversation?: boolean;
-  tabs?: HomeTab[];
-}
-
 const homeCardValidator = v.object({
   id: v.string(),
   type: v.union(
@@ -478,15 +448,6 @@ const homeConfigValidator = v.object({
   tabs: v.optional(v.array(homeTabValidator)),
 });
 
-const DEFAULT_HOME_TABS: HomeTab[] = [
-  { id: "home", enabled: true, visibleTo: "all" },
-  { id: "messages", enabled: true, visibleTo: "all" },
-  { id: "help", enabled: true, visibleTo: "all" },
-  { id: "tours", enabled: true, visibleTo: "all" },
-  { id: "tasks", enabled: true, visibleTo: "all" },
-  { id: "tickets", enabled: true, visibleTo: "all" },
-];
-
 // Default home configuration for new workspaces
 const DEFAULT_HOME_CONFIG: HomeConfig = {
   enabled: true,
@@ -498,69 +459,13 @@ const DEFAULT_HOME_CONFIG: HomeConfig = {
   ],
   defaultSpace: "home",
   launchDirectlyToConversation: false,
-  tabs: DEFAULT_HOME_TABS,
+  tabs: getDefaultHomeTabs(),
 };
-
-function normalizeHomeTabs(tabs: HomeTab[] | undefined): HomeTab[] {
-  const tabsById = new Map((tabs ?? []).map((tab) => [tab.id, tab]));
-
-  return DEFAULT_HOME_TABS.map((defaultTab) => {
-    if (defaultTab.id === "messages") {
-      // Keep Messages always available (Intercom-style invariant).
-      return { ...defaultTab };
-    }
-    const configuredTab = tabsById.get(defaultTab.id);
-    if (!configuredTab) {
-      return { ...defaultTab };
-    }
-    return {
-      id: defaultTab.id,
-      enabled: configuredTab.enabled,
-      visibleTo: configuredTab.visibleTo,
-    };
-  });
-}
 
 function normalizeHomeConfig(
   homeConfig: HomeConfig | undefined
 ): HomeConfig & { launchDirectlyToConversation: boolean; tabs: HomeTab[] } {
-  const source = homeConfig ?? DEFAULT_HOME_CONFIG;
-  return {
-    ...source,
-    launchDirectlyToConversation: source.launchDirectlyToConversation ?? false,
-    tabs: normalizeHomeTabs(source.tabs),
-  };
-}
-
-function isVisibleToAudience(visibleTo: HomeVisibility, isUser: boolean): boolean {
-  if (visibleTo === "all") {
-    return true;
-  }
-  if (visibleTo === "users") {
-    return isUser;
-  }
-  return !isUser;
-}
-
-function resolveDefaultSpace(
-  defaultSpace: HomeConfig["defaultSpace"],
-  visibleTabs: HomeTab[],
-  homeEnabled: boolean
-): HomeConfig["defaultSpace"] {
-  const visibleTabIds = new Set(visibleTabs.map((tab) => tab.id));
-  if (defaultSpace === "home" && homeEnabled && visibleTabIds.has("home")) {
-    return "home";
-  }
-  if (defaultSpace === "help" && visibleTabIds.has("help")) {
-    return "help";
-  }
-  if (visibleTabIds.has("messages")) {
-    return "messages";
-  }
-  if (homeEnabled && visibleTabIds.has("home")) {
-    return "home";
-  }
-  return "help";
+  return normalizeSharedHomeConfig(homeConfig, DEFAULT_HOME_CONFIG);
 }
 
 // Get home configuration for a workspace
@@ -603,7 +508,11 @@ export const getPublicHomeConfig = query({
         isVisibleToAudience(tab.visibleTo, isUser) &&
         (tab.id !== "home" || homeConfig.enabled)
     );
-    const defaultSpace = resolveDefaultSpace(homeConfig.defaultSpace, visibleTabs, homeConfig.enabled);
+    const defaultSpace = resolveDefaultHomeSpace(
+      homeConfig.defaultSpace,
+      visibleTabs,
+      homeConfig.enabled
+    );
 
     if (!homeConfig.enabled) {
       return {

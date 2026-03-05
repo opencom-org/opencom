@@ -449,10 +449,14 @@ export function TourOverlay({
           reason,
           selector: currentStep.elementSelector,
           currentUrl: window.location.href,
-        })) as { nextStep: number; status: string; reason: string };
+        })) as { nextStep?: number; status?: string; reason?: string } | null | undefined;
 
-        setAdvanceHint(getBlockedReasonMessage(result.reason));
-        moveToStepOrComplete(result.nextStep, result.status);
+        const fallbackNextStep = currentStepIndex + 1;
+        const nextStep =
+          result && typeof result.nextStep === "number" ? result.nextStep : fallbackNextStep;
+        const status = result && typeof result.status === "string" ? result.status : undefined;
+        setAdvanceHint(getBlockedReasonMessage(result?.reason ?? reason));
+        moveToStepOrComplete(nextStep, status);
       } catch (error) {
         console.error("Failed to skip tour step", error);
         setFailureHint(
@@ -466,6 +470,7 @@ export function TourOverlay({
       activeTour,
       currentStep,
       moveToStepOrComplete,
+      currentStepIndex,
       sessionToken,
       skipTourStep,
       visitorId,

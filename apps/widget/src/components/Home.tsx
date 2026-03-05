@@ -2,34 +2,13 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import {
+  getDefaultHomeTabs,
+  normalizeHomeConfig,
+  type HomeCard,
+  type HomeConfig,
+} from "@opencom/types";
 import { Search, MessageCircle, ChevronRight, FileText, Bell, Send } from "../icons";
-
-interface HomeCard {
-  id: string;
-  type:
-    | "welcome"
-    | "search"
-    | "conversations"
-    | "startConversation"
-    | "featuredArticles"
-    | "announcements";
-  config?: Record<string, unknown>;
-  visibleTo: "all" | "visitors" | "users";
-}
-
-interface HomeTab {
-  id: "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
-  enabled: boolean;
-  visibleTo: "all" | "visitors" | "users";
-}
-
-interface HomeConfig {
-  enabled: boolean;
-  cards: HomeCard[];
-  defaultSpace: "home" | "messages" | "help";
-  launchDirectlyToConversation: boolean;
-  tabs?: HomeTab[];
-}
 
 interface Conversation {
   _id: Id<"conversations">;
@@ -278,14 +257,7 @@ const DEFAULT_HOME_CONFIG: HomeConfig = {
   ],
   defaultSpace: "home",
   launchDirectlyToConversation: false,
-  tabs: [
-    { id: "home", enabled: true, visibleTo: "all" },
-    { id: "messages", enabled: true, visibleTo: "all" },
-    { id: "help", enabled: true, visibleTo: "all" },
-    { id: "tours", enabled: true, visibleTo: "all" },
-    { id: "tasks", enabled: true, visibleTo: "all" },
-    { id: "tickets", enabled: true, visibleTo: "all" },
-  ],
+  tabs: getDefaultHomeTabs(),
 };
 
 export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdentified: boolean) {
@@ -294,10 +266,5 @@ export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdent
     workspaceId ? { workspaceId, isIdentified } : "skip"
   ) as HomeConfig | undefined;
 
-  const resolvedConfig = homeConfig ?? DEFAULT_HOME_CONFIG;
-  return {
-    ...resolvedConfig,
-    launchDirectlyToConversation: resolvedConfig.launchDirectlyToConversation ?? false,
-    tabs: resolvedConfig.tabs ?? DEFAULT_HOME_CONFIG.tabs,
-  };
+  return normalizeHomeConfig(homeConfig, DEFAULT_HOME_CONFIG);
 }
