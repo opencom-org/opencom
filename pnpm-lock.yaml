@@ -220,6 +220,9 @@ importers:
       '@opencom/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@opencom/web-shared':
+        specifier: workspace:*
+        version: link:../../packages/web-shared
       convex:
         specifier: ^1.31.7
         version: 1.31.7(react@19.2.3)
@@ -296,6 +299,9 @@ importers:
       '@opencom/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@opencom/web-shared':
+        specifier: workspace:*
+        version: link:../../packages/web-shared
       convex:
         specifier: ^1.31.7
         version: 1.31.7(react@19.2.3)
@@ -557,6 +563,28 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+
+  packages/web-shared:
+    dependencies:
+      dompurify:
+        specifier: ^3.3.1
+        version: 3.3.1
+      markdown-it:
+        specifier: ^14.1.1
+        version: 14.1.1
+    devDependencies:
+      '@types/markdown-it':
+        specifier: ^14.1.2
+        version: 14.1.2
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@20.19.30)(jiti@1.21.7)(jsdom@26.1.0)(lightningcss@1.31.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
 packages:
 
