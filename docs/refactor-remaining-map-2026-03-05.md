@@ -15,6 +15,7 @@ Recently completed slices:
 - Web articles admin decomposition (`web`)
 - Convex schema domain fragmentation (`convex`)
 - Convex visitors domain decomposition (`convex`)
+- Convex reporting domain decomposition (`convex`)
 
 Open active OpenSpec changes unrelated to this refactor map (product tracks) remain in progress:
 
@@ -32,9 +33,8 @@ Open active OpenSpec changes unrelated to this refactor map (product tracks) rem
 2. `decompose-widget-tour-overlay-controller` (`apps/widget/src/TourOverlay.tsx`)
 3. `decompose-widget-conversation-view` (`apps/widget/src/components/ConversationView.tsx`)
 4. `decompose-widget-survey-overlay` (`apps/widget/src/SurveyOverlay.tsx`)
-5. `decompose-convex-reporting-domain` (`packages/convex/convex/reporting.ts`)
-6. `decompose-convex-campaign-delivery-domains` (`packages/convex/convex/carousels.ts` + `packages/convex/convex/surveys.ts`)
-7. `expand-convex-auth-wrapper-adoption` (`workspaces.ts`, `workspaceMembers.ts`, `identityVerification.ts`, `segments.ts`, `assignmentRules.ts`, `commonIssueButtons.ts`)
+5. `decompose-convex-campaign-delivery-domains` (`packages/convex/convex/carousels.ts` + `packages/convex/convex/surveys.ts`)
+6. `expand-convex-auth-wrapper-adoption` (`workspaces.ts`, `workspaceMembers.ts`, `identityVerification.ts`, `segments.ts`, `assignmentRules.ts`, `commonIssueButtons.ts`)
 
 ## 1) UI Decomposition: Web Monoliths (High)
 
@@ -51,7 +51,7 @@ Recently reduced:
 Recommended next proposal tracks:
 
 - `decompose-widget-shell-controller`
-- `decompose-convex-reporting-domain`
+- `decompose-convex-campaign-delivery-domains`
 
 ## 2) UI Decomposition: Widget Monoliths (High)
 
@@ -69,7 +69,6 @@ Recommended next proposal tracks:
 
 Highest concentration modules:
 
-- `packages/convex/convex/reporting.ts` (~1224 lines)
 - `packages/convex/convex/carousels.ts` (~1038 lines)
 - `packages/convex/convex/surveys.ts` (~968 lines)
 - `packages/convex/convex/schema/campaignTables.ts` (~538 lines)
@@ -77,8 +76,8 @@ Highest concentration modules:
 
 Recommended next proposal tracks:
 
-- `decompose-convex-reporting-domain`
 - `decompose-convex-campaign-delivery-domains`
+- `expand-convex-auth-wrapper-adoption`
 
 ## 4) Cross-Surface Contract Convergence (Medium)
 
@@ -107,8 +106,10 @@ Recommended proposal track:
    - `push` notification channel support must remain explicit in schema validators and dependent settings code.
 6. Visitors-domain extraction confirms re-export entrypoints are safe for Convex API stability.
    - Domain modules can be decomposed without changing generated API names/signatures.
+7. Reporting-domain extraction confirms the same re-export pattern scales across query/mutation-heavy modules.
+   - Shared helper modules can absorb auth/limit/date logic without endpoint contract drift.
 
 ## Suggested Immediate Next Refactor
 
-1. Start `decompose-convex-reporting-domain` while schema/visitors decomposition patterns are fresh.
+1. Start `decompose-convex-campaign-delivery-domains` while convex decomposition patterns are fresh.
 2. Follow with `decompose-widget-tour-overlay-controller` to reduce client-side controller complexity.
