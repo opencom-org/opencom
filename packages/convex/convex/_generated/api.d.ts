@@ -49,6 +49,13 @@ import type * as migrations_removePasswordHash from "../migrations/removePasswor
 import type * as migrations_removeUseSignedSessions from "../migrations/removeUseSignedSessions.js";
 import type * as notificationSettings from "../notificationSettings.js";
 import type * as notifications from "../notifications.js";
+import type * as notifications_contracts from "../notifications/contracts.js";
+import type * as notifications_dispatch from "../notifications/dispatch.js";
+import type * as notifications_emitters_chat from "../notifications/emitters/chat.js";
+import type * as notifications_emitters_ticket from "../notifications/emitters/ticket.js";
+import type * as notifications_helpers from "../notifications/helpers.js";
+import type * as notifications_recipients from "../notifications/recipients.js";
+import type * as notifications_routing from "../notifications/routing.js";
 import type * as officeHours from "../officeHours.js";
 import type * as originValidation from "../originValidation.js";
 import type * as outboundMessages from "../outboundMessages.js";
@@ -135,6 +142,13 @@ declare const fullApi: ApiFromModules<{
   "migrations/removeUseSignedSessions": typeof migrations_removeUseSignedSessions;
   notificationSettings: typeof notificationSettings;
   notifications: typeof notifications;
+  "notifications/contracts": typeof notifications_contracts;
+  "notifications/dispatch": typeof notifications_dispatch;
+  "notifications/emitters/chat": typeof notifications_emitters_chat;
+  "notifications/emitters/ticket": typeof notifications_emitters_ticket;
+  "notifications/helpers": typeof notifications_helpers;
+  "notifications/recipients": typeof notifications_recipients;
+  "notifications/routing": typeof notifications_routing;
   officeHours: typeof officeHours;
   originValidation: typeof originValidation;
   outboundMessages: typeof outboundMessages;
