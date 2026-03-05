@@ -16,16 +16,53 @@ Goal: ship a professional open-source customer messaging platform with strong de
 
 ### P0 (critical before production confidence)
 
-- [ ] Split up / simplify the settings page - maybe colocate settings with their corresponding functionality
-- [ ] Import feature for docs / help center, so you can keep a folder of markdown anywhere that you edit and maintain, and upload it to sync latest changes while maintaining folder structure (as collections), etc.
-- [ ] Fix inbox chat responsiveness (navbar)
-- [ ] make mobile app match inbox functionality (understand AI review, which messages were sent by AI, visitors list and details/navigation flows)
+<!-- - [ ] Split up / simplify the settings page - maybe colocate settings with their corresponding functionality -->
+<!-- - [ ] Fix inbox chat responsiveness (header bar buttons row) -->
+<!-- - [ ] ai handoff happening too frequently -->
+- [ ] make deploy of web and landing and updates to app stores dependent on successful convex deploy, otherwise the apps will be speaking to an old version of our convex functions
 - [ ] Merge some sidebar items
-- [ ] Check AI chat suggestions setup is working
 - [ ] check email campaign setup
 - [ ] check series setup
-- [ ] plan shift to production env
 - [ ] edit app store description for License to AGPLv3
+- [ ] do we need a way for users to fix versions to avoid potentially breaking changes? How would we do that - would it be just the widget JS, the convex backend too, anything else? 
+- [ ] SSO, SAML, OIDC, and granular role-based access controls 
+- [ ] Lets add an option for admins so they can set the  /// 
+- [ ] merge internal articles into regular articles, and add a toggle per article for internal vs public? or equivalent. Perhaps collection based, or article based, needs more thought. (can then remove the Knowledge page)
+- [ ] snippets should maybe be accessible from inbox, rather than its own panel
+- [ ] improved inbox management (sorting, filtering etc.)
+- [ ] dont allow requesting human support multiple times in a row on same chat
+
+- [ ] Check AI chat / article suggestions setup is working
+  - [ ] Add links to relevant help center articles in the widget AI responses, and maybe in chat (suggested articles)
+- [ ] deploy necessary packages to NPM or Github and fix instructions for Mobile SDK install (npm package + release pipeline)
+- [ ] AI Autotranslate for speaking to people in any language
+- [ ] make mobile app match inbox functionality (understand AI review, which messages were sent by AI, visitors list and details/navigation flows)
+<!-- - [ ] make sure AI responses that result in a handoff are still stored and tracked so they can be seen in AI review to understand what the full response was from the AI that resulted in the handoff -->
+<!-- - [ ] expandable size widget like intercom - make it big for reading articles etc. -->
+<!-- - [ ] Import feature for docs / help center, so you can keep a folder of markdown anywhere outside of Opencom that you edit and maintain, and upload it to opencom to sync latest changes while keeping folder structure (as collections), etc. Test it by uploading a folder of markdown files to opencom (e.g. our docs folder) and then opening the help center to see if it works. Consider how to handle reuploading the folder - should overwrite duplicates, add new files, etc. We should maintain a history also in case they accidentally delete a folder. We should have allow uploading subfolders of a folder, so where you upload the folder will matter (e.g. root folder vs subfolder) -->
+<!-- - [ ] add notification count to inbox tile in sidebar for admins, and play bing sound on new messages.  -->
+- [ ] ensure domain validation is working
+  - 2/27/2026, 11:45:52 AM [CONVEX M(widgetSessions:boot)] Uncaught Error: Origin validation failed: Origin not in allowed list
+    at requireValidOrigin (../../convex/originValidation.ts:116:0)
+    at async handler (../../convex/widgetSessions.ts:119:4)
+<!-- - [ ] triggering tour from widget should close widget before/when starting the tour -->
+<!-- - [ ] didnt reply first time ai agent -->
+<!-- - [ ] dont ask if you want to be connected with an agent when doing it, just do it -->
+<!-- - [ ] Dont create new chats when an existing new chat is open. Reopen the existing empty chat instead. -->
+<!-- - [ ] create persona for the human responding to make more personal, like the AI agent has a little name and icon, the human agent should have a name and icon too
+- [ ] when I interact with a chat that has new responses, then I exit the chat, the messages I have seen should be marked as read not unread -->
+<!-- - [ ] make the messages render markdown properly (new lines, etc.) - ideally use a preexisting implementation rather than building from scratch -->
+
+- [ ] featurebase feature exploration
+  - [ ] learn from featurebase docs and site for landing app
+  - [ ] slick animations
+  - [ ] suggested queries / replies for visitors
+
+
+
+- [ ] offer JWT identity verification as alternative to HMAC? 
+- [ ] ensure HMAC identity verification is working on landing page setup
+- [ ] switch to https://github.com/axelmarciano/expo-open-ota if EAS MAU costs become an issue
 
 - [ ] **(P0 | 0.95)** Finalize Convex integration:
   - CI for Convex functions on push.
@@ -92,6 +129,19 @@ Goal: ship a professional open-source customer messaging platform with strong de
 
 - [ ] **(P2 | 0.60)** AI assistant roadmap:
   - Better answer quality, context strategy, handoff rules, and evaluation prompts.
+
+RN & Native SDKs 
+  Installation
+  Configuration
+  Using Opencom
+  Help Center
+  Push Notifications
+  Secure Your Messenger
+  Deep Linking
+  Identity Verification
+  Supported Versions
+  Data Hosting Region Configuration
+  Code Samples
 
 ## Intercom-Parity Status Snapshot
 
