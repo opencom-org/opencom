@@ -7,6 +7,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
@@ -646,23 +647,42 @@ export const handoffToHuman = mutation({
     const handoffMessage =
       settings?.handoffMessage ?? "Let me connect you with a human agent who can help you better.";
 
+    const now = Date.now();
+
     const messageId: Id<"messages"> = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: "ai-agent",
       content: handoffMessage,
       senderType: "bot",
-      createdAt: Date.now(),
+      createdAt: now,
     });
-
-    const now = Date.now();
 
     // Update conversation to ensure it's open and visible to agents
     await ctx.db.patch(args.conversationId, {
       status: "open",
       updatedAt: now,
+      lastMessageAt: now,
+      // Preserve existing visitor-unread count while ensuring handoff-only threads surface to agents.
+      unreadByAgent: Math.max(conversation.unreadByAgent || 0, 1),
       aiWorkflowState: "handoff",
       aiHandoffReason: args.reason,
       aiLastResponseAt: now,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+      eventType: "chat_message",
+      domain: "chat",
+      audience: "agent",
+      workspaceId: conversation.workspaceId,
+      actorType: "bot",
+      conversationId: args.conversationId,
+      title: "AI handoff",
+      body: handoffMessage,
+      data: {
+        conversationId: args.conversationId,
+        type: "ai_handoff",
+      },
+      eventKey: `chat_handoff:${messageId}`,
     });
 
     return { messageId, handoffMessage };

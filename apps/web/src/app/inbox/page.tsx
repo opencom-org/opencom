@@ -62,6 +62,8 @@ type ConversationUiPatch = {
   optimisticLastMessage?: string;
 };
 
+const HANDOFF_REASON_FALLBACK = "Reason not provided by handoff trigger";
+
 function sortInboxConversations(
   left: { _id: string; createdAt: number; lastMessageAt?: number },
   right: { _id: string; createdAt: number; lastMessageAt?: number }
@@ -84,6 +86,13 @@ function getConversationIdentityLabel(conversation: {
     name: conversation.visitor?.name,
     email: conversation.visitor?.email,
   });
+}
+
+function getHandoffReasonLabel(reason: string | null | undefined): string {
+  const normalizedReason = reason?.trim();
+  return normalizedReason && normalizedReason.length > 0
+    ? normalizedReason
+    : HANDOFF_REASON_FALLBACK;
 }
 
 function InboxContent(): React.JSX.Element | null {
@@ -1029,6 +1038,18 @@ function InboxContent(): React.JSX.Element | null {
                           </Button>
                         )}
                       </div>
+                      {selectedConversation?.aiWorkflow?.state === "handoff" && (
+                        <div
+                          className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+                          data-testid="inbox-handoff-context-banner"
+                        >
+                          <Bot className="h-3 w-3" />
+                          <span className="font-medium">AI handoff</span>
+                          <span className="truncate">
+                            {getHandoffReasonLabel(selectedConversation.aiWorkflow.handoffReason)}
+                          </span>
+                        </div>
+                      )}
                       {isCompactViewport && (
                         <div
                           className="flex items-center gap-2"
@@ -1500,12 +1521,27 @@ function InboxContent(): React.JSX.Element | null {
                           Loading AI responses...
                         </p>
                       ) : !orderedAiResponses || orderedAiResponses.length === 0 ? (
-                        <p
-                          className="text-sm text-muted-foreground"
-                          data-testid="inbox-ai-review-empty"
-                        >
-                          No AI responses in this conversation yet.
-                        </p>
+                        selectedConversation?.aiWorkflow?.state === "handoff" ? (
+                          <div
+                            className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3"
+                            data-testid="inbox-ai-review-handoff-only"
+                          >
+                            <p className="text-sm font-medium text-amber-800">
+                              Conversation was handed off before an AI response record was stored.
+                            </p>
+                            <p className="text-xs text-amber-800">
+                              Handoff reason:{" "}
+                              {getHandoffReasonLabel(selectedConversation.aiWorkflow.handoffReason)}
+                            </p>
+                          </div>
+                        ) : (
+                          <p
+                            className="text-sm text-muted-foreground"
+                            data-testid="inbox-ai-review-empty"
+                          >
+                            No AI responses in this conversation yet.
+                          </p>
+                        )
                       ) : (
                         orderedAiResponses.map(
                           (response: NonNullable<typeof orderedAiResponses>[number]) => {
@@ -1627,9 +1663,10 @@ function InboxContent(): React.JSX.Element | null {
                                 {response.handedOff && (
                                   <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
                                     Handoff reason:{" "}
-                                    {response.handoffReason ??
-                                      selectedConversation?.aiWorkflow?.handoffReason ??
-                                      "Not specified"}
+                                    {getHandoffReasonLabel(
+                                      response.handoffReason ??
+                                        selectedConversation?.aiWorkflow?.handoffReason
+                                    )}
                                   </p>
                                 )}
 

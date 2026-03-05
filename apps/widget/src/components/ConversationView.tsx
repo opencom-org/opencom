@@ -9,6 +9,7 @@ import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { parseMarkdown } from "../utils/parseMarkdown";
 
 const DEFAULT_HUMAN_AGENT_NAME = "Support";
+const MANUAL_HANDOFF_REASON = "Visitor clicked Talk to human button";
 
 function resolveHumanAgentName(senderName?: string): string {
   const normalized = senderName?.trim();
@@ -392,6 +393,7 @@ export function ConversationView({
         conversationId,
         visitorId,
         sessionToken: sessionTokenRef.current ?? undefined,
+        reason: MANUAL_HANDOFF_REASON,
       });
     } catch (error) {
       console.error("Failed to handoff to human:", error);
