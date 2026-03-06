@@ -26,6 +26,28 @@ async function ensureAuthed(page: Page): Promise<void> {
   expect(authed).toBe(true);
 }
 
+async function readActiveWorkspaceId(
+  page: Page,
+  fallback: Id<"workspaces">
+): Promise<Id<"workspaces">> {
+  const activeWorkspaceId = await page
+    .evaluate(() => {
+      try {
+        const stored = window.localStorage.getItem("opencom_active_workspace");
+        if (!stored) {
+          return null;
+        }
+        const parsed = JSON.parse(stored) as { _id?: string };
+        return typeof parsed._id === "string" ? parsed._id : null;
+      } catch {
+        return null;
+      }
+    })
+    .catch(() => null);
+
+  return (activeWorkspaceId as Id<"workspaces"> | null) ?? fallback;
+}
+
 async function openTooltipsPage(page: Page): Promise<void> {
   await page.goto("/tooltips", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("tooltips-page-heading")).toBeVisible({ timeout: 15000 });
@@ -52,6 +74,7 @@ test.describe.serial("Tooltips", () => {
     await cleanupTestData(workspaceId);
     await updateWorkspaceMemberPermissions(workspaceId, userEmail, []);
     await openTooltipsPage(page);
+    workspaceId = await readActiveWorkspaceId(page, workspaceId);
   });
 
   test.afterEach(async () => {
@@ -61,10 +84,13 @@ test.describe.serial("Tooltips", () => {
   test("covers create/edit/delete, visual picker completion, warnings, and invalid token rejection", async ({
     page,
   }) => {
+    const crudTooltipName = `e2e_test_tooltip_crud_${Date.now()}`;
+    const pickerTooltipName = `e2e_test_tooltip_picker_${Date.now()}`;
+
     // Create + edit + delete tooltip.
     await page.getByTestId("tooltips-new-button").click();
     await expect(page.getByTestId("tooltip-modal")).toBeVisible({ timeout: 5000 });
-    await page.getByTestId("tooltip-name-input").fill("Tooltip CRUD Test");
+    await page.getByTestId("tooltip-name-input").fill(crudTooltipName);
     await page.getByTestId("tooltip-selector-input").fill("#tour-target-1");
     await page.getByTestId("tooltip-content-input").fill("Initial tooltip content");
     await submitTooltipForm(page);
@@ -72,19 +98,19 @@ test.describe.serial("Tooltips", () => {
 
     const crudCard = page
       .locator("[data-testid^='tooltip-card-']")
-      .filter({ hasText: "Tooltip CRUD Test" });
+      .filter({ hasText: crudTooltipName });
     await expect(crudCard).toHaveCount(1, { timeout: 10000 });
     await crudCard.locator("[data-testid^='tooltip-edit-']").click();
     await page.getByTestId("tooltip-content-input").fill("Updated tooltip content");
     await submitTooltipForm(page);
     await expect(crudCard).toContainText("Updated tooltip content");
-    page.once("dialog", (dialog) => dialog.accept());
     await crudCard.locator("[data-testid^='tooltip-delete-']").click();
+    await page.getByRole("button", { name: /^confirm$/i }).click();
     await expect(crudCard).toHaveCount(0, { timeout: 10000 });
 
     // Visual picker completion (deterministic backend completion).
     await page.getByTestId("tooltips-new-button").click();
-    await page.getByTestId("tooltip-name-input").fill("Tooltip Picker Test");
+    await page.getByTestId("tooltip-name-input").fill(pickerTooltipName);
     await page.getByTestId("tooltip-content-input").fill("Selected visually");
     await page.getByTestId("tooltip-pick-element-button").click();
     await expect(page.getByTestId("tooltip-picker-modal")).toBeVisible({ timeout: 5000 });

@@ -181,17 +181,12 @@ export async function clickHelpArticle(page: Page, articleTitle: string): Promis
 /**
  * Checks if a tour step is visible.
  */
-export async function isTourStepVisible(page: Page): Promise<boolean> {
-  try {
-    await expect(
-      page.locator("[data-testid='tour-step-card'], [data-testid='tour-overlay']").first()
-    ).toBeVisible({
-      timeout: 6000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+export async function isTourStepVisible(page: Page, timeout = 6000): Promise<boolean> {
+  return page
+    .locator("[data-testid='tour-step-card'], [data-testid='tour-overlay']")
+    .first()
+    .isVisible({ timeout })
+    .catch(() => false);
 }
 
 /**
@@ -219,7 +214,7 @@ export async function dismissTour(page: Page): Promise<void> {
   ];
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    const visible = await isTourStepVisible(page);
+    const visible = await isTourStepVisible(page, 500);
     if (!visible) {
       return;
     }

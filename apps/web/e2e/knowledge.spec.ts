@@ -136,8 +136,8 @@ test.describe("Knowledge Hub - Folder Management", () => {
     const deleteButton = page.getByRole("button", { name: /^delete$/i });
     await expect(deleteButton).toBeVisible({ timeout: 5000 });
 
-    page.once("dialog", (dialog) => dialog.accept());
     await deleteButton.click();
+    await page.getByRole("button", { name: /^confirm$/i }).click();
 
     await expect
       .poll(async () => getFolderNameLabels(page).count(), { timeout: 10000 })

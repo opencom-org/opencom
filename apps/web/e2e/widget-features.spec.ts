@@ -60,6 +60,64 @@ async function openConversationComposer(page: import("@playwright/test").Page) {
   return frame;
 }
 
+async function waitForTourToRender(
+  page: import("@playwright/test").Page,
+  timeout = 15000
+): Promise<void> {
+  let widgetOpened = false;
+
+  await expect
+    .poll(async () => {
+      const visible = await isTourStepVisible(page);
+      if (visible) {
+        return true;
+      }
+
+      if (!widgetOpened) {
+        widgetOpened = true;
+        await openWidgetChat(page).catch(() => {});
+      }
+
+      return isTourStepVisible(page);
+    }, { timeout })
+    .toBe(true);
+}
+
+async function expectTourToBeHidden(page: import("@playwright/test").Page): Promise<void> {
+  await expect.poll(async () => isTourStepVisible(page, 250), { timeout: 6000 }).toBe(false);
+}
+
+async function ensureTourAvailableForDismissal(
+  page: import("@playwright/test").Page
+): Promise<void> {
+  const autoDisplayDeadline = Date.now() + 15000;
+  let widgetOpened = false;
+
+  while (Date.now() < autoDisplayDeadline) {
+    if (await isTourStepVisible(page, 500)) {
+      return;
+    }
+
+    if (!widgetOpened) {
+      widgetOpened = true;
+      await openWidgetChat(page).catch(() => {});
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  const widget = getWidgetContainer(page);
+  const toursTab = widget.getByTitle("Product Tours").first();
+  await expect(toursTab).toBeVisible({ timeout: 10000 });
+  await toursTab.click();
+
+  const availableTour = widget.locator(".opencom-tour-item:not([disabled])").first();
+  await expect(availableTour).toBeVisible({ timeout: 10000 });
+  await availableTour.click();
+
+  await expect.poll(async () => isTourStepVisible(page, 500), { timeout: 10000 }).toBe(true);
+}
+
 test.beforeEach(async ({ page }) => {
   await refreshAuthState();
   const ok = await ensureAuthenticatedInPage(page);
@@ -117,15 +175,13 @@ test.describe("Widget E2E Tests - Product Tours", () => {
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
 
     // Tour should be visible for a first-time visitor on the target page
-    await expect.poll(async () => isTourStepVisible(page), { timeout: 15000 }).toBe(true);
+    await waitForTourToRender(page);
   });
 
   test("tour step navigation works (next/prev/skip)", async ({ page }) => {
     if (!workspaceId) return test.skip();
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
-
-    const tourVisible = await isTourStepVisible(page);
-    test.skip(!tourVisible, "Tour not visible – may have been completed by a prior test");
+    await waitForTourToRender(page);
 
     // Advance to next step
     await advanceTourStep(page);
@@ -137,36 +193,31 @@ test.describe("Widget E2E Tests - Product Tours", () => {
   test("tour can be dismissed", async ({ page }) => {
     if (!workspaceId) return test.skip();
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
-
-    const tourVisible = await isTourStepVisible(page);
-    test.skip(!tourVisible, "Tour not visible – cannot test dismissal");
+    await waitForTourToRender(page);
 
     await dismissTour(page);
 
     // Tour should no longer be visible
-    const stillVisible = await isTourStepVisible(page);
-    expect(stillVisible).toBe(false);
+    await expectTourToBeHidden(page);
   });
 
   test("completed tour does not show again for same visitor", async ({ page }) => {
     if (!workspaceId) return test.skip();
+    test.slow();
+
     // First visit - complete or dismiss tour
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
-
-    const tourVisible = await isTourStepVisible(page);
-    if (tourVisible) {
-      await dismissTour(page);
-    } else {
-      // Tour wasn't shown on first visit – still verify second visit
-    }
+    await ensureTourAvailableForDismissal(page);
+    await dismissTour(page);
+    await expectTourToBeHidden(page);
 
     // Second visit - tour should not appear
-    await page.reload();
+    await page.reload({ waitUntil: "domcontentloaded" });
     await waitForWidgetLoad(page, 15000);
-
-    const tourVisibleAfterReload = await isTourStepVisible(page);
-    // Tour should not show again (frequency: first_time_only)
-    expect(tourVisibleAfterReload).toBe(false);
+    if (!(await isTourStepVisible(page, 500))) {
+      await openWidgetChat(page).catch(() => {});
+    }
+    await expectTourToBeHidden(page);
   });
 });
 

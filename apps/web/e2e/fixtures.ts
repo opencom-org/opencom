@@ -9,7 +9,9 @@
 import { test as base, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import * as fs from "fs";
 import * as path from "path";
+import { refreshAuthState } from "./helpers/auth-refresh";
 import { resolveE2EBackendUrl } from "./helpers/e2e-env";
+import { sanitizeStorageStateFile } from "./helpers/storage-state";
 import { readTestStateFromPath, type E2ETestState } from "./helpers/test-state";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
@@ -340,7 +342,15 @@ export const test = base.extend<
   },
   WorkerFixtures
 >({
-  storageState: ({ workerStorageState }, use) => use(workerStorageState),
+  storageState: async ({ workerStorageState, workerTestState }, use) => {
+    setWorkerStateEnv(workerTestState);
+    const refreshed = await refreshAuthState();
+    if (!refreshed) {
+      console.warn("[fixtures] Failed to refresh worker auth state before creating test context.");
+    }
+    sanitizeStorageStateFile(workerStorageState);
+    await use(workerStorageState);
+  },
 
   page: async ({ page, workerTestState }, use) => {
     await use(page);
@@ -360,6 +370,7 @@ export const test = base.extend<
       .catch((error) => {
         console.warn(`[fixtures] Failed to persist worker auth state: ${formatError(error)}`);
       });
+    sanitizeStorageStateFile(workerTestState.authStoragePath);
   },
 
   workerStorageState: [

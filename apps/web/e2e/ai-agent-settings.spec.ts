@@ -1,9 +1,5 @@
 import { test, expect } from "./fixtures";
-import {
-  ensureAuthenticatedInPage,
-  gotoWithAuthRecovery,
-  refreshAuthState,
-} from "./helpers/auth-refresh";
+import { ensureAuthenticatedInPage, gotoWithAuthRecovery } from "./helpers/auth-refresh";
 
 const AUTH_ROUTE_RE = /\/(login|signup)(\/|$|\?)/;
 
@@ -18,6 +14,7 @@ function isAuthRoute(page: import("@playwright/test").Page): boolean {
 async function openSettings(page: import("@playwright/test").Page): Promise<void> {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     await gotoWithAuthRecovery(page, "/settings");
+    await page.waitForLoadState("networkidle").catch(() => {});
 
     if (isAuthRoute(page)) {
       const recovered = await ensureAuthenticatedInPage(page);
@@ -27,24 +24,32 @@ async function openSettings(page: import("@playwright/test").Page): Promise<void
       continue;
     }
 
-    const aiHeading = page.getByRole("heading", { name: /ai agent/i });
-    if (await aiHeading.isVisible({ timeout: 10000 }).catch(() => false)) {
+    await expect(page.getByRole("heading", { name: /^settings$/i })).toBeVisible({
+      timeout: 10000,
+    });
+
+    const aiSection = page.locator("#ai-agent");
+    await aiSection.scrollIntoViewIfNeeded().catch(() => {});
+
+    const aiSectionToggle = page.getByTestId("settings-section-toggle-ai-agent");
+    if (await aiSectionToggle.isVisible({ timeout: 10000 }).catch(() => false)) {
+      const isExpanded = (await aiSectionToggle.getAttribute("aria-expanded")) === "true";
+      if (!isExpanded) {
+        await aiSectionToggle.click({ timeout: 5000 });
+      }
+
+      await expect(page.locator("#ai-agent-content")).toBeVisible({ timeout: 10000 });
       return;
     }
 
     await page.waitForTimeout(500);
   }
 
-  await expect(page.getByRole("heading", { name: /ai agent/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.locator("#ai-agent-content")).toBeVisible({ timeout: 15000 });
 }
 
 test.describe("Web Admin - AI Agent Settings", () => {
-  test.beforeAll(async () => {
-    await refreshAuthState();
-  });
-
   test.beforeEach(async ({ page }) => {
-    await refreshAuthState();
     const ok = await ensureAuthenticatedInPage(page);
     if (!ok) {
       throw new Error("Failed to authenticate AI settings E2E context");
@@ -54,9 +59,7 @@ test.describe("Web Admin - AI Agent Settings", () => {
   test("should display AI Agent section on settings page", async ({ page }) => {
     await openSettings(page);
 
-    // The AI Agent section is a Card with h2 heading on the settings page
-    const aiHeading = page.getByRole("heading", { name: /ai agent/i });
-    await expect(aiHeading).toBeVisible({ timeout: 15000 });
+    await expect(page.locator("#ai-agent-content")).toBeVisible({ timeout: 15000 });
   });
 
   test("should toggle AI agent enable/disable", async ({ page }) => {
@@ -67,7 +70,7 @@ test.describe("Web Admin - AI Agent Settings", () => {
     await expect(enableText).toBeVisible({ timeout: 5000 });
 
     // The toggle is a sibling button with rounded-full class
-    const toggleButton = enableText.locator("..").locator("..").locator("button.rounded-full");
+    const toggleButton = enableText.locator("..").locator("..").locator("button").first();
     await expect(toggleButton).toBeVisible({ timeout: 5000 });
     await toggleButton.click();
 
@@ -97,7 +100,7 @@ test.describe("Web Admin - AI Agent Settings", () => {
     if (!isEnabled) {
       // Toggle enable
       const enableText = page.getByText("Enable AI Agent");
-      const toggleButton = enableText.locator("..").locator("..").locator("button.rounded-full");
+      const toggleButton = enableText.locator("..").locator("..").locator("button").first();
       await toggleButton.click();
     }
 
