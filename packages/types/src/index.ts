@@ -167,6 +167,11 @@ export type OutboundButtonAction =
   | "open_help_article"
   | "open_widget_tab";
 export type ButtonAction = OutboundButtonAction;
+export type AuthoringOutboundButtonAction = Exclude<OutboundButtonAction, "reply" | "chat">;
+export type AuthoringOutboundPrimaryButtonAction = Extract<
+  AuthoringOutboundButtonAction,
+  "url" | "open_new_conversation" | "open_help_article" | "open_widget_tab"
+>;
 
 export interface OutboundClickAction<ArticleId = string> {
   type: OutboundClickActionType;
@@ -186,6 +191,11 @@ export interface MessageButton<TourId = string, ArticleId = string> {
   prefillMessage?: string;
 }
 
+export interface AuthoringMessageButton<TourId = string, ArticleId = string>
+  extends Omit<MessageButton<TourId, ArticleId>, "action"> {
+  action: AuthoringOutboundButtonAction;
+}
+
 export interface OutboundMessageContent<UserId = string, TourId = string, ArticleId = string> {
   // Chat message fields
   text?: string;
@@ -201,6 +211,14 @@ export interface OutboundMessageContent<UserId = string, TourId = string, Articl
   // Shared fields
   clickAction?: OutboundClickAction<ArticleId>;
   buttons?: MessageButton<TourId, ArticleId>[];
+}
+
+export interface AuthoringOutboundMessageContent<
+  UserId = string,
+  TourId = string,
+  ArticleId = string,
+> extends Omit<OutboundMessageContent<UserId, TourId, ArticleId>, "buttons"> {
+  buttons?: AuthoringMessageButton<TourId, ArticleId>[];
 }
 
 export interface MessageTrigger {

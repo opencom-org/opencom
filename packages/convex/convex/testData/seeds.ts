@@ -2,9 +2,7 @@ import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
 import type {
-  MessageButton as SharedMessageButton,
-  OutboundButtonAction,
-  OutboundMessageContent,
+  AuthoringOutboundMessageContent,
 } from "@opencom/types";
 import { formatReadableVisitorId } from "../visitorReadableId";
 import {
@@ -16,16 +14,11 @@ import {
 
 const E2E_TEST_PREFIX = "e2e_test_";
 
-type SeedOutboundButtonAction = Exclude<OutboundButtonAction, "reply" | "chat">;
-type SeedMessageButton = Omit<SharedMessageButton<Id<"tours">, Id<"articles">>, "action"> & {
-  action: SeedOutboundButtonAction;
-};
-type SeedOutboundMessageContent = Omit<
-  OutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>,
-  "buttons"
-> & {
-  buttons?: SeedMessageButton[];
-};
+type SeedOutboundMessageContent = AuthoringOutboundMessageContent<
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
 function requireTestDataEnabled() {
   if (process.env.ALLOW_TEST_DATA !== "true") {

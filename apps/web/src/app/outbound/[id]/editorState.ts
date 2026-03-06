@@ -1,34 +1,24 @@
 import type { Id } from "@opencom/convex/dataModel";
 import type {
-  MessageButton as SharedMessageButton,
-  OutboundButtonAction,
+  AuthoringMessageButton,
+  AuthoringOutboundMessageContent,
+  AuthoringOutboundPrimaryButtonAction,
   OutboundClickAction,
   OutboundClickActionType,
-  OutboundMessageContent as SharedOutboundMessageContent,
   OutboundMessageType,
 } from "@opencom/types";
 
 export type MessageType = OutboundMessageType;
 export type MessageClickActionType = OutboundClickActionType;
-export type PostPrimaryActionType = Extract<
-  OutboundButtonAction,
-  "url" | "open_new_conversation" | "open_help_article" | "open_widget_tab"
->;
-export type SupportedMessageButtonAction = Exclude<OutboundButtonAction, "reply" | "chat">;
+export type PostPrimaryActionType = AuthoringOutboundPrimaryButtonAction;
 
 export type MessageClickAction = OutboundClickAction<Id<"articles">>;
-
-export type MessageButton = Omit<SharedMessageButton<Id<"tours">, Id<"articles">>, "action"> & {
-  action: SupportedMessageButtonAction;
-};
-
-export type MessageContent = Omit<
-  SharedOutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>,
-  "buttons" | "clickAction"
-> & {
-  buttons?: MessageButton[];
-  clickAction?: MessageClickAction;
-};
+export type MessageButton = AuthoringMessageButton<Id<"tours">, Id<"articles">>;
+export type MessageContent = AuthoringOutboundMessageContent<
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
 export interface ClickActionFormState {
   type: MessageClickActionType;
