@@ -41,6 +41,13 @@ That left trigger configuration, click-action configuration, and message UI meta
    - `apps/web/src/app/outbound/[id]/editorState.ts`
    - Added:
      - `getPostPreviewButtons`
+9. Finished the remaining live editor sections by extracting:
+   - header/action toolbar:
+     - `apps/web/src/app/outbound/[id]/OutboundEditorHeader.tsx`
+   - frequency panel:
+     - `apps/web/src/app/outbound/[id]/OutboundFrequencyPanel.tsx`
+   - statistics panel:
+     - `apps/web/src/app/outbound/[id]/OutboundStatisticsPanel.tsx`
 
 ## Verification Run Notes
 
@@ -52,5 +59,5 @@ Executed in this pass:
 
 ## Notes
 
-- The outbound editor route was reduced from roughly `634` lines to roughly `310` lines by moving content editing and preview rendering out of the page component.
-- The remaining outbound-editor work is now mostly around optional finer-grained section extraction or spinning the route into a formal OpenSpec change if further decomposition continues.
+- The outbound editor route was reduced from roughly `634` lines to roughly `235` lines by moving all live section rendering out of the page component.
+- Further outbound-editor work is now mostly optional orchestration-hook extraction or formalizing future work as a dedicated OpenSpec change.

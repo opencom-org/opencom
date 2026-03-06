@@ -53,4 +53,6 @@ Executed in this pass:
 ## Notes
 
 - This pass centralizes shared TypeScript record shapes only. It does not change Convex function names, runtime trigger evaluation, or widget outbound behavior.
-- Remaining work in this track is any residual trigger helper duplication that still sits outside `@opencom/types`, plus deciding whether the current local outbound editor form-state helpers should stay route-local or move into a shared authoring package.
+- A later repo-wide duplication audit found no remaining active outbound contract drift inside the live outbound web routes or cross-surface consumers.
+- The only notable leftover trigger-shape duplication is the dormant `apps/web/src/components/TriggerConfigEditor.tsx`, which is currently unused in `apps/web/src` and also carries non-outbound extras like `exit_intent` and `eventProperties`.
+- Remaining work in this track is now mostly a judgment call on whether that dormant trigger editor should be aligned to shared types or left alone until it becomes a live surface again.

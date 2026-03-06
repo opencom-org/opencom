@@ -93,10 +93,8 @@ What is already done:
 
 What still appears to remain in this track:
 
-- Decide whether outbound trigger helper logic should also move to shared `@opencom/types` or remain surface-local with explicit adapters.
+- Decide whether the dormant `apps/web/src/components/TriggerConfigEditor.tsx` trigger shape should be aligned to shared types or left alone until it becomes a live surface again.
 - Decide whether `apps/web/src/app/outbound/[id]/editorState.ts` should remain route-local or move into a reusable authoring package/module.
-- Replace any remaining web-local outbound contract/type drift inside `apps/web/src/app/outbound/[id]/page.tsx`.
-- Do one explicit repo-wide grep pass for remaining outbound contract duplication before declaring the track complete.
 
 Primary evidence docs:
 
@@ -126,10 +124,8 @@ What is already done:
 
 What still appears to remain:
 
-- `apps/web/src/app/outbound/[id]/page.tsx` is materially smaller, but it still orchestrates all data loading, mutations, section composition, and sidebar/statistics concerns.
+- `apps/web/src/app/outbound/[id]/page.tsx` is now mostly an orchestration shell around data loading, mutations, and section composition.
 - Remaining render/controller extraction likely still needed for:
-  - header/action toolbar
-  - frequency and statistics sections
   - potential save/load orchestration hooks if the route is pushed further
 - This slice should likely be formalized as a new OpenSpec change if continued seriously.
 
@@ -138,15 +134,41 @@ Primary evidence doc:
 - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-05.md`
 - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-06.md`
 
+### 3. Split convex schema high-concentration tables
+
+Status:
+
+- Started, not complete
+
+What is already done:
+
+- `packages/convex/convex/schema/campaignTables.ts` has been split into focused domain fragments:
+  - `campaignEmailTables.ts`
+  - `campaignPushTables.ts`
+  - `campaignCarouselTables.ts`
+  - `campaignSeriesTables.ts`
+  - `campaignSurveyTables.ts`
+- The old `campaignTables.ts` file now acts as a composition-only aggregator.
+
+What still appears to remain:
+
+- `packages/convex/convex/schema/operationsTables.ts` is still high-concentration.
+- `packages/convex/convex/schema/inboxNotificationTables.ts` is still high-concentration.
+- A follow-up pass should continue splitting the remaining dense schema fragments if the same maintainability threshold still applies.
+
+Primary evidence doc:
+
+- `docs/refactor-progress-convex-schema-high-concentration-tables-2026-03-06.md`
+
 ## Current Best View Of Remaining Work
 
 This is the practical remaining list after accounting for what has already been completed since the older slice maps were written.
 
 ### Highest-value remaining tracks
 
-1. Finish `centralize-trigger-and-outbound-contracts`
-2. Start `split-convex-schema-high-concentration-tables`
-3. Finish `decompose-web-outbound-editor`
+1. Continue `split-convex-schema-high-concentration-tables`
+2. Decide whether the dormant trigger-editor drift warrants another `centralize-trigger-and-outbound-contracts` pass
+3. Formalize any further `decompose-web-outbound-editor` work only if the orchestration shell still needs to shrink
 
 ### Next layer after that
 

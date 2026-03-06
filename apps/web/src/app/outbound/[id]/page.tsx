@@ -5,9 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
-import { Button, Input } from "@opencom/ui";
-import { ArrowLeft, Save, Play, Pause, Eye } from "lucide-react";
-import Link from "next/link";
+import { Input } from "@opencom/ui";
 import { useParams } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
@@ -17,14 +15,13 @@ import {
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
 import type { MessageFrequency, MessageTrigger } from "@opencom/types";
-import {
-  OutboundMessageTypeIcon,
-  getOutboundMessageStatusBadgeClass,
-} from "../outboundMessageUi";
 import { OutboundClickActionPanel } from "./OutboundClickActionPanel";
 import { OutboundContentEditor } from "./OutboundContentEditor";
+import { OutboundEditorHeader } from "./OutboundEditorHeader";
 import { OutboundFieldLabel } from "./OutboundFieldLabel";
+import { OutboundFrequencyPanel } from "./OutboundFrequencyPanel";
 import { OutboundPreviewPanel } from "./OutboundPreviewPanel";
+import { OutboundStatisticsPanel } from "./OutboundStatisticsPanel";
 import { OutboundTriggerPanel } from "./OutboundTriggerPanel";
 import {
   createDefaultClickActionFormState,
@@ -144,48 +141,14 @@ function MessageBuilderContent() {
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-4">
-          <Link href="/outbound">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <div className="flex items-center gap-2">
-            <OutboundMessageTypeIcon type={message.type} className="h-5 w-5" />
-            <h1 className="text-2xl font-bold capitalize">{message.type} Message</h1>
-          </div>
-          <span
-            className={`px-2 py-1 text-xs font-medium rounded-full ${getOutboundMessageStatusBadgeClass(message.status)}`}
-          >
-            {message.status}
-          </span>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowPreview(!showPreview)}>
-            <Eye className="h-4 w-4 mr-2" />
-            {showPreview ? "Hide Preview" : "Preview"}
-          </Button>
-          <Button variant="outline" onClick={handleToggleStatus}>
-            {message.status === "active" ? (
-              <>
-                <Pause className="h-4 w-4 mr-2" />
-                Pause
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4 mr-2" />
-                Activate
-              </>
-            )}
-          </Button>
-          <Button onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            Save
-          </Button>
-        </div>
-      </div>
+      <OutboundEditorHeader
+        messageType={message.type}
+        status={message.status}
+        showPreview={showPreview}
+        onTogglePreview={() => setShowPreview(!showPreview)}
+        onToggleStatus={handleToggleStatus}
+        onSave={handleSave}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
@@ -218,19 +181,7 @@ function MessageBuilderContent() {
 
           <OutboundTriggerPanel value={triggers} onChange={setTriggers} />
 
-          {/* Frequency */}
-          <div className="bg-white border rounded-lg p-6">
-            <h2 className="text-lg font-semibold mb-4">Frequency</h2>
-            <select
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value as typeof frequency)}
-              className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="once">Once per user</option>
-              <option value="once_per_session">Once per session</option>
-              <option value="always">Every time conditions are met</option>
-            </select>
-          </div>
+          <OutboundFrequencyPanel value={frequency} onChange={setFrequency} />
 
           <OutboundClickActionPanel
             articles={articles}
@@ -268,33 +219,7 @@ function MessageBuilderContent() {
             />
           )}
 
-          {/* Stats */}
-          <div className="bg-white border rounded-lg p-6">
-            <h2 className="text-lg font-semibold mb-4">Statistics</h2>
-            {stats ? (
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Shown</span>
-                  <span className="font-medium">{stats.shown}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Clicked</span>
-                  <span className="font-medium">{stats.clicked}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Dismissed</span>
-                  <span className="font-medium">{stats.dismissed}</span>
-                </div>
-                <hr />
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Click Rate</span>
-                  <span className="font-medium">{stats.clickRate.toFixed(1)}%</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-gray-500 text-sm">No data yet</p>
-            )}
-          </div>
+          <OutboundStatisticsPanel stats={stats} />
         </div>
       </div>
     </div>
