@@ -21,9 +21,11 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - web E2E harness/spec stabilization in `apps/web/e2e/**`
-  - an untracked helper added in `apps/web/e2e/helpers/storage-state.ts`
-  - unrelated OpenSpec files under `openspec/changes/simplify-knowledge-content-management/`
+  - widget shell orchestration phase 2 in `apps/widget/src/Widget.tsx`
+  - new widget-local hooks in:
+    - `apps/widget/src/hooks/useWidgetConversationFlow.ts`
+    - `apps/widget/src/hooks/useWidgetArticleNavigation.ts`
+    - `apps/widget/src/hooks/useWidgetTicketFlow.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -171,6 +173,38 @@ Primary evidence doc:
 
 - `docs/refactor-progress-convex-schema-high-concentration-tables-2026-03-06.md`
 
+### 4. Decompose widget shell orchestration phase 2
+
+Status:
+
+- Started, not complete
+- No live OpenSpec change currently exists
+
+What is already done:
+
+- Conversation lifecycle orchestration moved into:
+  - `apps/widget/src/hooks/useWidgetConversationFlow.ts`
+- Article navigation/presentation orchestration moved into:
+  - `apps/widget/src/hooks/useWidgetArticleNavigation.ts`
+- `apps/widget/src/Widget.tsx` now delegates:
+  - draft conversation reuse
+  - in-flight conversation-create deduplication
+  - conversation read-state synchronization
+  - article-detail selection
+  - article large-mode toggle/collapse timing
+- Ticket list/detail/create orchestration also moved into:
+  - `apps/widget/src/hooks/useWidgetTicketFlow.ts`
+- `apps/widget/src/Widget.tsx` is down to about `966` lines from `1285`.
+
+What still appears to remain:
+
+- Tab-content composition is still embedded in the controller.
+- Blocking experience arbitration and overlay wiring are still coordinated from the main shell.
+
+Primary evidence doc:
+
+- `docs/refactor-progress-widget-shell-orchestration-v2-2026-03-06.md`
+
 ## Current Best View Of Remaining Work
 
 This is the practical remaining list after accounting for what has already been completed since the older slice maps were written.
@@ -181,9 +215,9 @@ The latest repo-wide ranking for this is now:
 
 ### Highest-value remaining tracks
 
-1. Decompose widget shell orchestration phase 2
-2. Split tour runtime and centralize shared route/selector matching behavior
-3. Split Convex series runtime/authoring phase 2
+1. Split tour runtime and centralize shared route/selector matching behavior
+2. Split Convex series runtime/authoring phase 2
+3. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
 4. Converge messenger/home-config contracts across Convex, web, widget, and RN
 5. Split workspace admin/security/onboarding concerns across backend, web, and mobile
 6. Continue cross-surface outbound runtime convergence after the contract work already completed
@@ -213,6 +247,7 @@ For deciding what to do next, prefer this document plus:
 - `pnpm --filter @opencom/convex typecheck`
 - `pnpm --filter @opencom/convex test`
 - `pnpm test:compat:cross-surface`
+- `pnpm --filter @opencom/widget test -- --run src/test/widgetShellOrchestration.test.tsx src/test/widgetNewConversation.test.tsx src/test/widgetTicketErrorFeedback.test.tsx`
 - `pnpm web:test:e2e -- apps/web/e2e/outbound.spec.ts --project=chromium`
 - `pnpm web:test:e2e -- apps/web/e2e/tours.spec.ts --project=chromium`
 - `pnpm web:test:e2e -- apps/web/e2e/inbox.spec.ts apps/web/e2e/widget-features.spec.ts --project=chromium`
@@ -348,12 +383,10 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Commit the current E2E stabilization and documentation work.
-2. Treat `docs/refactor-opportunity-audit-2026-03-06.md` as the queue source of truth.
-3. Start with one of the top three slices:
-   - `decompose-widget-shell-orchestration-v2`
-   - `split-tour-runtime-and-route-matching`
-   - `split-convex-series-runtime-authoring-v2`
+1. Commit the current widget shell phase-2 extraction and documentation work.
+2. Treat the current widget-shell pass as a clean stop unless a very obvious next extraction presents itself.
+3. Start `split-tour-runtime-and-route-matching`.
+4. Follow with `split-convex-series-runtime-authoring-v2`.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
 

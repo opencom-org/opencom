@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@opencom/convex";
-import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { MessageCircle, Plus } from "./icons";
 import { Home as HomeComponent, useHomeConfig } from "./components/Home";
 import { ConversationList } from "./components/ConversationList";
@@ -28,11 +27,13 @@ import { useBlockingExperienceArbitration } from "./hooks/useBlockingExperienceA
 import { useWidgetTabVisibility, type MainTab, type TabConfig } from "./hooks/useWidgetTabVisibility";
 import { useWidgetUnreadCues } from "./hooks/useWidgetUnreadCues";
 import { useWidgetTourBridge } from "./hooks/useWidgetTourBridge";
+import { useWidgetConversationFlow } from "./hooks/useWidgetConversationFlow";
+import { useWidgetArticleNavigation } from "./hooks/useWidgetArticleNavigation";
+import { useWidgetTicketFlow } from "./hooks/useWidgetTicketFlow";
 import { checkElementsAvailable } from "./utils/dom";
 import { selectSurveyForDelivery, type SurveyDeliveryCandidate } from "@opencom/sdk-core";
 import {
   getWidgetTabHeader,
-  normalizeTicketFormData,
   resolveWidgetActiveTab,
 } from "./widgetShell/helpers";
 import type { WidgetProps, WidgetView } from "./widgetShell/types";
@@ -55,17 +56,7 @@ export function Widget({
   const [showDebug, setShowDebug] = useState(false);
   const [debugWorkspaceId, setDebugWorkspaceId] = useState(_workspaceId || "");
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(_workspaceId);
-  const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
-  const [articleSearchQuery, setArticleSearchQuery] = useState("");
-  const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
-  const [selectedHelpCollectionKey, setSelectedHelpCollectionKey] = useState<string | null>(null);
-  const [isArticleLargeMode, setIsArticleLargeMode] = useState(false);
-  const [isCollapsingLargeArticle, setIsCollapsingLargeArticle] = useState(false);
-  const [, setPreviousView] = useState<WidgetView>("conversation-list");
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
-  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
-  const [ticketErrorFeedback, setTicketErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
   const [sessionShownSurveyIds, setSessionShownSurveyIds] = useState<Set<string>>(new Set());
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [surveyEligibilityUnavailable, setSurveyEligibilityUnavailable] = useState(false);
@@ -78,9 +69,6 @@ export function Widget({
     hasActivePost: false,
   });
   const locationFetchedRef = useRef(false);
-  const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
-  const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
-  const largeArticleCollapseTimeoutRef = useRef<number | null>(null);
 
   // ── Tooltip trigger context ────────────────────────────────────────
   const [tooltipTriggerContext, setTooltipTriggerContext] = useState<{
@@ -147,41 +135,73 @@ export function Widget({
   });
 
   // ── Mutations still used directly ──────────────────────────────────
-  const createConversation = useMutation(api.conversations.createForVisitor);
-  const markAsReadMutation = useMutation(api.conversations.markAsRead);
-  const addTicketComment = useMutation(api.tickets.addComment);
-  const createTicket = useMutation(api.tickets.create);
+  const {
+    articleSearchQuery,
+    setArticleSearchQuery,
+    selectedArticleId,
+    clearSelectedArticle,
+    selectedHelpCollectionKey,
+    setSelectedHelpCollectionKey,
+    isCollapsingLargeArticle,
+    isLargeArticleView,
+    clearArticlePresentation,
+    openArticleDetail,
+    handleBackFromArticle,
+    handleToggleArticleLargeScreen,
+  } = useWidgetArticleNavigation({
+    view,
+    onViewChange: setView,
+    onTabChange: setActiveTab,
+  });
 
   // ── Queries ────────────────────────────────────────────────────────
-  const visitorTickets = useQuery(
-    api.tickets.listByVisitor,
-    isValidIdFormat && visitorId && sessionToken
-      ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
-      : "skip"
-  );
-
-  const selectedTicket = useQuery(
-    api.tickets.get,
-    selectedTicketId
-      ? {
-          id: selectedTicketId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  );
-
-  const ticketForm = useQuery(
-    api.ticketForms.getDefaultForVisitor,
-    isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
-
   const visitorConversations = useQuery(
     api.conversations.listByVisitor,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
       : "skip"
   );
+
+  const {
+    conversationId,
+    selectedConversation,
+    openConversation,
+    clearConversationSelection,
+    resetDraftConversationState,
+    openFreshConversation,
+    handleNewConversation,
+    handleSelectConversation,
+    handleBackToList,
+    syncConversationReadState,
+  } = useWidgetConversationFlow({
+    activeWorkspaceId,
+    visitorId,
+    visitorIdRef,
+    sessionTokenRef,
+    visitorConversations,
+    onViewChange: setView,
+  });
+
+  const {
+    visitorTickets,
+    selectedTicket,
+    ticketForm,
+    isSubmittingTicket,
+    ticketErrorFeedback,
+    handleBackFromTickets,
+    openTicketCreate,
+    handleSelectTicket,
+    handleSubmitTicket,
+    handleAddTicketComment,
+  } = useWidgetTicketFlow({
+    activeWorkspaceId,
+    isValidIdFormat,
+    visitorId,
+    sessionToken,
+    sessionTokenRef,
+    onViewChange: setView,
+    onTabChange: setActiveTab,
+  });
 
   const totalUnread = useQuery(
     api.conversations.getTotalUnreadForVisitor,
@@ -230,92 +250,6 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
-  const isLargeArticleView =
-    view === "article-detail" && (isArticleLargeMode || isCollapsingLargeArticle);
-  const clearLargeArticleCollapseTimeout = useCallback(() => {
-    if (largeArticleCollapseTimeoutRef.current !== null) {
-      window.clearTimeout(largeArticleCollapseTimeoutRef.current);
-      largeArticleCollapseTimeoutRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearLargeArticleCollapseTimeout();
-    };
-  }, [clearLargeArticleCollapseTimeout]);
-
-  const openArticleDetail = useCallback(
-    (articleId: Id<"articles">) => {
-      clearLargeArticleCollapseTimeout();
-      setIsArticleLargeMode(false);
-      setIsCollapsingLargeArticle(false);
-      setSelectedArticleId(articleId);
-      setPreviousView(view);
-      setView("article-detail");
-    },
-    [clearLargeArticleCollapseTimeout, view]
-  );
-
-  const selectedConversation = useMemo(() => {
-    if (!conversationId) {
-      return null;
-    }
-    return (
-      visitorConversations?.find((conversation) => conversation._id === conversationId) ?? null
-    );
-  }, [visitorConversations, conversationId]);
-
-  const reusableDraftConversationId = useMemo(() => {
-    if (!visitorConversations || visitorConversations.length === 0) {
-      return null;
-    }
-
-    const draftConversation = visitorConversations.find((conversation) => {
-      if (conversation.status !== "open") {
-        return false;
-      }
-      const lastMessageAt = conversation.lastMessageAt ?? conversation.createdAt;
-      return lastMessageAt === conversation.createdAt;
-    });
-
-    return draftConversation?._id ?? null;
-  }, [visitorConversations]);
-
-  useEffect(() => {
-    if (!visitorConversations) {
-      return;
-    }
-
-    if (reusableDraftConversationId) {
-      latestDraftConversationIdRef.current = reusableDraftConversationId;
-      return;
-    }
-
-    const latestDraftConversationId = latestDraftConversationIdRef.current;
-    if (!latestDraftConversationId) {
-      return;
-    }
-
-    const latestConversation = visitorConversations.find(
-      (conversation) => conversation._id === latestDraftConversationId
-    );
-
-    if (!latestConversation) {
-      latestDraftConversationIdRef.current = null;
-      return;
-    }
-
-    const latestConversationLastMessageAt =
-      latestConversation.lastMessageAt ?? latestConversation.createdAt;
-    const isLatestConversationStillDraft =
-      latestConversation.status === "open" &&
-      latestConversationLastMessageAt === latestConversation.createdAt;
-
-    if (!isLatestConversationStillDraft) {
-      latestDraftConversationIdRef.current = null;
-    }
-  }, [visitorConversations, reusableDraftConversationId]);
 
   // Automation settings for self-serve features (getOrCreate returns defaults for new workspaces)
   const automationSettings = useQuery(
@@ -486,11 +420,6 @@ export function Widget({
     return () => clearTimeout(timeout);
   }, [isValidIdFormat, visitorId, sessionToken, activeWorkspaceId, activeSurveys]);
 
-  const openConversation = useCallback((id: Id<"conversations">) => {
-    setConversationId(id);
-    setView("conversation");
-  }, []);
-
   const handleOpenConversationFromCue = useCallback(
     (id: Id<"conversations">) => {
       setActiveTab("messages");
@@ -545,109 +474,20 @@ export function Widget({
     setTourBlockingActive(false);
     setOutboundBlockingState({ hasPendingPost: false, hasActivePost: false });
     setSelectedHelpCollectionKey(null);
-    clearLargeArticleCollapseTimeout();
-    setIsArticleLargeMode(false);
-    setIsCollapsingLargeArticle(false);
-  }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout, setActiveBlockingExperience]);
+    clearArticlePresentation();
+  }, [sessionId, visitorId, activeWorkspaceId, clearArticlePresentation, setActiveBlockingExperience, setSelectedHelpCollectionKey]);
 
   useEffect(() => {
     resetUnreadSnapshot();
-    latestDraftConversationIdRef.current = null;
-    createConversationRequestRef.current = null;
-  }, [sessionId, visitorId, activeWorkspaceId, resetUnreadSnapshot]);
+    resetDraftConversationState();
+  }, [sessionId, visitorId, activeWorkspaceId, resetDraftConversationState, resetUnreadSnapshot]);
 
   // Handle debug workspace ID update
   const handleDebugWorkspaceUpdate = () => {
     setActiveWorkspaceId(debugWorkspaceId);
     // Reset conversation state when workspace changes
-    setConversationId(null);
+    clearConversationSelection();
     setVisitorId(null);
-  };
-
-  const handleNewConversation = async () => {
-    const existingDraftConversationId =
-      reusableDraftConversationId ?? latestDraftConversationIdRef.current;
-    if (existingDraftConversationId) {
-      openConversation(existingDraftConversationId);
-      return;
-    }
-
-    if (createConversationRequestRef.current) {
-      const inFlightConversationId = await createConversationRequestRef.current;
-      if (inFlightConversationId) {
-        latestDraftConversationIdRef.current = inFlightConversationId;
-        openConversation(inFlightConversationId);
-      }
-      return;
-    }
-
-    const createConversationRequest = (async () => {
-      // Wait briefly for visitor initialization if it hasn't completed yet
-      let vid = visitorIdRef.current;
-      if (!vid) {
-        for (let i = 0; i < 30 && !visitorIdRef.current; i++) {
-          await new Promise((r) => setTimeout(r, 100));
-        }
-        vid = visitorIdRef.current;
-      }
-      if (!vid || !activeWorkspaceId) {
-        console.warn("[Opencom Widget] Cannot create conversation - visitor not initialized", {
-          visitorId: vid,
-          activeWorkspaceId,
-        });
-        return null;
-      }
-      try {
-        const newConv = await createConversation({
-          workspaceId: activeWorkspaceId as Id<"workspaces">,
-          visitorId: vid,
-          sessionToken: sessionTokenRef.current ?? "",
-        });
-        return newConv?._id ?? null;
-      } catch (error) {
-        console.error("Failed to create conversation:", error);
-        return null;
-      }
-    })();
-
-    createConversationRequestRef.current = createConversationRequest;
-
-    try {
-      const createdConversationId = await createConversationRequest;
-      if (createdConversationId) {
-        latestDraftConversationIdRef.current = createdConversationId;
-        openConversation(createdConversationId);
-      }
-    } finally {
-      if (createConversationRequestRef.current === createConversationRequest) {
-        createConversationRequestRef.current = null;
-      }
-    }
-  };
-
-  const syncConversationReadState = useCallback(
-    (convId: Id<"conversations">) => {
-      markAsReadMutation({
-        id: convId,
-        readerType: "visitor",
-        visitorId: visitorId ?? undefined,
-        sessionToken: sessionTokenRef.current ?? undefined,
-      }).catch(console.error);
-    },
-    [markAsReadMutation, sessionTokenRef, visitorId]
-  );
-
-  const handleSelectConversation = (convId: Id<"conversations">) => {
-    setConversationId(convId);
-    setView("conversation");
-    syncConversationReadState(convId);
-  };
-
-  const handleBackToList = () => {
-    if (conversationId) {
-      syncConversationReadState(conversationId);
-    }
-    setView("conversation-list");
   };
 
   // (identify, trackEvent, and navigation tracking are now in extracted hooks)
@@ -808,173 +648,24 @@ export function Widget({
     if (view === "conversation" && conversationId) {
       syncConversationReadState(conversationId);
     }
-    clearLargeArticleCollapseTimeout();
-    setIsArticleLargeMode(false);
-    setIsCollapsingLargeArticle(false);
+    clearArticlePresentation();
     setView("launcher");
   };
 
-  // ── Navigation handlers ───────────────────────────────────────────
-  const navigateBackFromArticle = () => {
-    clearLargeArticleCollapseTimeout();
-    setIsArticleLargeMode(false);
-    setIsCollapsingLargeArticle(false);
-    setSelectedArticleId(null);
-    setActiveTab("help");
-    setView("conversation-list");
-  };
-
-  const collapseLargeArticle = useCallback(
-    (onCollapsed?: () => void) => {
-      if (isCollapsingLargeArticle) {
-        return;
-      }
-      if (!isArticleLargeMode) {
-        onCollapsed?.();
-        return;
-      }
-      setIsCollapsingLargeArticle(true);
-      clearLargeArticleCollapseTimeout();
-      largeArticleCollapseTimeoutRef.current = window.setTimeout(() => {
-        largeArticleCollapseTimeoutRef.current = null;
-        setIsArticleLargeMode(false);
-        setIsCollapsingLargeArticle(false);
-        onCollapsed?.();
-      }, 280);
-    },
-    [clearLargeArticleCollapseTimeout, isArticleLargeMode, isCollapsingLargeArticle]
-  );
-
-  const handleBackFromArticle = () => {
-    collapseLargeArticle(navigateBackFromArticle);
-  };
-
-  const handleToggleArticleLargeScreen = () => {
-    if (isCollapsingLargeArticle) {
-      return;
-    }
-    if (isArticleLargeMode) {
-      collapseLargeArticle();
-      return;
-    }
-    clearLargeArticleCollapseTimeout();
-    setIsCollapsingLargeArticle(false);
-    setIsArticleLargeMode(true);
-  };
-
   const handleStartConversationFromArticle = async () => {
-    let vid = visitorIdRef.current;
-    if (!vid) {
-      for (let i = 0; i < 30 && !visitorIdRef.current; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      vid = visitorIdRef.current;
+    if (!selectedArticle) {
+      return;
     }
-    if (!vid || !activeWorkspaceId || !selectedArticle) return;
-    try {
-      const newConv = await createConversation({
-        workspaceId: activeWorkspaceId as Id<"workspaces">,
-        visitorId: vid,
-        sessionToken: sessionTokenRef.current ?? "",
-      });
-      if (newConv) {
-        setConversationId(newConv._id);
-        setView("conversation");
-        setSelectedArticleId(null);
-        clearLargeArticleCollapseTimeout();
-        setIsArticleLargeMode(false);
-        setIsCollapsingLargeArticle(false);
-      }
-    } catch (error) {
-      console.error("Failed to start conversation:", error);
+
+    const createdConversationId = await openFreshConversation();
+    if (createdConversationId) {
+      clearSelectedArticle();
+      clearArticlePresentation();
     }
   };
 
   const handleSelectTour = (tourId: Id<"tours">) => {
     handleStartTour(tourId);
-  };
-
-  const handleBackFromTickets = () => {
-    setTicketErrorFeedback(null);
-    if (view === "ticket-detail") {
-      setSelectedTicketId(null);
-    }
-    setActiveTab("tickets");
-    setView("conversation-list");
-  };
-
-  const handleSubmitTicket = async (formData: Record<string, unknown>) => {
-    if (!visitorId || !activeWorkspaceId || isSubmittingTicket) return;
-    setTicketErrorFeedback(null);
-
-    const ticketFields = (ticketForm?.fields ?? []) as Array<{ id: string; label?: string }>;
-    const getFieldValueByHint = (hints: string[]): string | undefined => {
-      const matchingField = ticketFields.find((field) => {
-        const fieldKey = `${field.label ?? ""} ${field.id}`.toLowerCase();
-        return hints.some((hint) => fieldKey.includes(hint));
-      });
-      if (!matchingField) return undefined;
-
-      const value = formData[matchingField.id];
-      return typeof value === "string" ? value : undefined;
-    };
-
-    const subject =
-      (formData.subject as string) ||
-      (formData.Subject as string) ||
-      getFieldValueByHint(["subject", "title"]) ||
-      "Support Request";
-    const description =
-      (formData.description as string) ||
-      (formData.Description as string) ||
-      getFieldValueByHint(["description", "details", "message"]);
-
-    if (!subject.trim()) {
-      setTicketErrorFeedback({
-        message: "Please provide a subject for your ticket.",
-        nextAction: "Add a short subject, then submit again.",
-      });
-      return;
-    }
-
-    setIsSubmittingTicket(true);
-    try {
-      const ticketId = await createTicket({
-        workspaceId: activeWorkspaceId as Id<"workspaces">,
-        visitorId,
-        sessionToken: sessionTokenRef.current ?? undefined,
-        subject: subject.trim(),
-        description: description?.trim(),
-        formId: ticketForm?._id,
-        formData: normalizeTicketFormData(formData),
-      });
-      setSelectedTicketId(ticketId);
-      setView("ticket-detail");
-    } catch (error) {
-      console.error("Failed to create ticket:", error);
-      setTicketErrorFeedback(
-        normalizeUnknownError(error, {
-          fallbackMessage: "Failed to submit ticket.",
-          nextAction: "Please try again.",
-        })
-      );
-    } finally {
-      setIsSubmittingTicket(false);
-    }
-  };
-
-  const handleAddTicketComment = async (content: string) => {
-    if (!selectedTicketId || !visitorId) return;
-    try {
-      await addTicketComment({
-        ticketId: selectedTicketId,
-        visitorId,
-        content,
-        sessionToken: sessionTokenRef.current ?? undefined,
-      });
-    } catch (error) {
-      console.error("Failed to add comment:", error);
-    }
   };
 
   const handleSurveyComplete = () => {
@@ -1075,21 +766,11 @@ export function Widget({
         )}
         {resolvedActiveTab === "tickets" && (
           <div className="opencom-tickets-view">
-            <TicketsList
-              tickets={visitorTickets}
-              onSelectTicket={(id) => {
-                setSelectedTicketId(id);
-                setView("ticket-detail");
-              }}
-            />
+            <TicketsList tickets={visitorTickets} onSelectTicket={handleSelectTicket} />
             <div className="opencom-ticket-create-btn-container">
               <button
                 className="opencom-ticket-create-btn"
-                onClick={() => {
-                  setTicketErrorFeedback(null);
-                  setSelectedTicketId(null);
-                  setView("ticket-create");
-                }}
+                onClick={openTicketCreate}
                 type="button"
               >
                 <Plus />
