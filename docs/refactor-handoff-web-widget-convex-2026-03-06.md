@@ -20,16 +20,10 @@ Use this file in a new chat to recover context without reconstructing the work f
 
 - Branch: `pr/refactor`
 - Working tree is not clean.
-- Current uncommitted files at handoff time:
-  - `packages/convex/convex/schema/inboxNotificationTables.ts`
-  - `packages/convex/convex/schema/operationsTables.ts`
-  - `packages/convex/convex/schema/inboxConversationTables.ts`
-  - `packages/convex/convex/schema/inboxNotificationRoutingTables.ts`
-  - `packages/convex/convex/schema/inboxPushTokenTables.ts`
-  - `packages/convex/convex/schema/operationsAiTables.ts`
-  - `packages/convex/convex/schema/operationsMessengerTables.ts`
-  - `packages/convex/convex/schema/operationsReportingTables.ts`
-  - `packages/convex/convex/schema/operationsWorkflowTables.ts`
+- Current uncommitted work is now mainly:
+  - web E2E harness/spec stabilization in `apps/web/e2e/**`
+  - an untracked helper added in `apps/web/e2e/helpers/storage-state.ts`
+  - unrelated OpenSpec files under `openspec/changes/simplify-knowledge-content-management/`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -59,6 +53,7 @@ These slices are complete enough that they should be treated as established refa
 | Widget conversation view decomposition | Completed | `docs/refactor-progress-widget-conversation-view-decomposition-2026-03-05.md` |
 | Widget survey overlay decomposition | Completed | `docs/refactor-progress-widget-survey-overlay-decomposition-2026-03-05.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
+| Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
 
 ## What Is Partially Complete
 
@@ -180,23 +175,32 @@ Primary evidence doc:
 
 This is the practical remaining list after accounting for what has already been completed since the older slice maps were written.
 
+The latest repo-wide ranking for this is now:
+
+- `docs/refactor-opportunity-audit-2026-03-06.md`
+
 ### Highest-value remaining tracks
 
-1. Decide whether the dormant trigger-editor drift warrants another `centralize-trigger-and-outbound-contracts` pass
-2. Formalize any further `decompose-web-outbound-editor` work only if the orchestration shell still needs to shrink
-3. Re-audit for a new Convex concentration target only after the current schema split is committed and settled
+1. Decompose widget shell orchestration phase 2
+2. Split tour runtime and centralize shared route/selector matching behavior
+3. Split Convex series runtime/authoring phase 2
+4. Converge messenger/home-config contracts across Convex, web, widget, and RN
+5. Split workspace admin/security/onboarding concerns across backend, web, and mobile
+6. Continue cross-surface outbound runtime convergence after the contract work already completed
 
 ### Next layer after that
 
-1. Re-audit widget controller concentration after the outbound/trigger track is fully closed.
-2. Re-audit Convex high-density runtime domains after the schema-table split lands.
-3. Re-audit the web settings security/auth and audience-rule builder concentration only if they still fail the acceptance criteria below.
+1. Split knowledge/admin content plus the remaining article-domain concentration.
+2. Decompose the campaigns admin surface.
+3. Split the AI agent and email-channel service domains.
+4. Decompose audience-rule builder internals.
 
 ### Why the older P0/P1 lists are not the current source of truth
 
 `docs/refactor-remaining-slices-pass2-2026-03-05.md` captured a useful backlog, but several items in it were completed afterward.
 For deciding what to do next, prefer this document plus:
 
+- `docs/refactor-opportunity-audit-2026-03-06.md`
 - `docs/refactor-remaining-map-2026-03-05.md`
 - the latest `docs/refactor-progress-*.md` files
 
@@ -211,45 +215,36 @@ For deciding what to do next, prefer this document plus:
 - `pnpm test:compat:cross-surface`
 - `pnpm web:test:e2e -- apps/web/e2e/outbound.spec.ts --project=chromium`
 - `pnpm web:test:e2e -- apps/web/e2e/tours.spec.ts --project=chromium`
+- `pnpm web:test:e2e -- apps/web/e2e/inbox.spec.ts apps/web/e2e/widget-features.spec.ts --project=chromium`
+- `pnpm web:test:e2e`
 - `openspec validate decompose-web-tour-editor --strict --no-interactive`
 
 ### Last known full-suite baseline
 
-The latest inspected full-suite Playwright artifacts on March 6, 2026 ended in a failed state with `18` failing cases.
+The latest full-suite Playwright baseline on March 6, 2026 is green:
 
-Most failures were in shared auth or route-recovery behavior rather than the outbound refactor surface:
-
-- repeated `auth-refresh.ts` failures around `page.waitForURL`, `page.goto`, or `Loading...` never clearing
-- `outbound` retries failing during route recovery before editor assertions ran
-- `reports`, `settings`, `inbox`, `carousels`, `ai-agent-settings`, and several widget cases failing in the same shared recovery layer
-
-Feature-specific failures that still looked like real product/test issues in the artifacts:
-
-- `tooltips` CRUD: duplicate tooltip cards (`expected 1`, `received 2`)
-- `widget` email capture: prompt not visible / widget navigation element detached
-- `home-settings` preview: `Home Preview` not found
-- `ai-agent-settings`: expected controls such as `Enable AI Agent` / `Save AI Settings` not found after recovery
-- no-auth signup flow timing out waiting for the sign-up button
+- `pnpm web:test:e2e` -> pass (`193` passed, `7` skipped, `0` flaky)
 
 Important:
 
-- The focused passes above are newer than that full-suite baseline.
-- The outbound-focused E2E slice had previously passed in isolation; the later full-suite outbound failures appear to be route/auth recovery stalls rather than direct regressions in the extracted outbound editor components.
-- The full workspace `pnpm test` was not rerun after every later slice.
-- Before declaring the overall refactor complete, rerun the full suite and reclassify any remaining failures.
+- The earlier failed full-suite artifact was superseded by the stabilization pass documented in `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md`.
+- The current release bar for the web surface is no longer blocked by shared auth/route-recovery failures.
+- The full workspace `pnpm test` was still not rerun after every later slice, so broader non-web confidence remains bounded by the last package-focused verification listed above.
 
 ## Resume Procedure In A New Chat
 
 1. Read this document first.
-2. Read the latest progress docs for the two active/partial tracks:
+2. Read the latest repo-wide audit:
+   - `docs/refactor-opportunity-audit-2026-03-06.md`
+3. Read the latest progress docs for the two active/partial tracks:
    - `docs/refactor-progress-centralize-outbound-trigger-contracts-2026-03-06.md`
    - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-06.md`
-3. Run `git status --short` immediately and confirm whether the working tree still matches the handoff snapshot in this file.
-4. If continuing outbound/trigger convergence, treat the next action as:
+4. Run `git status --short` immediately and confirm whether the working tree still matches the handoff snapshot in this file.
+5. If continuing outbound/trigger convergence, treat the next action as:
    - one more duplication audit pass
    - then either finish the track or formalize the residual work as an OpenSpec change
-5. If switching away from outbound work, begin with a fresh Convex concentration audit rather than restarting the already-completed schema split.
-6. After each slice:
+6. If switching away from outbound work, prefer the priority order in `docs/refactor-opportunity-audit-2026-03-06.md` rather than the older pass-2 backlog.
+7. After each slice:
    - run focused verification first
    - run cross-surface compatibility gate when shared contracts or shared types change
    - update or add a `docs/refactor-progress-*.md` note
@@ -353,9 +348,12 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Commit the four currently modified files.
-2. If desired, archive `decompose-web-tour-editor`.
-3. Start `split-convex-schema-high-concentration-tables`.
+1. Commit the current E2E stabilization and documentation work.
+2. Treat `docs/refactor-opportunity-audit-2026-03-06.md` as the queue source of truth.
+3. Start with one of the top three slices:
+   - `decompose-widget-shell-orchestration-v2`
+   - `split-tour-runtime-and-route-matching`
+   - `split-convex-series-runtime-authoring-v2`
 
 If instead the intent is to fully close the outbound/trigger track before switching:
 
