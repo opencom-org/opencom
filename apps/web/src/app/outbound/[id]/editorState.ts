@@ -39,6 +39,34 @@ export interface PostButtonFormState {
   dismissButtonText: string;
 }
 
+export interface PostPreviewButton {
+  text: string;
+  variant: "primary" | "secondary";
+}
+
+export const CLICK_ACTION_OPTIONS = [
+  { value: "open_messenger", label: "Open Messenger" },
+  { value: "open_new_conversation", label: "Start New Conversation" },
+  { value: "open_widget_tab", label: "Open Widget Tab" },
+  { value: "open_help_article", label: "Open Help Article" },
+  { value: "open_url", label: "Open URL" },
+  { value: "dismiss", label: "Dismiss Message" },
+] as const satisfies ReadonlyArray<{ value: MessageClickActionType; label: string }>;
+
+export const POST_PRIMARY_ACTION_OPTIONS = [
+  { value: "open_new_conversation", label: "Start New Conversation" },
+  { value: "open_widget_tab", label: "Open Widget Tab" },
+  { value: "open_help_article", label: "Open Help Article" },
+  { value: "url", label: "Open URL" },
+] as const satisfies ReadonlyArray<{ value: PostPrimaryActionType; label: string }>;
+
+export const WIDGET_TAB_OPTIONS = [
+  { value: "home", label: "Home" },
+  { value: "messages", label: "Messages" },
+  { value: "help", label: "Help Center" },
+  { value: "tickets", label: "Tickets" },
+] as const satisfies ReadonlyArray<{ value: string; label: string }>;
+
 const DEFAULT_CLICK_ACTION_STATE: ClickActionFormState = {
   type: "open_messenger",
   tabId: "",
@@ -92,8 +120,36 @@ export function toMessageClickAction(formState: ClickActionFormState): MessageCl
   };
 }
 
+export function getClickActionSummary(formState: ClickActionFormState): string {
+  switch (formState.type) {
+    case "open_messenger":
+      return "Open Messenger";
+    case "open_new_conversation":
+      return "Start Conversation";
+    case "open_widget_tab":
+      return `Open Tab (${formState.tabId || "—"})`;
+    case "open_help_article":
+      return "Open Article";
+    case "open_url":
+      return "Open URL";
+    case "dismiss":
+      return "Dismiss";
+  }
+}
+
 export function createDefaultPostButtonFormState(): PostButtonFormState {
   return { ...DEFAULT_POST_BUTTON_STATE };
+}
+
+export function getPostPreviewButtons(formState: PostButtonFormState): PostPreviewButton[] {
+  return [
+    ...(formState.primaryButtonText.trim()
+      ? [{ text: formState.primaryButtonText.trim(), variant: "primary" as const }]
+      : []),
+    ...(formState.dismissEnabled && formState.dismissButtonText.trim()
+      ? [{ text: formState.dismissButtonText.trim(), variant: "secondary" as const }]
+      : []),
+  ];
 }
 
 export function toPostButtonFormState(buttons: MessageButton[] | undefined): PostButtonFormState {

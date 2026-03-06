@@ -114,21 +114,29 @@ What is already done:
 
 - State/business logic extraction started in:
   - `apps/web/src/app/outbound/[id]/editorState.ts`
+- Trigger settings and click-action settings panels are now extracted into dedicated route-local modules:
+  - `apps/web/src/app/outbound/[id]/OutboundTriggerPanel.tsx`
+  - `apps/web/src/app/outbound/[id]/OutboundClickActionPanel.tsx`
+- Remaining message-type content editing and preview rendering are now also extracted into dedicated route-local modules:
+  - `apps/web/src/app/outbound/[id]/OutboundContentEditor.tsx`
+  - `apps/web/src/app/outbound/[id]/OutboundPreviewPanel.tsx`
+- Shared outbound list/editor UI metadata is now centralized in:
+  - `apps/web/src/app/outbound/outboundMessageUi.tsx`
 - `apps/web/src/app/outbound/[id]/page.tsx` already consumes extracted click-action/post-button helpers.
 
 What still appears to remain:
 
-- `apps/web/src/app/outbound/[id]/page.tsx` is still a large, mixed-responsibility route.
+- `apps/web/src/app/outbound/[id]/page.tsx` is materially smaller, but it still orchestrates all data loading, mutations, section composition, and sidebar/statistics concerns.
 - Remaining render/controller extraction likely still needed for:
-  - content editors
-  - trigger settings panel
-  - preview/render blocks
-  - settings/action panels
+  - header/action toolbar
+  - frequency and statistics sections
+  - potential save/load orchestration hooks if the route is pushed further
 - This slice should likely be formalized as a new OpenSpec change if continued seriously.
 
 Primary evidence doc:
 
 - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-05.md`
+- `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-06.md`
 
 ## Current Best View Of Remaining Work
 
@@ -196,7 +204,7 @@ Important:
 1. Read this document first.
 2. Read the latest progress docs for the two active/partial tracks:
    - `docs/refactor-progress-centralize-outbound-trigger-contracts-2026-03-06.md`
-   - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-05.md`
+   - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-06.md`
 3. Run `git status --short` immediately and confirm whether the working tree still matches the handoff snapshot in this file.
 4. If continuing outbound/trigger convergence, treat the next action as:
    - one more duplication audit pass

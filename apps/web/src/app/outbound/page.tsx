@@ -11,34 +11,36 @@ import { Button, Input } from "@opencom/ui";
 import { Pencil, Trash2, Play, Pause, Search, MessageSquare, Bell, Flag } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
-
-type MessageType = "chat" | "post" | "banner";
-type MessageStatus = "draft" | "active" | "paused" | "archived";
+import type { OutboundMessageStatus, OutboundMessageType } from "@opencom/types";
+import {
+  OUTBOUND_MESSAGE_STATUS_OPTIONS,
+  OUTBOUND_MESSAGE_TYPE_OPTIONS,
+  OutboundMessageTypeIcon,
+  getOutboundMessageStatusBadgeClass,
+} from "./outboundMessageUi";
 
 function OutboundContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | MessageType>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | MessageStatus>("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | OutboundMessageType>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | OutboundMessageStatus>("all");
 
-  const messages = useQuery(
-    api.outboundMessages.list,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          type: typeFilter === "all" ? undefined : typeFilter,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        }
-      : "skip"
-  );
+  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  const messages = useQuery(api.outboundMessages.list, activeWorkspace?._id
+    ? {
+        workspaceId: activeWorkspace._id,
+        type: typeFilter === "all" ? undefined : typeFilter,
+        status: statusFilter === "all" ? undefined : statusFilter,
+      }
+    : "skip");
 
   const createMessage = useMutation(api.outboundMessages.create);
   const deleteMessage = useMutation(api.outboundMessages.remove);
   const activateMessage = useMutation(api.outboundMessages.activate);
   const pauseMessage = useMutation(api.outboundMessages.pause);
 
-  const handleCreate = async (type: MessageType) => {
+  const handleCreate = async (type: OutboundMessageType) => {
     if (!activeWorkspace?._id) return;
     const messageId = await createMessage({
       workspaceId: activeWorkspace._id,
@@ -79,32 +81,6 @@ function OutboundContent() {
     msg.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "draft":
-        return "bg-gray-100 text-gray-800";
-      case "paused":
-        return "bg-yellow-100 text-yellow-800";
-      case "archived":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const getTypeIcon = (type: MessageType) => {
-    switch (type) {
-      case "chat":
-        return <MessageSquare className="h-4 w-4" />;
-      case "post":
-        return <Bell className="h-4 w-4" />;
-      case "banner":
-        return <Flag className="h-4 w-4" />;
-    }
-  };
-
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
@@ -144,9 +120,11 @@ function OutboundContent() {
           className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="all">All Types</option>
-          <option value="chat">Chat</option>
-          <option value="post">Post</option>
-          <option value="banner">Banner</option>
+          {OUTBOUND_MESSAGE_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
         <select
           value={statusFilter}
@@ -154,10 +132,11 @@ function OutboundContent() {
           className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
         >
           <option value="all">All Status</option>
-          <option value="draft">Draft</option>
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="archived">Archived</option>
+          {OUTBOUND_MESSAGE_STATUS_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -208,13 +187,13 @@ function OutboundContent() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {getTypeIcon(msg.type)}
+                      <OutboundMessageTypeIcon type={msg.type} />
                       <span className="capitalize">{msg.type}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     <span
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(msg.status)}`}
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getOutboundMessageStatusBadgeClass(msg.status)}`}
                     >
                       {msg.status}
                     </span>
