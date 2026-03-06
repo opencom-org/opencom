@@ -1,9 +1,31 @@
 import { internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../_generated/dataModel";
+import type {
+  MessageButton as SharedMessageButton,
+  OutboundButtonAction,
+  OutboundMessageContent,
+} from "@opencom/types";
 import { formatReadableVisitorId } from "../visitorReadableId";
+import {
+  outboundClickActionValidator,
+  outboundMessageStatusValidator,
+  outboundMessageTriggerTypeValidator,
+  outboundMessageTypeValidator,
+} from "../outboundContracts";
 
 const E2E_TEST_PREFIX = "e2e_test_";
+
+type SeedOutboundButtonAction = Exclude<OutboundButtonAction, "reply" | "chat">;
+type SeedMessageButton = Omit<SharedMessageButton<Id<"tours">, Id<"articles">>, "action"> & {
+  action: SeedOutboundButtonAction;
+};
+type SeedOutboundMessageContent = Omit<
+  OutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>,
+  "buttons"
+> & {
+  buttons?: SeedMessageButton[];
+};
 
 function requireTestDataEnabled() {
   if (process.env.ALLOW_TEST_DATA !== "true") {
@@ -317,37 +339,12 @@ const seedOutboundMessage = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
     name: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("chat"), v.literal("post"), v.literal("banner"))),
-    status: v.optional(
-      v.union(v.literal("draft"), v.literal("active"), v.literal("paused"), v.literal("archived"))
-    ),
-    triggerType: v.optional(
-      v.union(
-        v.literal("immediate"),
-        v.literal("page_visit"),
-        v.literal("time_on_page"),
-        v.literal("scroll_depth"),
-        v.literal("event")
-      )
-    ),
+    type: v.optional(outboundMessageTypeValidator),
+    status: v.optional(outboundMessageStatusValidator),
+    triggerType: v.optional(outboundMessageTriggerTypeValidator),
     triggerPageUrl: v.optional(v.string()),
     senderId: v.optional(v.id("users")),
-    clickAction: v.optional(
-      v.object({
-        type: v.union(
-          v.literal("open_messenger"),
-          v.literal("open_new_conversation"),
-          v.literal("open_widget_tab"),
-          v.literal("open_help_article"),
-          v.literal("open_url"),
-          v.literal("dismiss")
-        ),
-        tabId: v.optional(v.string()),
-        articleId: v.optional(v.id("articles")),
-        url: v.optional(v.string()),
-        prefillMessage: v.optional(v.string()),
-      })
-    ),
+    clickAction: v.optional(outboundClickActionValidator),
   },
   handler: async (ctx, args) => {
     requireTestDataEnabled();
@@ -356,38 +353,7 @@ const seedOutboundMessage = internalMutation({
     const name = args.name || `${E2E_TEST_PREFIX}message_${randomSuffix}`;
     const type = args.type || "chat";
 
-    const content: {
-      text?: string;
-      senderId?: Id<"users">;
-      title?: string;
-      body?: string;
-      style?: "inline" | "floating";
-      dismissible?: boolean;
-      buttons?: Array<{
-        text: string;
-        action:
-          | "url"
-          | "dismiss"
-          | "tour"
-          | "open_new_conversation"
-          | "open_help_article"
-          | "open_widget_tab";
-        url?: string;
-      }>;
-      clickAction?: {
-        type:
-          | "open_messenger"
-          | "open_new_conversation"
-          | "open_widget_tab"
-          | "open_help_article"
-          | "open_url"
-          | "dismiss";
-        tabId?: string;
-        articleId?: Id<"articles">;
-        url?: string;
-        prefillMessage?: string;
-      };
-    } = {};
+    const content: SeedOutboundMessageContent = {};
 
     if (type === "chat") {
       content.text = "Hello! This is an E2E test message. How can we help you today?";

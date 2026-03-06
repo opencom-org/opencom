@@ -13,6 +13,10 @@ import { getAuthenticatedUserFromSession } from "../auth";
 import { type Permission, requirePermission } from "../permissions";
 
 type WorkspaceId = Id<"workspaces">;
+type ActionRunQuery = (queryRef: unknown, args: Record<string, unknown>) => Promise<unknown>;
+type ActionCtxWithRunQuery = ActionCtx & {
+  runQuery: ActionRunQuery;
+};
 
 export type AuthenticatedUser = NonNullable<
   Awaited<ReturnType<typeof getAuthenticatedUserFromSession>>
@@ -74,8 +78,12 @@ async function getWorkspaceIdForPermission<
 }
 
 async function getActionUser(ctx: ActionCtx): Promise<AuthenticatedUser> {
+  const runQuery = (ctx as ActionCtxWithRunQuery).runQuery;
   // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
-  const currentUser = await (ctx as any).runQuery((api as any).auth.currentUser, {} as any);
+  const currentUserRef = (api as unknown as { auth: { currentUser: unknown } }).auth.currentUser;
+  const currentUser = (await runQuery(currentUserRef, {})) as
+    | { user?: AuthenticatedUser }
+    | null;
   if (!currentUser?.user) {
     throw new Error("Not authenticated");
   }
@@ -170,12 +178,16 @@ export function authAction<ArgsValidator extends PropertyValidators, ReturnValue
           }
           throw new Error("Auth wrapper misconfigured: missing workspace resolver");
         }
+        const runQuery = (ctx as ActionCtxWithRunQuery).runQuery;
         // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
-        await (ctx as any).runQuery((internal as any).permissions.requirePermissionForAction, {
+        const permissionRef = (internal as unknown as {
+          permissions: { requirePermissionForAction: unknown };
+        }).permissions.requirePermissionForAction;
+        await runQuery(permissionRef, {
           userId: user._id,
           workspaceId,
           permission: options.permission,
-        } as any);
+        });
       }
 
       return options.handler(withUser(ctx, user), args);

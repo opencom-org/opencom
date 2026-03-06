@@ -39,6 +39,7 @@
     "test:unit": "pnpm web:test:unit",
     "test:e2e": "pnpm web:test:e2e",
     "test:ci": "pnpm web:test:ci",
+    "test:compat:cross-surface": "pnpm --filter @opencom/sdk-core test && pnpm --filter @opencom/react-native-sdk test && pnpm --filter @opencom/mobile typecheck",
     "web:test:unit": "vitest run",
     "web:test:e2e": "set -a; source packages/convex/.env.local; set +a; pnpm playwright test",
     "web:test:ci": "vitest run --coverage && playwright test",

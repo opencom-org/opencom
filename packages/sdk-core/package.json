@@ -20,6 +20,7 @@
     "test:watch": "vitest --config ./vitest.config.ts"
   },
   "dependencies": {
+    "@opencom/types": "workspace:*",
     "convex": "^1.31.7"
   },
   "devDependencies": {

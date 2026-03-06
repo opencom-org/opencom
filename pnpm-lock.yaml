@@ -409,6 +409,9 @@ importers:
       '@opencom/sdk-core':
         specifier: workspace:*
         version: link:../sdk-core
+      '@opencom/types':
+        specifier: workspace:*
+        version: link:../types
       '@react-native-async-storage/async-storage':
         specifier: ^1.23.0
         version: 1.24.0(react-native@0.81.5(@babel/core@7.28.6)(@react-native-community/cli@17.0.1(typescript@5.0.4))(@react-native/metro-config@0.83.1(@babel/core@7.28.6))(@types/react@19.1.17)(react@19.2.3))
@@ -513,6 +516,9 @@ importers:
       '@opencom/convex':
         specifier: workspace:*
         version: link:../convex
+      '@opencom/types':
+        specifier: workspace:*
+        version: link:../types
       convex:
         specifier: ^1.31.7
         version: 1.31.7(react@19.2.3)

@@ -26,61 +26,22 @@ import {
   toInlineAudienceRuleFromBuilder,
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
-
-type MessageType = "chat" | "post" | "banner";
-
-type MessageClickActionType =
-  | "open_messenger"
-  | "open_new_conversation"
-  | "open_widget_tab"
-  | "open_help_article"
-  | "open_url"
-  | "dismiss";
-
-type MessageButtonActionType =
-  | "url"
-  | "dismiss"
-  | "tour"
-  | "open_new_conversation"
-  | "open_help_article"
-  | "open_widget_tab";
-
-type PostPrimaryActionType =
-  | "url"
-  | "open_new_conversation"
-  | "open_help_article"
-  | "open_widget_tab";
-
-type MessageClickAction = {
-  type: MessageClickActionType;
-  tabId?: string;
-  articleId?: Id<"articles">;
-  url?: string;
-  prefillMessage?: string;
-};
-
-type MessageButton = {
-  text: string;
-  action: MessageButtonActionType;
-  url?: string;
-  tourId?: Id<"tours">;
-  articleId?: Id<"articles">;
-  tabId?: string;
-  prefillMessage?: string;
-};
-
-type MessageContent = {
-  text?: string;
-  senderId?: Id<"users">;
-  title?: string;
-  body?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  style?: "inline" | "floating";
-  dismissible?: boolean;
-  clickAction?: MessageClickAction;
-  buttons?: MessageButton[];
-};
+import type { MessageFrequency, MessageTrigger } from "@opencom/types";
+import {
+  createDefaultClickActionFormState,
+  createDefaultPostButtonFormState,
+  MessageContent,
+  MessageType,
+  PostPrimaryActionType,
+  toClickActionFormState,
+  toMessageClickAction,
+  toPostButtonFormState,
+  toPostButtons,
+  type ClickActionFormState,
+  type MessageButton,
+  type MessageClickActionType,
+  type PostButtonFormState,
+} from "./editorState";
 
 function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
@@ -95,7 +56,9 @@ function MessageBuilderContent() {
   const messageId = params.id as Id<"outboundMessages">;
   const { activeWorkspace } = useAuth();
 
+  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
   const message = useQuery(api.outboundMessages.get, { id: messageId });
+  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
   const stats = useQuery(api.outboundMessages.getStats, { id: messageId });
   const members = useQuery(
     api.workspaceMembers.listByWorkspace,
@@ -106,39 +69,25 @@ function MessageBuilderContent() {
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
+  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
   const updateMessage = useMutation(api.outboundMessages.update);
+  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
   const activateMessage = useMutation(api.outboundMessages.activate);
+  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
   const pauseMessage = useMutation(api.outboundMessages.pause);
 
   const [name, setName] = useState("");
   const [content, setContent] = useState<MessageContent>({});
-  const [triggers, setTriggers] = useState<{
-    type: "immediate" | "page_visit" | "time_on_page" | "scroll_depth" | "event";
-    pageUrl?: string;
-    pageUrlMatch?: "exact" | "contains" | "regex";
-    delaySeconds?: number;
-    scrollPercent?: number;
-    eventName?: string;
-  }>({ type: "immediate" });
-  const [frequency, setFrequency] = useState<"once" | "once_per_session" | "always">("once");
+  const [triggers, setTriggers] = useState<MessageTrigger>({ type: "immediate" });
+  const [frequency, setFrequency] = useState<MessageFrequency>("once");
   const [showPreview, setShowPreview] = useState(false);
   const [audienceRules, setAudienceRules] = useState<InlineAudienceRule | null>(null);
-  const [clickActionType, setClickActionType] = useState<string>("open_messenger");
-  const [clickActionTabId, setClickActionTabId] = useState<string>("");
-  const [clickActionArticleId, setClickActionArticleId] = useState<string>("");
-  const [clickActionUrl, setClickActionUrl] = useState<string>("");
-  const [clickActionPrefillMessage, setClickActionPrefillMessage] = useState<string>("");
-
-  const [postPrimaryButtonText, setPostPrimaryButtonText] = useState<string>("Learn More");
-  const [postPrimaryActionType, setPostPrimaryActionType] =
-    useState<PostPrimaryActionType>("open_new_conversation");
-  const [postPrimaryActionUrl, setPostPrimaryActionUrl] = useState<string>("");
-  const [postPrimaryActionTabId, setPostPrimaryActionTabId] = useState<string>("messages");
-  const [postPrimaryActionArticleId, setPostPrimaryActionArticleId] = useState<string>("");
-  const [postPrimaryActionPrefillMessage, setPostPrimaryActionPrefillMessage] =
-    useState<string>("");
-  const [postDismissEnabled, setPostDismissEnabled] = useState<boolean>(true);
-  const [postDismissButtonText, setPostDismissButtonText] = useState<string>("Dismiss");
+  const [clickActionForm, setClickActionForm] = useState<ClickActionFormState>(
+    createDefaultClickActionFormState()
+  );
+  const [postButtonForm, setPostButtonForm] = useState<PostButtonFormState>(
+    createDefaultPostButtonFormState()
+  );
 
   const articles = useQuery(
     api.articles.list,
@@ -154,53 +103,14 @@ function MessageBuilderContent() {
       setTriggers(message.triggers || { type: "immediate" });
       setFrequency(message.frequency || "once");
       setAudienceRules(toInlineAudienceRule(message.audienceRules ?? message.targeting));
-      const ca = message.content.clickAction;
-      if (ca) {
-        setClickActionType(ca.type);
-        setClickActionTabId(ca.tabId || "");
-        setClickActionArticleId((ca.articleId as string) || "");
-        setClickActionUrl(ca.url || "");
-        setClickActionPrefillMessage(ca.prefillMessage || "");
-      } else {
-        setClickActionType("open_messenger");
-        setClickActionTabId("");
-        setClickActionArticleId("");
-        setClickActionUrl("");
-        setClickActionPrefillMessage("");
-      }
+      setClickActionForm(
+        toClickActionFormState(message.content.clickAction as MessageContent["clickAction"])
+      );
 
       if (message.type === "post") {
-        const buttons = (message.content.buttons ?? []) as MessageButton[];
-        const hasExistingPostButtons = buttons.length > 0;
-        const primaryButton = buttons.find((button) => button.action !== "dismiss");
-        const dismissButton = buttons.find((button) => button.action === "dismiss");
-
-        if (primaryButton) {
-          const parsedPrimaryAction: PostPrimaryActionType =
-            primaryButton.action === "url" ||
-            primaryButton.action === "open_new_conversation" ||
-            primaryButton.action === "open_widget_tab" ||
-            primaryButton.action === "open_help_article"
-              ? primaryButton.action
-              : "open_new_conversation";
-
-          setPostPrimaryButtonText(primaryButton.text || "Learn More");
-          setPostPrimaryActionType(parsedPrimaryAction);
-          setPostPrimaryActionUrl(primaryButton.url || "");
-          setPostPrimaryActionTabId(primaryButton.tabId || "messages");
-          setPostPrimaryActionArticleId((primaryButton.articleId as string) || "");
-          setPostPrimaryActionPrefillMessage(primaryButton.prefillMessage || "");
-        } else {
-          setPostPrimaryButtonText("Learn More");
-          setPostPrimaryActionType("open_new_conversation");
-          setPostPrimaryActionUrl("");
-          setPostPrimaryActionTabId("messages");
-          setPostPrimaryActionArticleId("");
-          setPostPrimaryActionPrefillMessage("");
-        }
-
-        setPostDismissEnabled(dismissButton ? true : !hasExistingPostButtons);
-        setPostDismissButtonText(dismissButton?.text || "Dismiss");
+        setPostButtonForm(toPostButtonFormState((message.content.buttons ?? []) as MessageButton[]));
+      } else {
+        setPostButtonForm(createDefaultPostButtonFormState());
       }
     }
   }, [message]);
@@ -210,19 +120,7 @@ function MessageBuilderContent() {
       return;
     }
 
-    const clickAction: MessageClickAction = {
-      type: clickActionType as MessageClickActionType,
-      ...(clickActionType === "open_widget_tab" && clickActionTabId
-        ? { tabId: clickActionTabId }
-        : {}),
-      ...(clickActionType === "open_help_article" && clickActionArticleId
-        ? { articleId: clickActionArticleId as Id<"articles"> }
-        : {}),
-      ...(clickActionType === "open_url" && clickActionUrl ? { url: clickActionUrl } : {}),
-      ...(clickActionType === "open_new_conversation" && clickActionPrefillMessage
-        ? { prefillMessage: clickActionPrefillMessage }
-        : {}),
-    };
+    const clickAction = toMessageClickAction(clickActionForm);
 
     const nextContent: MessageContent = {
       ...content,
@@ -230,40 +128,7 @@ function MessageBuilderContent() {
     };
 
     if (message.type === "post") {
-      const postButtons: MessageButton[] = [];
-
-      const trimmedPrimaryText = postPrimaryButtonText.trim();
-      if (trimmedPrimaryText) {
-        const primaryButton: MessageButton = {
-          text: trimmedPrimaryText,
-          action: postPrimaryActionType,
-          ...(postPrimaryActionType === "url" && postPrimaryActionUrl.trim()
-            ? { url: postPrimaryActionUrl.trim() }
-            : {}),
-          ...(postPrimaryActionType === "open_widget_tab" && postPrimaryActionTabId
-            ? { tabId: postPrimaryActionTabId }
-            : {}),
-          ...(postPrimaryActionType === "open_help_article" && postPrimaryActionArticleId
-            ? { articleId: postPrimaryActionArticleId as Id<"articles"> }
-            : {}),
-          ...(postPrimaryActionType === "open_new_conversation" &&
-          postPrimaryActionPrefillMessage.trim()
-            ? { prefillMessage: postPrimaryActionPrefillMessage.trim() }
-            : {}),
-        };
-
-        postButtons.push(primaryButton);
-      }
-
-      const trimmedDismissText = postDismissButtonText.trim();
-      if (postDismissEnabled && trimmedDismissText) {
-        postButtons.push({
-          text: trimmedDismissText,
-          action: "dismiss",
-        });
-      }
-
-      nextContent.buttons = postButtons.length > 0 ? postButtons : undefined;
+      nextContent.buttons = toPostButtons(postButtonForm);
     }
 
     await updateMessage({
@@ -366,8 +231,10 @@ function MessageBuilderContent() {
               <div>
                 <Label>Primary CTA Label</Label>
                 <Input
-                  value={postPrimaryButtonText}
-                  onChange={(e) => setPostPrimaryButtonText(e.target.value)}
+                  value={postButtonForm.primaryButtonText}
+                  onChange={(e) =>
+                    setPostButtonForm((prev) => ({ ...prev, primaryButtonText: e.target.value }))
+                  }
                   placeholder="Learn More"
                 />
               </div>
@@ -375,9 +242,12 @@ function MessageBuilderContent() {
               <div>
                 <Label>Primary CTA Action</Label>
                 <select
-                  value={postPrimaryActionType}
+                  value={postButtonForm.primaryActionType}
                   onChange={(e) =>
-                    setPostPrimaryActionType(e.target.value as PostPrimaryActionType)
+                    setPostButtonForm((prev) => ({
+                      ...prev,
+                      primaryActionType: e.target.value as PostPrimaryActionType,
+                    }))
                   }
                   className="w-full mt-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 >
@@ -388,23 +258,30 @@ function MessageBuilderContent() {
                 </select>
               </div>
 
-              {postPrimaryActionType === "open_new_conversation" && (
+              {postButtonForm.primaryActionType === "open_new_conversation" && (
                 <div>
                   <Label>Prefill Message (optional)</Label>
                   <Input
-                    value={postPrimaryActionPrefillMessage}
-                    onChange={(e) => setPostPrimaryActionPrefillMessage(e.target.value)}
+                    value={postButtonForm.primaryActionPrefillMessage}
+                    onChange={(e) =>
+                      setPostButtonForm((prev) => ({
+                        ...prev,
+                        primaryActionPrefillMessage: e.target.value,
+                      }))
+                    }
                     placeholder="I'd like to learn more about..."
                   />
                 </div>
               )}
 
-              {postPrimaryActionType === "open_widget_tab" && (
+              {postButtonForm.primaryActionType === "open_widget_tab" && (
                 <div>
                   <Label>Widget Tab</Label>
                   <select
-                    value={postPrimaryActionTabId}
-                    onChange={(e) => setPostPrimaryActionTabId(e.target.value)}
+                    value={postButtonForm.primaryActionTabId}
+                    onChange={(e) =>
+                      setPostButtonForm((prev) => ({ ...prev, primaryActionTabId: e.target.value }))
+                    }
                     className="w-full mt-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="home">Home</option>
@@ -415,12 +292,17 @@ function MessageBuilderContent() {
                 </div>
               )}
 
-              {postPrimaryActionType === "open_help_article" && (
+              {postButtonForm.primaryActionType === "open_help_article" && (
                 <div>
                   <Label>Help Article</Label>
                   <select
-                    value={postPrimaryActionArticleId}
-                    onChange={(e) => setPostPrimaryActionArticleId(e.target.value)}
+                    value={postButtonForm.primaryActionArticleId}
+                    onChange={(e) =>
+                      setPostButtonForm((prev) => ({
+                        ...prev,
+                        primaryActionArticleId: e.target.value,
+                      }))
+                    }
                     className="w-full mt-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Select an article...</option>
@@ -433,12 +315,14 @@ function MessageBuilderContent() {
                 </div>
               )}
 
-              {postPrimaryActionType === "url" && (
+              {postButtonForm.primaryActionType === "url" && (
                 <div>
                   <Label>Destination URL</Label>
                   <Input
-                    value={postPrimaryActionUrl}
-                    onChange={(e) => setPostPrimaryActionUrl(e.target.value)}
+                    value={postButtonForm.primaryActionUrl}
+                    onChange={(e) =>
+                      setPostButtonForm((prev) => ({ ...prev, primaryActionUrl: e.target.value }))
+                    }
                     placeholder="https://example.com/pricing"
                   />
                 </div>
@@ -448,19 +332,23 @@ function MessageBuilderContent() {
                 <input
                   id="post-dismiss-enabled"
                   type="checkbox"
-                  checked={postDismissEnabled}
-                  onChange={(e) => setPostDismissEnabled(e.target.checked)}
+                  checked={postButtonForm.dismissEnabled}
+                  onChange={(e) =>
+                    setPostButtonForm((prev) => ({ ...prev, dismissEnabled: e.target.checked }))
+                  }
                   className="rounded"
                 />
                 <Label htmlFor="post-dismiss-enabled">Show dismiss button</Label>
               </div>
 
-              {postDismissEnabled && (
+              {postButtonForm.dismissEnabled && (
                 <div>
                   <Label>Dismiss Label</Label>
                   <Input
-                    value={postDismissButtonText}
-                    onChange={(e) => setPostDismissButtonText(e.target.value)}
+                    value={postButtonForm.dismissButtonText}
+                    onChange={(e) =>
+                      setPostButtonForm((prev) => ({ ...prev, dismissButtonText: e.target.value }))
+                    }
                     placeholder="Dismiss"
                   />
                 </div>
@@ -528,11 +416,11 @@ function MessageBuilderContent() {
 
       case "post": {
         const postPreviewButtons = [
-          ...(postPrimaryButtonText.trim()
-            ? [{ text: postPrimaryButtonText.trim(), variant: "primary" as const }]
+          ...(postButtonForm.primaryButtonText.trim()
+            ? [{ text: postButtonForm.primaryButtonText.trim(), variant: "primary" as const }]
             : []),
-          ...(postDismissEnabled && postDismissButtonText.trim()
-            ? [{ text: postDismissButtonText.trim(), variant: "secondary" as const }]
+          ...(postButtonForm.dismissEnabled && postButtonForm.dismissButtonText.trim()
+            ? [{ text: postButtonForm.dismissButtonText.trim(), variant: "secondary" as const }]
             : []),
         ];
 
@@ -779,8 +667,13 @@ function MessageBuilderContent() {
               <div>
                 <Label>Action Type</Label>
                 <select
-                  value={clickActionType}
-                  onChange={(e) => setClickActionType(e.target.value)}
+                  value={clickActionForm.type}
+                  onChange={(e) =>
+                    setClickActionForm((prev) => ({
+                      ...prev,
+                      type: e.target.value as MessageClickActionType,
+                    }))
+                  }
                   className="w-full mt-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="open_messenger">Open Messenger</option>
@@ -792,23 +685,30 @@ function MessageBuilderContent() {
                 </select>
               </div>
 
-              {clickActionType === "open_new_conversation" && (
+              {clickActionForm.type === "open_new_conversation" && (
                 <div>
                   <Label>Prefill Message (optional)</Label>
                   <Input
-                    value={clickActionPrefillMessage}
-                    onChange={(e) => setClickActionPrefillMessage(e.target.value)}
+                    value={clickActionForm.prefillMessage}
+                    onChange={(e) =>
+                      setClickActionForm((prev) => ({
+                        ...prev,
+                        prefillMessage: e.target.value,
+                      }))
+                    }
                     placeholder="I'd like to learn more about..."
                   />
                 </div>
               )}
 
-              {clickActionType === "open_widget_tab" && (
+              {clickActionForm.type === "open_widget_tab" && (
                 <div>
                   <Label>Tab</Label>
                   <select
-                    value={clickActionTabId}
-                    onChange={(e) => setClickActionTabId(e.target.value)}
+                    value={clickActionForm.tabId}
+                    onChange={(e) =>
+                      setClickActionForm((prev) => ({ ...prev, tabId: e.target.value }))
+                    }
                     className="w-full mt-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Select a tab...</option>
@@ -820,12 +720,14 @@ function MessageBuilderContent() {
                 </div>
               )}
 
-              {clickActionType === "open_help_article" && (
+              {clickActionForm.type === "open_help_article" && (
                 <div>
                   <Label>Article</Label>
                   <select
-                    value={clickActionArticleId}
-                    onChange={(e) => setClickActionArticleId(e.target.value)}
+                    value={clickActionForm.articleId}
+                    onChange={(e) =>
+                      setClickActionForm((prev) => ({ ...prev, articleId: e.target.value }))
+                    }
                     className="w-full mt-1 p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">Select an article...</option>
@@ -838,12 +740,14 @@ function MessageBuilderContent() {
                 </div>
               )}
 
-              {clickActionType === "open_url" && (
+              {clickActionForm.type === "open_url" && (
                 <div>
                   <Label>URL</Label>
                   <Input
-                    value={clickActionUrl}
-                    onChange={(e) => setClickActionUrl(e.target.value)}
+                    value={clickActionForm.url}
+                    onChange={(e) =>
+                      setClickActionForm((prev) => ({ ...prev, url: e.target.value }))
+                    }
                     placeholder="https://example.com/pricing"
                   />
                 </div>
@@ -881,17 +785,17 @@ function MessageBuilderContent() {
                 <span>
                   Click action:{" "}
                   <span className="font-medium text-gray-700">
-                    {clickActionType === "open_messenger"
+                    {clickActionForm.type === "open_messenger"
                       ? "Open Messenger"
-                      : clickActionType === "open_new_conversation"
+                      : clickActionForm.type === "open_new_conversation"
                         ? "Start Conversation"
-                        : clickActionType === "open_widget_tab"
-                          ? `Open Tab (${clickActionTabId || "—"})`
-                          : clickActionType === "open_help_article"
+                        : clickActionForm.type === "open_widget_tab"
+                          ? `Open Tab (${clickActionForm.tabId || "—"})`
+                          : clickActionForm.type === "open_help_article"
                             ? "Open Article"
-                            : clickActionType === "open_url"
+                            : clickActionForm.type === "open_url"
                               ? `Open URL`
-                              : clickActionType === "dismiss"
+                              : clickActionForm.type === "dismiss"
                                 ? "Dismiss"
                                 : "Open Messenger"}
                   </span>

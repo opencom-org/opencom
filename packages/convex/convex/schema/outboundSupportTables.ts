@@ -1,97 +1,28 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { audienceRulesOrSegmentValidator, formDataValidator, jsonValueValidator } from "../validators";
+import {
+  outboundImpressionActionValidator,
+  outboundMessageContentValidator,
+  outboundMessageFrequencyValidator,
+  outboundMessageSchedulingValidator,
+  outboundMessageStatusValidator,
+  outboundMessageTriggerValidator,
+  outboundMessageTypeValidator,
+} from "../outboundContracts";
 
 export const outboundSupportTables = {
   outboundMessages: defineTable({
     workspaceId: v.id("workspaces"),
-    type: v.union(v.literal("chat"), v.literal("post"), v.literal("banner")),
+    type: outboundMessageTypeValidator,
     name: v.string(),
-    content: v.object({
-      // Chat message fields
-      text: v.optional(v.string()),
-      senderId: v.optional(v.id("users")),
-      // Post message fields
-      title: v.optional(v.string()),
-      body: v.optional(v.string()),
-      imageUrl: v.optional(v.string()),
-      videoUrl: v.optional(v.string()),
-      // Banner fields
-      style: v.optional(v.union(v.literal("inline"), v.literal("floating"))),
-      dismissible: v.optional(v.boolean()),
-      // Shared fields
-      buttons: v.optional(
-        v.array(
-          v.object({
-            text: v.string(),
-            action: v.union(
-              v.literal("url"),
-              v.literal("dismiss"),
-              v.literal("tour"),
-              v.literal("open_new_conversation"),
-              v.literal("open_help_article"),
-              v.literal("open_widget_tab")
-            ),
-            url: v.optional(v.string()),
-            tourId: v.optional(v.id("tours")),
-            articleId: v.optional(v.id("articles")),
-            tabId: v.optional(v.string()),
-            prefillMessage: v.optional(v.string()),
-          })
-        )
-      ),
-      clickAction: v.optional(
-        v.object({
-          type: v.union(
-            v.literal("open_messenger"),
-            v.literal("open_new_conversation"),
-            v.literal("open_widget_tab"),
-            v.literal("open_help_article"),
-            v.literal("open_url"),
-            v.literal("dismiss")
-          ),
-          tabId: v.optional(v.string()),
-          articleId: v.optional(v.id("articles")),
-          url: v.optional(v.string()),
-          prefillMessage: v.optional(v.string()),
-        })
-      ),
-    }),
+    content: outboundMessageContentValidator,
     audienceRules: v.optional(audienceRulesOrSegmentValidator),
     targeting: v.optional(audienceRulesOrSegmentValidator),
-    triggers: v.optional(
-      v.object({
-        type: v.union(
-          v.literal("immediate"),
-          v.literal("page_visit"),
-          v.literal("time_on_page"),
-          v.literal("scroll_depth"),
-          v.literal("event")
-        ),
-        pageUrl: v.optional(v.string()),
-        pageUrlMatch: v.optional(
-          v.union(v.literal("exact"), v.literal("contains"), v.literal("regex"))
-        ),
-        delaySeconds: v.optional(v.number()),
-        scrollPercent: v.optional(v.number()),
-        eventName: v.optional(v.string()),
-      })
-    ),
-    frequency: v.optional(
-      v.union(v.literal("once"), v.literal("once_per_session"), v.literal("always"))
-    ),
-    scheduling: v.optional(
-      v.object({
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-      })
-    ),
-    status: v.union(
-      v.literal("draft"),
-      v.literal("active"),
-      v.literal("paused"),
-      v.literal("archived")
-    ),
+    triggers: v.optional(outboundMessageTriggerValidator),
+    frequency: v.optional(outboundMessageFrequencyValidator),
+    scheduling: v.optional(outboundMessageSchedulingValidator),
+    status: outboundMessageStatusValidator,
     priority: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -105,7 +36,7 @@ export const outboundSupportTables = {
     messageId: v.id("outboundMessages"),
     visitorId: v.id("visitors"),
     sessionId: v.optional(v.string()),
-    action: v.union(v.literal("shown"), v.literal("clicked"), v.literal("dismissed")),
+    action: outboundImpressionActionValidator,
     buttonIndex: v.optional(v.number()),
     createdAt: v.number(),
   })

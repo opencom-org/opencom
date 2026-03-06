@@ -3,59 +3,22 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { X } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
+import type {
+  MessageTrigger,
+  OutboundClickAction,
+  OutboundMessageContent,
+  OutboundMessageType,
+} from "@opencom/types";
 import { safeOpenUrl } from "./utils/safeOpenUrl";
 
-type ClickActionType =
-  | "open_messenger"
-  | "open_new_conversation"
-  | "open_widget_tab"
-  | "open_help_article"
-  | "open_url"
-  | "dismiss";
-
-interface ClickAction {
-  type: ClickActionType;
-  tabId?: string;
-  articleId?: Id<"articles">;
-  url?: string;
-  prefillMessage?: string;
-}
+type ClickAction = OutboundClickAction<Id<"articles">>;
 
 interface OutboundMessage {
   _id: Id<"outboundMessages">;
-  type: "chat" | "post" | "banner";
+  type: OutboundMessageType;
   name: string;
-  content: {
-    text?: string;
-    senderId?: Id<"users">;
-    title?: string;
-    body?: string;
-    imageUrl?: string;
-    videoUrl?: string;
-    style?: "inline" | "floating";
-    dismissible?: boolean;
-    buttons?: Array<{
-      text: string;
-      action:
-        | "url"
-        | "dismiss"
-        | "tour"
-        | "open_new_conversation"
-        | "open_help_article"
-        | "open_widget_tab";
-      url?: string;
-      tourId?: Id<"tours">;
-      articleId?: Id<"articles">;
-      tabId?: string;
-      prefillMessage?: string;
-    }>;
-    clickAction?: ClickAction;
-  };
-  triggers?: {
-    type: "immediate" | "page_visit" | "time_on_page" | "scroll_depth" | "event";
-    delaySeconds?: number;
-    scrollPercent?: number;
-  };
+  content: OutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>;
+  triggers?: MessageTrigger;
   priority?: number;
 }
 
@@ -277,7 +240,7 @@ export function OutboundOverlay({
           break;
         case "open_help_article":
           handleDismiss(message);
-          if (action.articleId) onOpenArticle?.(action.articleId);
+          if (action.articleId) onOpenArticle?.(action.articleId as Id<"articles">);
           break;
         case "open_url":
           if (action.url) safeOpenUrl(action.url);
@@ -328,12 +291,12 @@ export function OutboundOverlay({
       if (button.action === "url" && button.url) {
         safeOpenUrl(button.url);
       } else if (button.action === "tour" && button.tourId && onStartTour) {
-        onStartTour(button.tourId);
+        onStartTour(button.tourId as Id<"tours">);
       } else if (button.action === "open_new_conversation") {
         onStartConversation?.(button.prefillMessage);
         handleDismiss(message);
       } else if (button.action === "open_help_article" && button.articleId) {
-        onOpenArticle?.(button.articleId);
+        onOpenArticle?.(button.articleId as Id<"articles">);
         handleDismiss(message);
       } else if (button.action === "open_widget_tab" && button.tabId) {
         onNavigateTab?.(button.tabId);

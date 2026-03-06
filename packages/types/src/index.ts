@@ -149,17 +149,44 @@ export type OutboundMessageStatus = "draft" | "active" | "paused" | "archived";
 export type MessageFrequency = "once" | "once_per_session" | "always";
 export type TriggerType = "immediate" | "page_visit" | "time_on_page" | "scroll_depth" | "event";
 export type PageUrlMatch = "exact" | "contains" | "regex";
-export type ButtonAction = "url" | "dismiss" | "tour";
 export type BannerStyle = "inline" | "floating";
+export type OutboundClickActionType =
+  | "open_messenger"
+  | "open_new_conversation"
+  | "open_widget_tab"
+  | "open_help_article"
+  | "open_url"
+  | "dismiss";
+export type OutboundButtonAction =
+  | "url"
+  | "dismiss"
+  | "tour"
+  | "reply"
+  | "chat"
+  | "open_new_conversation"
+  | "open_help_article"
+  | "open_widget_tab";
+export type ButtonAction = OutboundButtonAction;
 
-export interface MessageButton {
-  text: string;
-  action: ButtonAction;
+export interface OutboundClickAction<ArticleId = string> {
+  type: OutboundClickActionType;
+  tabId?: string;
+  articleId?: ArticleId;
   url?: string;
-  tourId?: string;
+  prefillMessage?: string;
 }
 
-export interface OutboundMessageContent {
+export interface MessageButton<TourId = string, ArticleId = string> {
+  text: string;
+  action: OutboundButtonAction;
+  url?: string;
+  tourId?: TourId;
+  articleId?: ArticleId;
+  tabId?: string;
+  prefillMessage?: string;
+}
+
+export interface OutboundMessageContent<UserId = string, TourId = string, ArticleId = string> {
   // Chat message fields
   text?: string;
   senderId?: UserId;
@@ -172,7 +199,8 @@ export interface OutboundMessageContent {
   style?: BannerStyle;
   dismissible?: boolean;
   // Shared fields
-  buttons?: MessageButton[];
+  clickAction?: OutboundClickAction<ArticleId>;
+  buttons?: MessageButton<TourId, ArticleId>[];
 }
 
 export interface MessageTrigger {
@@ -183,6 +211,7 @@ export interface MessageTrigger {
   scrollPercent?: number;
   eventName?: string;
 }
+export type OutboundMessageTrigger = MessageTrigger;
 
 export interface MessageScheduling {
   startDate?: number;

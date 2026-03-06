@@ -23,7 +23,7 @@ import {
 } from "../src/api/conversations";
 import { bootSession } from "../src/api/sessions";
 import { createTicket } from "../src/api/tickets";
-import { getActiveOutboundMessages } from "../src/api/outbound";
+import { getActiveOutboundMessages, markOutboundAsSeen, trackOutboundImpression } from "../src/api/outbound";
 import { getEligibleChecklists } from "../src/api/checklists";
 import {
   resetVisitorState,
@@ -160,6 +160,47 @@ describe("sdk-core backend contract conformance", () => {
         workspaceId: WORKSPACE_ID,
         visitorId: VISITOR_ID,
         sessionToken: SESSION_TOKEN,
+      })
+    );
+  });
+
+  it("keeps outbound impression mutation contracts stable", async () => {
+    clientMocks.mutation.mockResolvedValue(undefined);
+
+    await trackOutboundImpression({
+      messageId: "outbound_message_1" as never,
+      visitorId: VISITOR_ID as never,
+      sessionId: "session_contract",
+      action: "clicked",
+      buttonIndex: 2,
+    });
+
+    expect(clientMocks.mutation).toHaveBeenLastCalledWith(
+      api.outboundMessages.trackImpression,
+      expect.objectContaining({
+        messageId: "outbound_message_1",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        sessionId: "session_contract",
+        action: "clicked",
+        buttonIndex: 2,
+      })
+    );
+
+    await markOutboundAsSeen({
+      messageId: "outbound_message_2" as never,
+      visitorId: VISITOR_ID as never,
+      sessionId: "session_contract",
+    });
+
+    expect(clientMocks.mutation).toHaveBeenLastCalledWith(
+      api.outboundMessages.trackImpression,
+      expect.objectContaining({
+        messageId: "outbound_message_2",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        sessionId: "session_contract",
+        action: "shown",
       })
     );
   });
