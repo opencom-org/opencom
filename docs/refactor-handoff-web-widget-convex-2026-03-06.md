@@ -21,10 +21,15 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted files at handoff time:
-  - `apps/web/src/app/outbound/[id]/editorState.ts`
-  - `packages/convex/convex/testData/seeds.ts`
-  - `packages/types/src/index.ts`
-  - `docs/refactor-progress-centralize-outbound-trigger-contracts-2026-03-06.md`
+  - `packages/convex/convex/schema/inboxNotificationTables.ts`
+  - `packages/convex/convex/schema/operationsTables.ts`
+  - `packages/convex/convex/schema/inboxConversationTables.ts`
+  - `packages/convex/convex/schema/inboxNotificationRoutingTables.ts`
+  - `packages/convex/convex/schema/inboxPushTokenTables.ts`
+  - `packages/convex/convex/schema/operationsAiTables.ts`
+  - `packages/convex/convex/schema/operationsMessengerTables.ts`
+  - `packages/convex/convex/schema/operationsReportingTables.ts`
+  - `packages/convex/convex/schema/operationsWorkflowTables.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -138,7 +143,8 @@ Primary evidence doc:
 
 Status:
 
-- Started, not complete
+- Implemented through the remaining obvious high-density fragments
+- At a clean stop point in the working tree
 
 What is already done:
 
@@ -149,12 +155,22 @@ What is already done:
   - `campaignSeriesTables.ts`
   - `campaignSurveyTables.ts`
 - The old `campaignTables.ts` file now acts as a composition-only aggregator.
+- `packages/convex/convex/schema/operationsTables.ts` has also been split into focused domain fragments:
+  - `operationsAiTables.ts`
+  - `operationsWorkflowTables.ts`
+  - `operationsReportingTables.ts`
+  - `operationsMessengerTables.ts`
+- The old `operationsTables.ts` file now acts as a composition-only aggregator.
+- `packages/convex/convex/schema/inboxNotificationTables.ts` has also been split into focused domain fragments:
+  - `inboxConversationTables.ts`
+  - `inboxPushTokenTables.ts`
+  - `inboxNotificationRoutingTables.ts`
+- The old `inboxNotificationTables.ts` file now acts as a composition-only aggregator.
 
 What still appears to remain:
 
-- `packages/convex/convex/schema/operationsTables.ts` is still high-concentration.
-- `packages/convex/convex/schema/inboxNotificationTables.ts` is still high-concentration.
-- A follow-up pass should continue splitting the remaining dense schema fragments if the same maintainability threshold still applies.
+- No obvious continuation remains inside this same slice.
+- Any further schema decomposition should start from a fresh concentration audit rather than assuming more fragmentation is still needed.
 
 Primary evidence doc:
 
@@ -166,14 +182,14 @@ This is the practical remaining list after accounting for what has already been 
 
 ### Highest-value remaining tracks
 
-1. Continue `split-convex-schema-high-concentration-tables`
-2. Decide whether the dormant trigger-editor drift warrants another `centralize-trigger-and-outbound-contracts` pass
-3. Formalize any further `decompose-web-outbound-editor` work only if the orchestration shell still needs to shrink
+1. Decide whether the dormant trigger-editor drift warrants another `centralize-trigger-and-outbound-contracts` pass
+2. Formalize any further `decompose-web-outbound-editor` work only if the orchestration shell still needs to shrink
+3. Re-audit for a new Convex concentration target only after the current schema split is committed and settled
 
 ### Next layer after that
 
 1. Re-audit widget controller concentration after the outbound/trigger track is fully closed.
-2. Re-audit Convex high-density runtime domains after schema-table decomposition.
+2. Re-audit Convex high-density runtime domains after the schema-table split lands.
 3. Re-audit the web settings security/auth and audience-rule builder concentration only if they still fail the acceptance criteria below.
 
 ### Why the older P0/P1 lists are not the current source of truth
@@ -199,25 +215,26 @@ For deciding what to do next, prefer this document plus:
 
 ### Last known full-suite baseline
 
-The last explicitly recorded full `pnpm test` run in this refactor thread had:
+The latest inspected full-suite Playwright artifacts on March 6, 2026 ended in a failed state with `18` failing cases.
 
-- Unit: pass
-- E2E: fail with 12 deterministic failures
+Most failures were in shared auth or route-recovery behavior rather than the outbound refactor surface:
 
-Known failing E2E areas from that baseline:
+- repeated `auth-refresh.ts` failures around `page.waitForURL`, `page.goto`, or `Loading...` never clearing
+- `outbound` retries failing during route recovery before editor assertions ran
+- `reports`, `settings`, `inbox`, `carousels`, `ai-agent-settings`, and several widget cases failing in the same shared recovery layer
 
-- `ai-agent-settings`
-- `carousels`
-- `home-settings` preview
-- `inbox` sidecar
-- `knowledge` delete flow
-- `tooltips` CRUD
-- `widget` email capture
-- no-auth signup flow
+Feature-specific failures that still looked like real product/test issues in the artifacts:
+
+- `tooltips` CRUD: duplicate tooltip cards (`expected 1`, `received 2`)
+- `widget` email capture: prompt not visible / widget navigation element detached
+- `home-settings` preview: `Home Preview` not found
+- `ai-agent-settings`: expected controls such as `Enable AI Agent` / `Save AI Settings` not found after recovery
+- no-auth signup flow timing out waiting for the sign-up button
 
 Important:
 
 - The focused passes above are newer than that full-suite baseline.
+- The outbound-focused E2E slice had previously passed in isolation; the later full-suite outbound failures appear to be route/auth recovery stalls rather than direct regressions in the extracted outbound editor components.
 - The full workspace `pnpm test` was not rerun after every later slice.
 - Before declaring the overall refactor complete, rerun the full suite and reclassify any remaining failures.
 
@@ -231,7 +248,7 @@ Important:
 4. If continuing outbound/trigger convergence, treat the next action as:
    - one more duplication audit pass
    - then either finish the track or formalize the residual work as an OpenSpec change
-5. If switching away from outbound work, start `split-convex-schema-high-concentration-tables`.
+5. If switching away from outbound work, begin with a fresh Convex concentration audit rather than restarting the already-completed schema split.
 6. After each slice:
    - run focused verification first
    - run cross-surface compatibility gate when shared contracts or shared types change
