@@ -213,6 +213,34 @@ export interface MessageTrigger {
 }
 export type OutboundMessageTrigger = MessageTrigger;
 
+export interface EligibleOutboundMessage<
+  MessageId = string,
+  UserId = string,
+  TourId = string,
+  ArticleId = string,
+> {
+  _id: MessageId;
+  type: OutboundMessageType;
+  name: string;
+  content: OutboundMessageContent<UserId, TourId, ArticleId>;
+  triggers?: MessageTrigger;
+  priority?: number;
+}
+
+export interface PersistedOutboundMessage<
+  MessageId = string,
+  WorkspaceId = string,
+  UserId = string,
+  TourId = string,
+  ArticleId = string,
+> extends EligibleOutboundMessage<MessageId, UserId, TourId, ArticleId> {
+  workspaceId: WorkspaceId;
+  status: OutboundMessageStatus;
+  frequency?: MessageFrequency;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface MessageScheduling {
   startDate?: number;
   endDate?: number;

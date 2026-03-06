@@ -4,23 +4,18 @@ import { api } from "@opencom/convex";
 import { X } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
 import type {
-  MessageTrigger,
+  EligibleOutboundMessage,
   OutboundClickAction,
-  OutboundMessageContent,
-  OutboundMessageType,
 } from "@opencom/types";
 import { safeOpenUrl } from "./utils/safeOpenUrl";
 
 type ClickAction = OutboundClickAction<Id<"articles">>;
-
-interface OutboundMessage {
-  _id: Id<"outboundMessages">;
-  type: OutboundMessageType;
-  name: string;
-  content: OutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>;
-  triggers?: MessageTrigger;
-  priority?: number;
-}
+type OutboundMessage = EligibleOutboundMessage<
+  Id<"outboundMessages">,
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
 // Track one visible message per type (banner, post, chat) simultaneously
 interface VisibleMessages {

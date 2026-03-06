@@ -2,10 +2,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import type {
-  MessageTrigger,
+  EligibleOutboundMessage,
   OutboundClickAction,
-  OutboundMessageContent,
-  OutboundMessageType,
 } from "@opencom/types";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
@@ -15,14 +13,12 @@ export type OutboundMessageId = Id<"outboundMessages">;
 export type ClickActionType = OutboundClickAction<Id<"articles">>["type"];
 export type ClickAction = OutboundClickAction<Id<"articles">>;
 
-export interface OutboundMessageData {
-  _id: OutboundMessageId;
-  type: OutboundMessageType;
-  name: string;
-  content: OutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>;
-  triggers?: MessageTrigger;
-  priority?: number;
-}
+export type OutboundMessageData = EligibleOutboundMessage<
+  OutboundMessageId,
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
 export function useOutboundMessages(currentUrl: string = "") {
   const { workspaceId } = useOpencomContext();

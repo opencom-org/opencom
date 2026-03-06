@@ -2,11 +2,7 @@ import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import type {
   ImpressionAction,
-  MessageFrequency,
-  MessageTrigger,
-  OutboundMessageContent,
-  OutboundMessageStatus,
-  OutboundMessageType,
+  PersistedOutboundMessage,
 } from "@opencom/types";
 import { getClient, getConfig } from "./client";
 import type { VisitorId } from "../types";
@@ -14,19 +10,13 @@ import { getVisitorState } from "../state/visitor";
 
 export type OutboundMessageId = Id<"outboundMessages">;
 
-export interface OutboundMessageData {
-  _id: OutboundMessageId;
-  workspaceId: Id<"workspaces">;
-  type: OutboundMessageType;
-  name: string;
-  content: OutboundMessageContent<Id<"users">, Id<"tours">, Id<"articles">>;
-  status: OutboundMessageStatus;
-  triggers?: MessageTrigger;
-  frequency?: MessageFrequency;
-  priority?: number;
-  createdAt: number;
-  updatedAt: number;
-}
+export type OutboundMessageData = PersistedOutboundMessage<
+  OutboundMessageId,
+  Id<"workspaces">,
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
 export async function getActiveOutboundMessages(params: {
   visitorId: VisitorId;
