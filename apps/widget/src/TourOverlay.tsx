@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { getPortalTarget } from "./portal";
-import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
-import type { Id } from "@opencom/convex/dataModel";
+import { evaluateRouteMatch } from "@opencom/types";
 import {
   TourConfettiLayer,
   TourEmergencyCloseButton,
@@ -14,16 +12,13 @@ import {
   TourRecoveryModal,
   TourRouteHintModal,
 } from "./tourOverlay/components";
-import { getAdvanceGuidance, getBlockedReasonMessage } from "./tourOverlay/messages";
-import { evaluateRouteMatch } from "./tourOverlay/routeMatching";
 import type {
-  AdvanceOn,
-  DiagnosticReason,
   ElementPosition,
   TooltipPosition,
-  TourData,
   TourOverlayProps,
 } from "./tourOverlay/types";
+import { useTourOverlayActions } from "./tourOverlay/useTourOverlayActions";
+import { useTourOverlaySession } from "./tourOverlay/useTourOverlaySession";
 import {
   clamp,
   getVisualViewportBounds,
@@ -42,8 +37,6 @@ export function TourOverlay({
   onTourComplete,
   onTourDismiss,
 }: TourOverlayProps) {
-  const [activeTour, setActiveTour] = useState<TourData | null>(null);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [elementPosition, setElementPosition] = useState<ElementPosition | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<TooltipPosition | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -51,7 +44,6 @@ export function TourOverlay({
   const [advanceHint, setAdvanceHint] = useState<string | null>(null);
   const [routeHint, setRouteHint] = useState<string | null>(null);
   const [failureHint, setFailureHint] = useState<string | null>(null);
-  const [suppressedTourIds, setSuppressedTourIds] = useState<Set<string>>(new Set());
   const observerRef = useRef<MutationObserver | null>(null);
   const fieldListenerRef = useRef<(() => void) | null>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -64,331 +56,71 @@ export function TourOverlay({
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollForceRecomputeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const startTour = useMutation(api.tourProgress.start);
-  const advanceTour = useMutation(api.tourProgress.advance);
-  const dismissTour = useMutation(api.tourProgress.dismiss);
-  const dismissPermanently = useMutation(api.tourProgress.dismissPermanently);
-  const snoozeTour = useMutation(api.tourProgress.snooze);
-  const restartTour = useMutation(api.tourProgress.restart);
-  const skipTourStep = useMutation(api.tourProgress.skipStep);
-  const checkpointTour = useMutation(api.tourProgress.checkpoint);
-
-  const suppressTour = useCallback((tourId: Id<"tours">) => {
-    setSuppressedTourIds((prev) => {
-      const key = String(tourId);
-      if (prev.has(key)) {
-        return prev;
-      }
-      const next = new Set(prev);
-      next.add(key);
-      return next;
-    });
-  }, []);
-
-  const unsuppressTour = useCallback((tourId: Id<"tours">) => {
-    setSuppressedTourIds((prev) => {
-      const key = String(tourId);
-      if (!prev.has(key)) {
-        return prev;
-      }
-      const next = new Set(prev);
-      next.delete(key);
-      return next;
-    });
-  }, []);
-
-  useEffect(() => {
-    setSuppressedTourIds((prev) => {
-      if (prev.size === 0) {
-        return prev;
-      }
-
-      const availableIds = new Set(availableTours.map((tourData) => String(tourData.tour._id)));
-      const retained = Array.from(prev).filter((id) => availableIds.has(id));
-
-      if (retained.length === prev.size) {
-        return prev;
-      }
-
-      return new Set(retained);
-    });
-  }, [availableTours]);
-
-  useEffect(() => {
-    if (!allowBlockingTour && !activeTour) {
-      return;
-    }
-
-    if (forcedTourId) {
-      const forcedTour = availableTours.find((t) => t.tour._id === forcedTourId);
-      if (forcedTour) {
-        if (activeTour?.tour._id === forcedTourId) return;
-
-        unsuppressTour(forcedTourId);
-
-        setActiveTour(forcedTour);
-        setCurrentStepIndex(0);
-        setAdvanceHint(null);
-        setRouteHint(null);
-        setFailureHint(null);
-        startTour({
-          workspaceId,
-          visitorId,
-          sessionToken: sessionToken ?? undefined,
-          tourId: forcedTour.tour._id,
-          force: true,
-          currentUrl: window.location.href,
-        }).catch(console.error);
-        return;
-      }
-    }
-
-    if (availableTours.length > 0 && !activeTour && !forcedTourId) {
-      const nextTour = availableTours.find(
-        (tourData) => tourData.steps.length > 0 && !suppressedTourIds.has(String(tourData.tour._id))
-      );
-      if (!nextTour) return;
-
-      const resumeIndex =
-        nextTour.progress?.status === "in_progress"
-          ? Math.max(0, Math.min(nextTour.progress.currentStep, nextTour.steps.length - 1))
-          : 0;
-
-      setActiveTour(nextTour);
-      setCurrentStepIndex(resumeIndex);
-      setAdvanceHint(null);
-      setRouteHint(null);
-      setFailureHint(null);
-      startTour({
-        workspaceId,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        tourId: nextTour.tour._id,
-        currentUrl: window.location.href,
-      }).catch(console.error);
-    }
-  }, [
-    availableTours,
+  const {
     activeTour,
+    currentStep,
+    currentStepIndex,
+    setCurrentStepIndex,
+    suppressTour,
+    unsuppressTour,
+    moveToStepOrComplete,
+    closeTourLocally,
+  } = useTourOverlaySession({
     workspaceId,
     visitorId,
     sessionToken,
-    startTour,
+    availableTours,
     forcedTourId,
-    suppressedTourIds,
-    unsuppressTour,
     allowBlockingTour,
-  ]);
-
-  useEffect(() => {
-    onBlockingActiveChange?.(Boolean(activeTour));
-  }, [activeTour, onBlockingActiveChange]);
-
-  useEffect(() => {
-    return () => {
-      onBlockingActiveChange?.(false);
-    };
-  }, [onBlockingActiveChange]);
-
-  const currentStep = activeTour?.steps[currentStepIndex];
+    onBlockingActiveChange,
+    onTourComplete,
+    onTourDismiss,
+    setElementPosition,
+    setTooltipPosition,
+    setShowConfetti,
+    setShowMoreMenu,
+    setAdvanceHint,
+    setRouteHint,
+    setFailureHint,
+    skipHandledStepRef,
+    routeCheckpointStepRef,
+    checkpointStepRef,
+    pendingStepScrollRef,
+    programmaticScrollInFlightRef,
+    scrollSettleTimerRef,
+    scrollForceRecomputeTimerRef,
+  });
   const isPointerStep = currentStep?.type === "pointer" || currentStep?.type === "video";
-
-  const finalizeTourCompletion = useCallback(() => {
-    if (!activeTour) return;
-
-    if (activeTour.tour.showConfetti) {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 3000);
-    }
-
-    setTimeout(
-      () => {
-        setActiveTour(null);
-        setCurrentStepIndex(0);
-        setAdvanceHint(null);
-        setRouteHint(null);
-        setFailureHint(null);
-        onTourComplete?.();
-      },
-      activeTour.tour.showConfetti ? 3000 : 0
-    );
-  }, [activeTour, onTourComplete]);
-
-  const moveToStepOrComplete = useCallback(
-    (nextStepIndex: number, status?: string) => {
-      if (!activeTour) return;
-
-      if (status === "completed" || nextStepIndex >= activeTour.steps.length) {
-        finalizeTourCompletion();
-        return;
-      }
-
-      if (nextStepIndex !== currentStepIndex) {
-        pendingStepScrollRef.current = true;
-        setElementPosition(null);
-        setTooltipPosition(null);
-      } else {
-        pendingStepScrollRef.current = false;
-      }
-
-      setCurrentStepIndex(nextStepIndex);
-      setAdvanceHint(getAdvanceGuidance(activeTour.steps[nextStepIndex]));
-      setRouteHint(null);
-      setFailureHint(null);
-      setShowMoreMenu(false);
-    },
-    [activeTour, currentStepIndex, finalizeTourCompletion]
-  );
-
-  const handleSkipCurrentStep = useCallback(
-    async (reason: DiagnosticReason) => {
-      if (!activeTour || !currentStep || skipInFlightRef.current) return;
-
-      skipInFlightRef.current = true;
-      skipHandledStepRef.current = currentStep._id;
-
-      try {
-        const result = (await skipTourStep({
-          workspaceId,
-          visitorId,
-          sessionToken: sessionToken ?? undefined,
-          tourId: activeTour.tour._id,
-          reason,
-          selector: currentStep.elementSelector,
-          currentUrl: window.location.href,
-        })) as { nextStep?: number; status?: string; reason?: string } | null | undefined;
-
-        const fallbackNextStep = currentStepIndex + 1;
-        const nextStep =
-          result && typeof result.nextStep === "number" ? result.nextStep : fallbackNextStep;
-        const status = result && typeof result.status === "string" ? result.status : undefined;
-        setAdvanceHint(getBlockedReasonMessage(result?.reason ?? reason));
-        moveToStepOrComplete(nextStep, status);
-      } catch (error) {
-        console.error("Failed to skip tour step", error);
-        setFailureHint(
-          "We couldn't recover this tour step automatically. You can retry, skip again, or close the tour."
-        );
-      } finally {
-        skipInFlightRef.current = false;
-      }
-    },
-    [
-      activeTour,
-      currentStep,
-      moveToStepOrComplete,
-      currentStepIndex,
-      sessionToken,
-      skipTourStep,
-      visitorId,
-      workspaceId,
-    ]
-  );
-
-  const handleNext = useCallback(
-    async (opts?: {
-      mode?: AdvanceOn;
-      targetMatched?: boolean;
-      fieldValue?: string;
-      selector?: string;
-    }) => {
-      if (!activeTour || !currentStep) return;
-
-      fieldListenerRef.current?.();
-
-      try {
-        const mode = opts?.mode ?? "click";
-        const result = (await advanceTour({
-          workspaceId,
-          visitorId,
-          sessionToken: sessionToken ?? undefined,
-          tourId: activeTour.tour._id,
-          mode,
-          targetMatched: opts?.targetMatched,
-          fieldValue: opts?.fieldValue,
-          selector: opts?.selector,
-          currentUrl: window.location.href,
-        })) as {
-          advanced: boolean;
-          blockedReason?: string | null;
-          nextStep: number;
-          status: string;
-        };
-
-        if (!result.advanced) {
-          setAdvanceHint(
-            getBlockedReasonMessage(result.blockedReason) ?? getAdvanceGuidance(currentStep)
-          );
-          return;
-        }
-
-        setAdvanceHint(null);
-        setFailureHint(null);
-        moveToStepOrComplete(result.nextStep, result.status);
-      } catch (error) {
-        console.error("Failed to advance tour step", error);
-        setFailureHint(
-          "Something went wrong while moving to the next step. You can retry, skip this step, or close the tour."
-        );
-      }
-    },
-    [
-      activeTour,
-      advanceTour,
-      currentStep,
-      moveToStepOrComplete,
-      sessionToken,
-      visitorId,
-      workspaceId,
-    ]
-  );
-
-  useEffect(() => {
-    if (!activeTour || !currentStep) return;
-
-    if (checkpointStepRef.current === currentStep._id) {
-      return;
-    }
-
-    checkpointStepRef.current = currentStep._id;
-    checkpointTour({
-      workspaceId,
-      visitorId,
-      sessionToken: sessionToken ?? undefined,
-      tourId: activeTour.tour._id,
-      currentUrl: window.location.href,
-      selector: currentStep.elementSelector,
-    }).catch(console.error);
-  }, [activeTour, checkpointTour, currentStep, sessionToken, visitorId, workspaceId]);
-
-  useEffect(() => {
-    if (!currentStep) {
-      skipHandledStepRef.current = null;
-      routeCheckpointStepRef.current = null;
-      checkpointStepRef.current = null;
-      pendingStepScrollRef.current = false;
-      programmaticScrollInFlightRef.current = false;
-      if (scrollSettleTimerRef.current) {
-        clearTimeout(scrollSettleTimerRef.current);
-        scrollSettleTimerRef.current = null;
-      }
-      if (scrollForceRecomputeTimerRef.current) {
-        clearTimeout(scrollForceRecomputeTimerRef.current);
-        scrollForceRecomputeTimerRef.current = null;
-      }
-      return;
-    }
-
-    if (skipHandledStepRef.current !== currentStep._id) {
-      skipHandledStepRef.current = null;
-    }
-    if (routeCheckpointStepRef.current !== currentStep._id) {
-      routeCheckpointStepRef.current = null;
-    }
-
-    setAdvanceHint(getAdvanceGuidance(currentStep));
-    setFailureHint(null);
-  }, [currentStep]);
+  const {
+    checkpointCurrentStep,
+    handleDismiss,
+    handleDismissPermanentlyWithClose,
+    handleNext,
+    handleRestart,
+    handleSkipCurrentStep,
+    handleSnoozeWithClose,
+  } = useTourOverlayActions({
+    workspaceId,
+    visitorId,
+    sessionToken,
+    activeTour,
+    currentStep,
+    currentStepIndex,
+    setCurrentStepIndex,
+    setAdvanceHint,
+    setRouteHint,
+    setFailureHint,
+    setShowMoreMenu,
+    suppressTour,
+    unsuppressTour,
+    moveToStepOrComplete,
+    closeTourLocally,
+    checkpointStepRef,
+    pendingStepScrollRef,
+    skipInFlightRef,
+    skipHandledStepRef,
+    fieldListenerRef,
+  });
 
   const updateElementPosition = useCallback(
     (opts?: { force?: boolean }) => {
@@ -415,16 +147,10 @@ export function TourOverlay({
 
         if (routeCheckpointStepRef.current !== currentStep._id) {
           routeCheckpointStepRef.current = currentStep._id;
-          checkpointTour({
-            workspaceId,
-            visitorId,
-            sessionToken: sessionToken ?? undefined,
-            tourId: activeTour.tour._id,
-            currentUrl: window.location.href,
-            selector: currentStep.elementSelector,
+          checkpointCurrentStep({
             blockedReason: routeResult.invalidRoute ? "checkpoint_invalid_route" : "route_mismatch",
             mode: "system",
-          }).catch(console.error);
+          });
         }
 
         if (routeResult.invalidRoute && skipHandledStepRef.current !== currentStep._id) {
@@ -629,7 +355,7 @@ export function TourOverlay({
     },
     [
       activeTour,
-      checkpointTour,
+      checkpointCurrentStep,
       currentStep,
       handleSkipCurrentStep,
       isPointerStep,
@@ -770,111 +496,6 @@ export function TourOverlay({
 
     return () => fieldListenerRef.current?.();
   }, [currentStep, handleNext]);
-
-  const closeTourLocally = useCallback(() => {
-    if (scrollSettleTimerRef.current) {
-      clearTimeout(scrollSettleTimerRef.current);
-      scrollSettleTimerRef.current = null;
-    }
-    if (scrollForceRecomputeTimerRef.current) {
-      clearTimeout(scrollForceRecomputeTimerRef.current);
-      scrollForceRecomputeTimerRef.current = null;
-    }
-    programmaticScrollInFlightRef.current = false;
-    pendingStepScrollRef.current = false;
-    setActiveTour(null);
-    setCurrentStepIndex(0);
-    setElementPosition(null);
-    setTooltipPosition(null);
-    setAdvanceHint(null);
-    setRouteHint(null);
-    setFailureHint(null);
-    setShowMoreMenu(false);
-    onTourDismiss?.();
-  }, [onTourDismiss]);
-
-  const handleDismiss = async () => {
-    if (!activeTour) return;
-    const tourId = activeTour.tour._id;
-    suppressTour(tourId);
-    closeTourLocally();
-    try {
-      await dismissTour({
-        workspaceId,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        tourId,
-      });
-    } catch (error) {
-      console.error("Failed to dismiss tour", error);
-    }
-  };
-
-  const handleDismissPermanently = async () => {
-    if (!activeTour) return;
-    const tourId = activeTour.tour._id;
-    suppressTour(tourId);
-    closeTourLocally();
-    try {
-      await dismissPermanently({
-        workspaceId,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        tourId,
-      });
-    } catch (error) {
-      console.error("Failed to dismiss tour permanently", error);
-    }
-  };
-
-  const handleSnooze = async () => {
-    if (!activeTour) return;
-    const tourId = activeTour.tour._id;
-    suppressTour(tourId);
-    closeTourLocally();
-    try {
-      await snoozeTour({
-        workspaceId,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        tourId,
-      });
-    } catch (error) {
-      console.error("Failed to snooze tour", error);
-    }
-  };
-
-  const handleRestart = async () => {
-    if (!activeTour) return;
-    try {
-      unsuppressTour(activeTour.tour._id);
-      await restartTour({
-        workspaceId,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        tourId: activeTour.tour._id,
-      });
-      pendingStepScrollRef.current = false;
-      setCurrentStepIndex(0);
-      setAdvanceHint(null);
-      setRouteHint(null);
-      setFailureHint(null);
-      setShowMoreMenu(false);
-    } catch (error) {
-      console.error("Failed to restart tour", error);
-      setFailureHint("We couldn't restart this tour right now. You can close it and try again.");
-    }
-  };
-
-  const handleDismissPermanentlyWithClose = async () => {
-    setShowMoreMenu(false);
-    await handleDismissPermanently();
-  };
-
-  const handleSnoozeWithClose = async () => {
-    setShowMoreMenu(false);
-    await handleSnooze();
-  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

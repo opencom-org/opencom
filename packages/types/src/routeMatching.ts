@@ -1,3 +1,26 @@
+export interface RouteMatchResult {
+  matches: boolean;
+  invalidRoute: boolean;
+}
+
+interface RouteMatchOptions {
+  matchWhenCurrentUrlMissing?: boolean;
+}
+
+export function normalizeRoutePath(routePath?: string): string | undefined {
+  const trimmed = routePath?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function safeParseUrl(url?: string): URL | null {
+  if (!url) return null;
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -9,17 +32,23 @@ function wildcardMatch(pattern: string, value: string): boolean {
 
 export function evaluateRouteMatch(
   routePath: string | undefined,
-  currentUrl: string
-): { matches: boolean; invalidRoute: boolean } {
-  const normalizedRoute = routePath?.trim();
+  currentUrl?: string,
+  options: RouteMatchOptions = {}
+): RouteMatchResult {
+  const normalizedRoute = normalizeRoutePath(routePath);
   if (!normalizedRoute) {
     return { matches: true, invalidRoute: false };
   }
 
-  let parsedCurrent: URL;
-  try {
-    parsedCurrent = new URL(currentUrl);
-  } catch {
+  if (!currentUrl) {
+    return {
+      matches: options.matchWhenCurrentUrlMissing ?? false,
+      invalidRoute: false,
+    };
+  }
+
+  const parsedCurrent = safeParseUrl(currentUrl);
+  if (!parsedCurrent) {
     return { matches: false, invalidRoute: false };
   }
 
@@ -27,10 +56,8 @@ export function evaluateRouteMatch(
   const currentPath = `${parsedCurrent.pathname}${parsedCurrent.search}`;
 
   if (/^https?:\/\//i.test(normalizedRoute)) {
-    let parsedRoute: URL;
-    try {
-      parsedRoute = new URL(normalizedRoute);
-    } catch {
+    const parsedRoute = safeParseUrl(normalizedRoute);
+    if (!parsedRoute) {
       return { matches: false, invalidRoute: true };
     }
 

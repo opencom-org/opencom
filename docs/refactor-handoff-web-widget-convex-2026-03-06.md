@@ -21,11 +21,12 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - widget shell orchestration phase 2 in `apps/widget/src/Widget.tsx`
-  - new widget-local hooks in:
-    - `apps/widget/src/hooks/useWidgetConversationFlow.ts`
-    - `apps/widget/src/hooks/useWidgetArticleNavigation.ts`
-    - `apps/widget/src/hooks/useWidgetTicketFlow.ts`
+  - tour runtime refactoring in:
+    - `apps/widget/src/TourOverlay.tsx`
+    - `apps/widget/src/tourOverlay/useTourOverlaySession.ts`
+    - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
+    - `packages/convex/convex/tourProgress.ts`
+    - `packages/types/src/routeMatching.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -54,6 +55,7 @@ These slices are complete enough that they should be treated as established refa
 | Widget tour overlay decomposition | Completed | `docs/refactor-progress-widget-tour-overlay-decomposition-2026-03-05.md` |
 | Widget conversation view decomposition | Completed | `docs/refactor-progress-widget-conversation-view-decomposition-2026-03-05.md` |
 | Widget survey overlay decomposition | Completed | `docs/refactor-progress-widget-survey-overlay-decomposition-2026-03-05.md` |
+| Tour runtime shared route matching | Completed for the current phase-2 slice | `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
 | Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
 
@@ -205,6 +207,38 @@ Primary evidence doc:
 
 - `docs/refactor-progress-widget-shell-orchestration-v2-2026-03-06.md`
 
+### 5. Split tour runtime and centralize route matching
+
+Status:
+
+- Started, not complete
+- At a cleaner stop point after the March 6 phase-2 pass
+- No live OpenSpec change currently exists
+
+What is already done:
+
+- Shared route matching now lives in:
+  - `packages/types/src/routeMatching.ts`
+- Both tour runtimes now consume that shared helper:
+  - `apps/widget/src/TourOverlay.tsx`
+  - `packages/convex/convex/tourProgress.ts`
+- The widget-local duplicate matcher was removed:
+  - `apps/widget/src/tourOverlay/routeMatching.ts`
+- Active-tour session and mutation orchestration were extracted from `TourOverlay.tsx` into:
+  - `apps/widget/src/tourOverlay/useTourOverlaySession.ts`
+  - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
+- `apps/widget/src/TourOverlay.tsx` is down to about `617` lines from `996`.
+
+What still appears to remain:
+
+- `TourOverlay.tsx` still owns selector lookup, viewport geometry, scroll-settle, and observer wiring.
+- `tourProgress.ts` still mixes progression rules, diagnostics, checkpointing, and availability queries.
+- This track still has one good pass left before it should be considered intentionally stopped.
+
+Primary evidence doc:
+
+- `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md`
+
 ## Current Best View Of Remaining Work
 
 This is the practical remaining list after accounting for what has already been completed since the older slice maps were written.
@@ -243,10 +277,13 @@ For deciding what to do next, prefer this document plus:
 ### Latest focused passes that are green
 
 - `pnpm --filter @opencom/web typecheck`
+- `pnpm --filter @opencom/types typecheck`
 - `pnpm --filter @opencom/widget typecheck`
 - `pnpm --filter @opencom/convex typecheck`
 - `pnpm --filter @opencom/convex test`
 - `pnpm test:compat:cross-surface`
+- `pnpm --filter @opencom/widget test -- --run src/test/routeMatching.test.ts src/test/tourOverlay.test.tsx`
+- `pnpm --filter @opencom/widget test`
 - `pnpm --filter @opencom/widget test -- --run src/test/widgetShellOrchestration.test.tsx src/test/widgetNewConversation.test.tsx src/test/widgetTicketErrorFeedback.test.tsx`
 - `pnpm web:test:e2e -- apps/web/e2e/outbound.spec.ts --project=chromium`
 - `pnpm web:test:e2e -- apps/web/e2e/tours.spec.ts --project=chromium`
@@ -383,10 +420,9 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Commit the current widget shell phase-2 extraction and documentation work.
-2. Treat the current widget-shell pass as a clean stop unless a very obvious next extraction presents itself.
-3. Start `split-tour-runtime-and-route-matching`.
-4. Follow with `split-convex-series-runtime-authoring-v2`.
+1. Either take one more `split-tour-runtime-and-route-matching` pass focused on overlay positioning/observer extraction, or stop this track intentionally at the current cleaner boundary.
+2. If switching domains, start `split-convex-series-runtime-authoring-v2`.
+3. Leave widget shell phase 2 alone unless a very obvious shell-composition extraction presents itself.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
 

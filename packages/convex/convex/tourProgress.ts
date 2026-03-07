@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
+import { evaluateRouteMatch, normalizeRoutePath } from "@opencom/types";
 import { evaluateRule, AudienceRule } from "./audienceRules";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { requirePermission } from "./permissions";
@@ -30,91 +31,6 @@ type ProgressContext = {
   progress: Doc<"tourProgress">;
   steps: Doc<"tourSteps">[];
 };
-
-function normalizeRoutePath(routePath?: string): string | undefined {
-  const trimmed = routePath?.trim();
-  return trimmed ? trimmed : undefined;
-}
-
-function safeParseUrl(url?: string): URL | null {
-  if (!url) return null;
-  try {
-    return new URL(url);
-  } catch {
-    return null;
-  }
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function wildcardMatch(pattern: string, value: string): boolean {
-  const regex = new RegExp(`^${escapeRegex(pattern).replace(/\\\*/g, ".*")}$`);
-  return regex.test(value);
-}
-
-function evaluateRouteMatch(
-  routePath: string | undefined,
-  currentUrl?: string
-): { matches: boolean; invalidRoute: boolean } {
-  const normalizedRoute = normalizeRoutePath(routePath);
-  if (!normalizedRoute) {
-    return { matches: true, invalidRoute: false };
-  }
-
-  if (!currentUrl) {
-    return { matches: true, invalidRoute: false };
-  }
-
-  const parsedCurrent = safeParseUrl(currentUrl);
-  if (!parsedCurrent) {
-    return { matches: false, invalidRoute: false };
-  }
-
-  const currentAbsolute = `${parsedCurrent.origin}${parsedCurrent.pathname}${parsedCurrent.search}`;
-  const currentPath = `${parsedCurrent.pathname}${parsedCurrent.search}`;
-
-  if (/^https?:\/\//i.test(normalizedRoute)) {
-    const parsedRoute = safeParseUrl(normalizedRoute);
-    if (!parsedRoute) {
-      return { matches: false, invalidRoute: true };
-    }
-
-    const routeAbsolute = `${parsedRoute.origin}${parsedRoute.pathname}${parsedRoute.search}`;
-    if (routeAbsolute.includes("*")) {
-      return { matches: wildcardMatch(routeAbsolute, currentAbsolute), invalidRoute: false };
-    }
-    return { matches: routeAbsolute === currentAbsolute, invalidRoute: false };
-  }
-
-  if (normalizedRoute.startsWith("/")) {
-    if (normalizedRoute.includes("*")) {
-      return { matches: wildcardMatch(normalizedRoute, currentPath), invalidRoute: false };
-    }
-    return {
-      matches: normalizedRoute === currentPath || normalizedRoute === parsedCurrent.pathname,
-      invalidRoute: false,
-    };
-  }
-
-  if (normalizedRoute.includes("*")) {
-    return {
-      matches:
-        wildcardMatch(normalizedRoute, currentAbsolute) ||
-        wildcardMatch(normalizedRoute, currentPath),
-      invalidRoute: false,
-    };
-  }
-
-  return {
-    matches:
-      normalizedRoute === currentAbsolute ||
-      normalizedRoute === currentPath ||
-      normalizedRoute === parsedCurrent.pathname,
-    invalidRoute: false,
-  };
-}
 
 function buildCheckpoint(currentStep: number, step?: Doc<"tourSteps">) {
   return {
@@ -351,7 +267,9 @@ export const advance = mutation({
       };
     }
 
-    const routeMatch = evaluateRouteMatch(currentStep.routePath, args.currentUrl);
+    const routeMatch = evaluateRouteMatch(currentStep.routePath, args.currentUrl, {
+      matchWhenCurrentUrlMissing: true,
+    });
     const expectedMode = (currentStep.advanceOn ?? "click") as AdvanceMode;
 
     let blockedReason: DiagnosticReason | null = null;
@@ -787,7 +705,9 @@ export const getAvailableTours = query({
       }
 
       if (!inProgress && tour.targetingRules?.pageUrl && args.currentUrl) {
-        const routeMatch = evaluateRouteMatch(tour.targetingRules.pageUrl, args.currentUrl);
+        const routeMatch = evaluateRouteMatch(tour.targetingRules.pageUrl, args.currentUrl, {
+          matchWhenCurrentUrlMissing: true,
+        });
         if (!routeMatch.matches) {
           continue;
         }
