@@ -21,12 +21,18 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - tour backend phase-3 refactoring in:
-    - `packages/convex/convex/tourProgress.ts`
-    - `packages/convex/convex/tourProgressShared.ts`
-    - `packages/convex/convex/tourProgressAccess.ts`
-    - `packages/convex/convex/tourProgressMutations.ts`
-    - `packages/convex/convex/tourProgressQueries.ts`
+  - messenger/home contract convergence in:
+    - `packages/types/src/messengerSettings.ts`
+    - `packages/types/src/homeConfig.ts`
+    - `packages/types/src/index.ts`
+    - `packages/convex/convex/messengerSettings.ts`
+    - `apps/widget/src/hooks/useWidgetSettings.ts`
+    - `apps/widget/src/components/Home.tsx`
+    - `packages/react-native-sdk/src/hooks/useMessengerSettings.ts`
+    - `packages/react-native-sdk/src/components/OpencomHome.tsx`
+  - incidental widget tour typing cleanup in:
+    - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
+    - `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -58,6 +64,7 @@ These slices are complete enough that they should be treated as established refa
 | Tour runtime shared route matching | Completed for the current phase-2 slice | `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md` |
 | Convex tour progress decomposition | Completed for the current phase-3 slice | `docs/refactor-progress-convex-tour-progress-decomposition-2026-03-07.md` |
 | Convex series runtime / authoring phase 2 | Completed for the current phase-2 slice | `docs/refactor-progress-convex-series-runtime-authoring-v2-2026-03-07.md` |
+| Messenger / home contract convergence | Completed for the current public-contract slice | `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
 | Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
 
@@ -177,7 +184,40 @@ Primary evidence doc:
 
 - `docs/refactor-progress-convex-schema-high-concentration-tables-2026-03-06.md`
 
-### 4. Decompose widget shell orchestration phase 2
+### 4. Converge messenger/home-config contracts
+
+Status:
+
+- Started, not complete
+- Public contract convergence is now implemented
+- No live OpenSpec change currently exists
+
+What is already done:
+
+- Shared public messenger settings now live in:
+  - `packages/types/src/messengerSettings.ts`
+- Shared default home config now lives in:
+  - `packages/types/src/homeConfig.ts`
+- `packages/convex/convex/messengerSettings.ts` now shapes public settings through the shared contract normalizer.
+- Widget messenger settings and home-config consumption now use the shared contract/defaults:
+  - `apps/widget/src/hooks/useWidgetSettings.ts`
+  - `apps/widget/src/components/Home.tsx`
+- React Native messenger settings and home-config consumption now use the shared contract/defaults:
+  - `packages/react-native-sdk/src/hooks/useMessengerSettings.ts`
+  - `packages/react-native-sdk/src/components/OpencomHome.tsx`
+- RN no longer carries local `HomeCard` / `HomeConfig` definitions for this surface.
+
+What still appears to remain:
+
+- `packages/convex/convex/messengerSettings.ts` still mixes public shaping, admin settings mutations, logo storage, audience rules, and home-card CRUD.
+- `apps/web/src/app/settings/MessengerSettingsSection.tsx` is still a concentrated authoring surface.
+- If this track continues, the next pass should be backend/web decomposition, not more public contract alignment.
+
+Primary evidence doc:
+
+- `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md`
+
+### 5. Decompose widget shell orchestration phase 2
 
 Status:
 
@@ -209,7 +249,7 @@ Primary evidence doc:
 
 - `docs/refactor-progress-widget-shell-orchestration-v2-2026-03-06.md`
 
-### 5. Split tour runtime and centralize route matching
+### 6. Split tour runtime and centralize route matching
 
 Status:
 
@@ -250,7 +290,7 @@ Primary evidence doc:
 - `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md`
 - `docs/refactor-progress-convex-tour-progress-decomposition-2026-03-07.md`
 
-### 6. Split Convex series runtime / authoring phase 2
+### 7. Split Convex series runtime / authoring phase 2
 
 Status:
 
@@ -323,8 +363,10 @@ For deciding what to do next, prefer this document plus:
 - `pnpm --filter @opencom/types typecheck`
 - `pnpm --filter @opencom/widget typecheck`
 - `pnpm --filter @opencom/convex typecheck`
+- `pnpm --filter @opencom/react-native-sdk typecheck`
 - `pnpm --filter @opencom/convex test`
 - `bash -lc 'set -a; source packages/convex/.env.local; set +a; pnpm --filter @opencom/convex test -- --run tests/tourProgress.test.ts'`
+- `bash -lc 'set -a; source packages/convex/.env.local; set +a; pnpm --filter @opencom/convex test -- --run tests/messengerSettings.test.ts'`
 - `pnpm test:compat:cross-surface`
 - `pnpm --filter @opencom/widget test -- --run src/test/routeMatching.test.ts src/test/tourOverlay.test.tsx`
 - `pnpm --filter @opencom/widget test`
@@ -352,7 +394,8 @@ Important:
 1. Read this document first.
 2. Read the latest repo-wide audit:
    - `docs/refactor-opportunity-audit-2026-03-06.md`
-3. Read the latest progress docs for the two active/partial tracks:
+3. Read the latest progress docs for the currently active/partial tracks:
+   - `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md`
    - `docs/refactor-progress-centralize-outbound-trigger-contracts-2026-03-06.md`
    - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-06.md`
 4. Run `git status --short` immediately and confirm whether the working tree still matches the handoff snapshot in this file.
@@ -464,9 +507,11 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Start messenger/home-config contract convergence as the next highest-value cross-surface refactor slice.
-2. Treat the tour runtime and series backend as clean stops unless one of the new isolated modules becomes the next obvious pain point.
-3. Leave widget shell phase 2 alone unless a very obvious shell-composition extraction presents itself.
+1. Continue messenger/home-config on the backend/web authoring side:
+   - split `packages/convex/convex/messengerSettings.ts`
+   - then split `apps/web/src/app/settings/MessengerSettingsSection.tsx`
+2. Treat the public messenger/home contract convergence work as complete for now.
+3. Treat the tour runtime and series backend as clean stops unless one of the new isolated modules becomes the next obvious pain point.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
 

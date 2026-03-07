@@ -13,31 +13,12 @@ import { useQuery } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { getVisitorState, getConfig } from "@opencom/sdk-core";
+import {
+  getDefaultHomeConfig,
+  type HomeCard,
+  type NormalizedHomeConfig,
+} from "@opencom/types";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
-
-// ============================================================================
-// Types
-// ============================================================================
-
-interface HomeCard {
-  id: string;
-  type:
-    | "welcome"
-    | "search"
-    | "conversations"
-    | "startConversation"
-    | "featuredArticles"
-    | "announcements";
-  config?: Record<string, unknown>;
-  visibleTo: "all" | "visitors" | "users";
-}
-
-interface HomeConfig {
-  enabled: boolean;
-  cards: HomeCard[];
-  defaultSpace: "home" | "messages" | "help";
-  launchDirectlyToConversation: boolean;
-}
 
 interface Conversation {
   _id: Id<"conversations">;
@@ -126,30 +107,13 @@ function ChevronRightIcon({ color = "#6b7280", size = 16 }) {
   );
 }
 
-// ============================================================================
-// Hook for Home Config
-// ============================================================================
-
-const DEFAULT_HOME_CONFIG: HomeConfig = {
-  enabled: true,
-  cards: [
-    { id: "welcome", type: "welcome", visibleTo: "all" },
-    { id: "search", type: "search", visibleTo: "all" },
-    { id: "conversations", type: "conversations", visibleTo: "all" },
-    { id: "startConversation", type: "startConversation", visibleTo: "all" },
-  ],
-  defaultSpace: "home",
-  launchDirectlyToConversation: false,
-};
-
 export function useHomeConfig(workspaceId: string | undefined, isIdentified: boolean) {
   const homeConfig = useQuery(
     api.messengerSettings.getPublicHomeConfig,
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces">, isIdentified } : "skip"
-  ) as HomeConfig | undefined;
+  ) as NormalizedHomeConfig | undefined;
 
-  // Return default config if backend config is missing or not loaded yet
-  return homeConfig ?? DEFAULT_HOME_CONFIG;
+  return homeConfig ?? getDefaultHomeConfig();
 }
 
 // ============================================================================
@@ -183,8 +147,8 @@ export function OpencomHome({
   const fetchedHomeConfig = useQuery(
     api.messengerSettings.getPublicHomeConfig,
     wsId ? { workspaceId: wsId, isIdentified } : "skip"
-  ) as HomeConfig | undefined;
-  const homeConfig = fetchedHomeConfig ?? DEFAULT_HOME_CONFIG;
+  ) as NormalizedHomeConfig | undefined;
+  const homeConfig = fetchedHomeConfig ?? getDefaultHomeConfig();
 
   const conversations = useQuery(
     api.conversations.listByVisitor,

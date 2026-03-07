@@ -3,10 +3,10 @@ import { useQuery } from "convex/react";
 import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import {
-  getDefaultHomeTabs,
-  normalizeHomeConfig,
+  getDefaultHomeConfig,
   type HomeCard,
-  type HomeConfig,
+  type NormalizedHomeConfig,
+  type PublicMessengerSettings,
 } from "@opencom/types";
 import { Search, MessageCircle, ChevronRight, FileText, Bell, Send } from "../icons";
 
@@ -32,13 +32,10 @@ interface HomeProps {
   visitorId: Id<"visitors"> | null;
   sessionToken: string | null;
   isIdentified: boolean;
-  settings: {
-    primaryColor: string;
-    backgroundColor: string;
-    logo: string | null;
-    welcomeMessage: string;
-    teamIntroduction: string | null;
-  };
+  settings: Pick<
+    PublicMessengerSettings,
+    "primaryColor" | "backgroundColor" | "logo" | "welcomeMessage" | "teamIntroduction"
+  >;
   conversations: Conversation[] | undefined;
   onStartConversation: () => void;
   onSelectConversation: (id: Id<"conversations">) => void;
@@ -63,7 +60,7 @@ export function Home({
   const homeConfig = useQuery(api.messengerSettings.getPublicHomeConfig, {
     workspaceId,
     isIdentified,
-  }) as HomeConfig | undefined;
+  }) as NormalizedHomeConfig | undefined;
 
   const featuredArticles = useQuery(
     api.articles.listForVisitor,
@@ -247,24 +244,11 @@ export function Home({
   return <div className="opencom-home">{homeConfig.cards.map(renderCard)}</div>;
 }
 
-const DEFAULT_HOME_CONFIG: HomeConfig = {
-  enabled: true,
-  cards: [
-    { id: "welcome", type: "welcome", visibleTo: "all" },
-    { id: "search", type: "search", visibleTo: "all" },
-    { id: "conversations", type: "conversations", visibleTo: "all" },
-    { id: "startConversation", type: "startConversation", visibleTo: "all" },
-  ],
-  defaultSpace: "home",
-  launchDirectlyToConversation: false,
-  tabs: getDefaultHomeTabs(),
-};
-
 export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdentified: boolean) {
   const homeConfig = useQuery(
     api.messengerSettings.getPublicHomeConfig,
     workspaceId ? { workspaceId, isIdentified } : "skip"
-  ) as HomeConfig | undefined;
+  ) as NormalizedHomeConfig | undefined;
 
-  return normalizeHomeConfig(homeConfig, DEFAULT_HOME_CONFIG);
+  return homeConfig ?? getDefaultHomeConfig();
 }

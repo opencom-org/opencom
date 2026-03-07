@@ -45,6 +45,12 @@ export interface NormalizedHomeConfig extends Omit<HomeConfig, "launchDirectlyTo
 }
 
 const HOME_TAB_ORDER: HomeTabId[] = ["home", "messages", "help", "tours", "tasks", "tickets"];
+const DEFAULT_HOME_CARDS: ReadonlyArray<HomeCard> = [
+  { id: "welcome-1", type: "welcome", visibleTo: "all" },
+  { id: "search-1", type: "search", visibleTo: "all" },
+  { id: "conversations-1", type: "conversations", visibleTo: "all" },
+  { id: "startConversation-1", type: "startConversation", visibleTo: "all" },
+];
 
 export const DEFAULT_HOME_TABS: ReadonlyArray<HomeTab> = [
   { id: "home", enabled: true, visibleTo: "all" },
@@ -65,6 +71,16 @@ interface NormalizeHomeTabsOptions {
 
 export function getDefaultHomeTabs(): HomeTab[] {
   return DEFAULT_HOME_TABS.map((tab) => ({ ...tab }));
+}
+
+export function getDefaultHomeConfig(): NormalizedHomeConfig {
+  return {
+    enabled: true,
+    cards: DEFAULT_HOME_CARDS.map((card) => ({ ...card })),
+    defaultSpace: "home",
+    launchDirectlyToConversation: false,
+    tabs: getDefaultHomeTabs(),
+  };
 }
 
 export function normalizeHomeTabs(

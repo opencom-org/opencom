@@ -3,6 +3,10 @@ import { api } from "@opencom/convex";
 import { useOpencomContext } from "../components/OpencomProvider";
 import { useColorScheme } from "react-native";
 import type { Id } from "@opencom/convex/dataModel";
+import {
+  normalizePublicMessengerSettings,
+  type PublicMessengerSettings,
+} from "@opencom/types";
 
 export interface OpencomTheme {
   primaryColor: string;
@@ -17,43 +21,7 @@ export interface OpencomTheme {
   isDark: boolean;
 }
 
-export interface MessengerSettings {
-  primaryColor: string;
-  backgroundColor: string;
-  themeMode: "light" | "dark" | "system";
-  launcherPosition: "left" | "right";
-  launcherSideSpacing: number;
-  launcherBottomSpacing: number;
-  showLauncher: boolean;
-  welcomeMessage: string;
-  teamIntroduction: string | null;
-  showTeammateAvatars: boolean;
-  supportedLanguages: string[];
-  defaultLanguage: string;
-  mobileEnabled: boolean;
-  logo: string | null;
-  launcherIconUrl: string | null;
-  privacyPolicyUrl: string | null;
-}
-
-const DEFAULT_SETTINGS: MessengerSettings = {
-  primaryColor: "#792cd4",
-  backgroundColor: "#792cd4",
-  themeMode: "system",
-  launcherPosition: "right",
-  launcherSideSpacing: 20,
-  launcherBottomSpacing: 20,
-  showLauncher: true,
-  welcomeMessage: "Hi there! How can we help you today?",
-  teamIntroduction: null,
-  showTeammateAvatars: true,
-  supportedLanguages: ["en"],
-  defaultLanguage: "en",
-  mobileEnabled: true,
-  logo: null,
-  launcherIconUrl: null,
-  privacyPolicyUrl: null,
-};
+export type MessengerSettings = PublicMessengerSettings;
 
 const LIGHT_THEME_COLORS = {
   textOnPrimary: "#FFFFFF",
@@ -88,9 +56,9 @@ export function useMessengerSettings(): {
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
   );
 
-  const settings: MessengerSettings = settingsData
-    ? (settingsData as MessengerSettings)
-    : DEFAULT_SETTINGS;
+  const settings: MessengerSettings = normalizePublicMessengerSettings(
+    settingsData as Partial<PublicMessengerSettings> | undefined
+  );
 
   // Determine effective theme mode
   const effectiveThemeMode =

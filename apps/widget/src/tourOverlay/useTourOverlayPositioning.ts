@@ -24,7 +24,7 @@ interface UseTourOverlayPositioningOptions {
   setFailureHint: Dispatch<SetStateAction<string | null>>;
   checkpointCurrentStep: (opts?: {
     blockedReason?: DiagnosticReason;
-    mode?: AdvanceOn | "system";
+    mode?: AdvanceOn;
     selector?: string;
   }) => void;
   handleNext: (opts?: {
@@ -256,7 +256,6 @@ export function useTourOverlayPositioning({
           routeCheckpointStepRef.current = currentStep._id;
           checkpointCurrentStep({
             blockedReason: routeResult.invalidRoute ? "checkpoint_invalid_route" : "route_mismatch",
-            mode: "system",
           });
         }
 

@@ -61,7 +61,7 @@ export function useTourOverlayActions({
   const checkpointCurrentStep = useCallback(
     (opts?: {
       blockedReason?: DiagnosticReason;
-      mode?: AdvanceOn | "system";
+      mode?: AdvanceOn;
       selector?: string;
     }) => {
       if (!activeTour || !currentStep) {

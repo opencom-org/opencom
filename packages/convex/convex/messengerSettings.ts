@@ -5,28 +5,33 @@ import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { audienceRulesValidator, jsonObjectValidator } from "./validators";
 import {
-  getDefaultHomeTabs,
+  getDefaultHomeConfig,
+  getDefaultPublicMessengerSettings,
   isVisibleToAudience,
   normalizeHomeConfig as normalizeSharedHomeConfig,
+  normalizePublicMessengerSettings,
   resolveDefaultHomeSpace,
   type HomeConfig,
   type HomeTab,
+  type PublicMessengerSettings,
 } from "@opencom/types";
 
-// Default settings for new workspaces
+const DEFAULT_PUBLIC_SETTINGS = getDefaultPublicMessengerSettings();
+
+// Default persisted settings for new workspaces
 const DEFAULT_SETTINGS = {
-  primaryColor: "#792cd4",
-  backgroundColor: "#792cd4",
-  themeMode: "system" as const,
-  launcherPosition: "right" as const,
-  launcherSideSpacing: 20,
-  launcherBottomSpacing: 20,
-  showLauncher: true,
-  welcomeMessage: "Hi there! How can we help you today?",
-  showTeammateAvatars: true,
-  supportedLanguages: ["en"],
-  defaultLanguage: "en",
-  mobileEnabled: true,
+  primaryColor: DEFAULT_PUBLIC_SETTINGS.primaryColor,
+  backgroundColor: DEFAULT_PUBLIC_SETTINGS.backgroundColor,
+  themeMode: DEFAULT_PUBLIC_SETTINGS.themeMode,
+  launcherPosition: DEFAULT_PUBLIC_SETTINGS.launcherPosition,
+  launcherSideSpacing: DEFAULT_PUBLIC_SETTINGS.launcherSideSpacing,
+  launcherBottomSpacing: DEFAULT_PUBLIC_SETTINGS.launcherBottomSpacing,
+  showLauncher: DEFAULT_PUBLIC_SETTINGS.showLauncher,
+  welcomeMessage: DEFAULT_PUBLIC_SETTINGS.welcomeMessage,
+  showTeammateAvatars: DEFAULT_PUBLIC_SETTINGS.showTeammateAvatars,
+  supportedLanguages: DEFAULT_PUBLIC_SETTINGS.supportedLanguages,
+  defaultLanguage: DEFAULT_PUBLIC_SETTINGS.defaultLanguage,
+  mobileEnabled: DEFAULT_PUBLIC_SETTINGS.mobileEnabled,
 };
 
 // Hex color validation regex
@@ -65,6 +70,50 @@ async function requireWorkspaceSettingsPermission(
     throw new Error("Not authenticated");
   }
   await requirePermission(ctx, user._id, workspaceId, "settings.workspace");
+}
+
+function toPublicMessengerSettings(args?: {
+  primaryColor?: string;
+  backgroundColor?: string;
+  themeMode?: PublicMessengerSettings["themeMode"];
+  launcherPosition?: PublicMessengerSettings["launcherPosition"];
+  launcherSideSpacing?: number;
+  launcherBottomSpacing?: number;
+  showLauncher?: boolean;
+  welcomeMessage?: string;
+  showTeammateAvatars?: boolean;
+  supportedLanguages?: string[];
+  defaultLanguage?: string;
+  mobileEnabled?: boolean;
+  logo?: string | null;
+  launcherIconUrl?: string | null;
+  teamIntroduction?: string | null;
+  privacyPolicyUrl?: string | null;
+  launcherAudienceRules?: unknown;
+}): PublicMessengerSettings {
+  return normalizePublicMessengerSettings(
+    args
+      ? {
+          primaryColor: args.primaryColor,
+          backgroundColor: args.backgroundColor,
+          themeMode: args.themeMode,
+          launcherPosition: args.launcherPosition,
+          launcherSideSpacing: args.launcherSideSpacing,
+          launcherBottomSpacing: args.launcherBottomSpacing,
+          showLauncher: args.showLauncher,
+          welcomeMessage: args.welcomeMessage,
+          showTeammateAvatars: args.showTeammateAvatars,
+          supportedLanguages: args.supportedLanguages,
+          defaultLanguage: args.defaultLanguage,
+          mobileEnabled: args.mobileEnabled,
+          logo: args.logo ?? null,
+          launcherIconUrl: args.launcherIconUrl ?? null,
+          teamIntroduction: args.teamIntroduction ?? null,
+          privacyPolicyUrl: args.privacyPolicyUrl ?? null,
+          launcherAudienceRules: args.launcherAudienceRules ?? null,
+        }
+      : undefined
+  );
 }
 
 export const get = query({
@@ -112,13 +161,8 @@ export const getOrCreate = query({
     // Return default settings (not persisted until update)
     return {
       workspaceId: args.workspaceId,
-      ...DEFAULT_SETTINGS,
-      logo: null,
+      ...DEFAULT_PUBLIC_SETTINGS,
       logoStorageId: null,
-      launcherIconUrl: null,
-      teamIntroduction: null,
-      privacyPolicyUrl: null,
-      launcherAudienceRules: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -137,35 +181,16 @@ export const getPublicSettings = query({
       .first();
 
     if (!settings) {
-      // Return defaults for workspaces without custom settings
-      return {
-        primaryColor: DEFAULT_SETTINGS.primaryColor,
-        backgroundColor: DEFAULT_SETTINGS.backgroundColor,
-        themeMode: DEFAULT_SETTINGS.themeMode,
-        launcherPosition: DEFAULT_SETTINGS.launcherPosition,
-        launcherSideSpacing: DEFAULT_SETTINGS.launcherSideSpacing,
-        launcherBottomSpacing: DEFAULT_SETTINGS.launcherBottomSpacing,
-        showLauncher: DEFAULT_SETTINGS.showLauncher,
-        welcomeMessage: DEFAULT_SETTINGS.welcomeMessage,
-        showTeammateAvatars: DEFAULT_SETTINGS.showTeammateAvatars,
-        supportedLanguages: DEFAULT_SETTINGS.supportedLanguages,
-        defaultLanguage: DEFAULT_SETTINGS.defaultLanguage,
-        mobileEnabled: DEFAULT_SETTINGS.mobileEnabled,
-        logo: null,
-        launcherIconUrl: null,
-        teamIntroduction: null,
-        privacyPolicyUrl: null,
-        launcherAudienceRules: null,
-      };
+      return getDefaultPublicMessengerSettings();
     }
 
     // Generate logo URL if storage ID exists
-    let logoUrl: string | undefined = settings.logo ?? undefined;
+    let logoUrl: string | null = settings.logo ?? null;
     if (settings.logoStorageId) {
-      logoUrl = (await ctx.storage.getUrl(settings.logoStorageId)) ?? undefined;
+      logoUrl = (await ctx.storage.getUrl(settings.logoStorageId)) ?? null;
     }
 
-    return {
+    return toPublicMessengerSettings({
       primaryColor: settings.primaryColor,
       backgroundColor: settings.backgroundColor,
       themeMode: settings.themeMode,
@@ -183,7 +208,7 @@ export const getPublicSettings = query({
       teamIntroduction: settings.teamIntroduction,
       privacyPolicyUrl: settings.privacyPolicyUrl,
       launcherAudienceRules: settings.launcherAudienceRules,
-    };
+    });
   },
 });
 
@@ -448,19 +473,7 @@ const homeConfigValidator = v.object({
   tabs: v.optional(v.array(homeTabValidator)),
 });
 
-// Default home configuration for new workspaces
-const DEFAULT_HOME_CONFIG: HomeConfig = {
-  enabled: true,
-  cards: [
-    { id: "welcome-1", type: "welcome", visibleTo: "all" },
-    { id: "search-1", type: "search", visibleTo: "all" },
-    { id: "conversations-1", type: "conversations", visibleTo: "all" },
-    { id: "startConversation-1", type: "startConversation", visibleTo: "all" },
-  ],
-  defaultSpace: "home",
-  launchDirectlyToConversation: false,
-  tabs: getDefaultHomeTabs(),
-};
+const DEFAULT_HOME_CONFIG: HomeConfig = getDefaultHomeConfig();
 
 function normalizeHomeConfig(
   homeConfig: HomeConfig | undefined
