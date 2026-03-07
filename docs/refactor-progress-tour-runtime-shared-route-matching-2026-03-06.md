@@ -8,6 +8,7 @@
 - `apps/widget/src/TourOverlay.tsx`
 - `apps/widget/src/tourOverlay/useTourOverlaySession.ts`
 - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
+- `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
 - `apps/widget/src/test/routeMatching.test.ts`
 
 ## Problem Addressed
@@ -43,21 +44,33 @@ That made multi-page tour behavior harder to trust and left the main widget runt
    - dismiss
    - snooze
    - restart
+7. Extracted DOM-heavy overlay runtime behavior out of `TourOverlay.tsx` into `useTourOverlayPositioning`:
+   - selector lookup
+   - route mismatch hinting/checkpointing
+   - viewport geometry and tooltip placement
+   - smooth-scroll settle handling
+   - mutation/resize/scroll observer wiring
+   - `elementClick` and `fieldFill` step-target bindings
 
 ## Result
 
-- `apps/widget/src/TourOverlay.tsx` is down to `617` lines from `996`.
+- `apps/widget/src/TourOverlay.tsx` is down to `253` lines from `996`.
 - `packages/convex/convex/tourProgress.ts` is down to `834` lines from the earlier `914`-line concentration point that drove the audit.
 - Route matching is now authored once and consumed by both the widget and Convex tour runtimes.
-- The remaining complexity inside `TourOverlay.tsx` is now much more clearly the DOM positioning/observer problem, not mixed runtime orchestration plus rendering plus mutation wiring.
+- The widget-side tour runtime now has clear ownership boundaries:
+  - `useTourOverlaySession`
+  - `useTourOverlayActions`
+  - `useTourOverlayPositioning`
+  - `TourOverlay.tsx` as render/orchestration shell
+- The remaining complexity in this track is now mostly inside `tourProgress.ts` and, secondarily, the isolated `useTourOverlayPositioning` hook rather than the route component itself.
 
 ## What Still Appears To Remain In This Track
 
-- `apps/widget/src/TourOverlay.tsx` still owns the selector lookup, viewport geometry, scroll-settle, and observer wiring.
+- `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts` still carries a lot of geometry and observer logic, even though it is now isolated.
 - `packages/convex/convex/tourProgress.ts` still mixes progression rules, diagnostics, checkpointing, and availability resolution.
 - The next clean follow-up is either:
-  - extract overlay positioning/observer behavior from `TourOverlay.tsx`, or
-  - split `tourProgress.ts` by progression/diagnostic/query responsibilities
+  - split `tourProgress.ts` by progression/diagnostic/query responsibilities, or
+  - trim `useTourOverlayPositioning.ts` further with pure viewport/selector helpers only if that file becomes a genuine maintenance problem
 
 ## Compatibility Notes
 

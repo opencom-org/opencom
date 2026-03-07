@@ -25,6 +25,7 @@ Use this file in a new chat to recover context without reconstructing the work f
     - `apps/widget/src/TourOverlay.tsx`
     - `apps/widget/src/tourOverlay/useTourOverlaySession.ts`
     - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
+    - `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
     - `packages/convex/convex/tourProgress.ts`
     - `packages/types/src/routeMatching.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
@@ -227,13 +228,15 @@ What is already done:
 - Active-tour session and mutation orchestration were extracted from `TourOverlay.tsx` into:
   - `apps/widget/src/tourOverlay/useTourOverlaySession.ts`
   - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
-- `apps/widget/src/TourOverlay.tsx` is down to about `617` lines from `996`.
+- DOM positioning, observer wiring, and step-target bindings were also extracted into:
+  - `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
+- `apps/widget/src/TourOverlay.tsx` is down to about `253` lines from `996`.
 
 What still appears to remain:
 
-- `TourOverlay.tsx` still owns selector lookup, viewport geometry, scroll-settle, and observer wiring.
+- `useTourOverlayPositioning.ts` still owns a lot of selector/viewport/observer behavior, even though the route file no longer does.
 - `tourProgress.ts` still mixes progression rules, diagnostics, checkpointing, and availability queries.
-- This track still has one good pass left before it should be considered intentionally stopped.
+- This track is now at a clean stop point; the next pass should be backend-focused unless the isolated positioning hook proves to be a maintenance problem.
 
 Primary evidence doc:
 
@@ -249,8 +252,8 @@ The latest repo-wide ranking for this is now:
 
 ### Highest-value remaining tracks
 
-1. Split tour runtime and centralize shared route/selector matching behavior
-2. Split Convex series runtime/authoring phase 2
+1. Split Convex series runtime/authoring phase 2
+2. Decide whether to do a backend-focused `tourProgress.ts` split or stop the tour-runtime track at the current cleaner boundary
 3. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
 4. Converge messenger/home-config contracts across Convex, web, widget, and RN
 5. Split workspace admin/security/onboarding concerns across backend, web, and mobile
@@ -420,8 +423,8 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Either take one more `split-tour-runtime-and-route-matching` pass focused on overlay positioning/observer extraction, or stop this track intentionally at the current cleaner boundary.
-2. If switching domains, start `split-convex-series-runtime-authoring-v2`.
+1. Start `split-convex-series-runtime-authoring-v2`.
+2. Treat the widget-side tour runtime as a clean stop unless the isolated `useTourOverlayPositioning.ts` hook becomes the next obvious pain point.
 3. Leave widget shell phase 2 alone unless a very obvious shell-composition extraction presents itself.
 
 If instead the intent is to fully close the outbound/trigger track before switching:

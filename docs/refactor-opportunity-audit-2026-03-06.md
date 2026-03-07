@@ -29,7 +29,7 @@ It is intended to replace the older "remaining slices" lists as the practical so
   - `pnpm --filter @opencom/web typecheck`
   - `pnpm web:test:e2e` -> pass (`193` passed, `7` skipped, `0` flaky)
 - Tour route matching is now centralized in `@opencom/types`.
-- `apps/widget/src/TourOverlay.tsx` is down to `617` lines from `996`.
+- `apps/widget/src/TourOverlay.tsx` is down to `253` lines from `996`.
 - The biggest remaining opportunities are no longer generic "large page" cleanups.
 - The highest-value remaining work is concentrated in a small set of runtime controllers and cross-surface domain contracts.
 
@@ -37,8 +37,8 @@ It is intended to replace the older "remaining slices" lists as the practical so
 
 | Rank | Opportunity | Why it is still high-value | Primary evidence |
 |---|---|---|---|
-| 1 | Tour runtime phase 2 | Shared route matching is now centralized in [`routeMatching.ts`](/Users/jack/dev/Repos/opencom-prod/packages/types/src/routeMatching.ts), and [`TourOverlay.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/TourOverlay.tsx) is down to `617` lines after extracting session and action hooks. The remaining hotspot is narrower now: DOM positioning/observer logic still lives in the widget runtime, while [`tourProgress.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/tourProgress.ts) still mixes progression, diagnostics, checkpointing, and availability resolution at `834` lines. This remains the highest cross-surface runtime reasoning slice until those responsibilities split further. | `apps/widget/src/TourOverlay.tsx`, `apps/widget/src/tourOverlay/useTourOverlaySession.ts`, `apps/widget/src/tourOverlay/useTourOverlayActions.ts`, `packages/types/src/routeMatching.ts`, `packages/convex/convex/tourProgress.ts`, `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md` |
-| 2 | Convex series runtime/authoring phase 2 | [`series/runtime.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/series/runtime.ts) (`1078` lines) still mixes trigger matching, graph traversal, status transitions, block execution, scheduling, telemetry, and tag/conversation side effects. [`series/authoring.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/series/authoring.ts) is still large enough that authoring invariants and runtime invariants are difficult to reason about together. | `packages/convex/convex/series/runtime.ts`, `packages/convex/convex/series/authoring.ts` |
+| 1 | Convex series runtime/authoring phase 2 | [`series/runtime.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/series/runtime.ts) (`1078` lines) still mixes trigger matching, graph traversal, status transitions, block execution, scheduling, telemetry, and tag/conversation side effects. [`series/authoring.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/series/authoring.ts) is still large enough that authoring invariants and runtime invariants are difficult to reason about together. This is now the clearest next concentration slice after the tour-runtime reductions already landed. | `packages/convex/convex/series/runtime.ts`, `packages/convex/convex/series/authoring.ts` |
+| 2 | Tour runtime backend follow-up | Shared route matching is centralized in [`routeMatching.ts`](/Users/jack/dev/Repos/opencom-prod/packages/types/src/routeMatching.ts), and [`TourOverlay.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/TourOverlay.tsx) is now a `253`-line shell around focused hooks. The remaining meaningful work in this track is mostly backend-side: [`tourProgress.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/tourProgress.ts) still mixes progression, diagnostics, checkpointing, and availability resolution at `834` lines, while [`useTourOverlayPositioning.ts`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/tourOverlay/useTourOverlayPositioning.ts) remains a large but isolated DOM-runtime hook. | `packages/convex/convex/tourProgress.ts`, `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`, `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md` |
 | 3 | Widget shell orchestration phase 2 | A phase-2 pass has now extracted conversation, article, and ticket state machines into [`useWidgetConversationFlow.ts`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/hooks/useWidgetConversationFlow.ts), [`useWidgetArticleNavigation.ts`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/hooks/useWidgetArticleNavigation.ts), and [`useWidgetTicketFlow.ts`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/hooks/useWidgetTicketFlow.ts). [`Widget.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/Widget.tsx) is down to `966` lines from `1285`, so this track is healthier than it was, but still worth another pass if we want the shell controller to stop being a notable hotspot. | `apps/widget/src/Widget.tsx`, `apps/widget/src/hooks/useWidgetConversationFlow.ts`, `apps/widget/src/hooks/useWidgetArticleNavigation.ts`, `apps/widget/src/hooks/useWidgetTicketFlow.ts`, `docs/refactor-progress-widget-shell-orchestration-v2-2026-03-06.md` |
 | 4 | Messenger/home-config contract convergence across Convex, web, widget, and RN | [`messengerSettings.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/messengerSettings.ts) still mixes public widget settings, admin mutation logic, logo asset handling, audience rules, and home-card CRUD. The same concepts are then re-expressed in [`MessengerSettingsSection.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/web/src/app/settings/MessengerSettingsSection.tsx), [`Home.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/widget/src/components/Home.tsx), and [`OpencomHome.tsx`](/Users/jack/dev/Repos/opencom-prod/packages/react-native-sdk/src/components/OpencomHome.tsx). RN still carries local `HomeCard` and `HomeConfig` interfaces and fetches public home config inline rather than relying on a clearly shared view model. | `packages/convex/convex/messengerSettings.ts`, `apps/web/src/app/settings/MessengerSettingsSection.tsx`, `apps/widget/src/components/Home.tsx`, `packages/react-native-sdk/src/components/OpencomHome.tsx` |
 | 5 | Workspace admin/security/onboarding split across backend, web, and mobile | [`workspaces.ts`](/Users/jack/dev/Repos/opencom-prod/packages/convex/convex/workspaces.ts) still bundles public context, onboarding state, origin validation, signup policy, and help-center access policy. The UI side is similarly concentrated in [`SecuritySettingsSection.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/web/src/app/settings/SecuritySettingsSection.tsx) (`709` lines, `9` queries, `7` mutations) and [`apps/mobile/app/(app)/settings.tsx`](/Users/jack/dev/Repos/opencom-prod/apps/mobile/app/(app)/settings.tsx) (`1048` lines). This is a cross-surface admin domain, not three unrelated files. | `packages/convex/convex/workspaces.ts`, `apps/web/src/app/settings/SecuritySettingsSection.tsx`, `apps/mobile/app/(app)/settings.tsx` |
@@ -53,8 +53,8 @@ It is intended to replace the older "remaining slices" lists as the practical so
 
 If the goal is to keep making the codebase easier to reason about while avoiding another broad backlog, the best next queue is:
 
-1. Tour runtime split plus shared route/selector matching
-2. Convex series runtime/authoring phase 2
+1. Convex series runtime/authoring phase 2
+2. Tour runtime backend follow-up in `tourProgress.ts`, or stop that track intentionally at the current cleaner boundary
 3. Either finish widget shell orchestration phase 2 or stop it intentionally at the current cleaner boundary
 4. Messenger/home-config contract convergence
 5. Workspace admin/security/onboarding split
@@ -62,12 +62,13 @@ If the goal is to keep making the codebase easier to reason about while avoiding
 
 After those, re-run the hotspot scan before committing to the rest of the list.
 
-Update after the March 6 tour-runtime pass:
+Update after the March 7 tour-runtime pass:
 
 - Route matching is no longer the active sub-problem in this track.
+- `TourOverlay.tsx` is no longer a top-tier concentration file.
 - The remaining tour-runtime work is now:
-  - widget overlay positioning/observer extraction
   - Convex progress/diagnostic/query separation
+  - optional pure-helper trimming inside `useTourOverlayPositioning.ts` if that isolated hook becomes hard to maintain
 
 ## Lower-Cost Cleanup Items
 
