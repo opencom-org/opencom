@@ -2,7 +2,7 @@
 
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
-import { AuditLogViewer } from "../settings/SecuritySettingsSection";
+import { AuditLogViewer } from "../settings/AuditLogViewer";
 
 function AuditLogsContent(): React.JSX.Element {
   const { activeWorkspace } = useAuth();

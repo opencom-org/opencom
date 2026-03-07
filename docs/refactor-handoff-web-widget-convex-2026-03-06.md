@@ -21,22 +21,25 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - messenger/home refactor work in:
-    - `packages/types/src/messengerSettings.ts`
-    - `packages/types/src/homeConfig.ts`
-    - `packages/types/src/index.ts`
-    - `packages/convex/convex/messengerSettings.ts`
-    - `packages/convex/convex/messengerSettingsShared.ts`
-    - `packages/convex/convex/messengerSettingsAccess.ts`
-    - `packages/convex/convex/messengerSettingsCore.ts`
-    - `packages/convex/convex/messengerHomeConfig.ts`
-    - `apps/widget/src/hooks/useWidgetSettings.ts`
-    - `apps/widget/src/components/Home.tsx`
-    - `packages/react-native-sdk/src/hooks/useMessengerSettings.ts`
-    - `packages/react-native-sdk/src/components/OpencomHome.tsx`
-  - incidental widget tour typing cleanup in:
-    - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
-    - `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
+  - messenger/home web authoring refactor work in:
+    - `apps/web/src/app/settings/MessengerSettingsSection.tsx`
+    - `apps/web/src/app/settings/MessengerSettingsFormFields.tsx`
+    - `apps/web/src/app/settings/MessengerSettingsPreview.tsx`
+    - `apps/web/src/app/settings/SettingsToggleRow.tsx`
+    - `apps/web/src/app/settings/messengerSettingsForm.ts`
+    - `apps/web/src/app/settings/messengerSettingsForm.test.ts`
+  - workspace admin/security/onboarding phase-1 work in:
+    - `packages/convex/convex/workspaces.ts`
+    - `packages/convex/convex/workspaceHostedOnboardingShared.ts`
+    - `packages/convex/convex/workspaceHostedOnboardingAccess.ts`
+    - `packages/convex/convex/workspaceHostedOnboardingQueries.ts`
+    - `packages/convex/convex/workspaceHostedOnboardingMutations.ts`
+    - `apps/web/src/app/settings/SecuritySettingsSection.tsx`
+    - `apps/web/src/app/settings/AuditLogViewer.tsx`
+    - `apps/web/src/app/settings/SecurityIdentitySettingsCard.tsx`
+    - `apps/web/src/app/settings/SignedSessionsSettings.tsx`
+    - `apps/web/src/app/audit-logs/page.tsx`
+  - updated refactor tracking docs
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -70,6 +73,8 @@ These slices are complete enough that they should be treated as established refa
 | Convex series runtime / authoring phase 2 | Completed for the current phase-2 slice | `docs/refactor-progress-convex-series-runtime-authoring-v2-2026-03-07.md` |
 | Messenger / home contract convergence | Completed for the current public-contract slice | `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md` |
 | Convex messenger settings decomposition | Completed for the current backend slice | `docs/refactor-progress-convex-messenger-settings-decomposition-2026-03-07.md` |
+| Web messenger settings decomposition | Completed for the current web authoring slice | `docs/refactor-progress-web-messenger-settings-decomposition-2026-03-07.md` |
+| Workspace admin/security/onboarding phase 1 | Completed for the current backend/web phase-1 slice | `docs/refactor-progress-workspace-admin-security-onboarding-v1-2026-03-07.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
 | Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
 
@@ -220,16 +225,54 @@ What is already done:
 
 What still appears to remain:
 
-- `apps/web/src/app/settings/MessengerSettingsSection.tsx` is still a concentrated authoring surface.
-- The main next pass in this track is now the web settings-side decomposition.
-- Further backend work in this track should be optional follow-up inside the isolated helper modules, not another endpoint-shell split.
+- `MessengerSettingsSection.tsx` is no longer the main concentration in this track.
+- If this track continues, the most likely next web surface is now `apps/web/src/app/settings/HomeSettingsSection.tsx`.
+- Further work here should be optional follow-up inside isolated web/backend modules, not another messenger settings endpoint-shell split.
 
 Primary evidence doc:
 
 - `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md`
 - `docs/refactor-progress-convex-messenger-settings-decomposition-2026-03-07.md`
+- `docs/refactor-progress-web-messenger-settings-decomposition-2026-03-07.md`
 
-### 5. Decompose widget shell orchestration phase 2
+### 5. Split workspace admin/security/onboarding
+
+Status:
+
+- Started, not complete
+- The first backend/web slice is now at a clean stop point
+- No live OpenSpec change currently exists
+
+What is already done:
+
+- Hosted onboarding logic moved out of `packages/convex/convex/workspaces.ts` into:
+  - `packages/convex/convex/workspaceHostedOnboardingShared.ts`
+  - `packages/convex/convex/workspaceHostedOnboardingAccess.ts`
+  - `packages/convex/convex/workspaceHostedOnboardingQueries.ts`
+  - `packages/convex/convex/workspaceHostedOnboardingMutations.ts`
+- `packages/convex/convex/workspaces.ts` is down to about `370` lines from `756`.
+- The web security route component now delegates to:
+  - `apps/web/src/app/settings/AuditLogViewer.tsx`
+  - `apps/web/src/app/settings/SecurityIdentitySettingsCard.tsx`
+  - `apps/web/src/app/settings/SignedSessionsSettings.tsx`
+- `apps/web/src/app/settings/SecuritySettingsSection.tsx` is down to about `124` lines from `709`.
+- `apps/web/src/app/audit-logs/page.tsx` now imports a dedicated `AuditLogViewer` component instead of reaching through the security settings file.
+
+What still appears to remain:
+
+- `apps/mobile/app/(app)/settings.tsx` is still the biggest concentration in this domain.
+- `packages/convex/convex/workspaces.ts` still mixes:
+  - public workspace context
+  - origin validation / signup settings
+  - help-center policy
+  - workspace create/default flows
+- If continuing this track, the next clean move is probably the mobile settings split plus optional backend extraction of the remaining workspace policy/public-context handlers.
+
+Primary evidence doc:
+
+- `docs/refactor-progress-workspace-admin-security-onboarding-v1-2026-03-07.md`
+
+### 6. Decompose widget shell orchestration phase 2
 
 Status:
 
@@ -261,7 +304,7 @@ Primary evidence doc:
 
 - `docs/refactor-progress-widget-shell-orchestration-v2-2026-03-06.md`
 
-### 6. Split tour runtime and centralize route matching
+### 7. Split tour runtime and centralize route matching
 
 Status:
 
@@ -302,7 +345,7 @@ Primary evidence doc:
 - `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md`
 - `docs/refactor-progress-convex-tour-progress-decomposition-2026-03-07.md`
 
-### 7. Split Convex series runtime / authoring phase 2
+### 8. Split Convex series runtime / authoring phase 2
 
 Status:
 
@@ -344,12 +387,12 @@ The latest repo-wide ranking for this is now:
 
 ### Highest-value remaining tracks
 
-1. Converge messenger/home-config contracts across Convex, web, widget, and RN
-2. Split workspace admin/security/onboarding concerns across backend, web, and mobile
-3. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
-4. Continue cross-surface outbound runtime convergence after the contract work already completed
-5. Split knowledge/admin content plus the remaining article-domain concentration
-6. Decompose the campaigns admin surface before reassessing the next service-domain slice
+1. Split workspace admin/security/onboarding concerns across backend, web, and mobile
+2. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
+3. Continue cross-surface outbound runtime convergence after the contract work already completed
+4. Split knowledge/admin content plus the remaining article-domain concentration
+5. Decompose the campaigns admin surface before reassessing the next service-domain slice
+6. Treat messenger/home as a cleaner stop unless `HomeSettingsSection.tsx` becomes the next obvious hotspot
 
 ### Next layer after that
 
@@ -379,6 +422,8 @@ For deciding what to do next, prefer this document plus:
 - `pnpm --filter @opencom/convex test`
 - `bash -lc 'set -a; source packages/convex/.env.local; set +a; pnpm --filter @opencom/convex test -- --run tests/tourProgress.test.ts'`
 - `bash -lc 'set -a; source packages/convex/.env.local; set +a; pnpm --filter @opencom/convex test -- --run tests/messengerSettings.test.ts'`
+- `bash -lc 'set -a; source packages/convex/.env.local; set +a; pnpm --filter @opencom/convex test -- --run tests/hostedOnboarding.test.ts tests/workspaceSettings.test.ts'`
+- `pnpm --filter @opencom/web test -- --run src/app/settings/MessengerSettingsSection.test.tsx src/app/settings/messengerSettingsForm.test.ts`
 - `pnpm test:compat:cross-surface`
 - `pnpm --filter @opencom/widget test -- --run src/test/routeMatching.test.ts src/test/tourOverlay.test.tsx`
 - `pnpm --filter @opencom/widget test`
@@ -407,7 +452,8 @@ Important:
 2. Read the latest repo-wide audit:
    - `docs/refactor-opportunity-audit-2026-03-06.md`
 3. Read the latest progress docs for the currently active/partial tracks:
-   - `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md`
+   - `docs/refactor-progress-workspace-admin-security-onboarding-v1-2026-03-07.md`
+   - `docs/refactor-progress-web-messenger-settings-decomposition-2026-03-07.md`
    - `docs/refactor-progress-centralize-outbound-trigger-contracts-2026-03-06.md`
    - `docs/refactor-progress-web-outbound-editor-decomposition-2026-03-06.md`
 4. Run `git status --short` immediately and confirm whether the working tree still matches the handoff snapshot in this file.
@@ -519,9 +565,10 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Continue messenger/home-config on the backend/web authoring side:
-   - split `apps/web/src/app/settings/MessengerSettingsSection.tsx`
-2. Treat the public messenger/home contract convergence work and Convex backend decomposition as complete for now.
+1. Continue workspace admin/security/onboarding from the new cleaner boundary:
+   - split `apps/mobile/app/(app)/settings.tsx`
+   - or extract the remaining workspace policy/public-context handlers out of `packages/convex/convex/workspaces.ts`
+2. Treat the messenger/home contract convergence track as a cleaner stop unless `HomeSettingsSection.tsx` becomes the next obvious hotspot.
 3. Treat the tour runtime and series backend as clean stops unless one of the new isolated modules becomes the next obvious pain point.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
