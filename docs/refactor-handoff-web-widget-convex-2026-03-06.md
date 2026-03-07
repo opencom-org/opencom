@@ -21,13 +21,14 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - tour runtime refactoring in:
-    - `apps/widget/src/TourOverlay.tsx`
-    - `apps/widget/src/tourOverlay/useTourOverlaySession.ts`
-    - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
-    - `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
-    - `packages/convex/convex/tourProgress.ts`
-    - `packages/types/src/routeMatching.ts`
+  - series backend phase-2 refactoring in:
+    - `packages/convex/convex/series/authoring.ts`
+    - `packages/convex/convex/series/runtime.ts`
+    - `packages/convex/convex/series/readiness.ts`
+    - `packages/convex/convex/series/runtimeEnrollment.ts`
+    - `packages/convex/convex/series/runtimeExecution.ts`
+    - `packages/convex/convex/series/runtimeProcessing.ts`
+    - `packages/convex/convex/series/runtimeProgressState.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -57,6 +58,7 @@ These slices are complete enough that they should be treated as established refa
 | Widget conversation view decomposition | Completed | `docs/refactor-progress-widget-conversation-view-decomposition-2026-03-05.md` |
 | Widget survey overlay decomposition | Completed | `docs/refactor-progress-widget-survey-overlay-decomposition-2026-03-05.md` |
 | Tour runtime shared route matching | Completed for the current phase-2 slice | `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md` |
+| Convex series runtime / authoring phase 2 | Completed for the current phase-2 slice | `docs/refactor-progress-convex-series-runtime-authoring-v2-2026-03-07.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
 | Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
 
@@ -242,6 +244,38 @@ Primary evidence doc:
 
 - `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md`
 
+### 6. Split Convex series runtime / authoring phase 2
+
+Status:
+
+- Started, not complete
+- At a cleaner stop point after the March 7 phase-2 pass
+- No live OpenSpec change currently exists
+
+What is already done:
+
+- Readiness evaluation moved out of `authoring.ts` into:
+  - `packages/convex/convex/series/readiness.ts`
+- Runtime progress stats/history/status bookkeeping moved into:
+  - `packages/convex/convex/series/runtimeProgressState.ts`
+- Runtime block execution moved into:
+  - `packages/convex/convex/series/runtimeExecution.ts`
+- Runtime progress engine moved into:
+  - `packages/convex/convex/series/runtimeProcessing.ts`
+- Runtime enrollment/trigger handling moved into:
+  - `packages/convex/convex/series/runtimeEnrollment.ts`
+- `packages/convex/convex/series/runtime.ts` is down to about `210` lines from `1078`.
+- `packages/convex/convex/series/authoring.ts` is down to about `482` lines from `784`.
+
+What still appears to remain:
+
+- `runtimeProcessing.ts` and `runtimeExecution.ts` are still meaningful backend logic concentrations, though they are now isolated by purpose.
+- This track is now at a clean stop point unless a future change makes those isolated modules the next obvious pain point.
+
+Primary evidence doc:
+
+- `docs/refactor-progress-convex-series-runtime-authoring-v2-2026-03-07.md`
+
 ## Current Best View Of Remaining Work
 
 This is the practical remaining list after accounting for what has already been completed since the older slice maps were written.
@@ -252,12 +286,12 @@ The latest repo-wide ranking for this is now:
 
 ### Highest-value remaining tracks
 
-1. Split Convex series runtime/authoring phase 2
-2. Decide whether to do a backend-focused `tourProgress.ts` split or stop the tour-runtime track at the current cleaner boundary
-3. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
-4. Converge messenger/home-config contracts across Convex, web, widget, and RN
-5. Split workspace admin/security/onboarding concerns across backend, web, and mobile
-6. Continue cross-surface outbound runtime convergence after the contract work already completed
+1. Decide whether to do a backend-focused `tourProgress.ts` split or stop the tour-runtime track at the current cleaner boundary
+2. Converge messenger/home-config contracts across Convex, web, widget, and RN
+3. Split workspace admin/security/onboarding concerns across backend, web, and mobile
+4. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
+5. Continue cross-surface outbound runtime convergence after the contract work already completed
+6. Treat the series backend as a cleaner stop unless one of the new isolated modules becomes the next obvious hotspot
 
 ### Next layer after that
 
@@ -423,8 +457,8 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Start `split-convex-series-runtime-authoring-v2`.
-2. Treat the widget-side tour runtime as a clean stop unless the isolated `useTourOverlayPositioning.ts` hook becomes the next obvious pain point.
+1. Start a backend-focused `tourProgress.ts` pass, or intentionally stop the tours track here and switch to messenger/home-config convergence.
+2. Treat the series backend as a clean stop unless `runtimeProcessing.ts` or `runtimeExecution.ts` becomes the next obvious pain point.
 3. Leave widget shell phase 2 alone unless a very obvious shell-composition extraction presents itself.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
