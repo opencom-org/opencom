@@ -21,11 +21,15 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - messenger/home contract convergence in:
+  - messenger/home refactor work in:
     - `packages/types/src/messengerSettings.ts`
     - `packages/types/src/homeConfig.ts`
     - `packages/types/src/index.ts`
     - `packages/convex/convex/messengerSettings.ts`
+    - `packages/convex/convex/messengerSettingsShared.ts`
+    - `packages/convex/convex/messengerSettingsAccess.ts`
+    - `packages/convex/convex/messengerSettingsCore.ts`
+    - `packages/convex/convex/messengerHomeConfig.ts`
     - `apps/widget/src/hooks/useWidgetSettings.ts`
     - `apps/widget/src/components/Home.tsx`
     - `packages/react-native-sdk/src/hooks/useMessengerSettings.ts`
@@ -65,6 +69,7 @@ These slices are complete enough that they should be treated as established refa
 | Convex tour progress decomposition | Completed for the current phase-3 slice | `docs/refactor-progress-convex-tour-progress-decomposition-2026-03-07.md` |
 | Convex series runtime / authoring phase 2 | Completed for the current phase-2 slice | `docs/refactor-progress-convex-series-runtime-authoring-v2-2026-03-07.md` |
 | Messenger / home contract convergence | Completed for the current public-contract slice | `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md` |
+| Convex messenger settings decomposition | Completed for the current backend slice | `docs/refactor-progress-convex-messenger-settings-decomposition-2026-03-07.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
 | Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
 
@@ -206,16 +211,23 @@ What is already done:
   - `packages/react-native-sdk/src/hooks/useMessengerSettings.ts`
   - `packages/react-native-sdk/src/components/OpencomHome.tsx`
 - RN no longer carries local `HomeCard` / `HomeConfig` definitions for this surface.
+- Convex messenger settings/backend responsibilities are now split into focused helper modules:
+  - `packages/convex/convex/messengerSettingsShared.ts`
+  - `packages/convex/convex/messengerSettingsAccess.ts`
+  - `packages/convex/convex/messengerSettingsCore.ts`
+  - `packages/convex/convex/messengerHomeConfig.ts`
+- `packages/convex/convex/messengerSettings.ts` is down to about `129` lines from `792`.
 
 What still appears to remain:
 
-- `packages/convex/convex/messengerSettings.ts` still mixes public shaping, admin settings mutations, logo storage, audience rules, and home-card CRUD.
 - `apps/web/src/app/settings/MessengerSettingsSection.tsx` is still a concentrated authoring surface.
-- If this track continues, the next pass should be backend/web decomposition, not more public contract alignment.
+- The main next pass in this track is now the web settings-side decomposition.
+- Further backend work in this track should be optional follow-up inside the isolated helper modules, not another endpoint-shell split.
 
 Primary evidence doc:
 
 - `docs/refactor-progress-messenger-home-contract-convergence-2026-03-07.md`
+- `docs/refactor-progress-convex-messenger-settings-decomposition-2026-03-07.md`
 
 ### 5. Decompose widget shell orchestration phase 2
 
@@ -508,9 +520,8 @@ All of A is true, and all of the following are also true:
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
 1. Continue messenger/home-config on the backend/web authoring side:
-   - split `packages/convex/convex/messengerSettings.ts`
-   - then split `apps/web/src/app/settings/MessengerSettingsSection.tsx`
-2. Treat the public messenger/home contract convergence work as complete for now.
+   - split `apps/web/src/app/settings/MessengerSettingsSection.tsx`
+2. Treat the public messenger/home contract convergence work and Convex backend decomposition as complete for now.
 3. Treat the tour runtime and series backend as clean stops unless one of the new isolated modules becomes the next obvious pain point.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
