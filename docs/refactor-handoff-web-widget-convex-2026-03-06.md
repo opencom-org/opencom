@@ -21,14 +21,12 @@ Use this file in a new chat to recover context without reconstructing the work f
 - Branch: `pr/refactor`
 - Working tree is not clean.
 - Current uncommitted work is now mainly:
-  - series backend phase-2 refactoring in:
-    - `packages/convex/convex/series/authoring.ts`
-    - `packages/convex/convex/series/runtime.ts`
-    - `packages/convex/convex/series/readiness.ts`
-    - `packages/convex/convex/series/runtimeEnrollment.ts`
-    - `packages/convex/convex/series/runtimeExecution.ts`
-    - `packages/convex/convex/series/runtimeProcessing.ts`
-    - `packages/convex/convex/series/runtimeProgressState.ts`
+  - tour backend phase-3 refactoring in:
+    - `packages/convex/convex/tourProgress.ts`
+    - `packages/convex/convex/tourProgressShared.ts`
+    - `packages/convex/convex/tourProgressAccess.ts`
+    - `packages/convex/convex/tourProgressMutations.ts`
+    - `packages/convex/convex/tourProgressQueries.ts`
 - Most earlier refactor slices referenced below appear to have been committed already.
 - `decompose-web-tour-editor` OpenSpec change exists, all artifacts are done, tasks are complete, and `openspec validate decompose-web-tour-editor --strict --no-interactive` passed.
 - There is no live OpenSpec change for the outbound/trigger convergence track. That track is being continued through progress docs and code changes, not through an active change artifact.
@@ -58,6 +56,7 @@ These slices are complete enough that they should be treated as established refa
 | Widget conversation view decomposition | Completed | `docs/refactor-progress-widget-conversation-view-decomposition-2026-03-05.md` |
 | Widget survey overlay decomposition | Completed | `docs/refactor-progress-widget-survey-overlay-decomposition-2026-03-05.md` |
 | Tour runtime shared route matching | Completed for the current phase-2 slice | `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md` |
+| Convex tour progress decomposition | Completed for the current phase-3 slice | `docs/refactor-progress-convex-tour-progress-decomposition-2026-03-07.md` |
 | Convex series runtime / authoring phase 2 | Completed for the current phase-2 slice | `docs/refactor-progress-convex-series-runtime-authoring-v2-2026-03-07.md` |
 | Web tour editor decomposition | Completed in code and validated; OpenSpec change not yet archived | `docs/refactor-progress-web-tour-editor-decomposition-2026-03-06.md`, `openspec/changes/decompose-web-tour-editor/` |
 | Web E2E auth/widget stabilization | Completed | `docs/refactor-progress-web-e2e-stabilization-2026-03-06.md` |
@@ -214,8 +213,8 @@ Primary evidence doc:
 
 Status:
 
-- Started, not complete
-- At a cleaner stop point after the March 6 phase-2 pass
+- Started, but the backend follow-up is now complete for the current phase-3 slice
+- At a cleaner stop point after the March 7 backend pass
 - No live OpenSpec change currently exists
 
 What is already done:
@@ -232,17 +231,24 @@ What is already done:
   - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
 - DOM positioning, observer wiring, and step-target bindings were also extracted into:
   - `apps/widget/src/tourOverlay/useTourOverlayPositioning.ts`
+- Convex tour-progress backend responsibilities are now split into focused helper modules:
+  - `packages/convex/convex/tourProgressShared.ts`
+  - `packages/convex/convex/tourProgressAccess.ts`
+  - `packages/convex/convex/tourProgressMutations.ts`
+  - `packages/convex/convex/tourProgressQueries.ts`
 - `apps/widget/src/TourOverlay.tsx` is down to about `253` lines from `996`.
+- `packages/convex/convex/tourProgress.ts` is down to about `120` lines from `834`.
 
 What still appears to remain:
 
 - `useTourOverlayPositioning.ts` still owns a lot of selector/viewport/observer behavior, even though the route file no longer does.
-- `tourProgress.ts` still mixes progression rules, diagnostics, checkpointing, and availability queries.
-- This track is now at a clean stop point; the next pass should be backend-focused unless the isolated positioning hook proves to be a maintenance problem.
+- There is no obvious required backend continuation inside the tour-progress slice right now.
+- This track is now at a clean stop point unless the isolated positioning hook or one of the extracted Convex helper modules becomes a real maintenance problem.
 
 Primary evidence doc:
 
 - `docs/refactor-progress-tour-runtime-shared-route-matching-2026-03-06.md`
+- `docs/refactor-progress-convex-tour-progress-decomposition-2026-03-07.md`
 
 ### 6. Split Convex series runtime / authoring phase 2
 
@@ -286,19 +292,19 @@ The latest repo-wide ranking for this is now:
 
 ### Highest-value remaining tracks
 
-1. Decide whether to do a backend-focused `tourProgress.ts` split or stop the tour-runtime track at the current cleaner boundary
-2. Converge messenger/home-config contracts across Convex, web, widget, and RN
-3. Split workspace admin/security/onboarding concerns across backend, web, and mobile
-4. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
-5. Continue cross-surface outbound runtime convergence after the contract work already completed
-6. Treat the series backend as a cleaner stop unless one of the new isolated modules becomes the next obvious hotspot
+1. Converge messenger/home-config contracts across Convex, web, widget, and RN
+2. Split workspace admin/security/onboarding concerns across backend, web, and mobile
+3. Decide whether to do one more widget shell orchestration phase-2 pass or stop it at the current cleaner boundary
+4. Continue cross-surface outbound runtime convergence after the contract work already completed
+5. Split knowledge/admin content plus the remaining article-domain concentration
+6. Decompose the campaigns admin surface before reassessing the next service-domain slice
 
 ### Next layer after that
 
-1. Split knowledge/admin content plus the remaining article-domain concentration.
-2. Decompose the campaigns admin surface.
-3. Split the AI agent and email-channel service domains.
-4. Decompose audience-rule builder internals.
+1. Split the AI agent and email-channel service domains.
+2. Decompose audience-rule builder internals.
+3. Treat the series backend as a cleaner stop unless one of the new isolated modules becomes the next obvious hotspot.
+4. Treat tours as a cleaner stop unless `useTourOverlayPositioning.ts` or an extracted helper module starts regrowing.
 
 ### Why the older P0/P1 lists are not the current source of truth
 
@@ -318,6 +324,7 @@ For deciding what to do next, prefer this document plus:
 - `pnpm --filter @opencom/widget typecheck`
 - `pnpm --filter @opencom/convex typecheck`
 - `pnpm --filter @opencom/convex test`
+- `bash -lc 'set -a; source packages/convex/.env.local; set +a; pnpm --filter @opencom/convex test -- --run tests/tourProgress.test.ts'`
 - `pnpm test:compat:cross-surface`
 - `pnpm --filter @opencom/widget test -- --run src/test/routeMatching.test.ts src/test/tourOverlay.test.tsx`
 - `pnpm --filter @opencom/widget test`
@@ -457,8 +464,8 @@ All of A is true, and all of the following are also true:
 
 If resuming immediately from this exact handoff state, the cleanest next action is:
 
-1. Start a backend-focused `tourProgress.ts` pass, or intentionally stop the tours track here and switch to messenger/home-config convergence.
-2. Treat the series backend as a clean stop unless `runtimeProcessing.ts` or `runtimeExecution.ts` becomes the next obvious pain point.
+1. Start messenger/home-config contract convergence as the next highest-value cross-surface refactor slice.
+2. Treat the tour runtime and series backend as clean stops unless one of the new isolated modules becomes the next obvious pain point.
 3. Leave widget shell phase 2 alone unless a very obvious shell-composition extraction presents itself.
 
 If instead the intent is to fully close the outbound/trigger track before switching:
