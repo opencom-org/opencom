@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@opencom/convex";
@@ -114,18 +114,21 @@ function ArticlesContent() {
   const generateAssetUploadUrl = useMutation(api.articles.generateAssetUploadUrl);
   const logExport = useMutation(api.auditLogs.logExport);
 
-  const handleCreateArticle = async (visibility: "public" | "internal" = "public") => {
-    if (!activeWorkspace?._id) {
-      return;
-    }
-    const articleId = await createArticle({
-      workspaceId: activeWorkspace._id,
-      title: "Untitled Article",
-      content: "",
-      visibility,
-    });
-    router.push(`/articles/${articleId}`);
-  };
+  const handleCreateArticle = useCallback(
+    async (visibility: "public" | "internal" = "public") => {
+      if (!activeWorkspace?._id) {
+        return;
+      }
+      const articleId = await createArticle({
+        workspaceId: activeWorkspace._id,
+        title: "Untitled Article",
+        content: "",
+        visibility,
+      });
+      router.push(`/articles/${articleId}`);
+    },
+    [activeWorkspace?._id, createArticle, router]
+  );
 
   useEffect(() => {
     if (createQueryHandledRef.current) {
@@ -139,7 +142,7 @@ function ArticlesContent() {
 
     createQueryHandledRef.current = true;
     void handleCreateArticle(createMode === "internal" ? "internal" : "public");
-  }, [activeWorkspace?._id, searchParams]);
+  }, [activeWorkspace?._id, handleCreateArticle, searchParams]);
 
   const handleDeleteRequest = (id: ArticleEditorId, title: string) => {
     setDeleteError(null);
