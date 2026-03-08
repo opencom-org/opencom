@@ -3,6 +3,7 @@ import { query, type QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { authMutation } from "./lib/authWrappers";
+import { isPublicArticle } from "./lib/unifiedArticles";
 import { requirePermission } from "./permissions";
 import { generateSlug, ensureUniqueSlug } from "./utils/strings";
 
@@ -231,6 +232,7 @@ export const list = query({
   args: {
     workspaceId: v.id("workspaces"),
     parentId: v.optional(v.id("collections")),
+    publicOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const authUser = await getAuthenticatedUserFromSession(ctx);
@@ -253,7 +255,9 @@ export const list = query({
           .withIndex("by_collection", (q) => q.eq("collectionId", collection._id))
           .collect();
 
-        const publishedCount = articles.filter((a) => a.status === "published").length;
+        const publishedCount = articles.filter(
+          (article) => isPublicArticle(article) && article.status === "published"
+        ).length;
 
         return {
           ...collection,
@@ -264,7 +268,7 @@ export const list = query({
     );
 
     const sorted = enriched.sort((a, b) => a.order - b.order);
-    if (authUser) {
+    if (authUser && !args.publicOnly) {
       return sorted;
     }
 
@@ -275,6 +279,7 @@ export const list = query({
 export const listHierarchy = query({
   args: {
     workspaceId: v.id("workspaces"),
+    publicOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const authUser = await getAuthenticatedUserFromSession(ctx);
@@ -295,7 +300,9 @@ export const listHierarchy = query({
           .withIndex("by_collection", (q) => q.eq("collectionId", collection._id))
           .collect();
 
-        const publishedCount = articles.filter((a) => a.status === "published").length;
+        const publishedCount = articles.filter(
+          (article) => isPublicArticle(article) && article.status === "published"
+        ).length;
 
         return {
           ...collection,
@@ -306,7 +313,7 @@ export const listHierarchy = query({
     );
 
     const sorted = enriched.sort((a, b) => a.order - b.order);
-    if (authUser) {
+    if (authUser && !args.publicOnly) {
       return sorted;
     }
 

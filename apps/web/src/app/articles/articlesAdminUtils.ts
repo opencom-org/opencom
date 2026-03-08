@@ -9,6 +9,12 @@ import {
   type ImportSelectionItem,
 } from "./articlesAdminTypes";
 
+export const ALL_VISIBILITY_FILTER = "all";
+export const ALL_STATUS_FILTER = "all";
+
+export type VisibilityFilter = typeof ALL_VISIBILITY_FILTER | "public" | "internal";
+export type StatusFilter = typeof ALL_STATUS_FILTER | ArticleListItem["status"];
+
 export const getRawImportRelativePath = (file: File): string => {
   const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
   const fallback = relativePath && relativePath.length > 0 ? relativePath : file.name;
@@ -49,23 +55,35 @@ export const buildImportSignature = (
 export const filterArticles = (
   articles: ArticleListItem[] | undefined,
   searchQuery: string,
-  collectionFilter: CollectionFilter
+  collectionFilter: CollectionFilter,
+  visibilityFilter: VisibilityFilter,
+  statusFilter: StatusFilter
 ): ArticleListItem[] => {
   if (!articles) {
     return [];
   }
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-  return articles.filter((article) => {
-    const matchesSearch = article.title.toLowerCase().includes(normalizedSearchQuery);
-    const matchesCollection =
-      collectionFilter === ALL_COLLECTION_FILTER
-        ? true
-        : collectionFilter === GENERAL_COLLECTION_FILTER
-          ? !article.collectionId
-          : article.collectionId === collectionFilter;
-    return matchesSearch && matchesCollection;
-  });
+  return [...articles]
+    .filter((article) => {
+      const visibility = article.visibility ?? "public";
+      const matchesSearch =
+        article.title.toLowerCase().includes(normalizedSearchQuery) ||
+        article.slug.toLowerCase().includes(normalizedSearchQuery) ||
+        (article.tags ?? []).some((tag) => tag.toLowerCase().includes(normalizedSearchQuery));
+      const matchesVisibility =
+        visibilityFilter === ALL_VISIBILITY_FILTER ? true : visibility === visibilityFilter;
+      const matchesStatus =
+        statusFilter === ALL_STATUS_FILTER ? true : article.status === statusFilter;
+      const matchesCollection =
+        collectionFilter === ALL_COLLECTION_FILTER
+          ? true
+          : collectionFilter === GENERAL_COLLECTION_FILTER
+            ? !article.collectionId
+            : article.collectionId === collectionFilter;
+      return matchesSearch && matchesVisibility && matchesStatus && matchesCollection;
+    })
+    .sort((left, right) => right.updatedAt - left.updatedAt);
 };
 
 export const getCollectionLabel = (

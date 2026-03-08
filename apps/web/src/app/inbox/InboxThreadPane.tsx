@@ -12,7 +12,6 @@ import {
   MessageSquare,
   MessageSquareText,
   Paperclip,
-  Search,
   Send,
   ShieldAlert,
   Ticket,
@@ -21,7 +20,6 @@ import {
 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import {
-  type InboxArticle,
   type InboxCompactPanel,
   type InboxConversation,
   type InboxKnowledgeItem,
@@ -40,15 +38,9 @@ interface InboxThreadPaneProps {
   isSending: boolean;
   isResolving: boolean;
   isConvertingTicket: boolean;
-  showSnippetPicker: boolean;
-  snippetSearch: string;
-  showArticleSearch: boolean;
-  articleSearch: string;
-  showKnowledgePanel: boolean;
+  showKnowledgePicker: boolean;
   knowledgeSearch: string;
-  snippets: InboxSnippet[] | undefined;
   allSnippets: InboxSnippet[] | undefined;
-  articles: InboxArticle[] | undefined;
   knowledgeResults: InboxKnowledgeItem[] | undefined;
   recentContent: InboxKnowledgeItem[] | undefined;
   activeCompactPanel: InboxCompactPanel;
@@ -57,6 +49,9 @@ interface InboxThreadPaneProps {
   isSidecarEnabled: boolean;
   suggestionsCount: number;
   isSuggestionsCountLoading: boolean;
+  canSaveDraftAsSnippet: boolean;
+  canUpdateSnippetFromDraft: boolean;
+  lastInsertedSnippetName: string | null;
   replyInputRef: React.RefObject<HTMLInputElement | null>;
   onBackToList: () => void;
   onResolveConversation: () => void;
@@ -67,18 +62,15 @@ interface InboxThreadPaneProps {
   onInputChange: (value: string) => void;
   onInputKeyDown: (event: React.KeyboardEvent) => void;
   onSendMessage: () => void;
-  onToggleSnippetPicker: () => void;
-  onToggleArticleSearch: () => void;
-  onToggleKnowledgePanel: () => void;
-  onSnippetSearchChange: (value: string) => void;
-  onArticleSearchChange: (value: string) => void;
+  onToggleKnowledgePicker: () => void;
   onKnowledgeSearchChange: (value: string) => void;
-  onCloseSnippetPicker: () => void;
-  onCloseArticleSearch: () => void;
-  onCloseKnowledgePanel: () => void;
-  onSelectSnippet: (content: string) => void;
-  onInsertArticleLink: (title: string, slug: string) => void;
-  onInsertKnowledgeContent: (item: InboxKnowledgeItem) => void;
+  onCloseKnowledgePicker: () => void;
+  onInsertKnowledgeContent: (
+    item: InboxKnowledgeItem,
+    action?: "content" | "link"
+  ) => void;
+  onSaveDraftAsSnippet: () => void;
+  onUpdateSnippetFromDraft: () => void;
   getConversationIdentityLabel: (conversation: InboxConversation) => string;
   getHandoffReasonLabel: (reason: string | null | undefined) => string;
 }
@@ -105,6 +97,25 @@ function getContentTypeLabel(type: "article" | "internalArticle" | "snippet"): s
   }
 }
 
+function getKnowledgePreview(item: Pick<InboxKnowledgeItem, "snippet" | "content">): string {
+  const value = item.snippet?.trim() || item.content.trim();
+  if (value.length <= 120) {
+    return value;
+  }
+  return `${value.slice(0, 117)}...`;
+}
+
+function getContentTypeBadgeClass(type: "article" | "internalArticle" | "snippet"): string {
+  switch (type) {
+    case "article":
+      return "bg-primary/10 text-primary";
+    case "internalArticle":
+      return "bg-amber-100 text-amber-700";
+    case "snippet":
+      return "bg-green-100 text-green-700";
+  }
+}
+
 export function InboxThreadPane({
   isCompactViewport,
   selectedConversationId,
@@ -116,15 +127,9 @@ export function InboxThreadPane({
   isSending,
   isResolving,
   isConvertingTicket,
-  showSnippetPicker,
-  snippetSearch,
-  showArticleSearch,
-  articleSearch,
-  showKnowledgePanel,
+  showKnowledgePicker,
   knowledgeSearch,
-  snippets,
   allSnippets,
-  articles,
   knowledgeResults,
   recentContent,
   activeCompactPanel,
@@ -133,6 +138,9 @@ export function InboxThreadPane({
   isSidecarEnabled,
   suggestionsCount,
   isSuggestionsCountLoading,
+  canSaveDraftAsSnippet,
+  canUpdateSnippetFromDraft,
+  lastInsertedSnippetName,
   replyInputRef,
   onBackToList,
   onResolveConversation,
@@ -143,21 +151,92 @@ export function InboxThreadPane({
   onInputChange,
   onInputKeyDown,
   onSendMessage,
-  onToggleSnippetPicker,
-  onToggleArticleSearch,
-  onToggleKnowledgePanel,
-  onSnippetSearchChange,
-  onArticleSearchChange,
+  onToggleKnowledgePicker,
   onKnowledgeSearchChange,
-  onCloseSnippetPicker,
-  onCloseArticleSearch,
-  onCloseKnowledgePanel,
-  onSelectSnippet,
-  onInsertArticleLink,
+  onCloseKnowledgePicker,
   onInsertKnowledgeContent,
+  onSaveDraftAsSnippet,
+  onUpdateSnippetFromDraft,
   getConversationIdentityLabel,
   getHandoffReasonLabel,
 }: InboxThreadPaneProps): React.JSX.Element {
+  const normalizedKnowledgeSearch = knowledgeSearch.trim();
+  const isSearchingKnowledge = normalizedKnowledgeSearch.length > 0;
+  const hasRecentContent = Boolean(recentContent && recentContent.length > 0);
+  const hasSnippetLibrary = Boolean(allSnippets && allSnippets.length > 0);
+  const hasKnowledgeResults = Boolean(knowledgeResults && knowledgeResults.length > 0);
+
+  const renderKnowledgeActions = (item: InboxKnowledgeItem) => {
+    if (item.type === "snippet") {
+      return (
+        <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
+          Insert
+        </Button>
+      );
+    }
+
+    if (item.type === "article" && item.slug) {
+      return (
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onInsertKnowledgeContent(item, "link")}
+          >
+            <Link className="mr-1 h-3.5 w-3.5" />
+            Insert Link
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
+            Insert Content
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
+        Insert Content
+      </Button>
+    );
+  };
+
+  const renderKnowledgeItem = (item: InboxKnowledgeItem) => (
+    <div
+      key={`${item.type}-${item.id}`}
+      className="flex items-start gap-3 rounded-lg border border-gray-200 px-3 py-3"
+    >
+      <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-50">
+        {getContentTypeIcon(item.type)}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="truncate font-medium text-gray-900">{item.title}</p>
+          <span
+            className={`inline-flex flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${getContentTypeBadgeClass(
+              item.type
+            )}`}
+          >
+            {getContentTypeLabel(item.type)}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{getKnowledgePreview(item)}</p>
+        {item.tags && item.tags.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {item.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      <div className="flex flex-shrink-0 items-center gap-2">{renderKnowledgeActions(item)}</div>
+    </div>
+  );
+
   return (
     <Card
       className="flex-1 min-w-0 flex flex-col overflow-hidden"
@@ -402,218 +481,118 @@ export function InboxThreadPane({
             </div>
 
             <div className="p-4 border-t relative">
-              {showSnippetPicker && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                  <div className="p-2 border-b flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={snippetSearch}
-                      onChange={(event) => onSnippetSearchChange(event.target.value)}
-                      placeholder="Search snippets..."
-                      className="flex-1 text-sm outline-none"
-                      autoFocus
-                    />
-                    <button onClick={onCloseSnippetPicker} className="p-1 hover:bg-muted rounded">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="p-1">
-                    {(snippetSearch ? snippets : allSnippets)?.map((snippet) => (
-                      <button
-                        key={snippet._id}
-                        onClick={() => onSelectSnippet(snippet.content)}
-                        className="w-full text-left p-2 hover:bg-muted rounded text-sm"
-                      >
-                        <div className="font-medium">{snippet.name}</div>
-                        {snippet.shortcut && (
-                          <div className="text-xs text-muted-foreground">/{snippet.shortcut}</div>
-                        )}
-                      </button>
-                    ))}
-                    {(snippetSearch ? snippets : allSnippets)?.length === 0 && (
-                      <p className="text-sm text-muted-foreground p-2">No snippets found</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {showArticleSearch && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto">
-                  <div className="p-2 border-b flex items-center gap-2">
-                    <Search className="h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={articleSearch}
-                      onChange={(event) => onArticleSearchChange(event.target.value)}
-                      placeholder="Search articles..."
-                      className="flex-1 text-sm outline-none"
-                      autoFocus
-                    />
-                    <button onClick={onCloseArticleSearch} className="p-1 hover:bg-muted rounded">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="p-1">
-                    {articles?.map((article) => (
-                      <button
-                        key={article._id}
-                        onClick={() => onInsertArticleLink(article.title, article.slug)}
-                        className="w-full text-left p-2 hover:bg-muted rounded text-sm flex items-start gap-2"
-                      >
-                        <FileText className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                        <div>
-                          <div className="font-medium">{article.title}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {article.content.slice(0, 60)}...
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                    {articleSearch.length < 2 && (
-                      <p className="text-sm text-muted-foreground p-2">
-                        Type at least 2 characters to search
-                      </p>
-                    )}
-                    {articleSearch.length >= 2 && articles?.length === 0 && (
-                      <p className="text-sm text-muted-foreground p-2">No articles found</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {showKnowledgePanel && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border rounded-lg shadow-lg max-h-80 overflow-y-auto">
-                  <div className="p-2 border-b flex items-center gap-2">
+              {showKnowledgePicker && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 overflow-hidden rounded-xl border bg-white shadow-lg">
+                  <div className="flex items-center gap-3 border-b px-3 py-3">
                     <BookOpen className="h-4 w-4 text-muted-foreground" />
                     <input
                       type="text"
                       value={knowledgeSearch}
                       onChange={(event) => onKnowledgeSearchChange(event.target.value)}
-                      placeholder="Search all knowledge... (Ctrl+K)"
+                      placeholder="Search articles and snippets... (Ctrl+K)"
                       className="flex-1 text-sm outline-none"
                       autoFocus
                     />
-                    <button onClick={onCloseKnowledgePanel} className="p-1 hover:bg-muted rounded">
+                    <button
+                      type="button"
+                      onClick={onCloseKnowledgePicker}
+                      className="rounded p-1 hover:bg-muted"
+                      aria-label="Close knowledge picker"
+                    >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="p-1">
-                    {!knowledgeSearch && recentContent && recentContent.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-xs text-muted-foreground px-2 py-1">Recently Used</p>
-                        {recentContent.map((item) => (
-                          <button
-                            key={`${item.type}-${item.id}`}
-                            onClick={() => onInsertKnowledgeContent(item)}
-                            className="w-full text-left p-2 hover:bg-muted rounded text-sm flex items-start gap-2"
-                          >
-                            {getContentTypeIcon(item.type)}
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{item.title}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {item.content.slice(0, 50)}...
-                              </div>
-                            </div>
-                            <span
-                              className={`text-xs px-1.5 py-0.5 rounded ${
-                                item.type === "article"
-                                  ? "bg-primary/10 text-primary"
-                                  : item.type === "internalArticle"
-                                    ? "bg-purple-100 text-purple-700"
-                                    : "bg-green-100 text-green-700"
-                              }`}
-                            >
-                              {getContentTypeLabel(item.type)}
-                            </span>
-                          </button>
-                        ))}
+
+                  <div className="max-h-96 space-y-4 overflow-y-auto p-3">
+                    {!isSearchingKnowledge && hasRecentContent ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Recently Used
+                        </p>
+                        <div className="space-y-2">
+                          {recentContent?.map((item) => renderKnowledgeItem(item))}
+                        </div>
                       </div>
-                    )}
+                    ) : null}
 
-                    {knowledgeSearch.length >= 2 && knowledgeResults && (
-                      <>
-                        <p className="text-xs text-muted-foreground px-2 py-1">Search Results</p>
-                        {knowledgeResults.map((item) => (
-                          <button
-                            key={`${item.type}-${item.id}`}
-                            onClick={() => onInsertKnowledgeContent(item)}
-                            className="w-full text-left p-2 hover:bg-muted rounded text-sm flex items-start gap-2"
-                          >
-                            {getContentTypeIcon(item.type)}
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{item.title}</div>
-                              <div className="text-xs text-muted-foreground truncate">
-                                {item.snippet || item.content.slice(0, 50)}...
-                              </div>
-                            </div>
-                            <span
-                              className={`text-xs px-1.5 py-0.5 rounded ${
-                                item.type === "article"
-                                  ? "bg-primary/10 text-primary"
-                                  : item.type === "internalArticle"
-                                    ? "bg-purple-100 text-purple-700"
-                                    : "bg-green-100 text-green-700"
-                              }`}
-                            >
-                              {getContentTypeLabel(item.type)}
-                            </span>
-                          </button>
-                        ))}
-                        {knowledgeResults.length === 0 && (
-                          <p className="text-sm text-muted-foreground p-2">No results found</p>
-                        )}
-                      </>
-                    )}
+                    {!isSearchingKnowledge && hasSnippetLibrary ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Snippets
+                        </p>
+                        <div className="space-y-2">
+                          {allSnippets?.map((snippet) =>
+                            renderKnowledgeItem({
+                              id: snippet._id,
+                              type: "snippet",
+                              title: snippet.name,
+                              content: snippet.content,
+                              snippet: snippet.shortcut
+                                ? `/${snippet.shortcut} • ${snippet.content}`
+                                : snippet.content,
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
 
-                    {knowledgeSearch.length > 0 && knowledgeSearch.length < 2 && (
-                      <p className="text-sm text-muted-foreground p-2">
-                        Type at least 2 characters to search
+                    {isSearchingKnowledge ? (
+                      hasKnowledgeResults ? (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Search Results
+                          </p>
+                          <div className="space-y-2">
+                            {knowledgeResults?.map((item) => renderKnowledgeItem(item))}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                          No matching knowledge found.
+                        </p>
+                      )
+                    ) : null}
+
+                    {!isSearchingKnowledge && !hasRecentContent && !hasSnippetLibrary ? (
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        Start typing to search knowledge, or save this draft as a snippet.
                       </p>
-                    )}
-
-                    {!knowledgeSearch && (!recentContent || recentContent.length === 0) && (
-                      <p className="text-sm text-muted-foreground p-2">
-                        Start typing to search all knowledge
-                      </p>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <div className="flex gap-1">
+              <div className="flex flex-wrap gap-2">
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="ghost"
+                    variant={showKnowledgePicker ? "default" : "ghost"}
                     size="icon"
-                    onClick={onToggleSnippetPicker}
-                    title="Insert snippet (or type /)"
-                  >
-                    <Zap className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onToggleArticleSearch}
-                    title="Insert article link"
-                  >
-                    <Link className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onToggleKnowledgePanel}
-                    title="Search knowledge (Ctrl+K)"
+                    onClick={onToggleKnowledgePicker}
+                    title="Search knowledge (Ctrl+K or /)"
                   >
                     <BookOpen className="h-4 w-4" />
                   </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onSaveDraftAsSnippet}
+                    disabled={!canSaveDraftAsSnippet}
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Save snippet
+                  </Button>
+                  {canUpdateSnippetFromDraft ? (
+                    <Button variant="outline" size="sm" onClick={onUpdateSnippetFromDraft}>
+                      Update {lastInsertedSnippetName ? `"${lastInsertedSnippetName}"` : "snippet"}
+                    </Button>
+                  ) : null}
                 </div>
                 <Input
                   ref={replyInputRef}
                   value={inputValue}
                   onChange={(event) => onInputChange(event.target.value)}
                   onKeyDown={onInputKeyDown}
-                  placeholder="Type a message... (/ for snippets)"
+                  placeholder="Type a message... (/ or Ctrl+K for knowledge)"
                   data-testid="inbox-reply-input"
                   disabled={isSending}
                   className="flex-1"

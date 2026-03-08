@@ -2,19 +2,29 @@
 
 import Link from "next/link";
 import { Button, Input } from "@opencom/ui";
-import type { Id } from "@opencom/convex/dataModel";
 import { Eye, EyeOff, FileText, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import type {
+  ArticleEditorId,
   ArticleListItem,
   CollectionFilter,
   CollectionFilterItem,
   CollectionListItem,
 } from "./articlesAdminTypes";
-import { formatDate, getArticleCollectionFilter, getCollectionName } from "./articlesAdminUtils";
+import {
+  ALL_STATUS_FILTER,
+  ALL_VISIBILITY_FILTER,
+  formatDate,
+  getArticleCollectionFilter,
+  getCollectionName,
+  type StatusFilter,
+  type VisibilityFilter,
+} from "./articlesAdminUtils";
 
 type ArticlesListSectionProps = {
   searchQuery: string;
   collectionFilter: CollectionFilter;
+  visibilityFilter: VisibilityFilter;
+  statusFilter: StatusFilter;
   collectionFilterItems: CollectionFilterItem[];
   filteredArticles: ArticleListItem[];
   collections: CollectionListItem[] | undefined;
@@ -22,15 +32,20 @@ type ArticlesListSectionProps = {
   hasActiveFilters: boolean;
   onSearchQueryChange: (value: string) => void;
   onCollectionFilterChange: (value: CollectionFilter) => void;
+  onVisibilityFilterChange: (value: VisibilityFilter) => void;
+  onStatusFilterChange: (value: StatusFilter) => void;
   onClearAllFilters: () => void;
   onCreateArticle: () => void;
-  onTogglePublish: (id: Id<"articles">, isPublished: boolean) => void;
-  onDeleteRequest: (id: Id<"articles">, title: string) => void;
+  onCreateInternalArticle: () => void;
+  onTogglePublish: (id: ArticleEditorId, isPublished: boolean) => void;
+  onDeleteRequest: (id: ArticleEditorId, title: string) => void;
 };
 
 export function ArticlesListSection({
   searchQuery,
   collectionFilter,
+  visibilityFilter,
+  statusFilter,
   collectionFilterItems,
   filteredArticles,
   collections,
@@ -38,8 +53,11 @@ export function ArticlesListSection({
   hasActiveFilters,
   onSearchQueryChange,
   onCollectionFilterChange,
+  onVisibilityFilterChange,
+  onStatusFilterChange,
   onClearAllFilters,
   onCreateArticle,
+  onCreateInternalArticle,
   onTogglePublish,
   onDeleteRequest,
 }: ArticlesListSectionProps) {
@@ -55,6 +73,25 @@ export function ArticlesListSection({
             className="pl-10"
           />
         </div>
+        <select
+          value={visibilityFilter}
+          onChange={(event) => onVisibilityFilterChange(event.target.value as VisibilityFilter)}
+          className="rounded-md border px-3 py-2 text-sm"
+        >
+          <option value={ALL_VISIBILITY_FILTER}>All visibility</option>
+          <option value="public">Public</option>
+          <option value="internal">Internal</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(event) => onStatusFilterChange(event.target.value as StatusFilter)}
+          className="rounded-md border px-3 py-2 text-sm"
+        >
+          <option value={ALL_STATUS_FILTER}>All status</option>
+          <option value="draft">Draft</option>
+          <option value="published">Published</option>
+          <option value="archived">Archived</option>
+        </select>
         {hasActiveFilters && (
           <Button variant="outline" size="sm" onClick={onClearAllFilters}>
             Clear filters
@@ -99,17 +136,23 @@ export function ArticlesListSection({
           <p className="text-gray-500 mb-4">
             {hasArticles
               ? "Try another search term or collection filter."
-              : "Create your first article to help your customers"}
+              : "Create your first article to help your team or your customers"}
           </p>
           {hasArticles ? (
             <Button variant="outline" onClick={onClearAllFilters}>
               Clear filters
             </Button>
           ) : (
-            <Button onClick={onCreateArticle}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Article
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" onClick={onCreateInternalArticle}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Internal Article
+              </Button>
+              <Button onClick={onCreateArticle}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Article
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -120,6 +163,9 @@ export function ArticlesListSection({
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Title</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">
                   Collection
+                </th>
+                <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">
+                  Visibility
                 </th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Status</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Updated</th>
@@ -155,9 +201,22 @@ export function ArticlesListSection({
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          (article.visibility ?? "public") === "internal"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-sky-100 text-sky-800"
+                        }`}
+                      >
+                        {(article.visibility ?? "public") === "internal" ? "Internal" : "Public"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                           article.status === "published"
                             ? "bg-green-100 text-green-800"
-                            : "bg-gray-100 text-gray-800"
+                            : article.status === "archived"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-gray-100 text-gray-800"
                         }`}
                       >
                         {article.status}

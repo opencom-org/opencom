@@ -28,9 +28,10 @@ Goal: ship a professional open-source customer messaging platform with strong de
 - [ ] SSO, SAML, OIDC, and granular role-based access controls 
 - [ ] Lets add an option for admins so they can set the  /// 
 - [ ] merge internal articles into regular articles, and add a toggle per article for internal vs public? or equivalent. Perhaps collection based, or article based, needs more thought. (can then remove the Knowledge page)
-- [ ] snippets should maybe be accessible from inbox, rather than its own panel
+- [ ] should snippets be accessible from inbox, rather than its own panel?
 - [ ] improved inbox management (sorting, filtering etc.)
 - [ ] dont allow requesting human support multiple times in a row on same chat
+- [ ] "resolve visitor from expression - session expired" - are we handling refresh properly?
 
 - [ ] Check AI chat / article suggestions setup is working
   - [ ] Add links to relevant help center articles in the widget AI responses, and maybe in chat (suggested articles)

@@ -31,7 +31,8 @@ export const helpCenterTables = {
     slug: v.string(),
     content: v.string(),
     widgetLargeScreen: v.optional(v.boolean()),
-    status: v.union(v.literal("draft"), v.literal("published")),
+    visibility: v.optional(v.union(v.literal("public"), v.literal("internal"))),
+    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
     order: v.number(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -40,14 +41,19 @@ export const helpCenterTables = {
     audienceRules: v.optional(audienceRulesValidator),
     importSourceId: v.optional(v.id("helpCenterImportSources")),
     importPath: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    legacyInternalArticleId: v.optional(v.id("internalArticles")),
+    legacyFolderId: v.optional(v.id("contentFolders")),
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_collection", ["collectionId"])
     .index("by_folder", ["folderId"])
     .index("by_slug", ["workspaceId", "slug"])
     .index("by_status", ["workspaceId", "status"])
+    .index("by_visibility", ["workspaceId", "visibility"])
     .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
-    .index("by_import_source_path", ["importSourceId", "importPath"]),
+    .index("by_import_source_path", ["importSourceId", "importPath"])
+    .index("by_legacy_internal_article", ["legacyInternalArticleId"]),
 
   // Help Center - Article Assets
   articleAssets: defineTable({
@@ -96,7 +102,9 @@ export const helpCenterTables = {
     parentPath: v.optional(v.string()),
     name: v.string(),
     content: v.optional(v.string()),
-    status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+    status: v.optional(
+      v.union(v.literal("draft"), v.literal("published"), v.literal("archived"))
+    ),
     description: v.optional(v.string()),
     icon: v.optional(v.string()),
     deletedAt: v.number(),

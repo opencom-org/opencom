@@ -94,6 +94,12 @@ describe("knowledge", () => {
       });
 
       expect(results.some((r: { id: string }) => r.id === testArticleId)).toBe(true);
+      expect(
+        results.some(
+          (r: { id: string; slug?: string }) =>
+            r.id === testArticleId && (r.slug?.startsWith("test-public-article") ?? false)
+        )
+      ).toBe(true);
     });
 
     it("should search internal articles", async () => {
@@ -104,6 +110,12 @@ describe("knowledge", () => {
       });
 
       expect(results.some((r: { id: string }) => r.id === testInternalArticleId)).toBe(true);
+      expect(
+        results.some(
+          (r: { id: string; tags?: string[] }) =>
+            r.id === testInternalArticleId && (r.tags ?? []).includes("internal")
+        )
+      ).toBe(true);
     });
 
     it("should search snippets", async () => {

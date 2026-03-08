@@ -78,9 +78,13 @@ function MessageBuilderContent() {
   const articles = useQuery(
     api.articles.list,
     activeWorkspace?._id
-      ? { workspaceId: activeWorkspace._id, status: "published" as const }
+      ? { workspaceId: activeWorkspace._id, status: "published" as const, visibility: "public" }
       : "skip"
   );
+  const publicArticleOptions = articles?.map((article) => ({
+    _id: article._id as Id<"articles">,
+    title: article.title,
+  }));
 
   useEffect(() => {
     if (message) {
@@ -173,7 +177,7 @@ function MessageBuilderContent() {
               content={content}
               setContent={setContent}
               members={members}
-              articles={articles}
+              articles={publicArticleOptions}
               postButtonForm={postButtonForm}
               setPostButtonForm={setPostButtonForm}
             />
@@ -184,7 +188,7 @@ function MessageBuilderContent() {
           <OutboundFrequencyPanel value={frequency} onChange={setFrequency} />
 
           <OutboundClickActionPanel
-            articles={articles}
+            articles={publicArticleOptions}
             clickActionForm={clickActionForm}
             setClickActionForm={setClickActionForm}
           />

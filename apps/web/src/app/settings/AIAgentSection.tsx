@@ -156,8 +156,8 @@ export function AIAgentSection({
               <label className="text-sm font-medium">Knowledge Sources</label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "articles", label: "Help Articles" },
-                  { id: "internalArticles", label: "Internal Docs" },
+                  { id: "articles", label: "Public Articles" },
+                  { id: "internalArticles", label: "Internal Articles" },
                   { id: "snippets", label: "Snippets" },
                 ].map((source) => (
                   <button

@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
-import { ArrowLeft, Save, Eye, EyeOff, Users } from "lucide-react";
+import { Archive, ArrowLeft, Eye, EyeOff, Save, Users } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
@@ -15,15 +15,18 @@ import {
   toInlineAudienceRuleFromBuilder,
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
+import type { ArticleEditorId } from "../articlesAdminTypes";
 
 export default function ArticleEditorPage() {
   const params = useParams();
   const { activeWorkspace } = useAuth();
-  const articleId = params.id as Id<"articles">;
+  const articleId = params.id as ArticleEditorId;
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [selectedCollectionId, setSelectedCollectionId] = useState<Id<"collections"> | undefined>();
+  const [visibility, setVisibility] = useState<"public" | "internal">("public");
+  const [tagsInput, setTagsInput] = useState("");
   const [audienceRules, setAudienceRules] = useState<InlineAudienceRule | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -45,6 +48,7 @@ export default function ArticleEditorPage() {
   const updateArticle = useMutation(api.articles.update);
   const publishArticle = useMutation(api.articles.publish);
   const unpublishArticle = useMutation(api.articles.unpublish);
+  const archiveArticle = useMutation(api.articles.archive);
   const generateAssetUploadUrl = useMutation(api.articles.generateAssetUploadUrl);
   const saveAsset = useMutation(api.articles.saveAsset);
   const deleteAsset = useMutation(api.articles.deleteAsset);
@@ -54,6 +58,8 @@ export default function ArticleEditorPage() {
       setTitle(article.title);
       setContent(article.content);
       setSelectedCollectionId(article.collectionId);
+      setVisibility(article.visibility ?? "public");
+      setTagsInput((article.tags ?? []).join(", "));
       setAudienceRules(toInlineAudienceRule(article.audienceRules));
     }
   }, [article]);
@@ -70,6 +76,14 @@ export default function ArticleEditorPage() {
         title,
         content,
         collectionId: selectedCollectionId,
+        visibility,
+        tags:
+          visibility === "internal"
+            ? tagsInput
+                .split(",")
+                .map((tag) => tag.trim())
+                .filter(Boolean)
+            : [],
         ...(mutationAudienceRules ? { audienceRules: mutationAudienceRules } : {}),
       });
       setHasChanges(false);
@@ -89,6 +103,11 @@ export default function ArticleEditorPage() {
     }
   };
 
+  const handleArchive = async () => {
+    await archiveArticle({ id: articleId });
+    setHasChanges(false);
+  };
+
   const handleTitleChange = (value: string) => {
     setTitle(value);
     setHasChanges(true);
@@ -101,6 +120,11 @@ export default function ArticleEditorPage() {
 
   const handleCollectionChange = (value: string) => {
     setSelectedCollectionId(value ? (value as Id<"collections">) : undefined);
+    setHasChanges(true);
+  };
+
+  const handleVisibilityChange = (value: "public" | "internal") => {
+    setVisibility(value);
     setHasChanges(true);
   };
 
@@ -207,20 +231,40 @@ export default function ArticleEditorPage() {
                 className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                   article.status === "published"
                     ? "bg-green-100 text-green-800"
-                    : "bg-gray-100 text-gray-800"
+                    : article.status === "archived"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-gray-100 text-gray-800"
                 }`}
               >
                 {article.status}
+              </span>
+              <span
+                className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                  visibility === "internal"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-sky-100 text-sky-800"
+                }`}
+              >
+                {visibility === "internal" ? "Internal" : "Public"}
               </span>
               {hasChanges && <span className="text-sm text-orange-600">Unsaved changes</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleArchive}
+              disabled={article.status === "archived"}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              Archive
+            </Button>
             <Button variant="outline" size="sm" onClick={handleTogglePublish}>
               {article.status === "published" ? (
                 <>
                   <EyeOff className="h-4 w-4 mr-2" />
-                  Unpublish
+                  Move to Draft
                 </>
               ) : (
                 <>
@@ -263,6 +307,36 @@ export default function ArticleEditorPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
+              <select
+                value={visibility}
+                onChange={(e) => handleVisibilityChange(e.target.value as "public" | "internal")}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="public">Public help article</option>
+                <option value="internal">Internal knowledge article</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags {visibility === "internal" ? "" : "(optional)"}
+              </label>
+              <Input
+                value={tagsInput}
+                onChange={(e) => {
+                  setTagsInput(e.target.value);
+                  setHasChanges(true);
+                }}
+                placeholder="billing, enterprise, refunds"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Comma-separated tags help agents and AI find internal content quickly.
+              </p>
+            </div>
           </div>
 
           <div>
@@ -351,23 +425,34 @@ export default function ArticleEditorPage() {
         <div className="bg-white rounded-lg border p-6 mt-6">
           <div className="flex items-center gap-2 mb-4">
             <Users className="h-5 w-5 text-gray-600" />
-            <h3 className="font-medium text-gray-900">Audience Targeting</h3>
+            <h3 className="font-medium text-gray-900">
+              {visibility === "internal" ? "Internal Visibility" : "Audience Targeting"}
+            </h3>
           </div>
-          <p className="text-sm text-gray-600 mb-4">
-            Control which visitors can see this article based on their attributes and behavior.
-          </p>
-          <AudienceRuleBuilder
-            value={audienceRules}
-            onChange={handleAudienceRulesChange}
-            workspaceId={activeWorkspace?._id}
-            showSegmentSelector={false}
-          />
+          {visibility === "internal" ? (
+            <p className="text-sm text-gray-600">
+              Internal articles stay out of the public help center and widget. Tags, search, inbox
+              insertion, and AI settings determine how agents can find and use them.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600 mb-4">
+                Control which visitors can see this article based on their attributes and behavior.
+              </p>
+              <AudienceRuleBuilder
+                value={audienceRules}
+                onChange={handleAudienceRulesChange}
+                workspaceId={activeWorkspace?._id}
+                showSegmentSelector={false}
+              />
+            </>
+          )}
         </div>
 
         <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/20">
           <h3 className="font-medium text-primary mb-2">Preview URL</h3>
           <p className="text-sm text-primary">
-            {article.status === "published" ? (
+            {article.status === "published" && visibility === "public" ? (
               <a
                 href={`/help/${article.slug}`}
                 target="_blank"
@@ -377,7 +462,11 @@ export default function ArticleEditorPage() {
                 /help/{article.slug}
               </a>
             ) : (
-              <span className="text-gray-500">Publish the article to get a public URL</span>
+              <span className="text-gray-500">
+                {visibility === "internal"
+                  ? "Internal articles are available only inside agent-facing knowledge workflows."
+                  : "Publish the article to get a public URL."}
+              </span>
             )}
           </p>
         </div>

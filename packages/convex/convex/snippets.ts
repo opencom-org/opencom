@@ -103,7 +103,7 @@ export const update = authMutation({
       updates.shortcut = args.shortcut;
     }
     if (args.folderId !== undefined) {
-      updates.folderId = args.folderId;
+      updates.folderId = undefined;
     }
 
     await ctx.db.patch(args.id, updates);

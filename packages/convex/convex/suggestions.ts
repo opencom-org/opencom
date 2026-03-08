@@ -5,6 +5,7 @@ import { Doc, Id } from "./_generated/dataModel";
 import { embed } from "ai";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
+import { getUnifiedArticleByIdOrLegacyInternalId, isInternalArticle } from "./lib/unifiedArticles";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
@@ -440,18 +441,26 @@ export const getContentById = internalQuery({
   },
   handler: async (ctx, args) => {
     if (args.contentType === "article") {
-      const article = (await ctx.db.get(
-        args.contentId as Id<"articles">
-      )) as Doc<"articles"> | null;
-      if (article) {
+      const article = await getUnifiedArticleByIdOrLegacyInternalId(
+        ctx.db,
+        args.contentId as Id<"articles"> | Id<"internalArticles">
+      );
+      if (article && article.visibility !== "internal") {
         return { content: article.content, title: article.title };
       }
     } else if (args.contentType === "internalArticle") {
-      const article = (await ctx.db.get(
+      const article = await getUnifiedArticleByIdOrLegacyInternalId(
+        ctx.db,
+        args.contentId as Id<"articles"> | Id<"internalArticles">
+      );
+      if (article && isInternalArticle(article)) {
+        return { content: article.content, title: article.title };
+      }
+      const legacyArticle = (await ctx.db.get(
         args.contentId as Id<"internalArticles">
       )) as Doc<"internalArticles"> | null;
-      if (article) {
-        return { content: article.content, title: article.title };
+      if (legacyArticle) {
+        return { content: legacyArticle.content, title: legacyArticle.title };
       }
     } else if (args.contentType === "snippet") {
       const snippet = (await ctx.db.get(
@@ -485,6 +494,7 @@ export const searchForWidget = action({
       throw new Error("Query exceeds max length");
     }
 
+    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
     const sessionValidation = await ctx.runQuery(api.widgetSessions.validateSessionToken, {
       workspaceId: args.workspaceId,
       visitorId: args.visitorId,

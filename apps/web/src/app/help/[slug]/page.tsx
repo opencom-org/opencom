@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@opencom/convex";
+import type { Id } from "@opencom/convex/dataModel";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { Button } from "@opencom/ui";
 import { ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle } from "lucide-react";
@@ -28,6 +29,8 @@ export default function ArticlePage() {
     api.articles.get,
     shouldFetchArticle && workspaceId ? { slug, workspaceId } : "skip"
   );
+  const publicArticleId =
+    article && article.visibility !== "internal" ? (article._id as Id<"articles">) : null;
 
   const collection = useQuery(
     api.collections.get,
@@ -36,14 +39,14 @@ export default function ArticlePage() {
 
   const feedbackStats = useQuery(
     api.articles.getFeedbackStats,
-    article?._id ? { articleId: article._id } : "skip"
+    publicArticleId ? { articleId: publicArticleId } : "skip"
   );
 
   const submitFeedback = useMutation(api.articles.submitFeedback);
 
   const handleFeedback = async (helpful: boolean) => {
-    if (!article?._id || feedbackSubmitted) return;
-    await submitFeedback({ articleId: article._id, helpful });
+    if (!publicArticleId || feedbackSubmitted) return;
+    await submitFeedback({ articleId: publicArticleId, helpful });
     setFeedbackSubmitted(true);
   };
 

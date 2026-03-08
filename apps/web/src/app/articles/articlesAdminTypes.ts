@@ -2,6 +2,8 @@
 
 import type { Id } from "@opencom/convex/dataModel";
 
+export type ArticleEditorId = Id<"articles"> | Id<"internalArticles">;
+
 export type ImportSelectionItem = {
   file: File;
   relativePath: string;
@@ -41,7 +43,7 @@ export type MarkdownImportPreview = {
 };
 
 export type DeleteArticleTarget = {
-  id: Id<"articles">;
+  id: ArticleEditorId;
   title: string;
 };
 
@@ -60,11 +62,14 @@ export type CollectionFilterItem = {
 };
 
 export type ArticleListItem = {
-  _id: Id<"articles">;
+  _id: ArticleEditorId;
   title: string;
-  status: string;
+  slug: string;
+  status: "draft" | "published" | "archived";
+  visibility?: "public" | "internal";
   updatedAt: number;
   collectionId?: Id<"collections">;
+  tags?: string[];
 };
 
 export type CollectionListItem = {

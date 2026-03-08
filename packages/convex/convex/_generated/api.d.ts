@@ -52,6 +52,7 @@ import type * as lib_aiGateway from "../lib/aiGateway.js";
 import type * as lib_authWrappers from "../lib/authWrappers.js";
 import type * as lib_notificationPreferences from "../lib/notificationPreferences.js";
 import type * as lib_seriesRuntimeAdapter from "../lib/seriesRuntimeAdapter.js";
+import type * as lib_unifiedArticles from "../lib/unifiedArticles.js";
 import type * as messages from "../messages.js";
 import type * as messengerHomeConfig from "../messengerHomeConfig.js";
 import type * as messengerSettings from "../messengerSettings.js";
@@ -228,6 +229,7 @@ declare const fullApi: ApiFromModules<{
   "lib/authWrappers": typeof lib_authWrappers;
   "lib/notificationPreferences": typeof lib_notificationPreferences;
   "lib/seriesRuntimeAdapter": typeof lib_seriesRuntimeAdapter;
+  "lib/unifiedArticles": typeof lib_unifiedArticles;
   messages: typeof messages;
   messengerHomeConfig: typeof messengerHomeConfig;
   messengerSettings: typeof messengerSettings;
