@@ -35,11 +35,12 @@ vi.mock("@opencom/convex", () => ({
       markAsRead: "conversations.markAsRead",
     },
     articles: {
+      getForVisitor: "articles.getForVisitor",
       searchForVisitor: "articles.searchForVisitor",
       listForVisitor: "articles.listForVisitor",
     },
     collections: {
-      listHierarchy: "collections.listHierarchy",
+      listHierarchyForVisitor: "collections.listHierarchyForVisitor",
     },
     automationSettings: {
       getOrCreate: "automationSettings.getOrCreate",
@@ -202,7 +203,7 @@ describe("Widget tour callback bridge lifecycle", () => {
       if (queryRef === "conversations.listByVisitor") return [];
       if (queryRef === "articles.searchForVisitor") return [];
       if (queryRef === "articles.listForVisitor") return [];
-      if (queryRef === "collections.listHierarchy") return [];
+      if (queryRef === "collections.listHierarchyForVisitor") return [];
       if (queryRef === "checklists.getEligible") return [];
       if (queryRef === "surveys.getActiveSurveys") return [];
       if (queryRef === "tooltips.getAvailableTooltips") return [];

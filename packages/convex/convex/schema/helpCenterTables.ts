@@ -49,6 +49,7 @@ export const helpCenterTables = {
     .index("by_collection", ["collectionId"])
     .index("by_folder", ["folderId"])
     .index("by_slug", ["workspaceId", "slug"])
+    .index("by_slug_only", ["slug"])
     .index("by_status", ["workspaceId", "status"])
     .index("by_visibility", ["workspaceId", "visibility"])
     .index("by_workspace_import_source", ["workspaceId", "importSourceId"])

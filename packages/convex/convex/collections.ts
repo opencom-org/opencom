@@ -1,11 +1,13 @@
 import { v } from "convex/values";
 import { query, type QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { authMutation } from "./lib/authWrappers";
+import { evaluateRule, type AudienceRule } from "./audienceRules";
 import { isPublicArticle } from "./lib/unifiedArticles";
 import { requirePermission } from "./permissions";
 import { generateSlug, ensureUniqueSlug } from "./utils/strings";
+import { resolveVisitorFromSession } from "./widgetSessions";
 
 type HelpCenterAccessPolicy = "public" | "restricted";
 
@@ -27,6 +29,51 @@ async function canReadHelpCenterCollections(
   const policy =
     (workspace.helpCenterAccessPolicy as HelpCenterAccessPolicy | undefined) ?? "public";
   return policy === "public";
+}
+
+function articleIsReadableOnVisitorSurface(
+  article: Pick<Doc<"articles">, "visibility" | "status">
+) {
+  return isPublicArticle(article) && article.status === "published";
+}
+
+async function resolveWidgetHelpCenterVisitor(
+  ctx: QueryCtx,
+  args: {
+    workspaceId: Id<"workspaces">;
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+  }
+): Promise<Doc<"visitors"> | null> {
+  const authUser = await getAuthenticatedUserFromSession(ctx);
+  let resolvedVisitorId = args.visitorId;
+
+  if (authUser) {
+    await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
+    if (!resolvedVisitorId) {
+      return null;
+    }
+  } else {
+    const resolved = await resolveVisitorFromSession(ctx, {
+      sessionToken: args.sessionToken,
+      workspaceId: args.workspaceId,
+    });
+    if (args.visitorId && args.visitorId !== resolved.visitorId) {
+      throw new Error("Not authorized to list collections for this visitor");
+    }
+    resolvedVisitorId = resolved.visitorId;
+  }
+
+  if (!resolvedVisitorId) {
+    return null;
+  }
+
+  const visitor = await ctx.db.get(resolvedVisitorId);
+  if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    return null;
+  }
+
+  return visitor;
 }
 
 export const create = authMutation({
@@ -318,6 +365,80 @@ export const listHierarchy = query({
     }
 
     return sorted.filter((collection) => collection.publishedArticleCount > 0);
+  },
+});
+
+export const listHierarchyForVisitor = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+    visitorId: v.optional(v.id("visitors")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
+      return [];
+    }
+
+    const allCollections = await ctx.db
+      .query("collections")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    const collectionMap = new Map(
+      allCollections.map((collection) => [collection._id, collection] as const)
+    );
+
+    const publishedArticles = await ctx.db
+      .query("articles")
+      .withIndex("by_status", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("status", "published")
+      )
+      .collect();
+
+    const visibleArticles: Doc<"articles">[] = [];
+    for (const article of publishedArticles) {
+      if (!articleIsReadableOnVisitorSurface(article)) {
+        continue;
+      }
+
+      const matches = await evaluateRule(
+        ctx,
+        article.audienceRules as AudienceRule | undefined,
+        visitor
+      );
+      if (matches) {
+        visibleArticles.push(article);
+      }
+    }
+
+    const directVisibleCollectionIds = new Set(
+      visibleArticles
+        .map((article) => article.collectionId)
+        .filter((value): value is Id<"collections"> => Boolean(value))
+    );
+    const visibleCollectionIds = new Set<Id<"collections">>();
+
+    for (const collectionId of directVisibleCollectionIds) {
+      let cursor: Id<"collections"> | undefined = collectionId;
+      while (cursor && !visibleCollectionIds.has(cursor)) {
+        visibleCollectionIds.add(cursor);
+        cursor = collectionMap.get(cursor)?.parentId;
+      }
+    }
+
+    return allCollections
+      .filter((collection) => visibleCollectionIds.has(collection._id))
+      .map((collection) => {
+        const visibleArticleCount = visibleArticles.filter(
+          (article) => article.collectionId === collection._id
+        ).length;
+        return {
+          ...collection,
+          articleCount: visibleArticleCount,
+          publishedArticleCount: visibleArticleCount,
+        };
+      })
+      .sort((a, b) => a.order - b.order);
   },
 });
 

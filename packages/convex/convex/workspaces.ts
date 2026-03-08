@@ -1,10 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { authMutation } from "./lib/authWrappers";
 import { getWorkspaceMembership } from "./permissions";
 import { matchesAllowedOrigin } from "./originValidation";
 import { logAudit } from "./auditLogs";
+import { getArticleVisibility } from "./lib/unifiedArticles";
 import {
   completeHostedOnboardingWidgetStepMutationHandler,
   issueHostedOnboardingVerificationTokenMutationHandler,
@@ -17,6 +19,20 @@ import {
 } from "./workspaceHostedOnboardingQueries";
 
 type HelpCenterAccessPolicy = "public" | "restricted";
+
+function getHelpCenterAccessPolicy(
+  workspace: { helpCenterAccessPolicy?: HelpCenterAccessPolicy | undefined } | null
+): HelpCenterAccessPolicy {
+  return workspace?.helpCenterAccessPolicy ?? "public";
+}
+
+function toPublicWorkspaceContext(workspace: Doc<"workspaces">) {
+  return {
+    _id: workspace._id,
+    name: workspace.name,
+    helpCenterAccessPolicy: getHelpCenterAccessPolicy(workspace),
+  };
+}
 
 export const get = query({
   args: {
@@ -52,23 +68,77 @@ export const get = query({
 });
 
 export const getPublicWorkspaceContext = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    workspaceId: v.optional(v.id("workspaces")),
+    articleSlug: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.workspaceId) {
+      const workspace = await ctx.db.get(args.workspaceId);
+      return workspace ? toPublicWorkspaceContext(workspace) : null;
+    }
+
+    if (args.articleSlug) {
+      const articleSlug = args.articleSlug;
+      const matchingArticles = await ctx.db
+        .query("articles")
+        .withIndex("by_slug_only", (q) => q.eq("slug", articleSlug))
+        .collect();
+
+      const readableWorkspaceIds = new Set<Id<"workspaces">>();
+      for (const article of matchingArticles) {
+        const workspace = await ctx.db.get(article.workspaceId);
+        if (
+          workspace &&
+          getHelpCenterAccessPolicy(workspace) === "public" &&
+          getArticleVisibility(article) === "public" &&
+          article.status === "published"
+        ) {
+          readableWorkspaceIds.add(article.workspaceId);
+        }
+      }
+
+      if (readableWorkspaceIds.size === 1) {
+        const [workspaceId] = Array.from(readableWorkspaceIds);
+        const workspace = await ctx.db.get(workspaceId);
+        return workspace ? toPublicWorkspaceContext(workspace) : null;
+      }
+    }
+
     const workspaceRows = await ctx.db
       .query("workspaces")
       .withIndex("by_created_at")
       .order("asc")
-      .take(1);
-    const workspace = workspaceRows[0] ?? null;
-    if (!workspace) {
+      .collect();
+
+    let firstWorkspaceWithPublicContent: (typeof workspaceRows)[number] | null = null;
+    for (const workspace of workspaceRows) {
+      if (getHelpCenterAccessPolicy(workspace) !== "public") {
+        continue;
+      }
+
+      const publishedArticles = await ctx.db
+        .query("articles")
+        .withIndex("by_status", (q) => q.eq("workspaceId", workspace._id).eq("status", "published"))
+        .collect();
+      const hasPublicArticles = publishedArticles.some(
+        (article) => getArticleVisibility(article) === "public"
+      );
+      if (hasPublicArticles) {
+        firstWorkspaceWithPublicContent = workspace;
+        break;
+      }
+    }
+
+    const fallbackWorkspace = firstWorkspaceWithPublicContent ?? workspaceRows[0] ?? null;
+    if (!fallbackWorkspace) {
       return null;
     }
 
     return {
-      _id: workspace._id,
-      name: workspace.name,
-      helpCenterAccessPolicy:
-        (workspace.helpCenterAccessPolicy as HelpCenterAccessPolicy | undefined) ?? "public",
+      _id: fallbackWorkspace._id,
+      name: fallbackWorkspace.name,
+      helpCenterAccessPolicy: getHelpCenterAccessPolicy(fallbackWorkspace),
     };
   },
 });

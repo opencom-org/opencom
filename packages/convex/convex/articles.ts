@@ -129,6 +129,45 @@ async function canReadHelpCenterArticles(
   return policy === "public";
 }
 
+async function resolveWidgetHelpCenterVisitor(
+  ctx: QueryCtx,
+  args: {
+    workspaceId: Id<"workspaces">;
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+  }
+): Promise<Doc<"visitors"> | null> {
+  const authUser = await getAuthenticatedUserFromSession(ctx);
+  let resolvedVisitorId = args.visitorId;
+
+  if (authUser) {
+    await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
+    if (!resolvedVisitorId) {
+      return null;
+    }
+  } else {
+    const resolved = await resolveVisitorFromSession(ctx, {
+      sessionToken: args.sessionToken,
+      workspaceId: args.workspaceId,
+    });
+    if (args.visitorId && args.visitorId !== resolved.visitorId) {
+      throw new Error("Not authorized to read articles for this visitor");
+    }
+    resolvedVisitorId = resolved.visitorId;
+  }
+
+  if (!resolvedVisitorId) {
+    return null;
+  }
+
+  const visitor = await ctx.db.get(resolvedVisitorId);
+  if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    return null;
+  }
+
+  return visitor;
+}
+
 type ArticleIdentifier = Id<"articles"> | Id<"internalArticles">;
 type ArticleRecord = CompatibilityArticle;
 type ResolvedArticleRecord =
@@ -993,36 +1032,8 @@ export const listForVisitor = query({
     collectionId: v.optional(v.id("collections")),
   },
   handler: async (ctx, args) => {
-    const authUser = await getAuthenticatedUserFromSession(ctx);
-    let resolvedVisitorId = args.visitorId;
-
-    if (authUser) {
-      await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
-      if (!resolvedVisitorId) {
-        return [];
-      }
-    } else {
-      const canRead = await canReadHelpCenterArticles(ctx, args.workspaceId);
-      if (!canRead) {
-        return [];
-      }
-
-      const resolved = await resolveVisitorFromSession(ctx, {
-        sessionToken: args.sessionToken,
-        workspaceId: args.workspaceId,
-      });
-      if (args.visitorId && args.visitorId !== resolved.visitorId) {
-        throw new Error("Not authorized to list articles for this visitor");
-      }
-      resolvedVisitorId = resolved.visitorId;
-    }
-
-    if (!resolvedVisitorId) {
-      return [];
-    }
-
-    const visitor = await ctx.db.get(resolvedVisitorId);
-    if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
       return [];
     }
 
@@ -1067,36 +1078,8 @@ export const searchForVisitor = query({
     query: v.string(),
   },
   handler: async (ctx, args) => {
-    const authUser = await getAuthenticatedUserFromSession(ctx);
-    let resolvedVisitorId = args.visitorId;
-
-    if (authUser) {
-      await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
-      if (!resolvedVisitorId) {
-        return [];
-      }
-    } else {
-      const canRead = await canReadHelpCenterArticles(ctx, args.workspaceId);
-      if (!canRead) {
-        return [];
-      }
-
-      const resolved = await resolveVisitorFromSession(ctx, {
-        sessionToken: args.sessionToken,
-        workspaceId: args.workspaceId,
-      });
-      if (args.visitorId && args.visitorId !== resolved.visitorId) {
-        throw new Error("Not authorized to search articles for this visitor");
-      }
-      resolvedVisitorId = resolved.visitorId;
-    }
-
-    if (!resolvedVisitorId) {
-      return [];
-    }
-
-    const visitor = await ctx.db.get(resolvedVisitorId);
-    if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
       return [];
     }
 
@@ -1126,6 +1109,40 @@ export const searchForVisitor = query({
     }
     const limitedArticles = filteredArticles.slice(0, 20);
     return await Promise.all(limitedArticles.map((article) => withRenderedContent(ctx, article)));
+  },
+});
+
+export const getForVisitor = query({
+  args: {
+    id: v.id("articles"),
+    workspaceId: v.id("workspaces"),
+    visitorId: v.optional(v.id("visitors")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
+      return null;
+    }
+
+    const article = await ctx.db.get(args.id);
+    if (!article || article.workspaceId !== args.workspaceId) {
+      return null;
+    }
+    if (!articleIsReadableOnVisitorSurface(article)) {
+      return null;
+    }
+
+    const matches = await evaluateRule(
+      ctx,
+      article.audienceRules as AudienceRule | undefined,
+      visitor
+    );
+    if (!matches) {
+      return null;
+    }
+
+    return await withRenderedContent(ctx, article);
   },
 });
 
