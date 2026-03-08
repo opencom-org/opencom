@@ -53,30 +53,30 @@ export default function TourEditorPage() {
   const { user, isLoading: authLoading } = useAuth();
   const canQueryTourData = !authLoading && !!user;
 
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const tour = useQuery(api.tours.get, canQueryTourData ? { id: tourId } : "skip");
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const steps = useQuery(api.tourSteps.list, canQueryTourData ? { tourId } : "skip");
   const eventNames = useQuery(
     api.events.getDistinctNames,
     canQueryTourData && tour?.workspaceId ? { workspaceId: tour.workspaceId } : "skip"
   );
 
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const updateTour = useMutation(api.tours.update);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const activateTour = useMutation(api.tours.activate);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const deactivateTour = useMutation(api.tours.deactivate);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const createStep = useMutation(api.tourSteps.create);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const updateStep = useMutation(api.tourSteps.update);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const deleteStep = useMutation(api.tourSteps.remove);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const reorderSteps = useMutation(api.tourSteps.reorder);
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const createAuthoringSession = useMutation(api.authoringSessions.create);
 
   useEffect(() => {

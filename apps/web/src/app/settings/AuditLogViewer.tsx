@@ -29,14 +29,14 @@ export function AuditLogViewer({
     };
   }, [timeRangeDays]);
 
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const auditAccess = useQuery(api.auditLogs.getAccess, showViewer ? { workspaceId } : "skip");
 
   const isAuditUnauthenticated = auditAccess?.status === "unauthenticated";
   const canReadAuditLogs = auditAccess?.status === "ok" ? auditAccess.canRead : false;
   const canExportAuditLogs = auditAccess?.status === "ok" ? auditAccess.canExport : false;
 
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const auditLogs = useQuery(
     api.auditLogs.list,
     showViewer && canReadAuditLogs
@@ -53,13 +53,13 @@ export function AuditLogViewer({
       : "skip"
   );
 
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const availableActions = useQuery(
     api.auditLogs.getActions,
     showViewer && canReadAuditLogs ? { workspaceId } : "skip"
   );
 
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const exportLogs = useQuery(
     api.auditLogs.exportLogs,
     isExporting && canReadAuditLogs && canExportAuditLogs
@@ -76,7 +76,7 @@ export function AuditLogViewer({
       : "skip"
   );
 
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const logExportMutation = useMutation(api.auditLogs.logExport);
 
   const handleExport = async () => {

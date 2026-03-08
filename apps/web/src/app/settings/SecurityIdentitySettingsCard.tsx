@@ -13,18 +13,18 @@ export function SecurityIdentitySettingsCard({
 }: {
   workspaceId: Id<"workspaces">;
 }): React.JSX.Element {
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const identitySettings = useQuery(api.identityVerification.getSettings, { workspaceId });
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const identitySecret = useQuery(api.identityVerification.getSecret, { workspaceId });
 
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const enableIdentity = useMutation(api.identityVerification.enable);
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const disableIdentity = useMutation(api.identityVerification.disable);
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const updateMode = useMutation(api.identityVerification.updateMode);
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
+  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const rotateSecret = useMutation(api.identityVerification.rotateSecret);
 
   const [showSecret, setShowSecret] = useState(false);

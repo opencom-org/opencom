@@ -26,7 +26,7 @@ function OutboundContent() {
   const [typeFilter, setTypeFilter] = useState<"all" | OutboundMessageType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | OutboundMessageStatus>("all");
 
-  // @ts-ignore Convex generated type graph can exceed TS instantiation depth in app package checks.
+  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const messages = useQuery(api.outboundMessages.list, activeWorkspace?._id
     ? {
         workspaceId: activeWorkspace._id,
