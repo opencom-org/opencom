@@ -18,9 +18,7 @@ export function SignedSessionsSettings({
 }: {
   workspaceId: Id<"workspaces">;
 }): React.JSX.Element {
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
   const settings = useQuery(api.widgetSessions.getSettings, { workspaceId });
-  // @ts-ignore Convex generated API refs can exceed TS instantiation depth in this component.
   const updateSettings = useMutation(api.widgetSessions.updateSettings);
 
   const handleLifetimeChange = async (sessionLifetimeMs: number) => {

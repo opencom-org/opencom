@@ -115,9 +115,9 @@ export function SuggestionsPanel({
 
   const handleViewFull = (suggestion: Suggestion) => {
     if (suggestion.type === "article") {
-      window.open(`/help-center/articles/${suggestion.id}`, "_blank");
+      window.open(`/articles/${suggestion.id}`, "_blank");
     } else if (suggestion.type === "internalArticle") {
-      window.open(`/knowledge/internal/${suggestion.id}`, "_blank");
+      window.open(`/articles/${suggestion.id}`, "_blank");
     }
   };
 

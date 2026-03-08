@@ -66,10 +66,12 @@ export async function getArticle(articleId: ArticleId): Promise<ArticleData | nu
 
   if (!article) return null;
 
+  const articleDoc = article as ArticleDoc;
+
   return {
-    id: article._id,
-    title: article.title,
-    content: article.content,
-    slug: article.slug,
+    id: articleDoc._id,
+    title: articleDoc.title,
+    content: articleDoc.content,
+    slug: articleDoc.slug,
   };
 }

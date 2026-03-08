@@ -19,19 +19,19 @@ export default function HelpCenterPage() {
 
   const collections = useQuery(
     api.collections.listHierarchy,
-    workspaceId ? { workspaceId } : "skip"
+    workspaceId ? { workspaceId, publicOnly: true } : "skip"
   );
 
   const searchResults = useQuery(
     api.articles.search,
     workspaceId && searchQuery.length >= 2
-      ? { workspaceId, query: searchQuery, publishedOnly: true }
+      ? { workspaceId, query: searchQuery, publishedOnly: true, visibility: "public" }
       : "skip"
   );
 
   const publishedArticles = useQuery(
     api.articles.list,
-    workspaceId ? { workspaceId, status: "published" } : "skip"
+    workspaceId ? { workspaceId, status: "published", visibility: "public" } : "skip"
   );
 
   const collectionsWithArticles = collections?.filter(

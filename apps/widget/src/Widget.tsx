@@ -238,11 +238,17 @@ export function Widget({
       : "skip"
   );
   const publishedCollections = useQuery(
-    api.collections.listHierarchy,
-    isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
+    api.collections.listHierarchyForVisitor,
+    isValidIdFormat && visitorId && sessionToken
+      ? {
+          workspaceId: activeWorkspaceId as Id<"workspaces">,
+          visitorId,
+          sessionToken,
+        }
+      : "skip"
   );
 
-  const selectedArticle = useMemo(() => {
+  const selectedArticleFromBrowseResults = useMemo(() => {
     if (!selectedArticleId) return undefined;
 
     const fromSearch = articleSearchResults?.find((article) => article._id === selectedArticleId);
@@ -250,6 +256,27 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
+  const selectedArticleQuery = useQuery(
+    api.articles.getForVisitor,
+    isValidIdFormat &&
+      selectedArticleId &&
+      !selectedArticleFromBrowseResults &&
+      activeWorkspaceId &&
+      visitorId &&
+      sessionToken
+      ? {
+          id: selectedArticleId,
+          workspaceId: activeWorkspaceId as Id<"workspaces">,
+          visitorId,
+          sessionToken,
+        }
+      : "skip"
+  );
+  const selectedArticle = selectedArticleFromBrowseResults ?? selectedArticleQuery ?? null;
+  const isSelectedArticleLoading =
+    Boolean(selectedArticleId) &&
+    !selectedArticleFromBrowseResults &&
+    selectedArticleQuery === undefined;
 
   // Automation settings for self-serve features (getOrCreate returns defaults for new workspaces)
   const automationSettings = useQuery(
@@ -862,7 +889,8 @@ export function Widget({
       )}
       {view === "article-detail" && (
         <ArticleDetail
-          article={selectedArticle ?? undefined}
+          article={selectedArticle}
+          isLoading={isSelectedArticleLoading}
           isLargeScreen={isLargeArticleView}
           isCollapsingLargeScreen={isCollapsingLargeArticle}
           onToggleLargeScreen={handleToggleArticleLargeScreen}

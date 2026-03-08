@@ -7,6 +7,7 @@ import type { Id } from "@opencom/convex/dataModel";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
+import { Button } from "@opencom/ui";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
 import { SuggestionsPanel } from "@/components/SuggestionsPanel";
 import {
@@ -27,7 +28,6 @@ import { InboxThreadPane } from "./InboxThreadPane";
 import { InboxAiReviewPanel } from "./InboxAiReviewPanel";
 import type {
   InboxAiResponse,
-  InboxArticle,
   InboxConversation,
   InboxKnowledgeItem,
   InboxMessage,
@@ -76,12 +76,15 @@ function InboxContent(): React.JSX.Element | null {
     null
   );
   const [inputValue, setInputValue] = useState("");
-  const [showSnippetPicker, setShowSnippetPicker] = useState(false);
-  const [snippetSearch, setSnippetSearch] = useState("");
-  const [showArticleSearch, setShowArticleSearch] = useState(false);
-  const [articleSearch, setArticleSearch] = useState("");
-  const [showKnowledgePanel, setShowKnowledgePanel] = useState(false);
+  const [showKnowledgePicker, setShowKnowledgePicker] = useState(false);
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
+  const [snippetDialogMode, setSnippetDialogMode] = useState<"create" | "update" | null>(null);
+  const [snippetDialogId, setSnippetDialogId] = useState<Id<"snippets"> | null>(null);
+  const [snippetName, setSnippetName] = useState("");
+  const [snippetShortcut, setSnippetShortcut] = useState("");
+  const [snippetMutationError, setSnippetMutationError] = useState<string | null>(null);
+  const [isSavingSnippet, setIsSavingSnippet] = useState(false);
+  const [lastInsertedSnippetId, setLastInsertedSnippetId] = useState<Id<"snippets"> | null>(null);
   const [aiWorkflowFilter, setAiWorkflowFilter] = useState<"all" | "ai_handled" | "handoff">("all");
   const [conversationPatches, setConversationPatches] = useState<
     Record<string, ConversationUiPatch>
@@ -124,29 +127,17 @@ function InboxContent(): React.JSX.Element | null {
   const updateStatus = useMutation(api.conversations.updateStatus);
   const convertToTicket = useMutation(api.tickets.convertFromConversation);
   const getSuggestionsForConversation = useAction(api.suggestions.getForConversation);
-
-  const snippets = useQuery(
-    api.snippets.search,
-    activeWorkspace?._id && snippetSearch.length >= 1
-      ? { workspaceId: activeWorkspace._id, query: snippetSearch }
-      : "skip"
-  );
+  const createSnippet = useMutation(api.snippets.create);
+  const updateSnippet = useMutation(api.snippets.update);
 
   const allSnippets = useQuery(
     api.snippets.list,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const articles = useQuery(
-    api.articles.search,
-    activeWorkspace?._id && articleSearch.length >= 2
-      ? { workspaceId: activeWorkspace._id, query: articleSearch, publishedOnly: true }
-      : "skip"
-  );
-
   const knowledgeResults = useQuery(
     api.knowledge.search,
-    activeWorkspace?._id && knowledgeSearch.length >= 2
+    activeWorkspace?._id && knowledgeSearch.trim().length >= 1
       ? { workspaceId: activeWorkspace._id, query: knowledgeSearch, limit: 20 }
       : "skip"
   );
@@ -248,9 +239,7 @@ function InboxContent(): React.JSX.Element | null {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
-        setShowKnowledgePanel(true);
-        setShowSnippetPicker(false);
-        setShowArticleSearch(false);
+        setShowKnowledgePicker(true);
       }
     };
 
@@ -352,23 +341,15 @@ function InboxContent(): React.JSX.Element | null {
       e.preventDefault();
       void handleSendMessage();
     }
-    // Trigger snippet picker on /
+    // Open the consolidated knowledge picker on /
     if (e.key === "/" && inputValue === "") {
       e.preventDefault();
-      setShowSnippetPicker(true);
-      setSnippetSearch("");
+      setShowKnowledgePicker(true);
+      setKnowledgeSearch("");
     }
-    // Close pickers on Escape
     if (e.key === "Escape") {
-      setShowSnippetPicker(false);
-      setShowArticleSearch(false);
+      setShowKnowledgePicker(false);
     }
-  };
-
-  const handleSelectSnippet = (content: string) => {
-    setInputValue(content);
-    setShowSnippetPicker(false);
-    setSnippetSearch("");
   };
 
   const jumpToMessage = (messageId: Id<"messages">) => {
@@ -387,15 +368,10 @@ function InboxContent(): React.JSX.Element | null {
     }, 2000);
   };
 
-  const handleInsertArticleLink = (title: string, slug: string) => {
-    const link = `[${title}](/help/${slug})`;
-    setInputValue((prev) => prev + (prev ? " " : "") + link);
-    setShowArticleSearch(false);
-    setArticleSearch("");
-  };
-
-  const handleInsertKnowledgeContent = async (item: InboxKnowledgeItem) => {
-    // Track access for recently used
+  const handleInsertKnowledgeContent = async (
+    item: InboxKnowledgeItem,
+    action: "content" | "link" = "content"
+  ) => {
     if (user?._id && activeWorkspace?._id) {
       trackAccess({
         userId: user._id,
@@ -406,15 +382,90 @@ function InboxContent(): React.JSX.Element | null {
     }
 
     if (item.type === "snippet") {
-      // Insert snippet content directly
-      setInputValue(item.content);
+      setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}${item.content}`);
+      setLastInsertedSnippetId(item.id as Id<"snippets">);
+    } else if (action === "link" && item.type === "article" && item.slug) {
+      setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}[${item.title}](/help/${item.slug})`);
     } else {
-      // Insert as a reference or paste content
-      setInputValue((prev) => prev + (prev ? "\n\n" : "") + item.content);
+      setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}${item.content}`);
     }
-    setShowKnowledgePanel(false);
+
+    setShowKnowledgePicker(false);
     setKnowledgeSearch("");
   };
+
+  const closeSnippetDialog = () => {
+    setSnippetDialogMode(null);
+    setSnippetDialogId(null);
+    setSnippetName("");
+    setSnippetShortcut("");
+    setSnippetMutationError(null);
+    setIsSavingSnippet(false);
+  };
+
+  const openCreateSnippetDialog = () => {
+    setSnippetDialogMode("create");
+    setSnippetDialogId(null);
+    setSnippetName("");
+    setSnippetShortcut("");
+    setSnippetMutationError(null);
+  };
+
+  const openUpdateSnippetDialog = () => {
+    if (!lastInsertedSnippetId || !allSnippets) {
+      return;
+    }
+
+    const snippet = allSnippets.find((entry) => entry._id === lastInsertedSnippetId);
+    if (!snippet) {
+      return;
+    }
+
+    setSnippetDialogMode("update");
+    setSnippetDialogId(snippet._id);
+    setSnippetName(snippet.name);
+    setSnippetShortcut(snippet.shortcut ?? "");
+    setSnippetMutationError(null);
+  };
+
+  const handleSubmitSnippetDialog = async () => {
+    if (!activeWorkspace?._id || !inputValue.trim() || !snippetDialogMode) {
+      return;
+    }
+
+    setIsSavingSnippet(true);
+    setSnippetMutationError(null);
+
+    try {
+      if (snippetDialogMode === "create") {
+        const snippetId = await createSnippet({
+          workspaceId: activeWorkspace._id,
+          name: snippetName.trim(),
+          content: inputValue,
+          shortcut: snippetShortcut.trim() || undefined,
+        });
+        setLastInsertedSnippetId(snippetId);
+      } else if (snippetDialogId) {
+        await updateSnippet({
+          id: snippetDialogId,
+          name: snippetName.trim(),
+          content: inputValue,
+          shortcut: snippetShortcut.trim() || undefined,
+        });
+        setLastInsertedSnippetId(snippetDialogId);
+      }
+
+      closeSnippetDialog();
+    } catch (error) {
+      setSnippetMutationError(
+        error instanceof Error ? error.message : "Failed to save snippet from inbox."
+      );
+      setIsSavingSnippet(false);
+    }
+  };
+
+  const lastInsertedSnippet =
+    allSnippets?.find((snippet) => snippet._id === lastInsertedSnippetId) ?? null;
 
   if (!user || !activeWorkspace) {
     return null;
@@ -455,15 +506,9 @@ function InboxContent(): React.JSX.Element | null {
                 isSending={isSending}
                 isResolving={isResolving}
                 isConvertingTicket={isConvertingTicket}
-                showSnippetPicker={showSnippetPicker}
-                snippetSearch={snippetSearch}
-                showArticleSearch={showArticleSearch}
-                articleSearch={articleSearch}
-                showKnowledgePanel={showKnowledgePanel}
+                showKnowledgePicker={showKnowledgePicker}
                 knowledgeSearch={knowledgeSearch}
-                snippets={snippets as InboxSnippet[] | undefined}
                 allSnippets={allSnippets as InboxSnippet[] | undefined}
-                articles={articles as InboxArticle[] | undefined}
                 knowledgeResults={knowledgeResults as InboxKnowledgeItem[] | undefined}
                 recentContent={recentContent as InboxKnowledgeItem[] | undefined}
                 activeCompactPanel={activeCompactPanel}
@@ -472,6 +517,11 @@ function InboxContent(): React.JSX.Element | null {
                 isSidecarEnabled={isSidecarEnabled}
                 suggestionsCount={suggestionsCount}
                 isSuggestionsCountLoading={isSuggestionsCountLoading}
+                canSaveDraftAsSnippet={inputValue.trim().length > 0}
+                canUpdateSnippetFromDraft={Boolean(
+                  lastInsertedSnippet && inputValue.trim().length > 0
+                )}
+                lastInsertedSnippetName={lastInsertedSnippet?.name ?? null}
                 replyInputRef={replyInputRef}
                 onBackToList={() => {
                   setSelectedConversationId(null);
@@ -495,31 +545,16 @@ function InboxContent(): React.JSX.Element | null {
                 onSendMessage={() => {
                   void handleSendMessage();
                 }}
-                onToggleSnippetPicker={() => {
-                  setShowSnippetPicker(!showSnippetPicker);
-                  setShowArticleSearch(false);
-                }}
-                onToggleArticleSearch={() => {
-                  setShowArticleSearch(!showArticleSearch);
-                  setShowSnippetPicker(false);
-                  setShowKnowledgePanel(false);
-                }}
-                onToggleKnowledgePanel={() => {
-                  setShowKnowledgePanel(!showKnowledgePanel);
-                  setShowSnippetPicker(false);
-                  setShowArticleSearch(false);
-                }}
-                onSnippetSearchChange={setSnippetSearch}
-                onArticleSearchChange={setArticleSearch}
                 onKnowledgeSearchChange={setKnowledgeSearch}
-                onCloseSnippetPicker={() => setShowSnippetPicker(false)}
-                onCloseArticleSearch={() => setShowArticleSearch(false)}
-                onCloseKnowledgePanel={() => setShowKnowledgePanel(false)}
-                onSelectSnippet={handleSelectSnippet}
-                onInsertArticleLink={handleInsertArticleLink}
-                onInsertKnowledgeContent={(item) => {
-                  void handleInsertKnowledgeContent(item);
+                onToggleKnowledgePicker={() => {
+                  setShowKnowledgePicker((current) => !current);
                 }}
+                onCloseKnowledgePicker={() => setShowKnowledgePicker(false)}
+                onInsertKnowledgeContent={(item, action) => {
+                  void handleInsertKnowledgeContent(item, action);
+                }}
+                onSaveDraftAsSnippet={openCreateSnippetDialog}
+                onUpdateSnippetFromDraft={openUpdateSnippetDialog}
                 getConversationIdentityLabel={getConversationIdentityLabel}
                 getHandoffReasonLabel={getHandoffReasonLabel}
               />
@@ -574,6 +609,76 @@ function InboxContent(): React.JSX.Element | null {
           </ResponsivePrimaryRegion>
         )}
       </div>
+
+      {snippetDialogMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-xl border bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold">
+              {snippetDialogMode === "create" ? "Save draft as snippet" : "Update snippet"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Snippets stay available in the inbox knowledge picker and slash shortcuts.
+            </p>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+                <input
+                  value={snippetName}
+                  onChange={(event) => setSnippetName(event.target.value)}
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  placeholder="Billing follow-up"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Shortcut (optional)
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">/</span>
+                  <input
+                    value={snippetShortcut}
+                    onChange={(event) =>
+                      setSnippetShortcut(
+                        event.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase()
+                      )
+                    }
+                    className="w-full rounded-md border px-3 py-2 text-sm font-mono"
+                    placeholder="billing-followup"
+                  />
+                </div>
+              </div>
+
+              {snippetMutationError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {snippetMutationError}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <Button variant="outline" onClick={closeSnippetDialog} disabled={isSavingSnippet}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  void handleSubmitSnippetDialog();
+                }}
+                disabled={isSavingSnippet || !snippetName.trim() || !inputValue.trim()}
+              >
+                {isSavingSnippet
+                  ? snippetDialogMode === "create"
+                    ? "Saving..."
+                    : "Updating..."
+                  : snippetDialogMode === "create"
+                    ? "Save Snippet"
+                    : "Update Snippet"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppPageShell>
   );
 }

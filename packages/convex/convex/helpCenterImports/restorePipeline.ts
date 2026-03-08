@@ -137,7 +137,7 @@ export async function runRestoreRun(ctx: MutationCtx, args: RestoreRunArgs) {
         title?: string;
         slug?: string;
         content?: string;
-        status?: "draft" | "published";
+        status?: "draft" | "published" | "archived";
         collectionId?: Id<"collections">;
         publishedAt?: number;
         updatedAt?: number;
@@ -163,6 +163,8 @@ export async function runRestoreRun(ctx: MutationCtx, args: RestoreRunArgs) {
         updates.status = entry.status;
         if (entry.status === "published") {
           updates.publishedAt = now;
+        } else {
+          updates.publishedAt = undefined;
         }
       }
 

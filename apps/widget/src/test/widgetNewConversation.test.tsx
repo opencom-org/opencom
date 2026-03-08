@@ -42,11 +42,12 @@ vi.mock("@opencom/convex", () => ({
       markAsRead: "conversations.markAsRead",
     },
     articles: {
+      getForVisitor: "articles.getForVisitor",
       searchForVisitor: "articles.searchForVisitor",
       listForVisitor: "articles.listForVisitor",
     },
     collections: {
-      listHierarchy: "collections.listHierarchy",
+      listHierarchyForVisitor: "collections.listHierarchyForVisitor",
     },
     automationSettings: {
       getOrCreate: "automationSettings.getOrCreate",
@@ -142,9 +143,7 @@ vi.mock("../components/HelpCenter", () => ({
         data-testid="mock-open-first-article"
         onClick={() => {
           const firstArticle = publishedArticles?.[0];
-          if (firstArticle) {
-            onSelectArticle(firstArticle._id);
-          }
+          onSelectArticle(firstArticle?._id ?? "article_detached_1");
         }}
       >
         Open first article
@@ -155,11 +154,18 @@ vi.mock("../components/HelpCenter", () => ({
 
 vi.mock("../components/ArticleDetail", () => ({
   ArticleDetail: ({
+    article,
+    isLoading,
     onToggleLargeScreen,
   }: {
+    article?: { title?: string } | null;
+    isLoading?: boolean;
     onToggleLargeScreen: () => void;
   }) => (
     <div data-testid="article-detail">
+      <span data-testid="mock-article-detail-state">
+        {isLoading ? "loading" : article?.title ?? "unavailable"}
+      </span>
       <button type="button" data-testid="mock-toggle-article-size" onClick={onToggleLargeScreen}>
         Toggle size
       </button>
@@ -248,6 +254,7 @@ describe("Widget new conversation behavior", () => {
   let markAsReadMock: ReturnType<typeof vi.fn>;
   let visitorConversationsResult: Array<Record<string, unknown>>;
   let publishedArticlesResult: Array<Record<string, unknown>>;
+  let selectedArticleResult: Record<string, unknown> | null | undefined;
 
   const openWidgetMessagesTab = async () => {
     fireEvent.click(screen.getByTestId("widget-launcher"));
@@ -267,6 +274,7 @@ describe("Widget new conversation behavior", () => {
 
     visitorConversationsResult = [];
     publishedArticlesResult = [];
+    selectedArticleResult = undefined;
     createConversationMock = vi.fn().mockResolvedValue({ _id: "conv_created_1" });
     markAsReadMock = vi.fn().mockResolvedValue(undefined);
 
@@ -307,11 +315,15 @@ describe("Widget new conversation behavior", () => {
         return publishedArticlesResult;
       }
 
+      if (queryRef === "articles.getForVisitor") {
+        return selectedArticleResult;
+      }
+
       if (queryRef === "articles.searchForVisitor") {
         return [];
       }
 
-      if (queryRef === "collections.listHierarchy") {
+      if (queryRef === "collections.listHierarchyForVisitor") {
         return [];
       }
 
@@ -489,5 +501,29 @@ describe("Widget new conversation behavior", () => {
     await waitFor(() => {
       expect(widgetRoot?.className).not.toContain("opencom-widget-article-large");
     });
+  });
+
+  it("fetches selected article detail when the article was opened outside the current browse results", async () => {
+    selectedArticleResult = {
+      _id: "article_detached_1",
+      title: "Detached article",
+      content: "Loaded directly by id",
+    };
+
+    render(<Widget workspaceId="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />);
+
+    fireEvent.click(screen.getByTestId("widget-launcher"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTitle("Help Center"));
+    fireEvent.click(screen.getByTestId("mock-open-first-article"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("article-detail")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("mock-article-detail-state")).toHaveTextContent("Detached article");
   });
 });

@@ -68,6 +68,8 @@ export interface InboxKnowledgeItem {
   title: string;
   content: string;
   snippet?: string;
+  slug?: string;
+  tags?: string[];
 }
 
 export interface InboxAiSource {

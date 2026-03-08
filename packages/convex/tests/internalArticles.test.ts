@@ -58,6 +58,16 @@ describe("internalArticles", () => {
     expect(article?.tags).toContain("test");
   });
 
+  it("stores compat internal articles in the unified article model", async () => {
+    const unifiedArticle = await client.query(api.articles.get, {
+      id: testArticleId,
+      workspaceId: testWorkspaceId,
+    });
+
+    expect(unifiedArticle).toBeDefined();
+    expect(unifiedArticle?.visibility).toBe("internal");
+  });
+
   it("should list internal articles for workspace", async () => {
     const articles = await client.query(api.internalArticles.list, {
       workspaceId: testWorkspaceId,
@@ -83,6 +93,7 @@ describe("internalArticles", () => {
     expect(article?.title).toBe("Updated Internal Article");
     expect(article?.content).toBe("Updated content");
     expect(article?.folderId).toBe(testFolderId);
+    expect(article?.legacyFolderId ?? article?.folderId).toBe(testFolderId);
   });
 
   it("should publish an internal article", async () => {

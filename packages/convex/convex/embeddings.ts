@@ -5,6 +5,11 @@ import { Doc, Id } from "./_generated/dataModel";
 import { embed, embedMany } from "ai";
 import { authAction } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
+import {
+  isInternalArticle,
+  isPublicArticle,
+  listUnifiedArticlesWithLegacyFallback,
+} from "./lib/unifiedArticles";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
@@ -491,13 +496,8 @@ export const listArticles = internalQuery({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const articles = (await ctx.db
-      .query("articles")
-      .withIndex("by_status", (q) =>
-        q.eq("workspaceId", args.workspaceId).eq("status", "published")
-      )
-      .collect()) as Doc<"articles">[];
-    return articles;
+    const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
+    return articles.filter((article) => isPublicArticle(article) && article.status === "published");
   },
 });
 
@@ -506,13 +506,10 @@ export const listInternalArticles = internalQuery({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    const articles = (await ctx.db
-      .query("internalArticles")
-      .withIndex("by_status", (q) =>
-        q.eq("workspaceId", args.workspaceId).eq("status", "published")
-      )
-      .collect()) as Doc<"internalArticles">[];
-    return articles;
+    const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
+    return articles.filter(
+      (article) => isInternalArticle(article) && article.status === "published"
+    );
   },
 });
 

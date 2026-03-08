@@ -220,6 +220,8 @@ export function HelpCenter({
             <div className="opencom-article-section-title">{selectedGroup.label}</div>
             {selectedGroup.articles.map((article) => renderArticleButton(article))}
           </>
+        ) : publishedArticles === undefined ? (
+          <div className="opencom-article-loading">Loading articles...</div>
         ) : groupedArticles.length > 0 ? (
           <>
             <div className="opencom-collection-list-title">

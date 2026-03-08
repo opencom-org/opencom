@@ -252,7 +252,7 @@ function yamlQuote(value: string): string {
 export function buildFrontmatterContent(args: {
   title: string;
   slug: string;
-  status: "draft" | "published";
+  status: "draft" | "published" | "archived";
   updatedAt: number;
   collectionPath?: string;
   sourceName?: string;

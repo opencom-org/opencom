@@ -12,6 +12,11 @@ import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authMutation, authQuery } from "./lib/authWrappers";
+import {
+  isInternalArticle,
+  isPublicArticle,
+  listUnifiedArticlesWithLegacyFallback,
+} from "./lib/unifiedArticles";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 const knowledgeSourceValidator = v.union(
@@ -141,15 +146,11 @@ async function collectRelevantKnowledge(
   const limit = args.limit ?? 5;
   const sources = args.knowledgeSources ?? ["articles", "internalArticles", "snippets"];
   const results: KnowledgeResult[] = [];
+  const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
 
   if (sources.includes("articles")) {
-    const articles = await ctx.db
-      .query("articles")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
-
     for (const article of articles) {
-      if (article.status !== "published") continue;
+      if (!isPublicArticle(article) || article.status !== "published") continue;
 
       const score = calculateRelevanceScore(article.title, article.content, searchTerm);
       if (score > 0) {
@@ -165,13 +166,8 @@ async function collectRelevantKnowledge(
   }
 
   if (sources.includes("internalArticles")) {
-    const internalArticles = await ctx.db
-      .query("internalArticles")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
-
-    for (const article of internalArticles) {
-      if (article.status === "archived") continue;
+    for (const article of articles) {
+      if (!isInternalArticle(article) || article.status !== "published") continue;
 
       const score = calculateRelevanceScore(article.title, article.content, searchTerm);
       if (score > 0) {
@@ -664,6 +660,7 @@ export const handoffToHuman = mutation({
       aiLastResponseAt: now,
     });
 
+    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
     await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
       eventType: "chat_message",
       domain: "chat",

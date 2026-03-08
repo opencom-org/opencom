@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   evaluateRule,
@@ -14,6 +14,19 @@ import { requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
 import { generateSlug, ensureUniqueSlug } from "./utils/strings";
 import { throwNotAuthenticated, createError } from "./utils/errors";
+import {
+  articleOrLegacyInternalArticleIdValidator,
+  articleStatusValidator,
+  articleVisibilityValidator,
+  getArticleContentType,
+  getArticleVisibility,
+  getUnifiedArticleByIdOrLegacyInternalId,
+  isPublicArticle,
+  listUnifiedArticlesWithLegacyFallback,
+  toCompatibilityArticle,
+  type CompatibilityArticle,
+  type UnifiedArticleVisibility,
+} from "./lib/unifiedArticles";
 import { audienceRulesValidator } from "./validators";
 
 type HelpCenterAccessPolicy = "public" | "restricted";
@@ -116,12 +129,182 @@ async function canReadHelpCenterArticles(
   return policy === "public";
 }
 
+async function resolveWidgetHelpCenterVisitor(
+  ctx: QueryCtx,
+  args: {
+    workspaceId: Id<"workspaces">;
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+  }
+): Promise<Doc<"visitors"> | null> {
+  const authUser = await getAuthenticatedUserFromSession(ctx);
+  let resolvedVisitorId = args.visitorId;
+
+  if (authUser) {
+    await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
+    if (!resolvedVisitorId) {
+      return null;
+    }
+  } else {
+    const resolved = await resolveVisitorFromSession(ctx, {
+      sessionToken: args.sessionToken,
+      workspaceId: args.workspaceId,
+    });
+    if (args.visitorId && args.visitorId !== resolved.visitorId) {
+      throw new Error("Not authorized to read articles for this visitor");
+    }
+    resolvedVisitorId = resolved.visitorId;
+  }
+
+  if (!resolvedVisitorId) {
+    return null;
+  }
+
+  const visitor = await ctx.db.get(resolvedVisitorId);
+  if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    return null;
+  }
+
+  return visitor;
+}
+
+type ArticleIdentifier = Id<"articles"> | Id<"internalArticles">;
+type ArticleRecord = CompatibilityArticle;
+type ResolvedArticleRecord =
+  | { kind: "article"; article: Doc<"articles"> }
+  | { kind: "legacyInternal"; article: Doc<"internalArticles"> };
+
+function articleMatchesVisibility(
+  article: Pick<Doc<"articles">, "visibility">,
+  visibility?: UnifiedArticleVisibility
+) {
+  return visibility ? getArticleVisibility(article) === visibility : true;
+}
+
+function articleIsReadableOnVisitorSurface(article: Pick<Doc<"articles">, "visibility" | "status">) {
+  return isPublicArticle(article) && article.status === "published";
+}
+
+function articleMatchesSearch(article: Pick<ArticleRecord, "title" | "content">, searchTerm: string) {
+  return (
+    article.title.toLowerCase().includes(searchTerm) ||
+    article.content.toLowerCase().includes(searchTerm)
+  );
+}
+
+async function resolveArticleRecord(
+  ctx: QueryCtx | MutationCtx,
+  id: ArticleIdentifier
+): Promise<ResolvedArticleRecord | null> {
+  const article = await getUnifiedArticleByIdOrLegacyInternalId(ctx.db, id);
+  if (article) {
+    return { kind: "article", article };
+  }
+
+  const legacyArticle = (await ctx.db.get(id as Id<"internalArticles">)) as Doc<"internalArticles"> | null;
+  if (legacyArticle) {
+    return { kind: "legacyInternal", article: legacyArticle };
+  }
+
+  return null;
+}
+
+async function listArticleRecords(
+  ctx: QueryCtx,
+  workspaceId: Id<"workspaces">
+): Promise<ArticleRecord[]> {
+  return await listUnifiedArticlesWithLegacyFallback(ctx.db, workspaceId);
+}
+
+function sortArticleRecordsForAdmin(records: ArticleRecord[]) {
+  return [...records].sort((left, right) => {
+    if (right.updatedAt !== left.updatedAt) {
+      return right.updatedAt - left.updatedAt;
+    }
+    return left.title.localeCompare(right.title);
+  });
+}
+
+async function backfillLegacyInternalArticles(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">
+) {
+  const existingArticles = (await ctx.db
+    .query("articles")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect()) as Doc<"articles">[];
+
+  const migratedLegacyIds = new Set(
+    existingArticles
+      .map((article) => article.legacyInternalArticleId)
+      .filter((value): value is Id<"internalArticles"> => Boolean(value))
+  );
+
+  const legacyArticles = (await ctx.db
+    .query("internalArticles")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect()) as Doc<"internalArticles">[];
+
+  const rootArticles = existingArticles.filter((article) => !article.collectionId);
+  let nextRootOrder = rootArticles.reduce((max, article) => Math.max(max, article.order), 0);
+
+  const migrated: Array<{ legacyId: Id<"internalArticles">; articleId: Id<"articles"> }> = [];
+
+  for (const legacyArticle of legacyArticles) {
+    if (migratedLegacyIds.has(legacyArticle._id)) {
+      continue;
+    }
+
+    const baseSlug = generateSlug(legacyArticle.title);
+    const slug = await ensureUniqueSlug(ctx.db, "articles", workspaceId, baseSlug);
+
+    const articleId = await ctx.db.insert("articles", {
+      workspaceId,
+      collectionId: undefined,
+      folderId: undefined,
+      title: legacyArticle.title,
+      slug,
+      content: legacyArticle.content,
+      widgetLargeScreen: false,
+      visibility: "internal",
+      status: legacyArticle.status,
+      order: ++nextRootOrder,
+      createdAt: legacyArticle.createdAt,
+      updatedAt: legacyArticle.updatedAt,
+      publishedAt: legacyArticle.publishedAt,
+      authorId: legacyArticle.authorId,
+      tags: legacyArticle.tags,
+      legacyInternalArticleId: legacyArticle._id,
+      legacyFolderId: legacyArticle.folderId,
+    });
+
+    migrated.push({ legacyId: legacyArticle._id, articleId });
+  }
+
+  const folderBackedArticles = existingArticles.filter((article) => article.folderId);
+  for (const article of folderBackedArticles) {
+    await ctx.db.patch(article._id, {
+      folderId: undefined,
+      legacyFolderId: article.legacyFolderId ?? article.folderId,
+      updatedAt: article.updatedAt,
+    });
+  }
+
+  return {
+    migratedCount: migrated.length,
+    migrated,
+    normalizedFolderBackedArticleCount: folderBackedArticles.length,
+  };
+}
+
 export const create = mutation({
   args: {
     workspaceId: v.id("workspaces"),
     title: v.string(),
     content: v.string(),
     collectionId: v.optional(v.id("collections")),
+    visibility: v.optional(articleVisibilityValidator),
+    tags: v.optional(v.array(v.string())),
     authorId: v.optional(v.id("users")),
   },
   handler: async (ctx, args) => {
@@ -145,14 +328,17 @@ export const create = mutation({
     const articleId = await ctx.db.insert("articles", {
       workspaceId: args.workspaceId,
       collectionId: args.collectionId,
+      folderId: undefined,
       title: args.title,
       slug,
       content: args.content,
       widgetLargeScreen: false,
+      visibility: args.visibility ?? "public",
       status: "draft",
       order: maxOrder + 1,
       createdAt: now,
       updatedAt: now,
+      tags: args.tags,
       authorId: args.authorId,
     });
 
@@ -162,12 +348,14 @@ export const create = mutation({
 
 export const update = mutation({
   args: {
-    id: v.id("articles"),
+    id: articleOrLegacyInternalArticleIdValidator,
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     widgetLargeScreen: v.optional(v.boolean()),
     collectionId: v.optional(v.id("collections")),
     folderId: v.optional(v.id("contentFolders")),
+    visibility: v.optional(articleVisibilityValidator),
+    tags: v.optional(v.array(v.string())),
     audienceRules: v.optional(audienceRulesValidator),
   },
   handler: async (ctx, args) => {
@@ -176,26 +364,59 @@ export const update = mutation({
       throwNotAuthenticated();
     }
 
-    const article = await ctx.db.get(args.id);
-    if (!article) {
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    if (!resolved) {
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await requirePermission(ctx, user._id, article.workspaceId, "articles.create");
+    await requirePermission(ctx, user._id, resolved.article.workspaceId, "articles.create");
+
+    if (resolved.kind === "legacyInternal") {
+      const legacyUpdates: Partial<Doc<"internalArticles">> & { updatedAt: number } = {
+        updatedAt: Date.now(),
+      };
+
+      if (args.title !== undefined) {
+        legacyUpdates.title = args.title;
+      }
+      if (args.content !== undefined) {
+        legacyUpdates.content = args.content;
+      }
+      if (args.tags !== undefined) {
+        legacyUpdates.tags = args.tags;
+      }
+
+      await ctx.db.patch(resolved.article._id, legacyUpdates);
+
+      if (
+        resolved.article.status === "published" &&
+        (args.title !== undefined || args.content !== undefined)
+      ) {
+        await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+          workspaceId: resolved.article.workspaceId,
+          contentType: "internalArticle",
+          contentId: resolved.article._id,
+          title: args.title ?? resolved.article.title,
+          content: args.content ?? resolved.article.content,
+        });
+      }
+
+      return resolved.article._id;
+    }
 
     const updates: Record<string, unknown> = {
       updatedAt: Date.now(),
     };
 
-    if (args.title !== undefined && args.title !== article.title) {
+    if (args.title !== undefined && args.title !== resolved.article.title) {
       updates.title = args.title;
       const baseSlug = generateSlug(args.title);
       updates.slug = await ensureUniqueSlug(
         ctx.db,
         "articles",
-        article.workspaceId,
+        resolved.article.workspaceId,
         baseSlug,
-        args.id
+        resolved.article._id
       );
     }
 
@@ -211,8 +432,17 @@ export const update = mutation({
       updates.collectionId = args.collectionId;
     }
 
+    if (args.visibility !== undefined) {
+      updates.visibility = args.visibility;
+    }
+
+    if (args.tags !== undefined) {
+      updates.tags = args.tags;
+    }
+
     if (args.folderId !== undefined) {
-      updates.folderId = args.folderId;
+      updates.legacyFolderId = args.folderId;
+      updates.folderId = undefined;
     }
 
     if (args.audienceRules !== undefined) {
@@ -220,30 +450,45 @@ export const update = mutation({
         throw createError("INVALID_INPUT", "Invalid audience rules");
       }
       updates.audienceRules = args.audienceRules;
+    } else if (args.visibility === "internal") {
+      updates.audienceRules = undefined;
     }
 
-    await ctx.db.patch(args.id, updates);
+    await ctx.db.patch(resolved.article._id, updates);
 
-    if (
-      article.status === "published" &&
-      (args.title !== undefined || args.content !== undefined)
-    ) {
-      await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
-        workspaceId: article.workspaceId,
-        contentType: "article",
-        contentId: args.id,
-        title: args.title ?? article.title,
-        content: args.content ?? article.content,
+    const previousContentType = getArticleContentType(resolved.article);
+    const nextContentType =
+      (args.visibility ?? getArticleVisibility(resolved.article)) === "internal"
+        ? "internalArticle"
+        : "article";
+
+    if (resolved.article.status === "published" && previousContentType !== nextContentType) {
+      await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+        contentType: previousContentType,
+        contentId: resolved.article._id,
       });
     }
 
-    return args.id;
+    if (
+      resolved.article.status === "published" &&
+      (args.title !== undefined || args.content !== undefined || args.visibility !== undefined)
+    ) {
+      await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+        workspaceId: resolved.article.workspaceId,
+        contentType: nextContentType,
+        contentId: resolved.article._id,
+        title: args.title ?? resolved.article.title,
+        content: args.content ?? resolved.article.content,
+      });
+    }
+
+    return resolved.article._id;
   },
 });
 
 export const remove = mutation({
   args: {
-    id: v.id("articles"),
+    id: articleOrLegacyInternalArticleIdValidator,
   },
   handler: async (ctx, args) => {
     const user = await getAuthenticatedUserFromSession(ctx);
@@ -251,28 +496,42 @@ export const remove = mutation({
       throwNotAuthenticated();
     }
 
-    const article = await ctx.db.get(args.id);
-    if (!article) {
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    if (!resolved) {
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await requirePermission(ctx, user._id, article.workspaceId, "articles.delete");
+    await requirePermission(ctx, user._id, resolved.article.workspaceId, "articles.delete");
 
-    await ctx.db.delete(args.id);
+    if (resolved.kind === "legacyInternal") {
+      await ctx.db.delete(resolved.article._id);
+      await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+        contentType: "internalArticle",
+        contentId: resolved.article._id,
+      });
+      return { success: true };
+    }
+
+    await ctx.db.delete(resolved.article._id);
+    await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+      contentType: getArticleContentType(resolved.article),
+      contentId: resolved.article._id,
+    });
     return { success: true };
   },
 });
 
 export const get = query({
   args: {
-    id: v.optional(v.id("articles")),
+    id: v.optional(articleOrLegacyInternalArticleIdValidator),
     slug: v.optional(v.string()),
     workspaceId: v.optional(v.id("workspaces")),
+    visibility: v.optional(articleVisibilityValidator),
   },
   handler: async (ctx, args) => {
     const authUser = await getAuthenticatedUserFromSession(ctx);
-    const articleById = args.id ? await ctx.db.get(args.id) : null;
-    const resolvedWorkspaceId = articleById?.workspaceId ?? args.workspaceId;
+    const resolvedRecord = args.id ? await resolveArticleRecord(ctx, args.id) : null;
+    const resolvedWorkspaceId = resolvedRecord?.article.workspaceId ?? args.workspaceId;
 
     if (!resolvedWorkspaceId) {
       return null;
@@ -283,12 +542,29 @@ export const get = query({
       return null;
     }
 
-    if (articleById) {
-      const articleWithContent = await withRenderedContent(ctx, articleById);
-      if (authUser) {
-        return articleWithContent;
+    if (resolvedRecord) {
+      const articleRecord =
+        resolvedRecord.kind === "article"
+          ? resolvedRecord.article
+          : toCompatibilityArticle(resolvedRecord.article);
+
+      if (!articleMatchesVisibility(articleRecord, args.visibility)) {
+        return null;
       }
-      return articleById.status === "published" ? articleWithContent : null;
+
+      if (!authUser && !articleIsReadableOnVisitorSurface(articleRecord)) {
+        return null;
+      }
+
+      const articleWithContent: CompatibilityArticle & { renderedContent: string } =
+        resolvedRecord.kind === "article"
+          ? await withRenderedContent(ctx, resolvedRecord.article)
+          : {
+              ...articleRecord,
+              renderedContent: articleRecord.content,
+            };
+
+      return articleWithContent;
     }
 
     const slug = args.slug;
@@ -301,11 +577,14 @@ export const get = query({
       if (!article) {
         return null;
       }
+      if (!articleMatchesVisibility(article, args.visibility)) {
+        return null;
+      }
       const articleWithContent = await withRenderedContent(ctx, article);
       if (authUser) {
         return articleWithContent;
       }
-      return article.status === "published" ? articleWithContent : null;
+      return articleIsReadableOnVisitorSurface(article) ? articleWithContent : null;
     }
 
     return null;
@@ -315,8 +594,9 @@ export const get = query({
 export const list = query({
   args: {
     workspaceId: v.id("workspaces"),
-    status: v.optional(v.union(v.literal("draft"), v.literal("published"))),
+    status: v.optional(articleStatusValidator),
     collectionId: v.optional(v.id("collections")),
+    visibility: v.optional(articleVisibilityValidator),
   },
   handler: async (ctx, args) => {
     const authUser = await getAuthenticatedUserFromSession(ctx);
@@ -325,41 +605,27 @@ export const list = query({
       return [];
     }
 
-    let articles;
+    let articles = await listArticleRecords(ctx, args.workspaceId);
 
     if (args.collectionId) {
-      articles = await ctx.db
-        .query("articles")
-        .withIndex("by_collection", (q) => q.eq("collectionId", args.collectionId))
-        .collect();
-    } else if (args.status) {
-      articles = await ctx.db
-        .query("articles")
-        .withIndex("by_status", (q) =>
-          q.eq("workspaceId", args.workspaceId).eq("status", args.status as "draft" | "published")
-        )
-        .collect();
-    } else {
-      articles = await ctx.db
-        .query("articles")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect();
+      articles = articles.filter((article) => article.collectionId === args.collectionId);
     }
 
-    // Filter by status if collectionId was used
-    if (args.collectionId && args.status) {
-      articles = articles.filter((a) => a.status === args.status);
+    if (args.status) {
+      articles = articles.filter((article) => article.status === args.status);
     }
 
-    if (args.collectionId) {
-      articles = articles.filter((a) => a.workspaceId === args.workspaceId);
+    if (args.visibility) {
+      articles = articles.filter((article) => articleMatchesVisibility(article, args.visibility));
     }
 
     if (!authUser) {
-      articles = articles.filter((a) => a.status === "published");
+      articles = articles.filter((article) => articleIsReadableOnVisitorSurface(article));
     }
 
-    return articles.sort((a, b) => a.order - b.order);
+    return authUser
+      ? sortArticleRecordsForAdmin(articles)
+      : [...articles].sort((left, right) => left.order - right.order);
   },
 });
 
@@ -368,6 +634,7 @@ export const search = query({
     workspaceId: v.id("workspaces"),
     query: v.string(),
     publishedOnly: v.optional(v.boolean()),
+    visibility: v.optional(articleVisibilityValidator),
   },
   handler: async (ctx, args) => {
     const authUser = await getAuthenticatedUserFromSession(ctx);
@@ -378,79 +645,135 @@ export const search = query({
 
     const searchTerm = args.query.toLowerCase();
 
-    let articles = await ctx.db
-      .query("articles")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
+    let articles = await listArticleRecords(ctx, args.workspaceId);
+
+    if (args.visibility) {
+      articles = articles.filter((article) => articleMatchesVisibility(article, args.visibility));
+    }
 
     if (args.publishedOnly || !authUser) {
-      articles = articles.filter((a) => a.status === "published");
+      articles = articles.filter((article) => article.status === "published");
+    }
+
+    if (!authUser) {
+      articles = articles.filter((article) => articleIsReadableOnVisitorSurface(article));
     }
 
     return articles
-      .filter(
-        (article) =>
-          article.title.toLowerCase().includes(searchTerm) ||
-          article.content.toLowerCase().includes(searchTerm)
-      )
+      .filter((article) => articleMatchesSearch(article, searchTerm))
+      .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, 20);
   },
 });
 
 export const publish = authMutation({
   args: {
-    id: v.id("articles"),
+    id: articleOrLegacyInternalArticleIdValidator,
   },
   permission: "articles.publish",
   resolveWorkspaceId: async (ctx, args) => {
-    const article = await ctx.db.get(args.id);
-    return article?.workspaceId ?? null;
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    return resolved?.article.workspaceId ?? null;
   },
   handler: async (ctx, args) => {
-    const article = await ctx.db.get(args.id);
-    if (!article) {
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    if (!resolved) {
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch(resolved.article._id, {
       status: "published",
       publishedAt: Date.now(),
       updatedAt: Date.now(),
     });
 
     await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
-      workspaceId: article.workspaceId,
-      contentType: "article",
-      contentId: args.id,
-      title: article.title,
-      content: article.content,
+      workspaceId: resolved.article.workspaceId,
+      contentType:
+        resolved.kind === "legacyInternal"
+          ? "internalArticle"
+          : getArticleContentType(resolved.article),
+      contentId: resolved.article._id,
+      title: resolved.article.title,
+      content: resolved.article.content,
     });
 
-    return args.id;
+    return resolved.article._id;
   },
 });
 
 export const unpublish = authMutation({
   args: {
-    id: v.id("articles"),
+    id: articleOrLegacyInternalArticleIdValidator,
   },
   permission: "articles.publish",
   resolveWorkspaceId: async (ctx, args) => {
-    const article = await ctx.db.get(args.id);
-    return article?.workspaceId ?? null;
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    return resolved?.article.workspaceId ?? null;
   },
   handler: async (ctx, args) => {
-    const article = await ctx.db.get(args.id);
-    if (!article) {
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    if (!resolved) {
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await ctx.db.patch(args.id, {
+    await ctx.db.patch(resolved.article._id, {
       status: "draft",
+      publishedAt: undefined,
       updatedAt: Date.now(),
     });
 
-    return args.id;
+    await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+      contentType:
+        resolved.kind === "legacyInternal"
+          ? "internalArticle"
+          : getArticleContentType(resolved.article),
+      contentId: resolved.article._id,
+    });
+
+    return resolved.article._id;
+  },
+});
+
+export const archive = authMutation({
+  args: {
+    id: articleOrLegacyInternalArticleIdValidator,
+  },
+  permission: "articles.publish",
+  resolveWorkspaceId: async (ctx, args) => {
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    return resolved?.article.workspaceId ?? null;
+  },
+  handler: async (ctx, args) => {
+    const resolved = await resolveArticleRecord(ctx, args.id);
+    if (!resolved) {
+      throw createError("NOT_FOUND", "Article not found");
+    }
+
+    await ctx.db.patch(resolved.article._id, {
+      status: "archived",
+      updatedAt: Date.now(),
+    });
+
+    await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+      contentType:
+        resolved.kind === "legacyInternal"
+          ? "internalArticle"
+          : getArticleContentType(resolved.article),
+      contentId: resolved.article._id,
+    });
+
+    return resolved.article._id;
+  },
+});
+
+export const migrateLegacyInternalArticles = authMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  permission: "articles.create",
+  handler: async (ctx, args) => {
+    return await backfillLegacyInternalArticles(ctx, args.workspaceId);
   },
 });
 
@@ -471,7 +794,7 @@ export const generateAssetUploadUrl = authMutation({
 export const saveAsset = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
-    articleId: v.optional(v.id("articles")),
+    articleId: v.optional(articleOrLegacyInternalArticleIdValidator),
     importSourceId: v.optional(v.id("helpCenterImportSources")),
     importPath: v.optional(v.string()),
     storageId: v.id("_storage"),
@@ -479,11 +802,19 @@ export const saveAsset = authMutation({
   },
   permission: "articles.create",
   handler: async (ctx, args) => {
+    let resolvedArticleId: Id<"articles"> | undefined;
     if (args.articleId) {
-      const article = await ctx.db.get(args.articleId);
-      if (!article || article.workspaceId !== args.workspaceId) {
+      const resolved = await resolveArticleRecord(ctx, args.articleId);
+      if (!resolved || resolved.article.workspaceId !== args.workspaceId) {
         throw createError("NOT_FOUND", "Article not found");
       }
+      if (resolved.kind === "legacyInternal") {
+        throw createError(
+          "INVALID_INPUT",
+          "Migrate this legacy internal article before uploading images."
+        );
+      }
+      resolvedArticleId = resolved.article._id;
     }
 
     if (args.importSourceId) {
@@ -526,7 +857,7 @@ export const saveAsset = authMutation({
           await ctx.storage.delete(existingAsset.storageId);
         }
         await ctx.db.patch(existingAsset._id, {
-          articleId: args.articleId,
+          articleId: resolvedArticleId,
           storageId: args.storageId,
           fileName,
           mimeType,
@@ -537,7 +868,7 @@ export const saveAsset = authMutation({
       } else {
         assetId = await ctx.db.insert("articleAssets", {
           workspaceId: args.workspaceId,
-          articleId: args.articleId,
+          articleId: resolvedArticleId,
           importSourceId: args.importSourceId,
           importPath: args.importPath,
           storageId: args.storageId,
@@ -552,7 +883,7 @@ export const saveAsset = authMutation({
     } else {
       assetId = await ctx.db.insert("articleAssets", {
         workspaceId: args.workspaceId,
-        articleId: args.articleId,
+        articleId: resolvedArticleId,
         importSourceId: args.importSourceId,
         importPath: args.importPath,
         storageId: args.storageId,
@@ -580,15 +911,20 @@ export const saveAsset = authMutation({
 export const listAssets = authQuery({
   args: {
     workspaceId: v.id("workspaces"),
-    articleId: v.optional(v.id("articles")),
+    articleId: v.optional(articleOrLegacyInternalArticleIdValidator),
   },
   permission: "articles.read",
   handler: async (ctx, args) => {
+    let resolvedArticleId: Id<"articles"> | undefined;
     if (args.articleId) {
-      const article = await ctx.db.get(args.articleId);
-      if (!article || article.workspaceId !== args.workspaceId) {
+      const resolved = await resolveArticleRecord(ctx, args.articleId);
+      if (!resolved || resolved.article.workspaceId !== args.workspaceId) {
         throw createError("NOT_FOUND", "Article not found");
       }
+      if (resolved.kind === "legacyInternal") {
+        return [];
+      }
+      resolvedArticleId = resolved.article._id;
     }
 
     const assets = await ctx.db
@@ -596,8 +932,8 @@ export const listAssets = authQuery({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .collect();
 
-    const filteredAssets = args.articleId
-      ? assets.filter((asset) => asset.articleId === args.articleId)
+    const filteredAssets = resolvedArticleId
+      ? assets.filter((asset) => asset.articleId === resolvedArticleId)
       : assets;
 
     const mappedAssets = await Promise.all(
@@ -696,36 +1032,8 @@ export const listForVisitor = query({
     collectionId: v.optional(v.id("collections")),
   },
   handler: async (ctx, args) => {
-    const authUser = await getAuthenticatedUserFromSession(ctx);
-    let resolvedVisitorId = args.visitorId;
-
-    if (authUser) {
-      await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
-      if (!resolvedVisitorId) {
-        return [];
-      }
-    } else {
-      const canRead = await canReadHelpCenterArticles(ctx, args.workspaceId);
-      if (!canRead) {
-        return [];
-      }
-
-      const resolved = await resolveVisitorFromSession(ctx, {
-        sessionToken: args.sessionToken,
-        workspaceId: args.workspaceId,
-      });
-      if (args.visitorId && args.visitorId !== resolved.visitorId) {
-        throw new Error("Not authorized to list articles for this visitor");
-      }
-      resolvedVisitorId = resolved.visitorId;
-    }
-
-    if (!resolvedVisitorId) {
-      return [];
-    }
-
-    const visitor = await ctx.db.get(resolvedVisitorId);
-    if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
       return [];
     }
 
@@ -735,7 +1043,7 @@ export const listForVisitor = query({
         .query("articles")
         .withIndex("by_collection", (q) => q.eq("collectionId", args.collectionId))
         .collect();
-      articles = articles.filter((a) => a.status === "published");
+      articles = articles.filter((article) => articleIsReadableOnVisitorSurface(article));
     } else {
       articles = await ctx.db
         .query("articles")
@@ -743,6 +1051,7 @@ export const listForVisitor = query({
           q.eq("workspaceId", args.workspaceId).eq("status", "published")
         )
         .collect();
+      articles = articles.filter((article) => articleIsReadableOnVisitorSurface(article));
     }
 
     const filteredArticles: Doc<"articles">[] = [];
@@ -769,36 +1078,8 @@ export const searchForVisitor = query({
     query: v.string(),
   },
   handler: async (ctx, args) => {
-    const authUser = await getAuthenticatedUserFromSession(ctx);
-    let resolvedVisitorId = args.visitorId;
-
-    if (authUser) {
-      await requirePermission(ctx, authUser._id, args.workspaceId, "articles.read");
-      if (!resolvedVisitorId) {
-        return [];
-      }
-    } else {
-      const canRead = await canReadHelpCenterArticles(ctx, args.workspaceId);
-      if (!canRead) {
-        return [];
-      }
-
-      const resolved = await resolveVisitorFromSession(ctx, {
-        sessionToken: args.sessionToken,
-        workspaceId: args.workspaceId,
-      });
-      if (args.visitorId && args.visitorId !== resolved.visitorId) {
-        throw new Error("Not authorized to search articles for this visitor");
-      }
-      resolvedVisitorId = resolved.visitorId;
-    }
-
-    if (!resolvedVisitorId) {
-      return [];
-    }
-
-    const visitor = await ctx.db.get(resolvedVisitorId);
-    if (!visitor || visitor.workspaceId !== args.workspaceId) {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
       return [];
     }
 
@@ -811,11 +1092,9 @@ export const searchForVisitor = query({
       )
       .collect();
 
-    const matchingArticles = articles.filter(
-      (article) =>
-        article.title.toLowerCase().includes(searchTerm) ||
-        article.content.toLowerCase().includes(searchTerm)
-    );
+    const matchingArticles = articles
+      .filter((article) => articleIsReadableOnVisitorSurface(article))
+      .filter((article) => articleMatchesSearch(article, searchTerm));
 
     const filteredArticles: Doc<"articles">[] = [];
     for (const article of matchingArticles) {
@@ -830,6 +1109,40 @@ export const searchForVisitor = query({
     }
     const limitedArticles = filteredArticles.slice(0, 20);
     return await Promise.all(limitedArticles.map((article) => withRenderedContent(ctx, article)));
+  },
+});
+
+export const getForVisitor = query({
+  args: {
+    id: v.id("articles"),
+    workspaceId: v.id("workspaces"),
+    visitorId: v.optional(v.id("visitors")),
+    sessionToken: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const visitor = await resolveWidgetHelpCenterVisitor(ctx, args);
+    if (!visitor) {
+      return null;
+    }
+
+    const article = await ctx.db.get(args.id);
+    if (!article || article.workspaceId !== args.workspaceId) {
+      return null;
+    }
+    if (!articleIsReadableOnVisitorSurface(article)) {
+      return null;
+    }
+
+    const matches = await evaluateRule(
+      ctx,
+      article.audienceRules as AudienceRule | undefined,
+      visitor
+    );
+    if (!matches) {
+      return null;
+    }
+
+    return await withRenderedContent(ctx, article);
   },
 });
 

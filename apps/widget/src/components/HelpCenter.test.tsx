@@ -83,6 +83,22 @@ describe("HelpCenter", () => {
     expect(screen.queryByText("Uncategorized Guide")).not.toBeInTheDocument();
   });
 
+  it("shows a loading state while visitor article results are still resolving", () => {
+    render(
+      <HelpCenter
+        articleSearchQuery=""
+        onSearchChange={vi.fn()}
+        articleSearchResults={undefined}
+        publishedArticles={undefined}
+        collections={[]}
+        onSelectArticle={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Loading articles...")).toBeInTheDocument();
+    expect(screen.queryByText("Help Center")).not.toBeInTheDocument();
+  });
+
   it("preserves selected collection across remount in controlled mode", () => {
     function ControlledHelpCenterHarness() {
       const [selectedCollectionKey, setSelectedCollectionKey] = useState<string | null>(null);

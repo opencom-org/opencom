@@ -13,6 +13,8 @@ describe("help center policy enforcement", () => {
   let publishedSlug: string;
   let draftArticleId: Id<"articles">;
   let draftSlug: string;
+  let visitorId: Id<"visitors">;
+  let sessionToken: string;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -46,6 +48,19 @@ describe("help center policy enforcement", () => {
       content: "Draft-only guidance",
       status: "draft",
     });
+
+    const visitor = await authedClient.mutation(api.testing.helpers.createTestVisitor, {
+      workspaceId,
+      email: "help-center-visitor@example.com",
+      name: "Help Center Visitor",
+    });
+    visitorId = visitor.visitorId;
+
+    const session = await authedClient.mutation(api.testing.helpers.createTestSessionToken, {
+      visitorId,
+      workspaceId,
+    });
+    sessionToken = session.sessionToken;
 
     const publishedArticle = await authedClient.query(api.articles.get, {
       id: publishedArticleId,
@@ -178,5 +193,42 @@ describe("help center policy enforcement", () => {
       query: "draft-only guidance",
     });
     expect(searchResults.some((article) => article._id === draftArticleId)).toBe(false);
+  });
+
+  it("keeps widget visitor article flows available when standalone public help access is restricted", async () => {
+    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+      workspaceId,
+      policy: "restricted",
+    });
+
+    const visitorBrowse = await unauthClient.query(api.articles.listForVisitor, {
+      workspaceId,
+      visitorId,
+      sessionToken,
+    });
+    expect(visitorBrowse.some((article) => article._id === publishedArticleId)).toBe(true);
+
+    const visitorSearch = await unauthClient.query(api.articles.searchForVisitor, {
+      workspaceId,
+      visitorId,
+      sessionToken,
+      query: "published guidance",
+    });
+    expect(visitorSearch.some((article) => article._id === publishedArticleId)).toBe(true);
+
+    const visitorArticle = await unauthClient.query(api.articles.getForVisitor, {
+      id: publishedArticleId,
+      workspaceId,
+      visitorId,
+      sessionToken,
+    });
+    expect(visitorArticle?._id).toBe(publishedArticleId);
+
+    const visitorCollections = await unauthClient.query(api.collections.listHierarchyForVisitor, {
+      workspaceId,
+      visitorId,
+      sessionToken,
+    });
+    expect(visitorCollections.some((collection) => collection._id === collectionId)).toBe(true);
   });
 });

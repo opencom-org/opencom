@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@opencom/convex";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -16,6 +16,7 @@ import { ArticlesListSection } from "./ArticlesListSection";
 import { DeleteArticleDialog } from "./DeleteArticleDialog";
 import {
   ALL_COLLECTION_FILTER,
+  type ArticleEditorId,
   type ArticleListItem,
   type CollectionFilter,
   type CollectionListItem,
@@ -28,20 +29,29 @@ import {
   type MarkdownImportPreview,
 } from "./articlesAdminTypes";
 import {
+  ALL_STATUS_FILTER,
   buildCollectionFilterItems,
   buildImportSignature,
   deriveDefaultSourceName,
   filterArticles,
   getRawImportRelativePath,
+  type StatusFilter,
+  type VisibilityFilter,
+  ALL_VISIBILITY_FILTER,
 } from "./articlesAdminUtils";
 
 function ArticlesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>(
     ALL_COLLECTION_FILTER
   );
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
+    ALL_VISIBILITY_FILTER
+  );
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(ALL_STATUS_FILTER);
   const [importSourceName, setImportSourceName] = useState("");
   const [importTargetCollectionId, setImportTargetCollectionId] = useState<
     Id<"collections"> | undefined
@@ -65,6 +75,7 @@ function ArticlesContent() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeletingArticle, setIsDeletingArticle] = useState(false);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const createQueryHandledRef = useRef(false);
 
   const articles = useQuery(
     api.articles.list,
@@ -103,19 +114,37 @@ function ArticlesContent() {
   const generateAssetUploadUrl = useMutation(api.articles.generateAssetUploadUrl);
   const logExport = useMutation(api.auditLogs.logExport);
 
-  const handleCreateArticle = async () => {
-    if (!activeWorkspace?._id) {
+  const handleCreateArticle = useCallback(
+    async (visibility: "public" | "internal" = "public") => {
+      if (!activeWorkspace?._id) {
+        return;
+      }
+      const articleId = await createArticle({
+        workspaceId: activeWorkspace._id,
+        title: "Untitled Article",
+        content: "",
+        visibility,
+      });
+      router.push(`/articles/${articleId}`);
+    },
+    [activeWorkspace?._id, createArticle, router]
+  );
+
+  useEffect(() => {
+    if (createQueryHandledRef.current) {
       return;
     }
-    const articleId = await createArticle({
-      workspaceId: activeWorkspace._id,
-      title: "Untitled Article",
-      content: "",
-    });
-    router.push(`/articles/${articleId}`);
-  };
 
-  const handleDeleteRequest = (id: Id<"articles">, title: string) => {
+    const createMode = searchParams.get("create");
+    if (!createMode || !activeWorkspace?._id) {
+      return;
+    }
+
+    createQueryHandledRef.current = true;
+    void handleCreateArticle(createMode === "internal" ? "internal" : "public");
+  }, [activeWorkspace?._id, handleCreateArticle, searchParams]);
+
+  const handleDeleteRequest = (id: ArticleEditorId, title: string) => {
     setDeleteError(null);
     setDeleteTarget({ id, title });
   };
@@ -146,7 +175,7 @@ function ArticlesContent() {
     }
   };
 
-  const handleTogglePublish = async (id: Id<"articles">, isPublished: boolean) => {
+  const handleTogglePublish = async (id: ArticleEditorId, isPublished: boolean) => {
     if (isPublished) {
       await unpublishArticle({ id });
     } else {
@@ -477,7 +506,13 @@ function ArticlesContent() {
     };
   }, [activeWorkspace?._id, isExporting, logExport, markdownExport]);
 
-  const filteredArticles = filterArticles(articles, searchQuery, collectionFilter);
+  const filteredArticles = filterArticles(
+    articles,
+    searchQuery,
+    collectionFilter,
+    visibilityFilter,
+    statusFilter
+  );
   const selectedImportPaths = selectedImportItems.map((item) => item.relativePath);
   const selectedImportAssetPaths = selectedImportAssetItems.map((item) => item.relativePath);
   const hasCurrentPreview = Boolean(
@@ -487,11 +522,16 @@ function ArticlesContent() {
   const collectionFilterItems = buildCollectionFilterItems(articles, collections);
   const hasArticles = (articles?.length ?? 0) > 0;
   const hasActiveFilters =
-    searchQuery.trim().length > 0 || collectionFilter !== ALL_COLLECTION_FILTER;
+    searchQuery.trim().length > 0 ||
+    collectionFilter !== ALL_COLLECTION_FILTER ||
+    visibilityFilter !== ALL_VISIBILITY_FILTER ||
+    statusFilter !== ALL_STATUS_FILTER;
 
   const clearAllFilters = () => {
     setSearchQuery("");
     setCollectionFilter(ALL_COLLECTION_FILTER);
+    setVisibilityFilter(ALL_VISIBILITY_FILTER);
+    setStatusFilter(ALL_STATUS_FILTER);
   };
 
   return (
@@ -499,13 +539,17 @@ function ArticlesContent() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold">Articles</h1>
-          <p className="text-gray-500">Manage your help center articles</p>
+          <p className="text-gray-500">Manage public and internal knowledge articles</p>
         </div>
         <div className="flex gap-2">
           <Link href="/articles/collections">
             <Button variant="outline">Manage Collections</Button>
           </Link>
-          <Button onClick={handleCreateArticle}>
+          <Button variant="outline" onClick={() => void handleCreateArticle("internal")}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Internal Article
+          </Button>
+          <Button onClick={() => void handleCreateArticle("public")}>
             <Plus className="h-4 w-4 mr-2" />
             New Article
           </Button>
@@ -544,6 +588,8 @@ function ArticlesContent() {
       <ArticlesListSection
         searchQuery={searchQuery}
         collectionFilter={collectionFilter}
+        visibilityFilter={visibilityFilter}
+        statusFilter={statusFilter}
         collectionFilterItems={collectionFilterItems}
         filteredArticles={filteredArticles}
         collections={collections}
@@ -551,8 +597,11 @@ function ArticlesContent() {
         hasActiveFilters={hasActiveFilters}
         onSearchQueryChange={setSearchQuery}
         onCollectionFilterChange={setCollectionFilter}
+        onVisibilityFilterChange={setVisibilityFilter}
+        onStatusFilterChange={setStatusFilter}
         onClearAllFilters={clearAllFilters}
-        onCreateArticle={handleCreateArticle}
+        onCreateArticle={() => void handleCreateArticle("public")}
+        onCreateInternalArticle={() => void handleCreateArticle("internal")}
         onTogglePublish={handleTogglePublish}
         onDeleteRequest={handleDeleteRequest}
       />
