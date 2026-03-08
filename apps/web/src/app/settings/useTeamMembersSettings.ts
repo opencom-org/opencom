@@ -62,14 +62,16 @@ type InviteToWorkspaceFn = (args: {
 type UpdateRoleFn = (args: {
   membershipId: Id<"workspaceMembers">;
   role: "admin" | "agent" | "viewer";
-}) => Promise<void>;
+}) => Promise<{ success: boolean }>;
 
-type RemoveMemberFn = (args: { membershipId: Id<"workspaceMembers"> }) => Promise<void>;
-type CancelInvitationFn = (args: { invitationId: Id<"workspaceInvitations"> }) => Promise<void>;
+type RemoveMemberFn = (args: { membershipId: Id<"workspaceMembers"> }) => Promise<{ success: boolean }>;
+type CancelInvitationFn = (args: {
+  invitationId: Id<"workspaceInvitations">;
+}) => Promise<{ success: boolean }>;
 type TransferOwnershipFn = (args: {
   workspaceId: Id<"workspaces">;
   newOwnerId: Id<"users">;
-}) => Promise<void>;
+}) => Promise<{ success: boolean }>;
 
 export function useTeamMembersSettings({
   workspaceId,
@@ -85,15 +87,10 @@ export function useTeamMembersSettings({
   const [transferTargetId, setTransferTargetId] = useState<Id<"users"> | null>(null);
   const [showRoleConfirm, setShowRoleConfirm] = useState<RoleConfirmState | null>(null);
 
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this hook.
   const inviteToWorkspace = useAction(api.workspaceMembers.inviteToWorkspace) as InviteToWorkspaceFn;
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this hook.
   const updateRole = useMutation(api.workspaceMembers.updateRole) as UpdateRoleFn;
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this hook.
   const removeMember = useMutation(api.workspaceMembers.remove) as RemoveMemberFn;
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this hook.
   const cancelInvitation = useMutation(api.workspaceMembers.cancelInvitation) as CancelInvitationFn;
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this hook.
   const transferOwnership = useMutation(api.workspaceMembers.transferOwnership) as TransferOwnershipFn;
 
   const handleInvite = async (e: React.FormEvent<HTMLFormElement>) => {

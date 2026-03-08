@@ -42,9 +42,7 @@ function MessageBuilderContent() {
   const messageId = params.id as Id<"outboundMessages">;
   const { activeWorkspace } = useAuth();
 
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const message = useQuery(api.outboundMessages.get, { id: messageId });
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const stats = useQuery(api.outboundMessages.getStats, { id: messageId });
   const members = useQuery(
     api.workspaceMembers.listByWorkspace,
@@ -55,11 +53,8 @@ function MessageBuilderContent() {
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const updateMessage = useMutation(api.outboundMessages.update);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const activateMessage = useMutation(api.outboundMessages.activate);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const pauseMessage = useMutation(api.outboundMessages.pause);
 
   const [name, setName] = useState("");

@@ -14,17 +14,14 @@ export function SecuritySettingsSection({
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const auditAccess = useQuery(api.auditLogs.getAccess, workspaceId ? { workspaceId } : "skip");
   const isSecurityUnauthenticated = auditAccess?.status === "unauthenticated";
   const canManageSecurity = auditAccess?.status === "ok" ? auditAccess.canManageSecurity : false;
 
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const auditLogSettings = useQuery(
     api.auditLogs.getSettings,
     workspaceId && canManageSecurity ? { workspaceId } : "skip"
   );
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const updateAuditSettings = useMutation(api.auditLogs.updateSettings);
 
   if (!workspaceId) {

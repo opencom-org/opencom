@@ -53,30 +53,20 @@ export default function TourEditorPage() {
   const { user, isLoading: authLoading } = useAuth();
   const canQueryTourData = !authLoading && !!user;
 
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const tour = useQuery(api.tours.get, canQueryTourData ? { id: tourId } : "skip");
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const steps = useQuery(api.tourSteps.list, canQueryTourData ? { tourId } : "skip");
   const eventNames = useQuery(
     api.events.getDistinctNames,
     canQueryTourData && tour?.workspaceId ? { workspaceId: tour.workspaceId } : "skip"
   );
 
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const updateTour = useMutation(api.tours.update);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const activateTour = useMutation(api.tours.activate);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const deactivateTour = useMutation(api.tours.deactivate);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const createStep = useMutation(api.tourSteps.create);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const updateStep = useMutation(api.tourSteps.update);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const deleteStep = useMutation(api.tourSteps.remove);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const reorderSteps = useMutation(api.tourSteps.reorder);
-  // @ts-expect-error Convex generated type graph can exceed TS instantiation depth in app package checks.
   const createAuthoringSession = useMutation(api.authoringSessions.create);
 
   useEffect(() => {

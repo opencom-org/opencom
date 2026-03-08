@@ -13,18 +13,12 @@ export function SecurityIdentitySettingsCard({
 }: {
   workspaceId: Id<"workspaces">;
 }): React.JSX.Element {
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const identitySettings = useQuery(api.identityVerification.getSettings, { workspaceId });
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const identitySecret = useQuery(api.identityVerification.getSecret, { workspaceId });
 
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const enableIdentity = useMutation(api.identityVerification.enable);
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const disableIdentity = useMutation(api.identityVerification.disable);
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const updateMode = useMutation(api.identityVerification.updateMode);
-  // @ts-expect-error Convex generated API refs can exceed TS instantiation depth in this component.
   const rotateSecret = useMutation(api.identityVerification.rotateSecret);
 
   const [showSecret, setShowSecret] = useState(false);
