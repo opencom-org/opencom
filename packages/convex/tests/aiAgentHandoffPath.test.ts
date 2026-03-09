@@ -13,7 +13,8 @@ describe("aiAgent.handoffToHuman persistence path", () => {
     expect(source).toMatch(
       /unreadByAgent:\s*Math\.max\(\s*conversation\.unreadByAgent\s*\|\|\s*0,\s*1\s*\)/
     );
-    expect(source).toContain("internal.notifications.routeEvent");
+    expect(source).toContain('getInternalRef("notifications:routeEvent")');
+    expect(source).toContain("await runAfter(0, routeEventRef");
     expect(source).toContain('audience: "agent"');
   });
 });

@@ -22,12 +22,17 @@ describe("runtime type hardening guards", () => {
       new URL("../convex/series/runtime.ts", import.meta.url),
       "utf8"
     );
+    const seriesSchedulerSource = readFileSync(
+      new URL("../convex/series/scheduler.ts", import.meta.url),
+      "utf8"
+    );
 
     expect(eventsSource).not.toContain("(internal as any).series");
     expect(seriesRuntimeSource).not.toContain("(internal as any).series");
+    expect(seriesSchedulerSource).not.toContain("(internal as any).series");
     expect(eventsSource).toContain("scheduleSeriesEvaluateEnrollment");
     expect(eventsSource).toContain("scheduleSeriesResumeWaitingForEvent");
-    expect(seriesRuntimeSource).toContain("scheduleSeriesProcessProgress");
+    expect(seriesSchedulerSource).toContain("scheduleSeriesProcessProgress");
     expect(seriesRuntimeSource).toContain("runSeriesEvaluateEntry");
   });
 });
