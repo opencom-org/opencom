@@ -67,6 +67,12 @@ interface OutboundOverlayProps {
   onOpenArticle?: (articleId: Id<"articles">) => void;
 }
 
+function handleMutationResult(result: unknown) {
+  if (result && typeof result === "object" && "catch" in result && typeof result.catch === "function") {
+    result.catch(console.error);
+  }
+}
+
 export function OutboundOverlay({
   workspaceId,
   visitorId,
@@ -204,13 +210,15 @@ export function OutboundOverlay({
       const timer = setTimeout(() => {
         setVisibleMessages((prev) => ({ ...prev, [message.type]: message }));
         setShownMessageIds((prev) => new Set(prev).add(message._id));
-        trackImpression({
-          messageId: message._id,
-          visitorId,
-          sessionToken: sessionToken ?? undefined,
-          sessionId,
-          action: "shown",
-        }).catch(console.error);
+        handleMutationResult(
+          trackImpression({
+            messageId: message._id,
+            visitorId,
+            sessionToken: sessionToken ?? undefined,
+            sessionId,
+            action: "shown",
+          })
+        );
       }, msgDelay);
       staggerTimers.current.push(timer);
     });
@@ -231,13 +239,15 @@ export function OutboundOverlay({
 
   const handleDismiss = useCallback(
     (message: OutboundMessage) => {
-      trackImpression({
-        messageId: message._id,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        sessionId,
-        action: "dismissed",
-      }).catch(console.error);
+      handleMutationResult(
+        trackImpression({
+          messageId: message._id,
+          visitorId,
+          sessionToken: sessionToken ?? undefined,
+          sessionId,
+          action: "dismissed",
+        })
+      );
       setVisibleMessages((prev) => ({ ...prev, [message.type]: null }));
     },
     [visitorId, sessionToken, sessionId, trackImpression]
@@ -276,13 +286,15 @@ export function OutboundOverlay({
 
   const handleClickAction = useCallback(
     (message: OutboundMessage) => {
-      trackImpression({
-        messageId: message._id,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        sessionId,
-        action: "clicked",
-      }).catch(console.error);
+      handleMutationResult(
+        trackImpression({
+          messageId: message._id,
+          visitorId,
+          sessionToken: sessionToken ?? undefined,
+          sessionId,
+          action: "clicked",
+        })
+      );
 
       const action: ClickAction = message.content.clickAction || { type: "open_messenger" };
       executeClickAction(message, action);
@@ -299,14 +311,16 @@ export function OutboundOverlay({
     ) => {
       event.stopPropagation();
 
-      trackImpression({
-        messageId: message._id,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        sessionId,
-        action: "clicked",
-        buttonIndex: index,
-      }).catch(console.error);
+      handleMutationResult(
+        trackImpression({
+          messageId: message._id,
+          visitorId,
+          sessionToken: sessionToken ?? undefined,
+          sessionId,
+          action: "clicked",
+          buttonIndex: index,
+        })
+      );
 
       if (button.action === "url" && button.url) {
         safeOpenUrl(button.url);

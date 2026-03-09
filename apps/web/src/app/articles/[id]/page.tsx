@@ -34,6 +34,7 @@ export default function ArticleEditorPage() {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [removingAssetId, setRemovingAssetId] = useState<Id<"articleAssets"> | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+  const hydratedArticleIdRef = useRef<ArticleEditorId | null>(null);
 
   const articleQuery = makeFunctionReference<
     "query",
@@ -105,15 +106,22 @@ export default function ArticleEditorPage() {
   const deleteAsset = useMutation(deleteAssetRef);
 
   useEffect(() => {
-    if (article) {
-      setTitle(article.title);
-      setContent(article.content);
-      setSelectedCollectionId(article.collectionId);
-      setVisibility(article.visibility ?? "public");
-      setTagsInput((article.tags ?? []).join(", "));
-      setAudienceRules(toInlineAudienceRule(article.audienceRules));
+    if (!article || articleId == null) {
+      return;
     }
-  }, [article]);
+
+    if (hydratedArticleIdRef.current === articleId && hasChanges) {
+      return;
+    }
+
+    hydratedArticleIdRef.current = articleId;
+    setTitle(article.title);
+    setContent(article.content);
+    setSelectedCollectionId(article.collectionId);
+    setVisibility(article.visibility ?? "public");
+    setTagsInput((article.tags ?? []).join(", "));
+    setAudienceRules(toInlineAudienceRule(article.audienceRules));
+  }, [article, articleId, hasChanges]);
 
   const handleSave = async () => {
     if (!articleId) return;

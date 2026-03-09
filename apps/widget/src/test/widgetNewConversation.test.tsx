@@ -20,6 +20,39 @@ vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
 }));
 
+function getFunctionPath(ref: unknown) {
+  if (typeof ref === "string") {
+    return ref;
+  }
+
+  if (ref && typeof ref === "object") {
+    const maybeRef = ref as {
+      functionName?: string;
+      name?: string;
+      reference?: { functionName?: string; name?: string };
+    };
+
+    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+      String(symbol).includes("functionName")
+    );
+
+    const symbolValue = symbolFunctionName
+      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+      : undefined;
+
+    return (
+      (typeof symbolValue === "string" ? symbolValue : undefined) ??
+      maybeRef.functionName ??
+      maybeRef.name ??
+      maybeRef.reference?.functionName ??
+      maybeRef.reference?.name ??
+      ""
+    );
+  }
+
+  return "";
+}
+
 vi.mock("@opencom/convex", () => ({
   api: {
     workspaces: {
@@ -280,10 +313,18 @@ describe("Widget new conversation behavior", () => {
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      if (mutationRef === "conversations.createForVisitor") {
+      const functionPath = getFunctionPath(mutationRef);
+
+      if (
+        functionPath === "conversations:createForVisitor" ||
+        functionPath === "conversations.createForVisitor"
+      ) {
         return createConversationMock;
       }
-      if (mutationRef === "conversations.markAsRead") {
+      if (
+        functionPath === "conversations:markAsRead" ||
+        functionPath === "conversations.markAsRead"
+      ) {
         return markAsReadMock;
       }
       return vi.fn().mockResolvedValue(undefined);
@@ -291,43 +332,60 @@ describe("Widget new conversation behavior", () => {
 
     const mockedUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
     mockedUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+      const functionPath = getFunctionPath(queryRef);
+
       if (args === "skip") {
         return undefined;
       }
 
-      if (queryRef === "workspaces.get") {
+      if (functionPath === "workspaces:get" || functionPath === "workspaces.get") {
         return { _id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
       }
 
-      if (queryRef === "workspaces.validateOrigin") {
+      if (functionPath === "workspaces:validateOrigin" || functionPath === "workspaces.validateOrigin") {
         return { valid: true };
       }
 
-      if (queryRef === "conversations.listByVisitor") {
+      if (
+        functionPath === "conversations:listByVisitor" ||
+        functionPath === "conversations.listByVisitor"
+      ) {
         return visitorConversationsResult;
       }
 
-      if (queryRef === "conversations.getTotalUnreadForVisitor") {
+      if (
+        functionPath === "conversations:getTotalUnreadForVisitor" ||
+        functionPath === "conversations.getTotalUnreadForVisitor"
+      ) {
         return 0;
       }
 
-      if (queryRef === "articles.listForVisitor") {
+      if (functionPath === "articles:listForVisitor" || functionPath === "articles.listForVisitor") {
         return publishedArticlesResult;
       }
 
-      if (queryRef === "articles.getForVisitor") {
+      if (functionPath === "articles:getForVisitor" || functionPath === "articles.getForVisitor") {
         return selectedArticleResult;
       }
 
-      if (queryRef === "articles.searchForVisitor") {
+      if (
+        functionPath === "articles:searchForVisitor" ||
+        functionPath === "articles.searchForVisitor"
+      ) {
         return [];
       }
 
-      if (queryRef === "collections.listHierarchyForVisitor") {
+      if (
+        functionPath === "collections:listHierarchyForVisitor" ||
+        functionPath === "collections.listHierarchyForVisitor"
+      ) {
         return [];
       }
 
-      if (queryRef === "automationSettings.getOrCreate") {
+      if (
+        functionPath === "automationSettings:getOrCreate" ||
+        functionPath === "automationSettings.getOrCreate"
+      ) {
         return {
           suggestArticlesEnabled: false,
           collectEmailEnabled: false,
@@ -336,23 +394,26 @@ describe("Widget new conversation behavior", () => {
         };
       }
 
-      if (queryRef === "officeHours.isCurrentlyOpen") {
+      if (functionPath === "officeHours:isCurrentlyOpen" || functionPath === "officeHours.isCurrentlyOpen") {
         return { isOpen: true };
       }
 
-      if (queryRef === "commonIssueButtons.list") {
+      if (functionPath === "commonIssueButtons:list" || functionPath === "commonIssueButtons.list") {
         return [];
       }
 
-      if (queryRef === "checklists.getEligible") {
+      if (functionPath === "checklists:getEligible" || functionPath === "checklists.getEligible") {
         return [];
       }
 
-      if (queryRef === "surveys.getActiveSurveys") {
+      if (functionPath === "surveys:getActiveSurveys" || functionPath === "surveys.getActiveSurveys") {
         return [];
       }
 
-      if (queryRef === "tooltips.getAvailableTooltips") {
+      if (
+        functionPath === "tooltips:getAvailableTooltips" ||
+        functionPath === "tooltips.getAvailableTooltips"
+      ) {
         return [];
       }
 

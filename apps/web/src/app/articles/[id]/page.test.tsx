@@ -75,6 +75,43 @@ vi.mock("next/link", () => ({
 
 import ArticleEditorPage from "./page";
 
+function resolveFunctionPath(ref: unknown): string {
+  if (typeof ref === "string") {
+    return ref;
+  }
+
+  if (!ref || typeof ref !== "object") {
+    return "";
+  }
+
+  const maybeRef = ref as {
+    functionName?: string;
+    reference?: { functionName?: string; name?: string };
+    name?: string;
+    referencePath?: string;
+    function?: { name?: string };
+  };
+
+  const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+    String(symbol).includes("functionName")
+  );
+
+  const symbolValue = symbolFunctionName
+    ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+    : undefined;
+
+  return (
+    (typeof symbolValue === "string" ? symbolValue : undefined) ??
+    maybeRef.functionName ??
+    maybeRef.reference?.functionName ??
+    maybeRef.reference?.name ??
+    maybeRef.name ??
+    maybeRef.referencePath ??
+    maybeRef.function?.name ??
+    ""
+  );
+}
+
 function renderArticleEditor(options?: {
   visibility?: "public" | "internal";
   tags?: string[];
@@ -98,38 +135,63 @@ function renderArticleEditor(options?: {
     },
   });
 
-  useQueryMock.mockImplementation((reference: string) => {
-    if (reference === apiMock.articles.get) {
+  useQueryMock.mockImplementation((_, args: unknown) => {
+    if (args === "skip") {
+      return undefined;
+    }
+
+    const queryArgs = args as { id?: string; articleId?: string; workspaceId?: string } | undefined;
+
+    if (queryArgs?.id === article._id) {
       return article;
     }
-    if (reference === apiMock.articles.listAssets) {
+
+    if (queryArgs?.articleId === article._id) {
       return [];
     }
-    if (reference === apiMock.collections.listHierarchy) {
+
+    if (queryArgs?.workspaceId === "workspace-1") {
       return [];
     }
+
     return undefined;
   });
 
-  useMutationMock.mockImplementation((reference: string) => {
-    switch (reference) {
-      case apiMock.articles.update:
-        return updateArticleMock;
-      case apiMock.articles.publish:
-        return publishArticleMock;
-      case apiMock.articles.unpublish:
-        return unpublishArticleMock;
-      case apiMock.articles.archive:
-        return archiveArticleMock;
-      case apiMock.articles.generateAssetUploadUrl:
-        return generateAssetUploadUrlMock;
-      case apiMock.articles.saveAsset:
-        return saveAssetMock;
-      case apiMock.articles.deleteAsset:
-        return deleteAssetMock;
-      default:
-        return vi.fn();
+  useMutationMock.mockImplementation((mutationRef: unknown) => {
+    const functionPath = resolveFunctionPath(mutationRef);
+
+    if (functionPath === "articles:update" || functionPath === "articles.update") {
+      return updateArticleMock;
     }
+
+    if (functionPath === "articles:publish" || functionPath === "articles.publish") {
+      return publishArticleMock;
+    }
+
+    if (functionPath === "articles:unpublish" || functionPath === "articles.unpublish") {
+      return unpublishArticleMock;
+    }
+
+    if (functionPath === "articles:archive" || functionPath === "articles.archive") {
+      return archiveArticleMock;
+    }
+
+    if (
+      functionPath === "articles:generateAssetUploadUrl" ||
+      functionPath === "articles.generateAssetUploadUrl"
+    ) {
+      return generateAssetUploadUrlMock;
+    }
+
+    if (functionPath === "articles:saveAsset" || functionPath === "articles.saveAsset") {
+      return saveAssetMock;
+    }
+
+    if (functionPath === "articles:deleteAsset" || functionPath === "articles.deleteAsset") {
+      return deleteAssetMock;
+    }
+
+    return vi.fn();
   });
 
   return render(<ArticleEditorPage />);
@@ -154,7 +216,10 @@ describe("ArticleEditorPage", () => {
       expect(screen.getByPlaceholderText("Article title")).toHaveValue("Refund policy");
     });
 
-    const [, visibilitySelect] = screen.getAllByRole("combobox");
+    fireEvent.change(screen.getByPlaceholderText("Article title"), {
+      target: { value: "Refund policy (internal)" },
+    });
+    const visibilitySelect = screen.getByDisplayValue("Public help article");
     fireEvent.change(visibilitySelect, { target: { value: "internal" } });
     fireEvent.change(screen.getByPlaceholderText("billing, enterprise, refunds"), {
       target: { value: "billing, vip" },
@@ -163,12 +228,22 @@ describe("ArticleEditorPage", () => {
       target: { value: "Internal-only refund handling steps" },
     });
 
+    expect(screen.getByPlaceholderText("Article title")).toHaveValue("Refund policy (internal)");
+    expect(screen.getByPlaceholderText("billing, enterprise, refunds")).toHaveValue("billing, vip");
+    expect(screen.getByPlaceholderText("Write your article content here...")).toHaveValue(
+      "Internal-only refund handling steps"
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(updateArticleMock).toHaveBeenCalledWith({
         id: "article-1",
-        title: "Refund policy",
+        title: "Refund policy (internal)",
         content: "Internal-only refund handling steps",
         collectionId: undefined,
         visibility: "internal",
@@ -189,15 +264,31 @@ describe("ArticleEditorPage", () => {
       );
     });
 
-    const [, visibilitySelect] = screen.getAllByRole("combobox");
+    fireEvent.change(screen.getByPlaceholderText("Article title"), {
+      target: { value: "Refund policy (public)" },
+    });
+    const visibilitySelect = screen.getByDisplayValue("Internal knowledge article");
     fireEvent.change(visibilitySelect, { target: { value: "public" } });
+    fireEvent.change(screen.getByPlaceholderText("Write your article content here..."), {
+      target: { value: "Base article body (public)" },
+    });
+
+    expect(screen.getByPlaceholderText("Article title")).toHaveValue("Refund policy (public)");
+    expect(screen.getByPlaceholderText("Write your article content here...")).toHaveValue(
+      "Base article body (public)"
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(updateArticleMock).toHaveBeenCalledWith({
         id: "article-1",
-        title: "Refund policy",
-        content: "Base article body",
+        title: "Refund policy (public)",
+        content: "Base article body (public)",
         collectionId: undefined,
         visibility: "public",
         tags: [],

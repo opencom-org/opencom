@@ -8,6 +8,39 @@ vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
 }));
 
+function getFunctionPath(ref: unknown) {
+  if (typeof ref === "string") {
+    return ref;
+  }
+
+  if (ref && typeof ref === "object") {
+    const maybeRef = ref as {
+      functionName?: string;
+      name?: string;
+      reference?: { functionName?: string; name?: string };
+    };
+
+    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+      String(symbol).includes("functionName")
+    );
+
+    const symbolValue = symbolFunctionName
+      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+      : undefined;
+
+    return (
+      (typeof symbolValue === "string" ? symbolValue : undefined) ??
+      maybeRef.functionName ??
+      maybeRef.name ??
+      maybeRef.reference?.functionName ??
+      maybeRef.reference?.name ??
+      ""
+    );
+  }
+
+  return "";
+}
+
 vi.mock("@opencom/convex", () => ({
   api: {
     workspaces: {
@@ -196,27 +229,35 @@ describe("Widget tour launch behavior", () => {
 
     const mockedUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
     mockedUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+      const functionPath = getFunctionPath(queryRef);
+
       if (args === "skip") {
         return undefined;
       }
 
-      if (queryRef === "workspaces.get") {
+      if (functionPath === "workspaces:get" || functionPath === "workspaces.get") {
         return { _id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
       }
 
-      if (queryRef === "workspaces.validateOrigin") {
+      if (functionPath === "workspaces:validateOrigin" || functionPath === "workspaces.validateOrigin") {
         return { valid: true };
       }
 
-      if (queryRef === "tourProgress.getAvailableTours") {
+      if (
+        functionPath === "tourProgress:getAvailableTours" ||
+        functionPath === "tourProgress.getAvailableTours"
+      ) {
         return availableToursResult;
       }
 
-      if (queryRef === "collections.listHierarchyForVisitor") {
+      if (
+        functionPath === "collections:listHierarchyForVisitor" ||
+        functionPath === "collections.listHierarchyForVisitor"
+      ) {
         return [];
       }
 
-      if (queryRef === "tours.listAll") {
+      if (functionPath === "tours:listAll" || functionPath === "tours.listAll") {
         return [
           {
             tour: {
@@ -231,15 +272,18 @@ describe("Widget tour launch behavior", () => {
         ];
       }
 
-      if (queryRef === "checklists.getEligible") {
+      if (functionPath === "checklists:getEligible" || functionPath === "checklists.getEligible") {
         return [];
       }
 
-      if (queryRef === "surveys.getActiveSurveys") {
+      if (functionPath === "surveys:getActiveSurveys" || functionPath === "surveys.getActiveSurveys") {
         return [];
       }
 
-      if (queryRef === "tooltips.getAvailableTooltips") {
+      if (
+        functionPath === "tooltips:getAvailableTooltips" ||
+        functionPath === "tooltips.getAvailableTooltips"
+      ) {
         return [];
       }
 
@@ -285,6 +329,10 @@ describe("Widget tour launch behavior", () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId("widget-launcher")).not.toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tour-overlay-activate")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTestId("tour-overlay-activate"));

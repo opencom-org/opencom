@@ -41,24 +41,67 @@ describe("MessengerSettingsSection error feedback", () => {
   } as const;
   let upsertMock: ReturnType<typeof vi.fn>;
 
+  const resolveFunctionPath = (ref: unknown): string => {
+    if (typeof ref === "string") {
+      return ref;
+    }
+
+    if (!ref || typeof ref !== "object") {
+      return "";
+    }
+
+    const maybeRef = ref as {
+      functionName?: string;
+      reference?: { functionName?: string };
+      name?: string;
+      referencePath?: string;
+      function?: { name?: string };
+      [key: string]: unknown;
+    };
+
+    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+      String(symbol).includes("functionName")
+    );
+
+    const symbolValue = symbolFunctionName
+      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+      : undefined;
+
+    return (
+      (typeof symbolValue === "string" ? symbolValue : undefined) ??
+      maybeRef.functionName ??
+      maybeRef.reference?.functionName ??
+      maybeRef.name ??
+      maybeRef.referencePath ??
+      maybeRef.function?.name ??
+      ""
+    );
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     upsertMock = vi.fn().mockResolvedValue(undefined);
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      if (mutationRef === "messengerSettings.upsert") {
+      const functionPath = resolveFunctionPath(mutationRef);
+
+      if (
+        functionPath === "messengerSettings:upsert" ||
+        functionPath === "messengerSettings.upsert"
+      ) {
         return upsertMock;
       }
+
       return vi.fn().mockResolvedValue(undefined);
     });
 
     const mockedUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
-    mockedUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+    mockedUseQuery.mockImplementation((_: unknown, args: unknown) => {
       if (args === "skip") {
         return undefined;
       }
-      if (queryRef === "messengerSettings.getOrCreate") {
+      if (args && typeof args === "object" && "workspaceId" in (args as Record<string, unknown>)) {
         return messengerSettingsFixture;
       }
       return undefined;

@@ -18,6 +18,30 @@ vi.mock("@opencom/convex", () => ({
   },
 }));
 
+function getFunctionPath(ref: unknown) {
+  if (typeof ref === "string") {
+    return ref;
+  }
+
+  if (ref && typeof ref === "object") {
+    const maybeRef = ref as {
+      functionName?: string;
+      name?: string;
+      reference?: { functionName?: string; name?: string };
+    };
+
+    return (
+      maybeRef.functionName ??
+      maybeRef.name ??
+      maybeRef.reference?.functionName ??
+      maybeRef.reference?.name ??
+      ""
+    );
+  }
+
+  return "";
+}
+
 describe("OutboundOverlay", () => {
   const workspaceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Id<"workspaces">;
   const visitorId = "visitor_1" as Id<"visitors">;
@@ -28,12 +52,7 @@ describe("OutboundOverlay", () => {
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
 
     mockedUseQuery.mockReturnValue(messages);
-    mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      if (mutationRef === "outboundMessages.trackImpression") {
-        return trackImpressionMock;
-      }
-      return vi.fn();
-    });
+    mockedUseMutation.mockImplementation(() => trackImpressionMock);
 
     return { trackImpressionMock };
   }

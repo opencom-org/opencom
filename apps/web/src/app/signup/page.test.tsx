@@ -178,6 +178,10 @@ describe("signup auth UX safeguards", () => {
       expect(sendOTPCodeMock).toHaveBeenCalledWith("otp-user@example.com");
     });
 
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^verify & create account$/i })).toBeInTheDocument();
+    });
+
     fireEvent.change(screen.getByPlaceholderText("000000"), {
       target: { value: "123456" },
     });
