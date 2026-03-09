@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
+import type { Id } from "@opencom/convex/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@opencom/ui";
 import {
   MessageSquare,
@@ -17,6 +18,35 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
 import Link from "next/link";
+
+const dashboardSummaryQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  {
+    totalConversations: number;
+    openConversations: number;
+    closedConversations: number;
+    avgResponseTimeMs: number;
+    avgResolutionTimeMs: number;
+  } | null
+>("reporting:getDashboardSummary");
+
+const csatMetricsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  { averageRating: number; totalResponses: number } | null
+>("reporting:getCsatMetrics");
+
+const aiAgentMetricsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  {
+    totalResponses: number;
+    resolutionRate: number;
+    handoffRate: number;
+    satisfactionRate: number;
+  } | null
+>("reporting:getAiAgentMetrics");
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -83,17 +113,17 @@ function ReportsContent() {
     now - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
 
   const summary = useQuery(
-    api.reporting.getDashboardSummary,
+    dashboardSummaryQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 
   const csatMetrics = useQuery(
-    api.reporting.getCsatMetrics,
+    csatMetricsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 
   const aiMetrics = useQuery(
-    api.reporting.getAiAgentMetrics,
+    aiAgentMetricsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
@@ -74,14 +74,37 @@ export default function CollectionsPage() {
     parentId: "",
   });
 
+  const listHierarchyQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    Array<{
+      _id: Id<"collections">;
+      name: string;
+      description?: string;
+      icon?: string;
+      parentId?: Id<"collections">;
+      articleCount?: number;
+      order: number;
+    }>
+  >("collections:listHierarchy");
+  const createCollectionRef = makeFunctionReference<"mutation", any, Id<"collections">>(
+    "collections:create"
+  );
+  const updateCollectionRef = makeFunctionReference<"mutation", any, unknown>(
+    "collections:update"
+  );
+  const deleteCollectionRef = makeFunctionReference<"mutation", { id: Id<"collections"> }, unknown>(
+    "collections:remove"
+  );
+
   const collections = useQuery(
-    api.collections.listHierarchy,
+    listHierarchyQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const createCollection = useMutation(api.collections.create);
-  const updateCollection = useMutation(api.collections.update);
-  const deleteCollection = useMutation(api.collections.remove);
+  const createCollection = useMutation(createCollectionRef);
+  const updateCollection = useMutation(updateCollectionRef);
+  const deleteCollection = useMutation(deleteCollectionRef);
 
   type CollectionItem = NonNullable<typeof collections>[number];
   type FlattenedCollectionRow = {
@@ -283,11 +306,13 @@ export default function CollectionsPage() {
       return;
     }
 
-    if (collection.articleCount > 0) {
+    const articleCount = collection.articleCount ?? 0;
+
+    if (articleCount > 0) {
       setNotice({
         tone: "warning",
-        message: `"${collection.name}" still has ${collection.articleCount} article${
-          collection.articleCount !== 1 ? "s" : ""
+        message: `"${collection.name}" still has ${articleCount} article${
+          articleCount !== 1 ? "s" : ""
         }. Move or delete those articles first.`,
       });
       return;

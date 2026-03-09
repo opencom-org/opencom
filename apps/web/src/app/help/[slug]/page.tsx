@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { Button } from "@opencom/ui";
@@ -11,10 +11,49 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { parseMarkdown } from "@/lib/parseMarkdown";
 
+const publicWorkspaceContextQuery = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  { _id?: Id<"workspaces">; helpCenterAccessPolicy?: string } | null
+>("workspaces:getPublicWorkspaceContext");
+
+const articleBySlugQuery = makeFunctionReference<
+  "query",
+  { slug: string; workspaceId: Id<"workspaces"> },
+  {
+    _id: Id<"articles">;
+    slug: string;
+    title: string;
+    content: string;
+    renderedContent?: string;
+    status?: string;
+    visibility?: string;
+    collectionId?: Id<"collections">;
+  } | null
+>("articles:get");
+
+const collectionGetQuery = makeFunctionReference<
+  "query",
+  { id: Id<"collections"> },
+  { _id: Id<"collections">; slug?: string; name: string } | null
+>("collections:get");
+
+const articleFeedbackStatsQuery = makeFunctionReference<
+  "query",
+  { articleId: Id<"articles"> },
+  { helpful: number; total: number } | null
+>("articles:getFeedbackStats");
+
+const submitArticleFeedbackRef = makeFunctionReference<
+  "mutation",
+  { articleId: Id<"articles">; helpful: boolean },
+  null
+>("articles:submitFeedback");
+
 export default function ArticlePage() {
   const params = useParams();
   const auth = useAuthOptional();
-  const workspaceContext = useQuery(api.workspaces.getPublicWorkspaceContext, {});
+  const workspaceContext = useQuery(publicWorkspaceContextQuery, {});
   const slug = params.slug as string;
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [renderedContent, setRenderedContent] = useState("");
@@ -26,23 +65,23 @@ export default function ArticlePage() {
   const shouldFetchArticle = Boolean(workspaceId && !isRestricted);
 
   const article = useQuery(
-    api.articles.get,
+    articleBySlugQuery,
     shouldFetchArticle && workspaceId ? { slug, workspaceId } : "skip"
   );
   const publicArticleId =
     article && article.visibility !== "internal" ? (article._id as Id<"articles">) : null;
 
   const collection = useQuery(
-    api.collections.get,
+    collectionGetQuery,
     article?.collectionId ? { id: article.collectionId } : "skip"
   );
 
   const feedbackStats = useQuery(
-    api.articles.getFeedbackStats,
+    articleFeedbackStatsQuery,
     publicArticleId ? { articleId: publicArticleId } : "skip"
   );
 
-  const submitFeedback = useMutation(api.articles.submitFeedback);
+  const submitFeedback = useMutation(submitArticleFeedbackRef);
 
   const handleFeedback = async (helpful: boolean) => {
     if (!publicArticleId || feedbackSubmitted) return;

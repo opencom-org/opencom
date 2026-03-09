@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -31,17 +31,61 @@ function SeriesEditor() {
   const params = useParams();
   const seriesId = params.id as Id<"series">;
 
-  const seriesData = useQuery(api.series.getWithBlocks, { id: seriesId });
-  const readiness = useQuery(api.series.getReadiness, { id: seriesId });
-  const stats = useQuery(api.series.getStats, { id: seriesId });
-  const updateSeries = useMutation(api.series.update);
-  const activateSeries = useMutation(api.series.activate);
-  const pauseSeries = useMutation(api.series.pause);
-  const addBlock = useMutation(api.series.addBlock);
-  const updateBlock = useMutation(api.series.updateBlock);
-  const removeBlock = useMutation(api.series.removeBlock);
-  const addConnection = useMutation(api.series.addConnection);
-  const removeConnection = useMutation(api.series.removeConnection);
+  const seriesDataQuery = makeFunctionReference<
+    "query",
+    { id: Id<"series"> },
+    {
+      _id: Id<"series">;
+      name: string;
+      description?: string;
+      status?: string;
+      blocks?: unknown[];
+      connections?: unknown[];
+      entryRules?: unknown;
+      exitRules?: unknown;
+      goalRules?: unknown;
+    } | null
+  >("series:getWithBlocks");
+  const readinessQuery = makeFunctionReference<
+    "query",
+    { id: Id<"series"> },
+    ReadinessResult | null
+  >("series:getReadiness");
+  const statsQuery = makeFunctionReference<
+    "query",
+    { id: Id<"series"> },
+    SeriesStats | null
+  >("series:getStats");
+  const updateSeriesRef = makeFunctionReference<"mutation", any, unknown>("series:update");
+  const activateSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, unknown>(
+    "series:activate"
+  );
+  const pauseSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, unknown>(
+    "series:pause"
+  );
+  const addBlockRef = makeFunctionReference<"mutation", any, unknown>("series:addBlock");
+  const updateBlockRef = makeFunctionReference<"mutation", any, unknown>("series:updateBlock");
+  const removeBlockRef = makeFunctionReference<"mutation", { id: Id<"seriesBlocks"> }, unknown>(
+    "series:removeBlock"
+  );
+  const addConnectionRef = makeFunctionReference<"mutation", any, unknown>("series:addConnection");
+  const removeConnectionRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"seriesConnections"> },
+    unknown
+  >("series:removeConnection");
+
+  const seriesData = useQuery(seriesDataQuery, { id: seriesId });
+  const readiness = useQuery(readinessQuery, { id: seriesId });
+  const stats = useQuery(statsQuery, { id: seriesId });
+  const updateSeries = useMutation(updateSeriesRef);
+  const activateSeries = useMutation(activateSeriesRef);
+  const pauseSeries = useMutation(pauseSeriesRef);
+  const addBlock = useMutation(addBlockRef);
+  const updateBlock = useMutation(updateBlockRef);
+  const removeBlock = useMutation(removeBlockRef);
+  const addConnection = useMutation(addConnectionRef);
+  const removeConnection = useMutation(removeConnectionRef);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@opencom/ui";
@@ -77,25 +77,113 @@ function ArticlesContent() {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const createQueryHandledRef = useRef(false);
 
+  const articlesListQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    ArticleListItem[]
+  >("articles:list");
+  const collectionsListHierarchyQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    CollectionListItem[]
+  >("collections:listHierarchy");
+  const importSourcesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    ImportSourceListItem[]
+  >("helpCenterImports:listSources");
+  const importHistoryQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; limit: number },
+    ImportHistoryListItem[]
+  >("helpCenterImports:listHistory");
+  const exportMarkdownQuery = makeFunctionReference<
+    "query",
+    {
+      workspaceId: Id<"workspaces">;
+      sourceId: Id<"helpCenterImportSources"> | undefined;
+      includeDrafts: boolean;
+    },
+    MarkdownExportPayload
+  >("helpCenterImports:exportMarkdown");
+  const createArticleRef = makeFunctionReference<
+    "mutation",
+    {
+      workspaceId: Id<"workspaces">;
+      title: string;
+      content: string;
+      visibility: "public" | "internal";
+    },
+    Id<"articles">
+  >("articles:create");
+  const deleteArticleRef = makeFunctionReference<
+    "mutation",
+    { id: ArticleEditorId },
+    unknown
+  >("articles:remove");
+  const publishArticleRef = makeFunctionReference<
+    "mutation",
+    { id: ArticleEditorId },
+    unknown
+  >("articles:publish");
+  const unpublishArticleRef = makeFunctionReference<
+    "mutation",
+    { id: ArticleEditorId },
+    unknown
+  >("articles:unpublish");
+  const syncMarkdownFolderRef = makeFunctionReference<
+    "mutation",
+    any,
+    {
+      strippedRootFolder?: string;
+      unresolvedImageReferences?: string[];
+      createdArticles: number;
+      createdCollections: number;
+      updatedArticles: number;
+      updatedCollections: number;
+      deletedArticles: number;
+      deletedCollections: number;
+      totalFiles?: number;
+      totalAssets?: number;
+      sourceId?: Id<"helpCenterImportSources">;
+      importRunId?: string;
+    }
+  >("helpCenterImports:syncMarkdownFolder");
+  const restoreImportRunRef = makeFunctionReference<
+    "mutation",
+    any,
+    {
+      restoredArticles: number;
+      restoredCollections: number;
+      sourceName?: string;
+    }
+  >("helpCenterImports:restoreRun");
+  const generateAssetUploadUrlRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces"> },
+    string
+  >("articles:generateAssetUploadUrl");
+  const logExportRef = makeFunctionReference<"mutation", any, unknown>("auditLogs:logExport");
+
   const articles = useQuery(
-    api.articles.list,
+    articlesListQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   ) as ArticleListItem[] | undefined;
 
   const collections = useQuery(
-    api.collections.listHierarchy,
+    collectionsListHierarchyQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   ) as CollectionListItem[] | undefined;
   const importSources = useQuery(
-    api.helpCenterImports.listSources,
+    importSourcesQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   ) as ImportSourceListItem[] | undefined;
   const importHistory = useQuery(
-    api.helpCenterImports.listHistory,
+    importHistoryQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, limit: 10 } : "skip"
   ) as ImportHistoryListItem[] | undefined;
   const markdownExport = useQuery(
-    api.helpCenterImports.exportMarkdown,
+    exportMarkdownQuery,
     isExporting && activeWorkspace?._id
       ? {
           workspaceId: activeWorkspace._id,
@@ -105,14 +193,14 @@ function ArticlesContent() {
       : "skip"
   ) as MarkdownExportPayload | undefined;
 
-  const createArticle = useMutation(api.articles.create);
-  const deleteArticle = useMutation(api.articles.remove);
-  const publishArticle = useMutation(api.articles.publish);
-  const unpublishArticle = useMutation(api.articles.unpublish);
-  const syncMarkdownFolder = useMutation(api.helpCenterImports.syncMarkdownFolder);
-  const restoreImportRun = useMutation(api.helpCenterImports.restoreRun);
-  const generateAssetUploadUrl = useMutation(api.articles.generateAssetUploadUrl);
-  const logExport = useMutation(api.auditLogs.logExport);
+  const createArticle = useMutation(createArticleRef);
+  const deleteArticle = useMutation(deleteArticleRef);
+  const publishArticle = useMutation(publishArticleRef);
+  const unpublishArticle = useMutation(unpublishArticleRef);
+  const syncMarkdownFolder = useMutation(syncMarkdownFolderRef);
+  const restoreImportRun = useMutation(restoreImportRunRef);
+  const generateAssetUploadUrl = useMutation(generateAssetUploadUrlRef);
+  const logExport = useMutation(logExportRef);
 
   const handleCreateArticle = useCallback(
     async (visibility: "public" | "internal" = "public") => {

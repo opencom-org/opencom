@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -62,17 +62,42 @@ function ChecklistBuilderContent() {
   const checklistId = params.id as Id<"checklists">;
   const { activeWorkspace } = useAuth();
 
-  const checklist = useQuery(api.checklists.get, { id: checklistId });
+  const checklistQuery = makeFunctionReference<
+    "query",
+    { id: Id<"checklists"> },
+    {
+      _id: Id<"checklists">;
+      name: string;
+      description?: string;
+      tasks: ChecklistTask[];
+      status: "draft" | "active" | "archived";
+      audienceRules?: InlineAudienceRule | null;
+      targeting?: InlineAudienceRule | null;
+    } | null
+  >("checklists:get");
+  const toursQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    Array<{ _id: Id<"tours">; name: string }>
+  >("tours:list");
+  const eventNamesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    string[]
+  >("events:getDistinctNames");
+  const updateChecklistRef = makeFunctionReference<"mutation", any, null>("checklists:update");
+
+  const checklist = useQuery(checklistQuery, { id: checklistId });
   const tours = useQuery(
-    api.tours.list,
+    toursQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
   const eventNames = useQuery(
-    api.events.getDistinctNames,
+    eventNamesQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const updateChecklist = useMutation(api.checklists.update);
+  const updateChecklist = useMutation(updateChecklistRef);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

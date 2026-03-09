@@ -2,12 +2,41 @@
 
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
+import type { Id } from "@opencom/convex/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { Star, Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+
+const csatMetricsQuery = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    startDate: number;
+    endDate: number;
+    granularity: "day" | "week" | "month";
+  },
+  {
+    averageRating: number;
+    totalResponses: number;
+    satisfactionRate: number;
+    ratingDistribution: Record<number, number>;
+    trendByPeriod: Array<{ period: string; averageRating: number; count: number }>;
+  } | null
+>("reporting:getCsatMetrics");
+
+const csatByAgentQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  Array<{
+    agentId: string;
+    agentName: string;
+    averageRating: number;
+    totalResponses: number;
+  }>
+>("reporting:getCsatByAgent");
 
 function CsatReportContent() {
   const { activeWorkspace } = useAuth();
@@ -19,14 +48,14 @@ function CsatReportContent() {
     now - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
 
   const csatMetrics = useQuery(
-    api.reporting.getCsatMetrics,
+    csatMetricsQuery,
     activeWorkspace?._id
       ? { workspaceId: activeWorkspace._id, startDate, endDate: now, granularity }
       : "skip"
   );
 
   const csatByAgent = useQuery(
-    api.reporting.getCsatByAgent,
+    csatByAgentQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 

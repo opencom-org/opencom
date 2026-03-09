@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
 import { Archive, ArrowLeft, Eye, EyeOff, Save, Users } from "lucide-react";
@@ -35,23 +35,74 @@ export default function ArticleEditorPage() {
   const [removingAssetId, setRemovingAssetId] = useState<Id<"articleAssets"> | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
-  const article = useQuery(api.articles.get, { id: articleId });
+  const articleQuery = makeFunctionReference<
+    "query",
+    { id: ArticleEditorId },
+    {
+      slug?: string;
+      title: string;
+      content: string;
+      collectionId?: Id<"collections">;
+      visibility?: "public" | "internal";
+      tags?: string[];
+      audienceRules?: unknown;
+      status?: string;
+    } | null
+  >("articles:get");
+
+  const articleAssetsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; articleId: ArticleEditorId },
+    Array<{ _id: Id<"articleAssets">; reference: string; fileName?: string }>
+  >("articles:listAssets");
+
+  const collectionsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    Array<{ _id: Id<"collections">; name: string }>
+  >("collections:listHierarchy");
+
+  const updateArticleRef = makeFunctionReference<"mutation", any, unknown>("articles:update");
+  const publishArticleRef = makeFunctionReference<"mutation", { id: ArticleEditorId }, unknown>(
+    "articles:publish"
+  );
+  const unpublishArticleRef = makeFunctionReference<"mutation", { id: ArticleEditorId }, unknown>(
+    "articles:unpublish"
+  );
+  const archiveArticleRef = makeFunctionReference<"mutation", { id: ArticleEditorId }, unknown>(
+    "articles:archive"
+  );
+  const generateAssetUploadUrlRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces"> },
+    string
+  >("articles:generateAssetUploadUrl");
+  const saveAssetRef = makeFunctionReference<"mutation", any, { reference: string; fileName?: string }>(
+    "articles:saveAsset"
+  );
+  const deleteAssetRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces">; assetId: Id<"articleAssets"> },
+    unknown
+  >("articles:deleteAsset");
+
+  const article = useQuery(articleQuery, { id: articleId });
   const articleAssets = useQuery(
-    api.articles.listAssets,
+    articleAssetsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, articleId } : "skip"
   );
   const collections = useQuery(
-    api.collections.listHierarchy,
+    collectionsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const updateArticle = useMutation(api.articles.update);
-  const publishArticle = useMutation(api.articles.publish);
-  const unpublishArticle = useMutation(api.articles.unpublish);
-  const archiveArticle = useMutation(api.articles.archive);
-  const generateAssetUploadUrl = useMutation(api.articles.generateAssetUploadUrl);
-  const saveAsset = useMutation(api.articles.saveAsset);
-  const deleteAsset = useMutation(api.articles.deleteAsset);
+  const updateArticle = useMutation(updateArticleRef);
+  const publishArticle = useMutation(publishArticleRef);
+  const unpublishArticle = useMutation(unpublishArticleRef);
+  const archiveArticle = useMutation(archiveArticleRef);
+  const generateAssetUploadUrl = useMutation(generateAssetUploadUrlRef);
+  const saveAsset = useMutation(saveAssetRef);
+  const deleteAsset = useMutation(deleteAssetRef);
 
   useEffect(() => {
     if (article) {
@@ -401,7 +452,9 @@ export default function ArticleEditorPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => appendAssetReference(asset.reference, asset.fileName)}
+                        onClick={() =>
+                          appendAssetReference(asset.reference, asset.fileName ?? "image")
+                        }
                       >
                         Insert
                       </Button>

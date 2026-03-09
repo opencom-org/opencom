@@ -2,12 +2,69 @@
 
 import { useState, useMemo } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
+import type { Id } from "@opencom/convex/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { Bot, Download, ArrowLeft, TrendingUp, Clock, AlertTriangle, Zap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+
+const aiAgentMetricsQuery = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    startDate: number;
+    endDate: number;
+    granularity: "day" | "week" | "month";
+  },
+  {
+    totalResponses: number;
+    resolvedByAI: number;
+    handedOff: number;
+    resolutionRate: number;
+    avgResponseTimeMs: number;
+    satisfactionRate: number;
+    totalTokensUsed?: number;
+    avgConfidence?: number;
+    handoffRate: number;
+    trendByPeriod: Array<{
+      period: string;
+      totalResponses: number;
+      resolutionRate: number;
+      satisfactionRate: number;
+    }>;
+  } | null
+>("reporting:getAiAgentMetrics");
+
+const aiVsHumanComparisonQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  {
+    ai: {
+      conversationCount: number;
+      avgResponseTimeMs: number;
+      csatResponseCount: number;
+      avgCsatRating: number;
+    };
+    human: {
+      conversationCount: number;
+      avgResponseTimeMs: number;
+      csatResponseCount: number;
+      avgCsatRating: number;
+    };
+  } | null
+>("reporting:getAiVsHumanComparison");
+
+const knowledgeGapsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number; limit: number },
+  Array<{
+    query: string;
+    count: number;
+    confidence: number;
+  }>
+>("reporting:getKnowledgeGaps");
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -28,19 +85,19 @@ function AiReportContent() {
   }, [dateRange]);
 
   const aiMetrics = useQuery(
-    api.reporting.getAiAgentMetrics,
+    aiAgentMetricsQuery,
     activeWorkspace?._id
       ? { workspaceId: activeWorkspace._id, startDate, endDate: now, granularity }
       : "skip"
   );
 
   const comparison = useQuery(
-    api.reporting.getAiVsHumanComparison,
+    aiVsHumanComparisonQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 
   const knowledgeGaps = useQuery(
-    api.reporting.getKnowledgeGaps,
+    knowledgeGapsQuery,
     activeWorkspace?._id
       ? { workspaceId: activeWorkspace._id, startDate, endDate: now, limit: 20 }
       : "skip"
@@ -310,7 +367,7 @@ function AiReportContent() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Avg Confidence</span>
                 <span className="font-medium">
-                  {aiMetrics ? `${(aiMetrics.avgConfidence * 100).toFixed(0)}%` : "-"}
+                  {aiMetrics ? `${((aiMetrics.avgConfidence ?? 0) * 100).toFixed(0)}%` : "-"}
                 </span>
               </div>
               <div className="flex justify-between items-center">

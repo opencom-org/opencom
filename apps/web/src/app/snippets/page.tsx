@@ -2,13 +2,47 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, MessageSquare, Search } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
+
+const snippetsListQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Array<{
+    _id: Id<"snippets">;
+    name: string;
+    content: string;
+    shortcut?: string;
+  }>
+>("snippets:list");
+
+const createSnippetRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    name: string;
+    content: string;
+    shortcut?: string;
+  },
+  Id<"snippets">
+>("snippets:create");
+
+const updateSnippetRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"snippets">; name?: string; content?: string; shortcut?: string },
+  null
+>("snippets:update");
+
+const deleteSnippetRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"snippets"> },
+  null
+>("snippets:remove");
 
 interface SnippetFormData {
   name: string;
@@ -28,13 +62,13 @@ function SnippetsContent() {
   });
 
   const snippets = useQuery(
-    api.snippets.list,
+    snippetsListQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const createSnippet = useMutation(api.snippets.create);
-  const updateSnippet = useMutation(api.snippets.update);
-  const deleteSnippet = useMutation(api.snippets.remove);
+  const createSnippet = useMutation(createSnippetRef);
+  const updateSnippet = useMutation(updateSnippetRef);
+  const deleteSnippet = useMutation(deleteSnippetRef);
 
   const handleOpenModal = (snippet?: NonNullable<typeof snippets>[number]) => {
     if (snippet) {
@@ -90,7 +124,7 @@ function SnippetsContent() {
   };
 
   const filteredSnippets = snippets?.filter(
-    (snippet: NonNullable<typeof snippets>[number]) =>
+    (snippet) =>
       snippet.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       snippet.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (snippet.shortcut && snippet.shortcut.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -133,7 +167,7 @@ function SnippetsContent() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredSnippets?.map((snippet: NonNullable<typeof snippets>[number]) => (
+          {filteredSnippets?.map((snippet) => (
             <div
               key={snippet._id}
               className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow"

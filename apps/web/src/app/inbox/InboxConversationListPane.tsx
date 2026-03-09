@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Card } from "@opencom/ui";
 import { Bot, Circle, Mail, MessageSquare, ShieldAlert } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
@@ -9,7 +9,12 @@ import { ResponsiveSecondaryRegion } from "@/components/ResponsiveLayout";
 import { type InboxAiWorkflowFilter, type InboxConversation } from "./inboxRenderTypes";
 
 function PresenceIndicator({ visitorId }: { visitorId: Id<"visitors"> }): React.JSX.Element {
-  const isOnline = useQuery(api.visitors.isOnline, { visitorId });
+  const visitorOnlineQuery = makeFunctionReference<
+    "query",
+    { visitorId: Id<"visitors"> },
+    boolean
+  >("visitors:isOnline");
+  const isOnline = useQuery(visitorOnlineQuery, { visitorId });
   return (
     <Circle
       className={`h-2 w-2 ${isOnline ? "fill-green-500 text-green-500" : "fill-gray-300 text-gray-300"}`}

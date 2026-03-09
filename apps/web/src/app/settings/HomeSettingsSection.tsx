@@ -16,9 +16,35 @@ import {
   type HomeVisibility,
 } from "@opencom/types";
 import { Home, Plus, X, GripVertical, Search, MessageSquare, FileText, Bell } from "lucide-react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
+
+const homeConfigQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  HomeConfig | null
+>("messengerSettings:getHomeConfig");
+
+const updateHomeConfigRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    homeConfig: {
+      enabled: boolean;
+      cards: HomeCard[];
+      defaultSpace: HomeDefaultSpace;
+      tabs: HomeTab[];
+    };
+  },
+  null
+>("messengerSettings:updateHomeConfig");
+
+const toggleHomeEnabledRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; enabled: boolean },
+  null
+>("messengerSettings:toggleHomeEnabled");
 
 // Card type definitions for Home settings
 const CARD_TYPES = [
@@ -105,12 +131,12 @@ export function HomeSettingsSection({
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
   const homeConfig = useQuery(
-    api.messengerSettings.getHomeConfig,
+    homeConfigQuery,
     workspaceId ? { workspaceId } : "skip"
   ) as HomeConfig | undefined;
 
-  const updateHomeConfig = useMutation(api.messengerSettings.updateHomeConfig);
-  const toggleHomeEnabled = useMutation(api.messengerSettings.toggleHomeEnabled);
+  const updateHomeConfig = useMutation(updateHomeConfigRef);
+  const toggleHomeEnabled = useMutation(toggleHomeEnabledRef);
 
   const [enabled, setEnabled] = useState(false);
   const [cards, setCards] = useState<HomeCard[]>([]);

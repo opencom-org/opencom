@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@opencom/ui";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 
 export function AuditLogViewer({
@@ -21,6 +21,66 @@ export function AuditLogViewer({
   const [exportNotice, setExportNotice] = useState<string | null>(null);
   const [showViewer, setShowViewer] = useState(false);
 
+  const auditAccessQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    { status: "unauthenticated" | "ok" | "forbidden"; canRead?: boolean; canExport?: boolean }
+  >("auditLogs:getAccess");
+
+  const auditLogsListQuery = makeFunctionReference<
+    "query",
+    {
+      workspaceId: Id<"workspaces">;
+      action?: string;
+      actorId?: Id<"users">;
+      resourceType?: string;
+      resourceId?: string;
+      startTime: number;
+      endTime: number;
+      limit: number;
+    },
+    Array<{
+      _id: string;
+      action: string;
+      timestamp: number;
+      actorId?: string;
+      actorType?: string;
+      actorName?: string;
+      actorEmail?: string;
+      resourceType?: string;
+      resourceId?: string;
+      metadata?: unknown;
+      details?: unknown;
+    }>
+  >("auditLogs:list");
+
+  const auditActionsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    string[]
+  >("auditLogs:getActions");
+
+  const exportLogsQuery = makeFunctionReference<
+    "query",
+    {
+      workspaceId: Id<"workspaces">;
+      action?: string;
+      actorId?: Id<"users">;
+      resourceType?: string;
+      resourceId?: string;
+      startTime: number;
+      endTime: number;
+      format: "json";
+    },
+    { data: unknown; count: number }
+  >("auditLogs:exportLogs");
+
+  const logExportRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces">; exportType: string; recordCount: number },
+    unknown
+  >("auditLogs:logExport");
+
   const { startTime, endTime } = useMemo(() => {
     const now = Date.now();
     return {
@@ -29,14 +89,14 @@ export function AuditLogViewer({
     };
   }, [timeRangeDays]);
 
-  const auditAccess = useQuery(api.auditLogs.getAccess, showViewer ? { workspaceId } : "skip");
+  const auditAccess = useQuery(auditAccessQuery, showViewer ? { workspaceId } : "skip");
 
   const isAuditUnauthenticated = auditAccess?.status === "unauthenticated";
   const canReadAuditLogs = auditAccess?.status === "ok" ? auditAccess.canRead : false;
   const canExportAuditLogs = auditAccess?.status === "ok" ? auditAccess.canExport : false;
 
   const auditLogs = useQuery(
-    api.auditLogs.list,
+    auditLogsListQuery,
     showViewer && canReadAuditLogs
       ? {
           workspaceId,
@@ -52,12 +112,12 @@ export function AuditLogViewer({
   );
 
   const availableActions = useQuery(
-    api.auditLogs.getActions,
+    auditActionsQuery,
     showViewer && canReadAuditLogs ? { workspaceId } : "skip"
   );
 
   const exportLogs = useQuery(
-    api.auditLogs.exportLogs,
+    exportLogsQuery,
     isExporting && canReadAuditLogs && canExportAuditLogs
       ? {
           workspaceId,
@@ -72,7 +132,7 @@ export function AuditLogViewer({
       : "skip"
   );
 
-  const logExportMutation = useMutation(api.auditLogs.logExport);
+  const logExportMutation = useMutation(logExportRef);
 
   const handleExport = async () => {
     if (isAuditUnauthenticated) {

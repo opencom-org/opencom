@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -20,8 +20,28 @@ function ChecklistsContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ChecklistStatus>("all");
 
+  const checklistsListQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; status?: ChecklistStatus },
+    Array<{
+      _id: Id<"checklists">;
+      name: string;
+      description?: string;
+      tasks: unknown[];
+      status: ChecklistStatus;
+      createdAt: number;
+    }>
+  >("checklists:list");
+  const createChecklistRef = makeFunctionReference<"mutation", any, Id<"checklists">>(
+    "checklists:create"
+  );
+  const deleteChecklistRef = makeFunctionReference<"mutation", { id: Id<"checklists"> }, null>(
+    "checklists:remove"
+  );
+  const updateChecklistRef = makeFunctionReference<"mutation", any, null>("checklists:update");
+
   const checklists = useQuery(
-    api.checklists.list,
+    checklistsListQuery,
     activeWorkspace?._id
       ? {
           workspaceId: activeWorkspace._id,
@@ -30,9 +50,9 @@ function ChecklistsContent() {
       : "skip"
   );
 
-  const createChecklist = useMutation(api.checklists.create);
-  const deleteChecklist = useMutation(api.checklists.remove);
-  const updateChecklist = useMutation(api.checklists.update);
+  const createChecklist = useMutation(createChecklistRef);
+  const deleteChecklist = useMutation(deleteChecklistRef);
+  const updateChecklist = useMutation(updateChecklistRef);
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;

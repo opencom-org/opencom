@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -100,56 +100,126 @@ function InboxContent(): React.JSX.Element | null {
   const messageHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyInputRef = useRef<HTMLInputElement | null>(null);
 
+  const inboxConversationsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; aiWorkflowState?: "ai_handled" | "handoff" },
+    { conversations: InboxConversation[] }
+  >("conversations:listForInbox");
+  const aiSettingsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    { suggestionsEnabled?: boolean } | null
+  >("aiAgent:getSettings");
+  const messagesListQuery = makeFunctionReference<
+    "query",
+    { conversationId: Id<"conversations"> },
+    InboxMessage[]
+  >("messages:list");
+  const aiConversationResponsesQuery = makeFunctionReference<
+    "query",
+    { conversationId: Id<"conversations"> },
+    InboxAiResponse[]
+  >("aiAgent:getConversationResponses");
+  const sendMessageRef = makeFunctionReference<"mutation", any, unknown>("messages:send");
+  const markConversationReadRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"conversations">; readerType: "agent" },
+    unknown
+  >("conversations:markAsRead");
+  const updateConversationStatusRef = makeFunctionReference<"mutation", any, unknown>(
+    "conversations:updateStatus"
+  );
+  const convertConversationToTicketRef = makeFunctionReference<
+    "mutation",
+    { conversationId: Id<"conversations"> },
+    Id<"tickets">
+  >("tickets:convertFromConversation");
+  const getSuggestionsForConversationAction = makeFunctionReference<
+    "action",
+    { conversationId: Id<"conversations">; limit: number },
+    Array<{ id: string }>
+  >("suggestions:getForConversation");
+  const createSnippetRef = makeFunctionReference<
+    "mutation",
+    {
+      workspaceId: Id<"workspaces">;
+      name: string;
+      content: string;
+      shortcut?: string;
+    },
+    Id<"snippets">
+  >("snippets:create");
+  const updateSnippetRef = makeFunctionReference<"mutation", any, unknown>("snippets:update");
+  const snippetsListQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    InboxSnippet[]
+  >("snippets:list");
+  const knowledgeSearchQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; query: string; limit: number },
+    InboxKnowledgeItem[]
+  >("knowledge:search");
+  const recentlyUsedKnowledgeQuery = makeFunctionReference<
+    "query",
+    { userId: Id<"users">; workspaceId: Id<"workspaces">; limit: number },
+    InboxKnowledgeItem[]
+  >("knowledge:getRecentlyUsed");
+  const trackKnowledgeAccessRef = makeFunctionReference<"mutation", any, null>(
+    "knowledge:trackAccess"
+  );
+
   const inboxQueryArgs = activeWorkspace?._id
     ? {
         workspaceId: activeWorkspace._id,
         ...(aiWorkflowFilter === "all" ? {} : { aiWorkflowState: aiWorkflowFilter }),
       }
     : "skip";
-  const conversationsData = useQuery(api.conversations.listForInbox, inboxQueryArgs);
+  const conversationsData = useQuery(inboxConversationsQuery, inboxQueryArgs);
   const rawConversations = conversationsData?.conversations;
   const aiSettings = useQuery(
-    api.aiAgent.getSettings,
+    aiSettingsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
   const messages = useQuery(
-    api.messages.list,
+    messagesListQuery,
     selectedConversationId ? { conversationId: selectedConversationId } : "skip"
   );
   const aiResponses = useQuery(
-    api.aiAgent.getConversationResponses,
+    aiConversationResponsesQuery,
     selectedConversationId ? { conversationId: selectedConversationId } : "skip"
   );
 
-  const sendMessage = useMutation(api.messages.send);
-  const markAsRead = useMutation(api.conversations.markAsRead);
-  const updateStatus = useMutation(api.conversations.updateStatus);
-  const convertToTicket = useMutation(api.tickets.convertFromConversation);
-  const getSuggestionsForConversation = useAction(api.suggestions.getForConversation);
-  const createSnippet = useMutation(api.snippets.create);
-  const updateSnippet = useMutation(api.snippets.update);
+  const sendMessage = useMutation(sendMessageRef);
+  const markAsRead = useMutation(markConversationReadRef);
+  const updateStatus = useMutation(updateConversationStatusRef);
+  const convertToTicket = useMutation(convertConversationToTicketRef);
+  const getSuggestionsForConversation = useAction(getSuggestionsForConversationAction);
+  const createSnippet = useMutation(createSnippetRef);
+  const updateSnippet = useMutation(updateSnippetRef);
 
   const allSnippets = useQuery(
-    api.snippets.list,
+    snippetsListQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
   const knowledgeResults = useQuery(
-    api.knowledge.search,
+    knowledgeSearchQuery,
     activeWorkspace?._id && knowledgeSearch.trim().length >= 1
       ? { workspaceId: activeWorkspace._id, query: knowledgeSearch, limit: 20 }
       : "skip"
   );
 
   const recentContent = useQuery(
-    api.knowledge.getRecentlyUsed,
+    recentlyUsedKnowledgeQuery,
     activeWorkspace?._id && user?._id
       ? { userId: user._id, workspaceId: activeWorkspace._id, limit: 5 }
       : "skip"
   );
 
-  const trackAccess = useMutation(api.knowledge.trackAccess);
+  const trackAccess = useMutation(trackKnowledgeAccessRef);
+
   const conversations = useMemo(() => {
     if (!rawConversations) {
       return rawConversations;

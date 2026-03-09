@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -12,6 +12,50 @@ import { Plus, Pencil, Trash2, Copy, Play, Pause, Search, Route } from "lucide-r
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 
+type TourRecord = {
+  _id: Id<"tours">;
+  name: string;
+  description?: string;
+  status: "draft" | "active" | "archived";
+  createdAt: number;
+};
+
+const listToursQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; status?: "draft" | "active" | "archived" },
+  TourRecord[]
+>("tours:list");
+
+const createTourMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; name: string },
+  Id<"tours">
+>("tours:create");
+
+const deleteTourMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"tours"> },
+  null
+>("tours:remove");
+
+const activateTourMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"tours"> },
+  null
+>("tours:activate");
+
+const deactivateTourMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"tours"> },
+  null
+>("tours:deactivate");
+
+const duplicateTourMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"tours"> },
+  Id<"tours">
+>("tours:duplicate");
+
 function ToursContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
@@ -19,20 +63,20 @@ function ToursContent() {
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "active" | "archived">("all");
 
   const tours = useQuery(
-    api.tours.list,
+    listToursQueryRef,
     activeWorkspace?._id
       ? {
           workspaceId: activeWorkspace._id,
           status: statusFilter === "all" ? undefined : statusFilter,
         }
       : "skip"
-  );
+  ) as TourRecord[] | undefined;
 
-  const createTour = useMutation(api.tours.create);
-  const deleteTour = useMutation(api.tours.remove);
-  const activateTour = useMutation(api.tours.activate);
-  const deactivateTour = useMutation(api.tours.deactivate);
-  const duplicateTour = useMutation(api.tours.duplicate);
+  const createTour = useMutation(createTourMutationRef);
+  const deleteTour = useMutation(deleteTourMutationRef);
+  const activateTour = useMutation(activateTourMutationRef);
+  const deactivateTour = useMutation(deactivateTourMutationRef);
+  const duplicateTour = useMutation(duplicateTourMutationRef);
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;
@@ -53,7 +97,7 @@ function ToursContent() {
     }
   };
 
-  const handleToggleStatus = async (tour: NonNullable<typeof tours>[number]) => {
+  const handleToggleStatus = async (tour: TourRecord) => {
     if (tour.status === "active") {
       await deactivateTour({ id: tour._id });
     } else {
@@ -66,7 +110,7 @@ function ToursContent() {
   };
 
   const filteredTours = tours?.filter(
-    (tour: NonNullable<typeof tours>[number]) =>
+    (tour: TourRecord) =>
       tour.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (tour.description && tour.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -145,7 +189,7 @@ function ToursContent() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredTours?.map((tour: NonNullable<typeof tours>[number]) => (
+              {filteredTours?.map((tour: TourRecord) => (
                 <tr key={tour._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <Link href={`/tours/${tour._id}`} className="hover:text-primary">

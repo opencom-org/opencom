@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@opencom/ui";
@@ -14,7 +14,7 @@ import {
   toInlineAudienceRuleFromBuilder,
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
-import type { MessageFrequency, MessageTrigger } from "@opencom/types";
+import type { MessageFrequency, MessageTrigger, OutboundMessageType, OutboundMessageStatus } from "@opencom/types";
 import { OutboundClickActionPanel } from "./OutboundClickActionPanel";
 import { OutboundContentEditor } from "./OutboundContentEditor";
 import { OutboundEditorHeader } from "./OutboundEditorHeader";
@@ -42,20 +42,76 @@ function MessageBuilderContent() {
   const messageId = params.id as Id<"outboundMessages">;
   const { activeWorkspace } = useAuth();
 
-  const message = useQuery(api.outboundMessages.get, { id: messageId });
-  const stats = useQuery(api.outboundMessages.getStats, { id: messageId });
+  const outboundMessageQuery = makeFunctionReference<
+    "query",
+    { id: Id<"outboundMessages"> },
+    {
+      _id: Id<"outboundMessages">;
+      name: string;
+      type: OutboundMessageType;
+      status: OutboundMessageStatus;
+      content: MessageContent;
+      triggers?: MessageTrigger;
+      frequency?: MessageFrequency;
+      audienceRules?: InlineAudienceRule | null;
+      targeting?: InlineAudienceRule | null;
+    } | null
+  >("outboundMessages:get");
+
+  const outboundMessageStatsQuery = makeFunctionReference<
+    "query",
+    { id: Id<"outboundMessages"> },
+    { shown: number; clicked: number; dismissed: number; clickRate: number } | null
+  >("outboundMessages:getStats");
+
+  const workspaceMembersQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    Array<{ userId: Id<"users">; name?: string | null; email?: string | null }>
+  >("workspaceMembers:listByWorkspace");
+
+  const eventNamesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    string[]
+  >("events:getDistinctNames");
+
+  const updateOutboundMessageRef = makeFunctionReference<"mutation", any, null>(
+    "outboundMessages:update"
+  );
+
+  const activateOutboundMessageRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"outboundMessages"> },
+    null
+  >("outboundMessages:activate");
+
+  const pauseOutboundMessageRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"outboundMessages"> },
+    null
+  >("outboundMessages:pause");
+
+  const publicArticlesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; status: "published"; visibility: "public" },
+    Array<{ _id: Id<"articles">; title: string }>
+  >("articles:list");
+
+  const message = useQuery(outboundMessageQuery, { id: messageId });
+  const stats = useQuery(outboundMessageStatsQuery, { id: messageId });
   const members = useQuery(
-    api.workspaceMembers.listByWorkspace,
+    workspaceMembersQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
   const eventNames = useQuery(
-    api.events.getDistinctNames,
+    eventNamesQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const updateMessage = useMutation(api.outboundMessages.update);
-  const activateMessage = useMutation(api.outboundMessages.activate);
-  const pauseMessage = useMutation(api.outboundMessages.pause);
+  const updateMessage = useMutation(updateOutboundMessageRef);
+  const activateMessage = useMutation(activateOutboundMessageRef);
+  const pauseMessage = useMutation(pauseOutboundMessageRef);
 
   const [name, setName] = useState("");
   const [content, setContent] = useState<MessageContent>({});
@@ -71,7 +127,7 @@ function MessageBuilderContent() {
   );
 
   const articles = useQuery(
-    api.articles.list,
+    publicArticlesQuery,
     activeWorkspace?._id
       ? { workspaceId: activeWorkspace._id, status: "published" as const, visibility: "public" }
       : "skip"

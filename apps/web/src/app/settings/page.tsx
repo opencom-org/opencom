@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { Button, Card, Input } from "@opencom/ui";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { Copy, Check, Globe, Server, Search } from "lucide-react";
@@ -11,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useBackend } from "@/contexts/BackendContext";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
-import { api } from "@opencom/convex";
+import type { Id } from "@opencom/convex/dataModel";
 import { appConfirm } from "@/lib/appConfirm";
 import { MessengerSettingsSection } from "./MessengerSettingsSection";
 import { HomeSettingsSection } from "./HomeSettingsSection";
@@ -22,11 +23,23 @@ import { MobileDevicesSection } from "./MobileDevicesSection";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
 import { SettingsSectionContainer } from "./SettingsSectionContainer";
 import { SETTINGS_SECTION_CONFIG, type SettingsSectionId } from "./settingsSections";
-import { TeamMembersSection } from "./TeamMembersSection";
+import {
+  TeamMembersSection,
+  type PendingInvitationRecord,
+  type TeamMemberRecord,
+} from "./TeamMembersSection";
 import { useTeamMembersSettings } from "./useTeamMembersSettings";
 import { SignupAuthSection } from "./SignupAuthSection";
 import { HelpCenterAccessSection } from "./HelpCenterAccessSection";
 import { EmailChannelSection } from "./EmailChannelSection";
+
+type EmailConfigRecord = {
+  enabled: boolean;
+  forwardingAddress?: string;
+  fromName?: string;
+  fromEmail?: string;
+  signature?: string;
+};
 
 function SettingsContent(): React.JSX.Element | null {
   const router = useRouter();
@@ -52,46 +65,137 @@ function SettingsContent(): React.JSX.Element | null {
   const [emailSignature, setEmailSignature] = useState("");
   const [isSavingEmail, setIsSavingEmail] = useState(false);
 
+  const workspaceQuery = makeFunctionReference<
+    "query",
+    { id: Id<"workspaces"> },
+    {
+      _id: Id<"workspaces">;
+      allowedOrigins?: string[];
+      signupMode?: "invite-only" | "domain-allowlist";
+      allowedDomains?: string[];
+      helpCenterAccessPolicy?: "public" | "restricted";
+      authMethods?: Array<"password" | "otp">;
+    } | null
+  >("workspaces:get");
+
+  const workspaceMembersQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    TeamMemberRecord[]
+  >("workspaceMembers:listByWorkspace");
+
+  const pendingInvitationsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    PendingInvitationRecord[]
+  >("workspaceMembers:getWorkspacePendingInvitations");
+
+  const emailConfigQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    EmailConfigRecord | null
+  >("emailChannel:getEmailConfig");
+
+  const aiSettingsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    { enabled?: boolean } | null
+  >("aiAgent:getSettings");
+
+  const automationSettingsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    {
+      suggestArticlesEnabled?: boolean;
+      showReplyTimeEnabled?: boolean;
+      collectEmailEnabled?: boolean;
+      askForRatingEnabled?: boolean;
+    } | null
+  >("automationSettings:get");
+
+  const auditAccessQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    { status: "unauthenticated" | "forbidden" | "ok"; canManageSecurity?: boolean } | null
+  >("auditLogs:getAccess");
+
+  const mobileDeviceStatsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    { total: number } | null
+  >("visitorPushTokens:getStats");
+
+  const updateAllowedOriginsRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces">; allowedOrigins: string[] },
+    null
+  >("workspaces:updateAllowedOrigins");
+
+  const upsertEmailConfigRef = makeFunctionReference<"mutation", any, null>(
+    "emailChannel:upsertEmailConfig"
+  );
+
+  const updateSignupSettingsRef = makeFunctionReference<
+    "mutation",
+    {
+      workspaceId: Id<"workspaces">;
+      signupMode: "invite-only" | "domain-allowlist";
+      allowedDomains: string[];
+      authMethods: Array<"password" | "otp">;
+    },
+    null
+  >("workspaces:updateSignupSettings");
+
+  const updateHelpCenterAccessPolicyRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces">; policy: "public" | "restricted" },
+    null
+  >("workspaces:updateHelpCenterAccessPolicy");
+
   const workspace = useQuery(
-    api.workspaces.get,
+    workspaceQuery,
     activeWorkspace?._id ? { id: activeWorkspace._id } : "skip"
   );
 
   const members = useQuery(
-    api.workspaceMembers.listByWorkspace,
+    workspaceMembersQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
   const pendingInvitations = useQuery(
-    api.workspaceMembers.getWorkspacePendingInvitations,
+    pendingInvitationsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
   const emailConfig = useQuery(
-    api.emailChannel.getEmailConfig,
+    emailConfigQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
+  ) as EmailConfigRecord | null | undefined;
+
   const aiSettings = useQuery(
-    api.aiAgent.getSettings,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const automationSettings = useQuery(
-    api.automationSettings.get,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const securityAccess = useQuery(
-    api.auditLogs.getAccess,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const mobileDeviceStats = useQuery(
-    api.visitorPushTokens.getStats,
+    aiSettingsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const updateAllowedOrigins = useMutation(api.workspaces.updateAllowedOrigins);
-  const upsertEmailConfig = useMutation(api.emailChannel.upsertEmailConfig);
-  const updateSignupSettings = useMutation(api.workspaces.updateSignupSettings);
-  const updateHelpCenterAccessPolicy = useMutation(api.workspaces.updateHelpCenterAccessPolicy);
+  const automationSettings = useQuery(
+    automationSettingsQuery,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+
+  const securityAccess = useQuery(
+    auditAccessQuery,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+
+  const mobileDeviceStats = useQuery(
+    mobileDeviceStatsQuery,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+
+  const updateAllowedOrigins = useMutation(updateAllowedOriginsRef);
+  const upsertEmailConfig = useMutation(upsertEmailConfigRef);
+  const updateSignupSettings = useMutation(updateSignupSettingsRef);
+  const updateHelpCenterAccessPolicy = useMutation(updateHelpCenterAccessPolicyRef);
 
   const isOwner = activeWorkspace?.role === "owner";
   const isAdmin = activeWorkspace?.role === "admin" || isOwner;

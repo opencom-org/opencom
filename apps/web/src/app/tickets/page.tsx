@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   Ticket,
@@ -24,6 +24,60 @@ import type { Id } from "@opencom/convex/dataModel";
 
 type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
 type TicketPriority = "low" | "normal" | "high" | "urgent";
+
+type VisitorOption = {
+  _id: Id<"visitors">;
+  readableId?: string;
+  name?: string;
+  email?: string;
+};
+
+type AdminTicketRecord = {
+  _id: Id<"tickets">;
+  visitorId?: Id<"visitors">;
+  assigneeId?: Id<"users">;
+  subject: string;
+  description?: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  createdAt: number;
+  visitor?: VisitorOption | null;
+  assignee?: { _id: Id<"users">; name?: string; email?: string } | null;
+};
+
+type TicketsListForAdminViewResult =
+  | { status: "ok"; tickets: AdminTicketRecord[] }
+  | { status: "unauthenticated" | "forbidden"; tickets: [] };
+
+const visitorsSearchQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; query: string; limit?: number },
+  VisitorOption[]
+>("visitors:search");
+
+const visitorsListQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; limit?: number },
+  VisitorOption[]
+>("visitors:list");
+
+const ticketsListForAdminViewQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; status?: TicketStatus },
+  TicketsListForAdminViewResult
+>("tickets:listForAdminView");
+
+const createTicketMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId?: Id<"visitors">;
+    subject: string;
+    description?: string;
+    priority?: TicketPriority;
+  },
+  Id<"tickets">
+>("tickets:create");
 
 const statusConfig: Record<
   TicketStatus,
@@ -54,30 +108,30 @@ function TicketsContent(): React.JSX.Element | null {
   const [visitorSearchQuery, setVisitorSearchQuery] = useState("");
 
   const visitors = useQuery(
-    api.visitors.search,
+    visitorsSearchQueryRef,
     activeWorkspace?._id && visitorSearchQuery.length >= 2
       ? { workspaceId: activeWorkspace._id, query: visitorSearchQuery, limit: 10 }
       : "skip"
-  );
+  ) as VisitorOption[] | undefined;
 
   const recentVisitors = useQuery(
-    api.visitors.list,
+    visitorsListQueryRef,
     activeWorkspace?._id && !visitorSearchQuery
       ? { workspaceId: activeWorkspace._id, limit: 10 }
       : "skip"
-  );
+  ) as VisitorOption[] | undefined;
 
   const tickets = useQuery(
-    api.tickets.listForAdminView,
+    ticketsListForAdminViewQueryRef,
     activeWorkspace?._id
       ? {
           workspaceId: activeWorkspace._id,
           ...(statusFilter !== "all" && { status: statusFilter }),
         }
       : "skip"
-  );
+  ) as TicketsListForAdminViewResult | undefined;
 
-  const createTicket = useMutation(api.tickets.create);
+  const createTicket = useMutation(createTicketMutationRef);
 
   const handleCreateTicket = async () => {
     if (!activeWorkspace?._id || !newTicketSubject.trim()) return;
@@ -118,8 +172,7 @@ function TicketsContent(): React.JSX.Element | null {
   });
 
   const selectedVisitor = (visitors || recentVisitors)?.find(
-    (visitor: { _id: Id<"visitors">; name?: string; email?: string }) =>
-      visitor._id === selectedVisitorId
+    (visitor) => visitor._id === selectedVisitorId
   );
 
   if (!user || !activeWorkspace) {
@@ -344,12 +397,7 @@ function TicketsContent(): React.JSX.Element | null {
                 (visitorSearchQuery.length >= 2 ? visitors : recentVisitors)?.length ? (
                   <div className="mt-2 border rounded-md max-h-40 overflow-y-auto">
                     {(visitorSearchQuery.length >= 2 ? visitors : recentVisitors)?.map(
-                      (visitor: {
-                        _id: Id<"visitors">;
-                        readableId?: string;
-                        name?: string;
-                        email?: string;
-                      }) => (
+                      (visitor) => (
                         <button
                           key={visitor._id}
                           type="button"

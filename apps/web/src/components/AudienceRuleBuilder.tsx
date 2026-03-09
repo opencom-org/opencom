@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Trash2, ChevronDown, GripVertical, Users, Layers } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
@@ -491,6 +491,13 @@ function GroupEditor({ group, onChange, onRemove, depth = 0, eventNames = [] }: 
   );
 }
 
+interface ConditionEditorProps {
+  condition: AudienceCondition;
+  onChange: (condition: AudienceCondition) => void;
+  onRemove: () => void;
+  eventNames?: string[];
+}
+
 export function AudienceRuleBuilder({
   value,
   onChange,
@@ -506,10 +513,22 @@ export function AudienceRuleBuilder({
     isSegmentRule(value) ? "segment" : "custom"
   );
 
-  const segments = useQuery(api.segments.list, workspaceId ? { workspaceId } : "skip");
+  const listSegmentsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    Array<{ _id: Id<"segments">; name: string }>
+  >("segments:list");
+
+  const previewAudienceRulesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; audienceRules: AudienceRule },
+    { matching: number; total: number }
+  >("tours:previewAudienceRules");
+
+  const segments = useQuery(listSegmentsQuery, workspaceId ? { workspaceId } : "skip");
 
   const preview = useQuery(
-    api.tours.previewAudienceRules,
+    previewAudienceRulesQuery,
     workspaceId && isEnabled && value ? { workspaceId, audienceRules: value } : "skip"
   );
 
@@ -621,24 +640,24 @@ export function AudienceRuleBuilder({
         value &&
         "type" in value &&
         value.type === "group" && (
-        <>
-          <GroupEditor group={value} onChange={handleChange} eventNames={eventNames} />
-          {preview && (
-            <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg text-sm">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="text-primary">
-                <strong>{preview.matching}</strong> of <strong>{preview.total}</strong> visitors
-                match these rules
-              </span>
-              {preview.total > 0 && (
-                <span className="text-primary/80">
-                  ({Math.round((preview.matching / preview.total) * 100)}%)
+          <>
+            <GroupEditor group={value} onChange={handleChange} eventNames={eventNames} />
+            {preview && (
+              <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg text-sm">
+                <Users className="h-4 w-4 text-primary" />
+                <span className="text-primary">
+                  <strong>{preview.matching}</strong> of <strong>{preview.total}</strong> visitors
+                  match these rules
                 </span>
-              )}
-            </div>
-          )}
-        </>
-      )}
+                {preview.total > 0 && (
+                  <span className="text-primary/80">
+                    ({Math.round((preview.matching / preview.total) * 100)}%)
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
       {isEnabled && targetingMode === "custom" && !value && (
         <Button variant="outline" onClick={() => onChange(createEmptyGroup())}>

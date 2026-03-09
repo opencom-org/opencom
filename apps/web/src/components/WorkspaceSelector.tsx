@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Button, Input } from "@opencom/ui";
 import { ChevronDown, Plus, Check, Building2 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
@@ -15,7 +15,12 @@ export function WorkspaceSelector(): React.JSX.Element | null {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const createWorkspace = useMutation(api.workspaces.create);
+  const createWorkspaceRef = makeFunctionReference<
+    "mutation",
+    { name: string },
+    Id<"workspaces">
+  >("workspaces:create");
+  const createWorkspace = useMutation(createWorkspaceRef);
   const handleSelect = async (workspaceId: Id<"workspaces">) => {
     if (workspaceId !== activeWorkspace?._id) {
       await switchWorkspace(workspaceId);

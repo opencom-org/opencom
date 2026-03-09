@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -53,15 +53,52 @@ function CarouselEditor() {
   const carouselId = params.id as Id<"carousels">;
   const { activeWorkspace } = useAuth();
 
-  const carousel = useQuery(api.carousels.get, { id: carouselId });
-  const stats = useQuery(api.carousels.getStats, { id: carouselId });
+  const carouselQuery = makeFunctionReference<
+    "query",
+    { id: Id<"carousels"> },
+    {
+      _id: Id<"carousels">;
+      name: string;
+      status: string;
+      screens: CarouselScreen[];
+      audienceRules?: AudienceRule | null;
+      targeting?: AudienceRule | null;
+    } | null
+  >("carousels:get");
+  const carouselStatsQuery = makeFunctionReference<
+    "query",
+    { id: Id<"carousels"> },
+    {
+      shown?: number;
+      impressions?: number;
+      completions?: number;
+      completed?: number;
+      completionRate?: number;
+      dismissals?: number;
+    } | null
+  >("carousels:getStats");
+  const eventNamesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    string[]
+  >("events:getDistinctNames");
+  const updateCarouselRef = makeFunctionReference<"mutation", any, unknown>("carousels:update");
+  const activateCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, unknown>(
+    "carousels:activate"
+  );
+  const pauseCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, unknown>(
+    "carousels:pause"
+  );
+
+  const carousel = useQuery(carouselQuery, { id: carouselId });
+  const stats = useQuery(carouselStatsQuery, { id: carouselId });
   const eventNames = useQuery(
-    api.events.getDistinctNames,
+    eventNamesQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
-  const updateCarousel = useMutation(api.carousels.update);
-  const activateCarousel = useMutation(api.carousels.activate);
-  const pauseCarousel = useMutation(api.carousels.pause);
+  const updateCarousel = useMutation(updateCarouselRef);
+  const activateCarousel = useMutation(activateCarouselRef);
+  const pauseCarousel = useMutation(pauseCarouselRef);
 
   const [name, setName] = useState("");
   const [screens, setScreens] = useState<CarouselScreen[]>([]);
@@ -524,15 +561,15 @@ function CarouselEditor() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Shown</span>
-                  <span className="font-medium">{stats.shown}</span>
+                  <span className="font-medium">{stats.shown ?? 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Completed</span>
-                  <span className="font-medium">{stats.completed}</span>
+                  <span className="font-medium">{stats.completed ?? 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Completion Rate</span>
-                  <span className="font-medium">{stats.completionRate.toFixed(1)}%</span>
+                  <span className="font-medium">{(stats.completionRate ?? 0).toFixed(1)}%</span>
                 </div>
               </div>
             </div>

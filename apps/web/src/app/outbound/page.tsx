@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -26,7 +26,46 @@ function OutboundContent() {
   const [typeFilter, setTypeFilter] = useState<"all" | OutboundMessageType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | OutboundMessageStatus>("all");
 
-  const messages = useQuery(api.outboundMessages.list, activeWorkspace?._id
+  const outboundMessagesListQuery = makeFunctionReference<
+    "query",
+    {
+      workspaceId: Id<"workspaces">;
+      type?: OutboundMessageType;
+      status?: OutboundMessageStatus;
+    },
+    Array<{
+      _id: Id<"outboundMessages">;
+      name: string;
+      type: OutboundMessageType;
+      status: OutboundMessageStatus;
+      createdAt: number;
+      content: { text?: string; title?: string; body?: string };
+    }>
+  >("outboundMessages:list");
+
+  const createOutboundMessageRef = makeFunctionReference<"mutation", any, Id<"outboundMessages">>(
+    "outboundMessages:create"
+  );
+
+  const deleteOutboundMessageRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"outboundMessages"> },
+    null
+  >("outboundMessages:remove");
+
+  const activateOutboundMessageRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"outboundMessages"> },
+    null
+  >("outboundMessages:activate");
+
+  const pauseOutboundMessageRef = makeFunctionReference<
+    "mutation",
+    { id: Id<"outboundMessages"> },
+    null
+  >("outboundMessages:pause");
+
+  const messages = useQuery(outboundMessagesListQuery, activeWorkspace?._id
     ? {
         workspaceId: activeWorkspace._id,
         type: typeFilter === "all" ? undefined : typeFilter,
@@ -34,10 +73,10 @@ function OutboundContent() {
       }
     : "skip");
 
-  const createMessage = useMutation(api.outboundMessages.create);
-  const deleteMessage = useMutation(api.outboundMessages.remove);
-  const activateMessage = useMutation(api.outboundMessages.activate);
-  const pauseMessage = useMutation(api.outboundMessages.pause);
+  const createMessage = useMutation(createOutboundMessageRef);
+  const deleteMessage = useMutation(deleteOutboundMessageRef);
+  const activateMessage = useMutation(activateOutboundMessageRef);
+  const pauseMessage = useMutation(pauseOutboundMessageRef);
 
   const handleCreate = async (type: OutboundMessageType) => {
     if (!activeWorkspace?._id) return;

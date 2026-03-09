@@ -5,7 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Bell } from "lucide-react";
 import { Button, Card } from "@opencom/ui";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   broadcastInboxCuePreferencesUpdated,
@@ -13,6 +13,46 @@ import {
   saveInboxCuePreferences,
 } from "@/lib/inboxNotificationCues";
 import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
+
+const myNotificationPreferencesQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  {
+    effective: {
+      newVisitorMessageEmail: boolean;
+      newVisitorMessagePush: boolean;
+    };
+  } | null
+>("notificationSettings:getMyPreferences");
+
+const workspaceNotificationDefaultsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  {
+    newVisitorMessageEmail: boolean;
+    newVisitorMessagePush: boolean;
+  } | null
+>("notificationSettings:getWorkspaceDefaults");
+
+const updateMyNotificationPreferencesRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    newVisitorMessageEmail?: boolean;
+    newVisitorMessagePush?: boolean;
+  },
+  null
+>("notificationSettings:updateMyPreferences");
+
+const updateWorkspaceNotificationDefaultsRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    newVisitorMessageEmail?: boolean;
+    newVisitorMessagePush?: boolean;
+  },
+  null
+>("notificationSettings:updateWorkspaceDefaults");
 
 interface NotificationSettingsSectionProps {
   workspaceId?: Id<"workspaces">;
@@ -24,17 +64,17 @@ export function NotificationSettingsSection({
   isAdmin,
 }: NotificationSettingsSectionProps): React.JSX.Element | null {
   const myPreferences = useQuery(
-    api.notificationSettings.getMyPreferences,
+    myNotificationPreferencesQuery,
     workspaceId ? { workspaceId } : "skip"
   );
 
   const workspaceDefaults = useQuery(
-    api.notificationSettings.getWorkspaceDefaults,
+    workspaceNotificationDefaultsQuery,
     workspaceId && isAdmin ? { workspaceId } : "skip"
   );
 
-  const updateMyPreferences = useMutation(api.notificationSettings.updateMyPreferences);
-  const updateWorkspaceDefaults = useMutation(api.notificationSettings.updateWorkspaceDefaults);
+  const updateMyPreferences = useMutation(updateMyNotificationPreferencesRef);
+  const updateWorkspaceDefaults = useMutation(updateWorkspaceNotificationDefaultsRef);
 
   const [myEmailEnabled, setMyEmailEnabled] = useState(true);
   const [myPushEnabled, setMyPushEnabled] = useState(true);

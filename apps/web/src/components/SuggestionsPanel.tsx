@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Button, Card } from "@opencom/ui";
 import {
   Sparkles,
@@ -43,10 +43,41 @@ export function SuggestionsPanel({
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
-  const settings = useQuery(api.aiAgent.getSettings, { workspaceId });
-  const getSuggestions = useAction(api.suggestions.getForConversation);
-  const trackUsage = useMutation(api.suggestions.trackUsage);
-  const trackDismissal = useMutation(api.suggestions.trackDismissal);
+  const aiSettingsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    { suggestionsEnabled?: boolean } | null
+  >("aiAgent:getSettings");
+  const getSuggestionsAction = makeFunctionReference<
+    "action",
+    { conversationId: Id<"conversations">; limit: number },
+    Suggestion[]
+  >("suggestions:getForConversation");
+  const trackUsageRef = makeFunctionReference<
+    "mutation",
+    {
+      workspaceId: Id<"workspaces">;
+      conversationId: Id<"conversations">;
+      contentType: Suggestion["type"];
+      contentId: string;
+    },
+    null
+  >("suggestions:trackUsage");
+  const trackDismissalRef = makeFunctionReference<
+    "mutation",
+    {
+      workspaceId: Id<"workspaces">;
+      conversationId: Id<"conversations">;
+      contentType: Suggestion["type"];
+      contentId: string;
+    },
+    null
+  >("suggestions:trackDismissal");
+
+  const settings = useQuery(aiSettingsQuery, { workspaceId });
+  const getSuggestions = useAction(getSuggestionsAction);
+  const trackUsage = useMutation(trackUsageRef);
+  const trackDismissal = useMutation(trackDismissalRef);
 
   const fetchSuggestions = useCallback(async () => {
     if (!settings?.suggestionsEnabled) {

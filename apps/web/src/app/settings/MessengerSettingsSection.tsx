@@ -5,7 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { Palette, Eye } from "lucide-react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
 import { MessengerSettingsFormFields } from "./MessengerSettingsFormFields";
@@ -16,20 +16,45 @@ import {
   type MessengerSettingsFormState,
 } from "./messengerSettingsForm";
 
+const messengerSettingsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Record<string, unknown> | null
+>("messengerSettings:getOrCreate");
+
+const upsertMessengerSettingsRef = makeFunctionReference<"mutation", any, null>(
+  "messengerSettings:upsert"
+);
+const generateLogoUploadUrlRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  string
+>("messengerSettings:generateLogoUploadUrl");
+const saveLogoRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; storageId: string },
+  null
+>("messengerSettings:saveLogo");
+const deleteLogoRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  null
+>("messengerSettings:deleteLogo");
+
 export function MessengerSettingsSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
   const messengerSettings = useQuery(
-    api.messengerSettings.getOrCreate,
+    messengerSettingsQuery,
     workspaceId ? { workspaceId } : "skip"
   );
 
-  const upsertSettings = useMutation(api.messengerSettings.upsert);
-  const generateUploadUrl = useMutation(api.messengerSettings.generateLogoUploadUrl);
-  const saveLogo = useMutation(api.messengerSettings.saveLogo);
-  const deleteLogo = useMutation(api.messengerSettings.deleteLogo);
+  const upsertSettings = useMutation(upsertMessengerSettingsRef);
+  const generateUploadUrl = useMutation(generateLogoUploadUrlRef);
+  const saveLogo = useMutation(saveLogoRef);
+  const deleteLogo = useMutation(deleteLogoRef);
 
   const [formState, setFormState] = useState<MessengerSettingsFormState>(() =>
     createMessengerSettingsFormState()

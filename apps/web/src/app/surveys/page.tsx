@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,6 +11,53 @@ import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, Copy, Play, Pause, Search, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+
+const surveysListQuery = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    status?: "draft" | "active" | "paused" | "archived";
+  },
+  Array<{
+    _id: Id<"surveys">;
+    name: string;
+    description?: string;
+    format: string;
+    questions: unknown[];
+    status: "draft" | "active" | "paused" | "archived";
+    createdAt: number;
+  }>
+>("surveys:list");
+
+const createSurveyRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; name: string; format: string },
+  Id<"surveys">
+>("surveys:create");
+
+const deleteSurveyRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"surveys"> },
+  null
+>("surveys:remove");
+
+const activateSurveyRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"surveys"> },
+  null
+>("surveys:activate");
+
+const pauseSurveyRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"surveys"> },
+  null
+>("surveys:pause");
+
+const duplicateSurveyRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"surveys"> },
+  Id<"surveys"> | null
+>("surveys:duplicate");
 
 function SurveysContent() {
   const router = useRouter();
@@ -21,7 +68,7 @@ function SurveysContent() {
   >("all");
 
   const surveys = useQuery(
-    api.surveys.list,
+    surveysListQuery,
     activeWorkspace?._id
       ? {
           workspaceId: activeWorkspace._id,
@@ -30,11 +77,11 @@ function SurveysContent() {
       : "skip"
   );
 
-  const createSurvey = useMutation(api.surveys.create);
-  const deleteSurvey = useMutation(api.surveys.remove);
-  const activateSurvey = useMutation(api.surveys.activate);
-  const pauseSurvey = useMutation(api.surveys.pause);
-  const duplicateSurvey = useMutation(api.surveys.duplicate);
+  const createSurvey = useMutation(createSurveyRef);
+  const deleteSurvey = useMutation(deleteSurveyRef);
+  const activateSurvey = useMutation(activateSurveyRef);
+  const pauseSurvey = useMutation(pauseSurveyRef);
+  const duplicateSurvey = useMutation(duplicateSurveyRef);
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;

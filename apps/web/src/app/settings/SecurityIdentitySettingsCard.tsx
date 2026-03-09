@@ -4,22 +4,53 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@opencom/ui";
 import { Check, Copy } from "lucide-react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { appConfirm } from "@/lib/appConfirm";
+
+const identitySettingsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  { enabled: boolean; mode: "optional" | "required" } | null
+>("identityVerification:getSettings");
+const identitySecretQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  { secret?: string | null } | null
+>("identityVerification:getSecret");
+const enableIdentityRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  { secret?: string | null }
+>("identityVerification:enable");
+const disableIdentityRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; confirmDisable: boolean },
+  null
+>("identityVerification:disable");
+const updateIdentityModeRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; mode: "optional" | "required" },
+  null
+>("identityVerification:updateMode");
+const rotateIdentitySecretRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  { secret?: string | null }
+>("identityVerification:rotateSecret");
 
 export function SecurityIdentitySettingsCard({
   workspaceId,
 }: {
   workspaceId: Id<"workspaces">;
 }): React.JSX.Element {
-  const identitySettings = useQuery(api.identityVerification.getSettings, { workspaceId });
-  const identitySecret = useQuery(api.identityVerification.getSecret, { workspaceId });
+  const identitySettings = useQuery(identitySettingsQuery, { workspaceId });
+  const identitySecret = useQuery(identitySecretQuery, { workspaceId });
 
-  const enableIdentity = useMutation(api.identityVerification.enable);
-  const disableIdentity = useMutation(api.identityVerification.disable);
-  const updateMode = useMutation(api.identityVerification.updateMode);
-  const rotateSecret = useMutation(api.identityVerification.rotateSecret);
+  const enableIdentity = useMutation(enableIdentityRef);
+  const disableIdentity = useMutation(disableIdentityRef);
+  const updateMode = useMutation(updateIdentityModeRef);
+  const rotateSecret = useMutation(rotateIdentitySecretRef);
 
   const [showSecret, setShowSecret] = useState(false);
   const [showDisableConfirm, setShowDisableConfirm] = useState(false);

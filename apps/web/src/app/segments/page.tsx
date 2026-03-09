@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Trash2, Edit2, Users, AlertTriangle, Layers } from "lucide-react";
@@ -15,14 +15,76 @@ import {
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
 
-type SegmentAudienceRulesInput = NonNullable<typeof api.segments.update._args.audienceRules>;
+type SegmentAudienceRulesInput = InlineAudienceRule;
+
+const segmentsListQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Array<{ _id: Id<"segments">; name: string; description?: string; audienceRules: unknown }>
+>("segments:list");
+
+const segmentPreviewQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; audienceRules: SegmentAudienceRulesInput },
+  { matching: number; total: number } | null
+>("segments:preview");
+
+const segmentUsageQuery = makeFunctionReference<
+  "query",
+  { id: Id<"segments"> },
+  Array<{ type: string; name: string }>
+>("segments:getUsage");
+
+const segmentGetQuery = makeFunctionReference<
+  "query",
+  { id: Id<"segments"> },
+  {
+    _id: Id<"segments">;
+    name: string;
+    description?: string;
+    audienceRules: unknown;
+  } | null
+>("segments:get");
+
+const eventNamesQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  string[]
+>("events:getDistinctNames");
+
+const createSegmentRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    name: string;
+    description?: string;
+    audienceRules: SegmentAudienceRulesInput;
+  },
+  Id<"segments">
+>("segments:create");
+
+const updateSegmentRef = makeFunctionReference<
+  "mutation",
+  {
+    id: Id<"segments">;
+    name?: string;
+    description?: string;
+    audienceRules?: SegmentAudienceRulesInput;
+  },
+  null
+>("segments:update");
+
+const deleteSegmentRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"segments"> },
+  null
+>("segments:remove");
 
 function SegmentsContent() {
   const { user } = useAuth();
   const workspaceId = user?.workspaceId as Id<"workspaces"> | undefined;
 
-  const segments = useQuery(api.segments.list, workspaceId ? { workspaceId } : "skip");
-
+  const segments = useQuery(segmentsListQuery, workspaceId ? { workspaceId } : "skip");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Id<"segments"> | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<Id<"segments"> | null>(null);
@@ -110,7 +172,7 @@ function SegmentCard({
 }) {
   const parsedAudienceRules = toInlineAudienceRule(segment.audienceRules);
   const preview = useQuery(
-    api.segments.preview,
+    segmentPreviewQuery,
     parsedAudienceRules
       ? {
           workspaceId,
@@ -119,7 +181,7 @@ function SegmentCard({
       : "skip"
   );
 
-  const usage = useQuery(api.segments.getUsage, { id: segment._id });
+  const usage = useQuery(segmentUsageQuery, { id: segment._id });
 
   return (
     <div
@@ -175,12 +237,12 @@ function SegmentModal({
   segmentId?: Id<"segments">;
   onClose: () => void;
 }) {
-  const existingSegment = useQuery(api.segments.get, segmentId ? { id: segmentId } : "skip");
+  const existingSegment = useQuery(segmentGetQuery, segmentId ? { id: segmentId } : "skip");
 
-  const eventNames = useQuery(api.events.getDistinctNames, { workspaceId });
+  const eventNames = useQuery(eventNamesQuery, { workspaceId });
 
-  const createSegment = useMutation(api.segments.create);
-  const updateSegment = useMutation(api.segments.update);
+  const createSegment = useMutation(createSegmentRef);
+  const updateSegment = useMutation(updateSegmentRef);
 
   const [name, setName] = useState(existingSegment?.name || "");
   const [description, setDescription] = useState(existingSegment?.description || "");
@@ -305,9 +367,9 @@ function DeleteConfirmModal({
   segmentId: Id<"segments">;
   onClose: () => void;
 }) {
-  const segment = useQuery(api.segments.get, { id: segmentId });
-  const usage = useQuery(api.segments.getUsage, { id: segmentId });
-  const deleteSegment = useMutation(api.segments.remove);
+  const segment = useQuery(segmentGetQuery, { id: segmentId });
+  const usage = useQuery(segmentUsageQuery, { id: segmentId });
+  const deleteSegment = useMutation(deleteSegmentRef);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
