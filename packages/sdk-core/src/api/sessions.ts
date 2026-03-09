@@ -1,7 +1,11 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { DeviceInfo, UserIdentification } from "../types";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export interface BootSessionResult {
   visitor: { _id: string };
@@ -24,7 +28,7 @@ export async function bootSession(params: {
   const client = getClient();
   const config = getConfig();
 
-  const result = await client.mutation(api.widgetSessions.boot, {
+  const result = await client.mutation(getMutationRef("widgetSessions:boot"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     sessionId: params.sessionId,
     device: params.device,
@@ -56,7 +60,7 @@ export async function refreshSession(params: {
 }): Promise<RefreshSessionResult> {
   const client = getClient();
 
-  const result = await client.mutation(api.widgetSessions.refresh, {
+  const result = await client.mutation(getMutationRef("widgetSessions:refresh"), {
     sessionToken: params.sessionToken,
   });
 
@@ -66,7 +70,7 @@ export async function refreshSession(params: {
 export async function revokeSession(params: { sessionToken: string }): Promise<void> {
   const client = getClient();
 
-  await client.mutation(api.widgetSessions.revoke, {
+  await client.mutation(getMutationRef("widgetSessions:revoke"), {
     sessionToken: params.sessionToken,
   });
 }

@@ -14,7 +14,6 @@
   "dependencies": {
     "@convex-dev/auth": "^0.0.90",
     "@opencom/convex": "workspace:*",
-    "@opencom/sdk-core": "workspace:*",
     "@opencom/types": "workspace:*",
     "@opencom/ui": "workspace:*",
     "@opencom/web-shared": "workspace:*",

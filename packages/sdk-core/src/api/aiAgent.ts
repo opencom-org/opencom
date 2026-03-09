@@ -1,8 +1,16 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { ConversationId, VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export type AIResponseId = Id<"aiResponses">;
 
@@ -51,7 +59,7 @@ export async function getAISettings(): Promise<AIAgentSettings> {
   const client = getClient();
   const config = getConfig();
 
-  const settings = await client.query(api.aiAgent.getPublicSettings, {
+  const settings = await client.query(getQueryRef("aiAgent:getPublicSettings"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 
@@ -65,7 +73,7 @@ export async function getRelevantKnowledge(
   const client = getClient();
   const config = getConfig();
 
-  const results = await client.query(api.aiAgent.getRelevantKnowledge, {
+  const results = await client.query(getQueryRef("aiAgent:getRelevantKnowledge"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     query,
     limit,
@@ -84,7 +92,7 @@ export async function getConversationAIResponses(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const responses = await client.query(api.aiAgent.getConversationResponses, {
+  const responses = await client.query(getQueryRef("aiAgent:getConversationResponses"), {
     conversationId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -104,7 +112,7 @@ export async function submitAIFeedback(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  await client.mutation(api.aiAgent.submitFeedback, {
+  await client.mutation(getMutationRef("aiAgent:submitFeedback"), {
     responseId,
     feedback,
     visitorId: resolvedVisitorId,
@@ -123,7 +131,7 @@ export async function handoffToHuman(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const result = await client.mutation(api.aiAgent.handoffToHuman, {
+  const result = await client.mutation(getMutationRef("aiAgent:handoffToHuman"), {
     conversationId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -140,7 +148,7 @@ export async function shouldAIRespond(): Promise<{
   const client = getClient();
   const config = getConfig();
 
-  const result = await client.query(api.aiAgent.shouldRespond, {
+  const result = await client.query(getQueryRef("aiAgent:shouldRespond"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 

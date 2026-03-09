@@ -1,7 +1,11 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId, EventProperties } from "../types";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export type AutoEventType = "page_view" | "screen_view" | "session_start" | "session_end";
 type ConvexEventPropertyValue = string | number | boolean | null | Array<string | number>;
@@ -49,7 +53,7 @@ export async function trackEvent(params: {
   const config = getConfig();
   const properties = normalizeEventProperties(params.properties);
 
-  await client.mutation(api.events.track, {
+  await client.mutation(getMutationRef("events:track"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId: params.visitorId,
     sessionToken: params.sessionToken,
@@ -76,7 +80,7 @@ export async function trackAutoEvent(params: {
   const config = getConfig();
   const properties = normalizeEventProperties(params.properties);
 
-  const result = await client.mutation(api.events.trackAutoEvent, {
+  const result = await client.mutation(getMutationRef("events:trackAutoEvent"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId: params.visitorId,
     sessionToken: params.sessionToken,

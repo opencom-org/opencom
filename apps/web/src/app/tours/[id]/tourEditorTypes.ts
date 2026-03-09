@@ -1,5 +1,5 @@
 import type { Doc } from "@opencom/convex/dataModel";
-import { scoreSelectorQuality } from "@opencom/sdk-core";
+import { scoreSelectorQuality } from "@opencom/web-shared";
 
 export type StepType = "pointer" | "post" | "video";
 export type Position = "auto" | "left" | "right" | "above" | "below";

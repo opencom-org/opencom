@@ -1,8 +1,8 @@
 "use client";
 
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { useState } from "react";
 import { useAction, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import type { Id } from "@opencom/convex/dataModel";
 
@@ -73,6 +73,14 @@ type TransferOwnershipFn = (args: {
   newOwnerId: Id<"users">;
 }) => Promise<{ success: boolean }>;
 
+function getActionRef(name: string): FunctionReference<"action"> {
+  return makeFunctionReference(name) as FunctionReference<"action">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
+
 export function useTeamMembersSettings({
   workspaceId,
   onError,
@@ -87,11 +95,15 @@ export function useTeamMembersSettings({
   const [transferTargetId, setTransferTargetId] = useState<Id<"users"> | null>(null);
   const [showRoleConfirm, setShowRoleConfirm] = useState<RoleConfirmState | null>(null);
 
-  const inviteToWorkspace = useAction(api.workspaceMembers.inviteToWorkspace) as InviteToWorkspaceFn;
-  const updateRole = useMutation(api.workspaceMembers.updateRole) as UpdateRoleFn;
-  const removeMember = useMutation(api.workspaceMembers.remove) as RemoveMemberFn;
-  const cancelInvitation = useMutation(api.workspaceMembers.cancelInvitation) as CancelInvitationFn;
-  const transferOwnership = useMutation(api.workspaceMembers.transferOwnership) as TransferOwnershipFn;
+  const inviteToWorkspace = useAction(getActionRef("workspaceMembers:inviteToWorkspace")) as InviteToWorkspaceFn;
+  const updateRole = useMutation(getMutationRef("workspaceMembers:updateRole")) as UpdateRoleFn;
+  const removeMember = useMutation(getMutationRef("workspaceMembers:remove")) as RemoveMemberFn;
+  const cancelInvitation = useMutation(
+    getMutationRef("workspaceMembers:cancelInvitation")
+  ) as CancelInvitationFn;
+  const transferOwnership = useMutation(
+    getMutationRef("workspaceMembers:transferOwnership")
+  ) as TransferOwnershipFn;
 
   const handleInvite = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -1,8 +1,16 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId, ConversationId } from "../types";
 import { getVisitorState } from "../state/visitor";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 function requireVisitorSessionToken(sessionToken?: string): string {
   const resolvedSessionToken = sessionToken ?? getVisitorState().sessionToken ?? undefined;
@@ -20,7 +28,7 @@ export async function createConversation(
   const config = getConfig();
   const resolvedSessionToken = requireVisitorSessionToken(sessionToken);
 
-  const result = await client.mutation(api.conversations.createForVisitor, {
+  const result = await client.mutation(getMutationRef("conversations:createForVisitor"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: resolvedSessionToken,
@@ -37,7 +45,7 @@ export async function getOrCreateConversation(
   const config = getConfig();
   const resolvedSessionToken = requireVisitorSessionToken(sessionToken);
 
-  const result = await client.mutation(api.conversations.getOrCreateForVisitor, {
+  const result = await client.mutation(getMutationRef("conversations:getOrCreateForVisitor"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: resolvedSessionToken,
@@ -62,7 +70,7 @@ export async function getMessages(
 > {
   const client = getClient();
 
-  const result = await client.query(api.messages.list, {
+  const result = await client.query(getQueryRef("messages:list"), {
     conversationId,
     visitorId,
     sessionToken,
@@ -76,7 +84,7 @@ export async function getConversations(visitorId: VisitorId, sessionToken?: stri
   const config = getConfig();
   const resolvedSessionToken = requireVisitorSessionToken(sessionToken);
 
-  const result = await client.query(api.conversations.listByVisitor, {
+  const result = await client.query(getQueryRef("conversations:listByVisitor"), {
     visitorId,
     sessionToken: resolvedSessionToken,
     workspaceId: config.workspaceId as Id<"workspaces">,
@@ -92,7 +100,7 @@ export async function markAsRead(
 ): Promise<void> {
   const client = getClient();
   const resolvedSessionToken = requireVisitorSessionToken(sessionToken);
-  await client.mutation(api.conversations.markAsRead, {
+  await client.mutation(getMutationRef("conversations:markAsRead"), {
     id: conversationId,
     readerType: "visitor",
     visitorId,
@@ -109,7 +117,7 @@ export async function sendMessage(params: {
   const client = getClient();
   const resolvedSessionToken = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  await client.mutation(api.messages.send, {
+  await client.mutation(getMutationRef("messages:send"), {
     conversationId: params.conversationId,
     senderId: params.visitorId,
     senderType: "visitor",

@@ -19,3 +19,9 @@ export {
   type NormalizeUnknownErrorOptions,
 } from "./errorFeedback";
 export { resolveArticleSourceId, type AISourceMetadata } from "./aiSourceLinks";
+export {
+  scoreSelectorQuality,
+  type SelectorQualityGrade,
+  type SelectorQualityMetadata,
+  type SelectorQualitySignals,
+} from "./selectorQuality";

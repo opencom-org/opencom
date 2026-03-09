@@ -1,8 +1,12 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId, ArticleId, ArticleData } from "../types";
 import { getVisitorState } from "../state/visitor";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 interface ArticleDoc {
   _id: ArticleId;
@@ -21,7 +25,7 @@ export async function searchArticles(params: {
   const state = getVisitorState();
   const sessionToken = params.sessionToken ?? state.sessionToken ?? undefined;
 
-  const results = await client.query(api.articles.searchForVisitor, {
+  const results = await client.query(getQueryRef("articles:searchForVisitor"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId: params.visitorId,
     sessionToken,
@@ -45,7 +49,7 @@ export async function listArticles(
   const state = getVisitorState();
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const results = await client.query(api.articles.listForVisitor, {
+  const results = await client.query(getQueryRef("articles:listForVisitor"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: token,
@@ -62,7 +66,7 @@ export async function listArticles(
 export async function getArticle(articleId: ArticleId): Promise<ArticleData | null> {
   const client = getClient();
 
-  const article = await client.query(api.articles.get, { id: articleId });
+  const article = await client.query(getQueryRef("articles:get"), { id: articleId });
 
   if (!article) return null;
 
