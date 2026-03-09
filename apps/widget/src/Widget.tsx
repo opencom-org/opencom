@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { MessageCircle, Plus } from "./icons";
 import { Home as HomeComponent, useHomeConfig } from "./components/Home";
 import { ConversationList } from "./components/ConversationList";
@@ -38,6 +38,275 @@ import {
 } from "./widgetShell/helpers";
 import type { WidgetProps, WidgetView } from "./widgetShell/types";
 import { WidgetMainShell } from "./widgetShell/WidgetMainShell";
+
+type ConversationListItem = {
+  _id: Id<"conversations">;
+  status: "open" | "closed" | "snoozed";
+  createdAt: number;
+  updatedAt: number;
+  lastMessageAt?: number;
+  unreadByVisitor?: number;
+  lastMessage?: {
+    content: string;
+    senderType: string;
+  } | null;
+};
+
+type ArticleListItem = {
+  _id: Id<"articles">;
+  title: string;
+  content: string;
+  slug: string;
+  collectionId?: Id<"collections">;
+  order?: number;
+  renderedContent?: string;
+};
+
+type CollectionHierarchyItem = {
+  _id: Id<"collections">;
+  name: string;
+  parentId?: Id<"collections">;
+  description?: string;
+};
+
+type OfficeHoursStatusRecord = {
+  isOpen: boolean;
+  offlineMessage?: string | null;
+};
+
+type TourListItem = {
+  tour: {
+    _id: Id<"tours">;
+    name: string;
+    description?: string;
+    displayMode?: "first_time_only" | "until_dismissed";
+    buttonColor?: string;
+    showConfetti?: boolean;
+    allowSnooze?: boolean;
+    allowRestart?: boolean;
+  };
+  steps: Array<{
+    _id: Id<"tourSteps">;
+    tourId: Id<"tours">;
+    type: "pointer" | "post" | "video";
+    order: number;
+    title?: string;
+    content: string;
+    elementSelector?: string;
+    routePath?: string;
+    position?: "auto" | "left" | "right" | "above" | "below";
+    size?: "small" | "large";
+    advanceOn?: "click" | "elementClick" | "fieldFill";
+    customButtonText?: string;
+    mediaUrl?: string;
+    mediaType?: "image" | "video";
+  }>;
+  elementSelectors: string[];
+  tourStatus: string;
+  progress?: {
+    currentStep: number;
+    status: string;
+    checkpointRoute?: string;
+    checkpointSelector?: string;
+  };
+};
+
+type EligibleChecklistItem = {
+  checklist: {
+    _id: Id<"checklists">;
+    name: string;
+    description?: string;
+    tasks: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      action?: {
+        type: "tour" | "url" | "event";
+        tourId?: Id<"tours">;
+        url?: string;
+        eventName?: string;
+      };
+      completionType: "manual" | "auto_event" | "auto_attribute";
+    }>;
+  };
+  progress: { completedTaskIds: string[] } | null;
+};
+
+type ActiveSurveyRecord = SurveyDeliveryCandidate<Id<"surveys">> & {
+  _id: Id<"surveys">;
+  name: string;
+  format: "small" | "large";
+  questions: Array<{
+    id: string;
+    type:
+      | "nps"
+      | "numeric_scale"
+      | "star_rating"
+      | "emoji_rating"
+      | "dropdown"
+      | "short_text"
+      | "long_text"
+      | "multiple_choice";
+    title: string;
+    description?: string;
+    required: boolean;
+    storeAsAttribute?: string;
+    options?: {
+      scaleStart?: number;
+      scaleEnd?: number;
+      startLabel?: string;
+      endLabel?: string;
+      starLabels?: { low?: string; high?: string };
+      emojiCount?: 3 | 5;
+      emojiLabels?: { low?: string; high?: string };
+      choices?: string[];
+      allowMultiple?: boolean;
+    };
+  }>;
+  introStep?: { title: string; description?: string; buttonText?: string };
+  thankYouStep?: { title: string; description?: string; buttonText?: string };
+  showProgressBar?: boolean;
+  showDismissButton?: boolean;
+};
+
+type TooltipRecord = {
+  _id: Id<"tooltips">;
+  name: string;
+  elementSelector: string;
+  content: string;
+  triggerType: "hover" | "click" | "auto";
+};
+
+type AutomationSettingsRecord = {
+  suggestArticlesEnabled?: boolean;
+  collectEmailEnabled?: boolean;
+  showReplyTimeEnabled?: boolean;
+  askForRatingEnabled?: boolean;
+};
+
+type CommonIssueButtonRecord = {
+  _id: string;
+  label: string;
+  action: string;
+  articleId?: Id<"articles">;
+  conversationStarter?: string;
+};
+
+const visitorConversationsQueryRef = makeFunctionReference<
+  "query",
+  { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
+  ConversationListItem[]
+>("conversations:listByVisitor");
+
+const totalUnreadForVisitorQueryRef = makeFunctionReference<
+  "query",
+  { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
+  number
+>("conversations:getTotalUnreadForVisitor");
+
+const articleSearchForVisitorQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+    query: string;
+  },
+  ArticleListItem[]
+>("articles:searchForVisitor");
+
+const articleListForVisitorQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  ArticleListItem[]
+>("articles:listForVisitor");
+
+const collectionHierarchyForVisitorQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  CollectionHierarchyItem[]
+>("collections:listHierarchyForVisitor");
+
+const articleGetForVisitorQueryRef = makeFunctionReference<
+  "query",
+  {
+    id: Id<"articles">;
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+  },
+  ArticleListItem | null
+>("articles:getForVisitor");
+
+const automationSettingsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  AutomationSettingsRecord
+>("automationSettings:getOrCreate");
+
+const commonIssueButtonsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  CommonIssueButtonRecord[]
+>("commonIssueButtons:list");
+
+const officeHoursOpenQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  OfficeHoursStatusRecord
+>("officeHours:isCurrentlyOpen");
+
+const expectedReplyTimeQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  string
+>("officeHours:getExpectedReplyTime");
+
+const availableToursQueryRef = makeFunctionReference<
+  "query",
+  {
+    visitorId: Id<"visitors">;
+    workspaceId: Id<"workspaces">;
+    sessionToken: string;
+    currentUrl: string;
+  },
+  TourListItem[]
+>("tourProgress:getAvailableTours");
+
+const allToursQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  TourListItem[]
+>("tours:listAll");
+
+const eligibleChecklistsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  EligibleChecklistItem[]
+>("checklists:getEligible");
+
+const activeSurveysQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  ActiveSurveyRecord[]
+>("surveys:getActiveSurveys");
+
+const availableTooltipsQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+    triggerContext: {
+      currentUrl?: string;
+      timeOnPageSeconds?: number;
+      scrollPercent?: number;
+      firedEventName?: string;
+      isExitIntent?: boolean;
+    };
+  },
+  TooltipRecord[]
+>("tooltips:getAvailableTooltips");
 
 export function Widget({
   workspaceId: _workspaceId,
@@ -156,11 +425,11 @@ export function Widget({
 
   // ── Queries ────────────────────────────────────────────────────────
   const visitorConversations = useQuery(
-    api.conversations.listByVisitor,
+    visitorConversationsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
       : "skip"
-  );
+  ) as ConversationListItem[] | undefined;
 
   const {
     conversationId,
@@ -204,11 +473,11 @@ export function Widget({
   });
 
   const totalUnread = useQuery(
-    api.conversations.getTotalUnreadForVisitor,
+    totalUnreadForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
       : "skip"
-  );
+  ) as number | undefined;
 
   const normalizedUnreadCount = useMemo(() => {
     if (typeof totalUnread === "number") {
@@ -219,7 +488,7 @@ export function Widget({
   }, [totalUnread]);
 
   const articleSearchResults = useQuery(
-    api.articles.searchForVisitor,
+    articleSearchForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken && articleSearchQuery.length >= 2
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -228,17 +497,17 @@ export function Widget({
           query: articleSearchQuery,
         }
       : "skip"
-  );
+  ) as ArticleListItem[] | undefined;
 
   // List published articles for browsing (when not searching), filtered by visitor audience
   const publishedArticles = useQuery(
-    api.articles.listForVisitor,
+    articleListForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
-  );
+  ) as ArticleListItem[] | undefined;
   const publishedCollections = useQuery(
-    api.collections.listHierarchyForVisitor,
+    collectionHierarchyForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -246,7 +515,7 @@ export function Widget({
           sessionToken,
         }
       : "skip"
-  );
+  ) as CollectionHierarchyItem[] | undefined;
 
   const selectedArticleFromBrowseResults = useMemo(() => {
     if (!selectedArticleId) return undefined;
@@ -257,7 +526,7 @@ export function Widget({
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
   const selectedArticleQuery = useQuery(
-    api.articles.getForVisitor,
+    articleGetForVisitorQueryRef,
     isValidIdFormat &&
       selectedArticleId &&
       !selectedArticleFromBrowseResults &&
@@ -271,7 +540,7 @@ export function Widget({
           sessionToken,
         }
       : "skip"
-  );
+  ) as ArticleListItem | null | undefined;
   const selectedArticle = selectedArticleFromBrowseResults ?? selectedArticleQuery ?? null;
   const isSelectedArticleLoading =
     Boolean(selectedArticleId) &&
@@ -280,30 +549,30 @@ export function Widget({
 
   // Automation settings for self-serve features (getOrCreate returns defaults for new workspaces)
   const automationSettings = useQuery(
-    api.automationSettings.getOrCreate,
+    automationSettingsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as AutomationSettingsRecord | undefined;
 
   // Common issue buttons for quick actions
   const commonIssueButtons = useQuery(
-    api.commonIssueButtons.list,
+    commonIssueButtonsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as CommonIssueButtonRecord[] | undefined;
 
   // Office hours for reply time expectations
   const officeHoursStatus = useQuery(
-    api.officeHours.isCurrentlyOpen,
+    officeHoursOpenQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as OfficeHoursStatusRecord | undefined;
 
   const expectedReplyTime = useQuery(
-    api.officeHours.getExpectedReplyTime,
+    expectedReplyTimeQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as string | undefined;
 
   // Tour queries
   const availableTours = useQuery(
-    api.tourProgress.getAvailableTours,
+    availableToursQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           visitorId,
@@ -312,25 +581,25 @@ export function Widget({
           currentUrl: window.location.href,
         }
       : "skip"
-  );
+  ) as TourListItem[] | undefined;
 
   const allTours = useQuery(
-    api.tours.listAll,
+    allToursQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
-  );
+  ) as TourListItem[] | undefined;
 
   // Checklist query for showing empty state
   const eligibleChecklists = useQuery(
-    api.checklists.getEligible,
+    eligibleChecklistsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
-  );
+  ) as EligibleChecklistItem[] | undefined;
 
   const activeSurveys = useQuery(
-    api.surveys.getActiveSurveys,
+    activeSurveysQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -338,13 +607,13 @@ export function Widget({
           sessionToken,
         }
       : "skip"
-  );
-  type ActiveSurvey = NonNullable<typeof activeSurveys>[number];
+  ) as ActiveSurveyRecord[] | undefined;
+  type ActiveSurvey = ActiveSurveyRecord;
   const [displayedSurvey, setDisplayedSurvey] = useState<ActiveSurvey | null>(null);
 
   // Available tooltips based on audience rules and triggers
   const availableTooltips = useQuery(
-    api.tooltips.getAvailableTooltips,
+    availableTooltipsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -353,7 +622,7 @@ export function Widget({
           triggerContext: tooltipTriggerContext,
         }
       : "skip"
-  );
+  ) as TooltipRecord[] | undefined;
 
   const candidateSurvey = useMemo(() => {
     if (!activeSurveys || surveyEligibilityUnavailable) {

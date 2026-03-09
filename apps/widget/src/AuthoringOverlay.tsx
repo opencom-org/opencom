@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { scoreSelectorQuality } from "@opencom/sdk-core";
@@ -30,6 +30,51 @@ interface ElementRect {
   width: number;
   height: number;
 }
+
+type AuthoringSessionData =
+  | {
+      valid: true;
+      steps?: TourStep[];
+      tour?: { name?: string; buttonColor?: string | null } | null;
+      session?: { stepId?: Id<"tourSteps"> | null } | null;
+    }
+  | {
+      valid: false;
+      reason?: string;
+      steps?: TourStep[];
+      tour?: null;
+      session?: null;
+    };
+
+const validateAuthoringSessionQueryRef = makeFunctionReference<
+  "query",
+  { token: string },
+  AuthoringSessionData | null
+>("authoringSessions:validate");
+
+const updateAuthoringStepMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    token: string;
+    stepId: Id<"tourSteps">;
+    elementSelector: string;
+    currentUrl: string;
+    selectorQuality: ReturnType<typeof scoreSelectorQuality>;
+  },
+  null
+>("authoringSessions:updateStep");
+
+const setAuthoringCurrentStepMutationRef = makeFunctionReference<
+  "mutation",
+  { token: string; stepId: Id<"tourSteps"> },
+  null
+>("authoringSessions:setCurrentStep");
+
+const endAuthoringSessionMutationRef = makeFunctionReference<
+  "mutation",
+  { token: string },
+  null
+>("authoringSessions:end");
 
 function generateSelector(element: Element): string {
   // Priority 1: data-tour-target or data-opencom-* attributes
@@ -139,10 +184,12 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
   );
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const sessionData = useQuery(api.authoringSessions.validate, { token });
-  const updateStepMutation = useMutation(api.authoringSessions.updateStep);
-  const setCurrentStepMutation = useMutation(api.authoringSessions.setCurrentStep);
-  const endSessionMutation = useMutation(api.authoringSessions.end);
+  const sessionData = useQuery(validateAuthoringSessionQueryRef, { token }) as
+    | AuthoringSessionData
+    | undefined;
+  const updateStepMutation = useMutation(updateAuthoringStepMutationRef);
+  const setCurrentStepMutation = useMutation(setAuthoringCurrentStepMutationRef);
+  const endSessionMutation = useMutation(endAuthoringSessionMutationRef);
 
   const steps = useMemo(
     () => (sessionData?.valid ? (sessionData.steps ?? []) : []),
@@ -153,8 +200,9 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
 
   // Set initial step from session
   useEffect(() => {
-    if (sessionData?.valid && sessionData.session && sessionData.session.stepId) {
-      const stepIndex = steps.findIndex((s: TourStep) => s._id === sessionData.session.stepId);
+    const sessionStepId = sessionData?.valid ? sessionData.session?.stepId : null;
+    if (sessionStepId) {
+      const stepIndex = steps.findIndex((s: TourStep) => s._id === sessionStepId);
       if (stepIndex !== -1) {
         setCurrentStepIndex(stepIndex);
       }

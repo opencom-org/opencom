@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { CheckSquare, ChevronDown, ChevronUp, ExternalLink } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
 import { safeOpenUrl } from "./utils/safeOpenUrl";
@@ -32,6 +32,41 @@ interface ChecklistOverlayProps {
   onStartTour?: (tourId: Id<"tours">) => void;
 }
 
+type EligibleChecklistRecord = {
+  checklist: Checklist;
+  progress: { completedTaskIds: string[] } | null;
+};
+
+const eligibleChecklistsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken?: string },
+  EligibleChecklistRecord[]
+>("checklists:getEligible");
+
+const completeChecklistTaskMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    visitorId: Id<"visitors">;
+    checklistId: Id<"checklists">;
+    taskId: string;
+    workspaceId: Id<"workspaces">;
+    sessionToken?: string;
+  },
+  null
+>("checklists:completeTask");
+
+const uncompleteChecklistTaskMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    visitorId: Id<"visitors">;
+    checklistId: Id<"checklists">;
+    taskId: string;
+    workspaceId: Id<"workspaces">;
+    sessionToken?: string;
+  },
+  null
+>("checklists:uncompleteTask");
+
 export function ChecklistOverlay({
   workspaceId,
   visitorId,
@@ -40,14 +75,14 @@ export function ChecklistOverlay({
 }: ChecklistOverlayProps) {
   const [expandedChecklist, setExpandedChecklist] = useState<Id<"checklists"> | null>(null);
 
-  const eligibleChecklists = useQuery(api.checklists.getEligible, {
+  const eligibleChecklists = useQuery(eligibleChecklistsQueryRef, {
     workspaceId,
     visitorId,
     sessionToken: sessionToken ?? undefined,
-  });
+  }) as EligibleChecklistRecord[] | undefined;
 
-  const completeTask = useMutation(api.checklists.completeTask);
-  const uncompleteTask = useMutation(api.checklists.uncompleteTask);
+  const completeTask = useMutation(completeChecklistTaskMutationRef);
+  const uncompleteTask = useMutation(uncompleteChecklistTaskMutationRef);
 
   const handleTaskClick = useCallback(
     async (checklist: Checklist, task: ChecklistTask, isCompleted: boolean) => {
@@ -94,10 +129,7 @@ export function ChecklistOverlay({
         ({
           checklist,
           progress,
-        }: {
-          checklist: Checklist;
-          progress: { completedTaskIds: string[] } | null;
-        }) => {
+        }: EligibleChecklistRecord) => {
           const completedTaskIds = progress?.completedTaskIds || [];
           const completedCount = completedTaskIds.length;
           const totalCount = checklist.tasks.length;

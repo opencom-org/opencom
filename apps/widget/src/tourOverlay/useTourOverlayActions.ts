@@ -1,9 +1,33 @@
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getAdvanceGuidance, getBlockedReasonMessage } from "./messages";
 import type { AdvanceOn, DiagnosticReason, TourData, TourStep } from "./types";
+
+const advanceTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
+  "tourProgress:advance"
+);
+const dismissTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
+  "tourProgress:dismiss"
+);
+const dismissTourPermanentlyMutationRef = makeFunctionReference<
+  "mutation",
+  Record<string, unknown>,
+  unknown
+>("tourProgress:dismissPermanently");
+const snoozeTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
+  "tourProgress:snooze"
+);
+const restartTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
+  "tourProgress:restart"
+);
+const skipTourStepMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
+  "tourProgress:skipStep"
+);
+const checkpointTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
+  "tourProgress:checkpoint"
+);
 
 interface UseTourOverlayActionsOptions {
   workspaceId: Id<"workspaces">;
@@ -50,13 +74,13 @@ export function useTourOverlayActions({
   skipHandledStepRef,
   fieldListenerRef,
 }: UseTourOverlayActionsOptions) {
-  const advanceTour = useMutation(api.tourProgress.advance);
-  const dismissTour = useMutation(api.tourProgress.dismiss);
-  const dismissPermanently = useMutation(api.tourProgress.dismissPermanently);
-  const snoozeTour = useMutation(api.tourProgress.snooze);
-  const restartTour = useMutation(api.tourProgress.restart);
-  const skipTourStep = useMutation(api.tourProgress.skipStep);
-  const checkpointTour = useMutation(api.tourProgress.checkpoint);
+  const advanceTour = useMutation(advanceTourMutationRef);
+  const dismissTour = useMutation(dismissTourMutationRef);
+  const dismissPermanently = useMutation(dismissTourPermanentlyMutationRef);
+  const snoozeTour = useMutation(snoozeTourMutationRef);
+  const restartTour = useMutation(restartTourMutationRef);
+  const skipTourStep = useMutation(skipTourStepMutationRef);
+  const checkpointTour = useMutation(checkpointTourMutationRef);
 
   const checkpointCurrentStep = useCallback(
     (opts?: {

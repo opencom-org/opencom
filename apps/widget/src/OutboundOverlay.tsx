@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { X } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
 import type {
@@ -16,6 +16,31 @@ type OutboundMessage = EligibleOutboundMessage<
   Id<"tours">,
   Id<"articles">
 >;
+
+const eligibleOutboundMessagesQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    currentUrl: string;
+    sessionId: string;
+  },
+  OutboundMessage[]
+>("outboundMessages:getEligible");
+
+const trackOutboundImpressionMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    messageId: Id<"outboundMessages">;
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    sessionId: string;
+    action: "shown" | "dismissed" | "clicked";
+    buttonIndex?: number;
+  },
+  null
+>("outboundMessages:trackImpression");
 
 // Track one visible message per type (banner, post, chat) simultaneously
 interface VisibleMessages {
@@ -66,15 +91,15 @@ export function OutboundOverlay({
   const [timeOnPage, setTimeOnPage] = useState(0);
   const staggerTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const eligibleMessages = useQuery(api.outboundMessages.getEligible, {
+  const eligibleMessages = useQuery(eligibleOutboundMessagesQueryRef, {
     workspaceId,
     visitorId,
     sessionToken: sessionToken ?? undefined,
     currentUrl,
     sessionId,
-  });
+  }) as OutboundMessage[] | undefined;
 
-  const trackImpression = useMutation(api.outboundMessages.trackImpression);
+  const trackImpression = useMutation(trackOutboundImpressionMutationRef);
 
   // Track scroll depth
   useEffect(() => {

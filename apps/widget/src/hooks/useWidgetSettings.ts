@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   getDefaultPublicMessengerSettings,
@@ -12,6 +12,12 @@ import { getThemeRoot } from "../portal";
 export type MessengerSettings = PublicMessengerSettings;
 
 const DEFAULT_SETTINGS: MessengerSettings = getDefaultPublicMessengerSettings();
+
+const publicMessengerSettingsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Partial<PublicMessengerSettings> | null
+>("messengerSettings:getPublicSettings");
 
 function getEffectiveTheme(themeMode: "light" | "dark" | "system"): "light" | "dark" {
   if (themeMode === "system") {
@@ -28,9 +34,9 @@ function settingsCacheKey(workspaceId: string): string {
 export function useWidgetSettings(activeWorkspaceId: string | undefined, isValidIdFormat: boolean) {
   // Messenger customization settings
   const messengerSettingsData = useQuery(
-    api.messengerSettings.getPublicSettings,
+    publicMessengerSettingsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as Partial<PublicMessengerSettings> | null | undefined;
 
   // Merge fetched settings with defaults, cache in localStorage scoped by workspace
   const messengerSettings = useMemo<MessengerSettings>(() => {

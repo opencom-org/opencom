@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   getDefaultHomeConfig,
@@ -26,6 +26,29 @@ interface Article {
   title: string;
   slug: string;
 }
+
+const publicHomeConfigQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; isIdentified: boolean },
+  NormalizedHomeConfig
+>("messengerSettings:getPublicHomeConfig");
+
+const visitorArticlesListQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  Article[]
+>("articles:listForVisitor");
+
+const visitorArticlesSearchQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+    query: string;
+  },
+  Article[]
+>("articles:searchForVisitor");
 
 interface HomeProps {
   workspaceId: Id<"workspaces">;
@@ -57,18 +80,18 @@ export function Home({
 }: HomeProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const homeConfig = useQuery(api.messengerSettings.getPublicHomeConfig, {
+  const homeConfig = useQuery(publicHomeConfigQueryRef, {
     workspaceId,
     isIdentified,
   }) as NormalizedHomeConfig | undefined;
 
   const featuredArticles = useQuery(
-    api.articles.listForVisitor,
+    visitorArticlesListQueryRef,
     visitorId && sessionToken ? { workspaceId, visitorId, sessionToken } : "skip"
   ) as Article[] | undefined;
 
   const searchResults = useQuery(
-    api.articles.searchForVisitor,
+    visitorArticlesSearchQueryRef,
     visitorId && sessionToken && searchQuery.length >= 2
       ? { workspaceId, visitorId, sessionToken, query: searchQuery }
       : "skip"
@@ -246,7 +269,7 @@ export function Home({
 
 export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdentified: boolean) {
   const homeConfig = useQuery(
-    api.messengerSettings.getPublicHomeConfig,
+    publicHomeConfigQueryRef,
     workspaceId ? { workspaceId, isIdentified } : "skip"
   ) as NormalizedHomeConfig | undefined;
 

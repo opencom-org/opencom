@@ -1,10 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import type { WidgetView } from "../widgetShell/types";
 
 type ConversationStatus = "open" | "closed" | "snoozed";
+
+type CreatedConversationResult = { _id: Id<"conversations"> } | Id<"conversations"> | null;
+
+const createConversationForVisitorMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  CreatedConversationResult
+>("conversations:createForVisitor");
+
+const markConversationReadMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    id: Id<"conversations">;
+    readerType: "visitor";
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+  },
+  null
+>("conversations:markAsRead");
 
 export interface WidgetConversationSummary {
   _id: Id<"conversations">;
@@ -70,8 +89,8 @@ export function useWidgetConversationFlow({
   const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
   const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
 
-  const createConversation = useMutation(api.conversations.createForVisitor);
-  const markAsRead = useMutation(api.conversations.markAsRead);
+  const createConversation = useMutation(createConversationForVisitorMutationRef);
+  const markAsRead = useMutation(markConversationReadMutationRef);
 
   const selectedConversation = useMemo(() => {
     if (!conversationId) {
