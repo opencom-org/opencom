@@ -3,8 +3,8 @@ import { getClient } from "./client";
 import { getVisitorState } from "../state/visitor";
 import type { UserIdentification, DeviceInfo, LocationInfo, VisitorId } from "../types";
 
-function getMutationRef(name: string): unknown {
-  return makeFunctionReference(name);
+function getMutationRef(name: string): import("convex/server").FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as import("convex/server").FunctionReference<"mutation">;
 }
 
 // getOrCreateVisitor has been removed — use bootSession instead.

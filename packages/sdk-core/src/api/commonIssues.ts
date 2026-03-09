@@ -1,6 +1,10 @@
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 export type CommonIssueButtonId = Id<"commonIssueButtons">;
 
@@ -24,7 +28,7 @@ export async function getCommonIssueButtons(): Promise<CommonIssueButton[]> {
   const client = getClient();
   const config = getConfig();
 
-  const buttons = await client.query(api.commonIssueButtons.list, {
+  const buttons = await client.query(getQueryRef("commonIssueButtons:list"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 

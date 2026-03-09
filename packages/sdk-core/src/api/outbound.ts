@@ -1,4 +1,3 @@
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import type {
   ImpressionAction,
@@ -7,6 +6,15 @@ import type {
 import { getClient, getConfig } from "./client";
 import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 export type OutboundMessageId = Id<"outboundMessages">;
 
@@ -28,7 +36,7 @@ export async function getActiveOutboundMessages(params: {
   const config = getConfig();
   const token = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const messages = await client.query(api.outboundMessages.getEligible, {
+  const messages = await client.query(getQueryRef("outboundMessages:getEligible"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId: params.visitorId,
     sessionToken: token,
@@ -50,7 +58,7 @@ export async function trackOutboundImpression(params: {
   const client = getClient();
   const token = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  await client.mutation(api.outboundMessages.trackImpression, {
+  await client.mutation(getMutationRef("outboundMessages:trackImpression"), {
     messageId: params.messageId,
     visitorId: params.visitorId,
     sessionToken: token,
