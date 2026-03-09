@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@opencom/types": "workspace:*",
-    "convex": "^1.31.7"
+    "convex": "^1.32.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

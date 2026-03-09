@@ -1,10 +1,22 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { mutation, query, internalMutation, type QueryCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { type Doc, type Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    runArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 async function withSupportSenderNames(
   ctx: QueryCtx,
@@ -192,7 +204,9 @@ export const send = mutation({
 
     await ctx.db.patch(args.conversationId, updateData);
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    const runAfter = getShallowRunAfter(ctx);
+    const notifyNewMessageRef = getInternalRef("notifications:notifyNewMessage");
+    await runAfter(0, notifyNewMessageRef, {
       conversationId: args.conversationId,
       messageContent: args.content,
       senderType: args.senderType,
@@ -235,7 +249,9 @@ export const internalSendBotMessage = internalMutation({
       unreadByVisitor: (conversation.unreadByVisitor || 0) + 1,
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    const runAfter = getShallowRunAfter(ctx);
+    const notifyNewMessageRef = getInternalRef("notifications:notifyNewMessage");
+    await runAfter(0, notifyNewMessageRef, {
       conversationId: args.conversationId,
       messageContent: args.content,
       senderType: "bot",

@@ -44,7 +44,7 @@ describe("security regression coverage (admin auth + visitor ownership)", () => 
     visitorsA = await createVisitorSessionBundle(agentA.client, agentA.workspaceId);
     visitorsB = await createVisitorSessionBundle(agentB.client, agentB.workspaceId);
 
-    tourA = await agentA.client.mutation(api.testing.helpers.createTestTour, {
+    tourA = await agentA.client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: agentA.workspaceId,
       name: "Security Visitor Ownership Tour",
     });
@@ -53,9 +53,9 @@ describe("security regression coverage (admin auth + visitor ownership)", () => 
       type: "post",
       content: "Tour step 1",
     });
-    await agentA.client.mutation(api.testing.helpers.activateTestTour, { id: tourA });
+    await agentA.client.mutation(api.testing_helpers.activateTestTour, { id: tourA });
 
-    tourB = await agentB.client.mutation(api.testing.helpers.createTestTour, {
+    tourB = await agentB.client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: agentB.workspaceId,
       name: "Cross Workspace Tour",
     });

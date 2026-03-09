@@ -1,8 +1,20 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { internalMutation } from "../../_generated/server";
-import { internal } from "../../_generated/api";
 import type { Doc } from "../../_generated/dataModel";
 import { truncatePreview } from "../helpers";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    runArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 export const notifyTicketCreated = internalMutation({
   args: {
@@ -22,7 +34,8 @@ export const notifyTicketCreated = internalMutation({
       }
     }
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:routeEvent"), {
       eventType: "ticket_created",
       domain: "ticket",
       audience: "agent",
@@ -53,7 +66,8 @@ export const notifyTicketStatusChanged = internalMutation({
     const ticket = (await ctx.db.get(args.ticketId)) as Doc<"tickets"> | null;
     if (!ticket || !ticket.visitorId) return;
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:routeEvent"), {
       eventType: "ticket_status_changed",
       domain: "ticket",
       audience: "visitor",
@@ -62,7 +76,7 @@ export const notifyTicketStatusChanged = internalMutation({
       actorUserId: args.actorUserId,
       ticketId: args.ticketId,
       title: "Ticket update",
-      body: `Your ticket \"${ticket.subject}\" moved to ${args.newStatus.replaceAll("_", " ")}.`,
+      body: `Your ticket "${ticket.subject}" moved to ${args.newStatus.replaceAll("_", " ")}.`,
       data: {
         ticketId: args.ticketId,
         type: "ticket_status_changed",
@@ -95,7 +109,8 @@ export const notifyTicketAssigned = internalMutation({
       }
     }
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:routeEvent"), {
       eventType: "ticket_assigned",
       domain: "ticket",
       audience: "agent",
@@ -128,7 +143,8 @@ export const notifyTicketComment = internalMutation({
     const comment = (await ctx.db.get(args.commentId)) as Doc<"ticketComments"> | null;
     if (!comment) return;
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:routeEvent"), {
       eventType: "ticket_comment",
       domain: "ticket",
       audience: "visitor",
@@ -169,7 +185,8 @@ export const notifyTicketCustomerReply = internalMutation({
       }
     }
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:routeEvent"), {
       eventType: "ticket_customer_reply",
       domain: "ticket",
       audience: "agent",
@@ -202,7 +219,8 @@ export const notifyTicketResolved = internalMutation({
     const ticket = (await ctx.db.get(args.ticketId)) as Doc<"tickets"> | null;
     if (!ticket || !ticket.visitorId) return;
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:routeEvent"), {
       eventType: "ticket_resolved",
       domain: "ticket",
       audience: "visitor",
@@ -213,7 +231,7 @@ export const notifyTicketResolved = internalMutation({
       title: "Ticket resolved",
       body: args.resolutionSummary
         ? truncatePreview(args.resolutionSummary, 140)
-        : `Your ticket \"${ticket.subject}\" was resolved.`,
+        : `Your ticket "${ticket.subject}" was resolved.`,
       data: {
         ticketId: args.ticketId,
         type: "ticket_resolved",

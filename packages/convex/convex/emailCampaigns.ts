@@ -416,11 +416,13 @@ export const remove = authMutation({
     if (!campaign) throw new Error("Campaign not found");
 
     // Delete associated recipients
-    while (true) {
+    let recipientsCount = RECIPIENT_DELETE_BATCH_SIZE;
+    while (recipientsCount === RECIPIENT_DELETE_BATCH_SIZE) {
       const recipients = await ctx.db
         .query("emailCampaignRecipients")
         .withIndex("by_campaign", (q) => q.eq("campaignId", args.id))
         .take(RECIPIENT_DELETE_BATCH_SIZE);
+      recipientsCount = recipients.length;
 
       if (recipients.length === 0) {
         break;
@@ -428,10 +430,6 @@ export const remove = authMutation({
 
       for (const recipient of recipients) {
         await ctx.db.delete(recipient._id);
-      }
-
-      if (recipients.length < RECIPIENT_DELETE_BATCH_SIZE) {
-        break;
       }
     }
 

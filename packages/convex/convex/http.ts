@@ -1,6 +1,5 @@
-import { httpRouter } from "convex/server";
+import { httpRouter, makeFunctionReference } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { auth } from "./authConvex";
 
@@ -177,13 +176,14 @@ function getCorsHeaders(
   return headers;
 }
 
+type ValidateOriginResult = { valid: boolean; reason: string };
+
+function getApiRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
 async function validateOriginForWorkspace(
-  ctx: {
-    runQuery: (
-      query: typeof api.workspaces.validateOrigin,
-      args: { workspaceId: Id<"workspaces">; origin: string }
-    ) => Promise<{ valid: boolean; reason: string }>;
-  },
+  ctx: { runQuery: unknown },
   request: Request
 ): Promise<{ valid: boolean; reason: string; origin: string | null }> {
   const origin = request.headers.get("origin");
@@ -194,7 +194,12 @@ async function validateOriginForWorkspace(
   }
 
   try {
-    const result = await ctx.runQuery(api.workspaces.validateOrigin, {
+    const runQuery = ctx.runQuery as unknown as (
+      query: unknown,
+      args: { workspaceId: Id<"workspaces">; origin: string }
+    ) => Promise<ValidateOriginResult>;
+    const validateOriginRef = getApiRef("workspaces.validateOrigin");
+    const result = await runQuery(validateOriginRef, {
       workspaceId: workspaceId as Id<"workspaces">,
       origin: origin || "",
     });
@@ -319,7 +324,18 @@ http.route({
     }
 
     try {
-      const metadata = await ctx.runQuery(api.discovery.getMetadata, {});
+      const runQuery = ctx.runQuery as unknown as (
+        query: unknown,
+        args: Record<string, unknown>
+      ) => Promise<unknown>;
+      const getMetadataRef = getApiRef("discovery:getMetadata");
+      const metadata = (await runQuery(getMetadataRef, {})) as {
+        version: string;
+        name: string;
+        features: unknown;
+        signupMode?: "invite-only" | "domain-allowlist";
+        authMethods?: ("password" | "otp")[];
+      };
       const settings = metadata as {
         signupMode?: "invite-only" | "domain-allowlist";
         authMethods?: ("password" | "otp")[];
@@ -403,10 +419,17 @@ http.route({
       // Find workspace by forwarding address
       const toAddresses = Array.isArray(to) ? to : [to];
       let emailConfig: Doc<"emailConfigs"> | null = null;
+      const runQuery = ctx.runQuery as unknown as (
+        query: unknown,
+        args: Record<string, unknown>
+      ) => Promise<unknown>;
+      const getEmailConfigByForwardingAddressRef = getApiRef(
+        "emailChannel:getEmailConfigByForwardingAddress"
+      );
 
       for (const toAddr of toAddresses) {
         const addr = toAddr.toLowerCase().trim();
-        emailConfig = (await ctx.runQuery(api.emailChannel.getEmailConfigByForwardingAddress, {
+        emailConfig = (await runQuery(getEmailConfigByForwardingAddressRef, {
           forwardingAddress: addr,
           webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
         })) as Doc<"emailConfigs"> | null;
@@ -415,7 +438,7 @@ http.route({
         // Try extracting just the email part
         const match = addr.match(/<([^>]+)>/) || [null, addr];
         if (match[1]) {
-          emailConfig = (await ctx.runQuery(api.emailChannel.getEmailConfigByForwardingAddress, {
+          emailConfig = (await runQuery(getEmailConfigByForwardingAddressRef, {
             forwardingAddress: match[1],
             webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
           })) as Doc<"emailConfigs"> | null;
@@ -441,13 +464,18 @@ http.route({
       // Check if this is a forwarded email (detect "Fwd:" in subject or forwarding patterns)
       const isForwarded = /^fwd?:/i.test(subject) || /^------\s*forwarded/im.test(text || "");
 
-      let result;
+      let result: Record<string, unknown>;
       if (isForwarded) {
         // Try to extract original sender from forwarded content
         const originalFromMatch = (text || html || "").match(/from:\s*([^\n\r]+)/i);
         const originalFrom = originalFromMatch ? originalFromMatch[1].trim() : from;
 
-        result = await ctx.runMutation(api.emailChannel.processForwardedEmail, {
+        const runMutation = ctx.runMutation as unknown as (
+          mutation: unknown,
+          args: Record<string, unknown>
+        ) => Promise<Record<string, unknown>>;
+        const processForwardedEmailRef = getApiRef("emailChannel:processForwardedEmail");
+        result = await runMutation(processForwardedEmailRef, {
           workspaceId: emailConfig.workspaceId,
           webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
           forwarderEmail: from,
@@ -466,7 +494,12 @@ http.route({
           ),
         });
       } else {
-        result = await ctx.runMutation(api.emailChannel.processInboundEmail, {
+        const runMutation = ctx.runMutation as unknown as (
+          mutation: unknown,
+          args: Record<string, unknown>
+        ) => Promise<Record<string, unknown>>;
+        const processInboundEmailRef = getApiRef("emailChannel:processInboundEmail");
+        result = await runMutation(processInboundEmailRef, {
           workspaceId: emailConfig.workspaceId,
           webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
           from,
@@ -533,7 +566,14 @@ http.route({
 
           const newStatus = statusMap[type];
           if (newStatus) {
-            await ctx.runMutation(internal.emailChannel.updateDeliveryStatusByExternalId, {
+            const runMutation = ctx.runMutation as unknown as (
+              mutation: unknown,
+              args: Record<string, unknown>
+            ) => Promise<unknown>;
+            const updateDeliveryStatusByExternalIdRef = getApiRef(
+              "emailChannel:updateDeliveryStatusByExternalId"
+            );
+            await runMutation(updateDeliveryStatusByExternalIdRef, {
               externalEmailId,
               status: newStatus,
             });

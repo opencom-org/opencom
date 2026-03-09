@@ -1,6 +1,6 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { action, internalAction, internalQuery } from "./_generated/server";
-import { api, internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { embed } from "ai";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
@@ -10,7 +10,29 @@ import { getUnifiedArticleByIdOrLegacyInternalId, isInternalArticle } from "./li
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
 const FEEDBACK_STATS_MAX_LIMIT = 20000;
-const WIDGET_QUERY_MAX_LENGTH = 500;
+const WIDGET_QUERY_MAX_LENGTH = 200;
+
+function getApiRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as (
+    queryRef: unknown,
+    queryArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as unknown as (
+    actionRef: unknown,
+    actionArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function normalizeSuggestionQuery(query: string): string {
+  return query.trim().toLowerCase();
+}
 
 type SuggestionContentType = "article" | "internalArticle" | "snippet";
 
@@ -77,6 +99,7 @@ export const searchSimilar = authAction({
     const limit = args.limit || 10;
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
     const aiClient = createAIClient();
+    const runQuery = getShallowRunQuery(ctx);
 
     const { embedding } = await embed({
       model: aiClient.embedding(modelName),
@@ -106,12 +129,9 @@ export const searchSimilar = authAction({
           _id: Id<"contentEmbeddings">;
           _score: number;
         }): Promise<SuggestionResult | null> => {
-          const doc: Doc<"contentEmbeddings"> | null = await ctx.runQuery(
-            internal.suggestions.getEmbeddingById,
-            {
-              id: result._id,
-            }
-          );
+          const doc = (await runQuery(getApiRef("suggestions:getEmbeddingById"), {
+            id: result._id,
+          })) as Doc<"contentEmbeddings"> | null;
           if (!doc) return null;
           return {
             id: doc.contentId,
@@ -136,38 +156,35 @@ export const getForConversation = authAction({
   handler: async (ctx, args): Promise<SuggestionResultWithContent[]> => {
     const limit = args.limit || 5;
 
-    const conversation: Doc<"conversations"> | null = await ctx.runQuery(
-      internal.suggestions.getConversation,
-      {
-        conversationId: args.conversationId,
-      }
-    );
+    const runQuery = getShallowRunQuery(ctx);
+    const runAction = getShallowRunAction(ctx);
+
+    const conversation = (await runQuery(getApiRef("suggestions:getConversation"), {
+      conversationId: args.conversationId,
+    })) as Doc<"conversations"> | null;
 
     if (!conversation) {
       return [];
     }
 
-    await ctx.runQuery(internal.permissions.requirePermissionForAction, {
+    await runQuery(getApiRef("permissions:requirePermissionForAction"), {
       userId: ctx.user._id,
       workspaceId: conversation.workspaceId,
       permission: "articles.read",
     });
 
-    const settings: Doc<"aiAgentSettings"> | null = await ctx.runQuery(
-      internal.suggestions.getAiSettings,
-      {
-        workspaceId: conversation.workspaceId,
-      }
-    );
+    const settings = (await runQuery(getApiRef("suggestions:getAiSettings"), {
+      workspaceId: conversation.workspaceId,
+    })) as Doc<"aiAgentSettings"> | null;
 
     if (!settings?.suggestionsEnabled) {
       return [];
     }
 
-    const messages: Doc<"messages">[] = await ctx.runQuery(internal.suggestions.getRecentMessages, {
+    const messages = (await runQuery(getApiRef("suggestions:getRecentMessages"), {
       conversationId: args.conversationId,
       limit: 5,
-    });
+    })) as Doc<"messages">[];
 
     if (messages.length === 0) {
       return [];
@@ -178,16 +195,13 @@ export const getForConversation = authAction({
       settings.knowledgeSources as unknown as string[] | undefined
     );
 
-    const results: SuggestionResultWithContent[] = await ctx.runAction(
-      internal.suggestions.searchSimilarInternal,
-      {
-        workspaceId: conversation.workspaceId,
-        query: contextText,
-        contentTypes: normalizedContentTypes,
-        limit,
-        model: settings.embeddingModel,
-      }
-    );
+    const results = (await runAction(getApiRef("suggestions:searchSimilarInternal"), {
+      workspaceId: conversation.workspaceId,
+      query: contextText,
+      contentTypes: normalizedContentTypes,
+      limit,
+      model: settings.embeddingModel,
+    })) as SuggestionResultWithContent[];
 
     return results;
   },
@@ -219,6 +233,7 @@ export const searchSimilarInternal = internalAction({
     const limit = args.limit || 10;
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
     const aiClient = createAIClient();
+    const runQuery = getShallowRunQuery(ctx);
 
     const { embedding } = await embed({
       model: aiClient.embedding(modelName),
@@ -262,15 +277,20 @@ export const searchSimilarInternal = internalAction({
             contentId: string;
             title: string;
             snippet: string;
-          } | null = await ctx.runQuery(internal.suggestions.getEmbeddingById, {
+          } | null = (await runQuery(getApiRef("suggestions:getEmbeddingById"), {
             id: result._id,
-          });
+          })) as {
+            contentType: "article" | "internalArticle" | "snippet";
+            contentId: string;
+            title: string;
+            snippet: string;
+          } | null;
           if (!doc) return null;
 
-          const content = await ctx.runQuery(internal.suggestions.getContentById, {
+          const content = (await runQuery(getApiRef("suggestions:getContentById"), {
             contentType: doc.contentType,
             contentId: doc.contentId,
-          });
+          })) as { content?: string; title?: string } | null;
 
           return {
             id: doc.contentId,
@@ -484,7 +504,7 @@ export const searchForWidget = action({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<WidgetSuggestionResult[]> => {
-    const normalizedQuery = args.query.trim();
+    const normalizedQuery = normalizeSuggestionQuery(args.query);
 
     if (normalizedQuery.length < 2) {
       return [];
@@ -494,33 +514,32 @@ export const searchForWidget = action({
       throw new Error("Query exceeds max length");
     }
 
-    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-    const sessionValidation = await ctx.runQuery(api.widgetSessions.validateSessionToken, {
+    const runQuery = getShallowRunQuery(ctx);
+    const validateSessionTokenRef = getApiRef("widgetSessions:validateSessionToken");
+    const sessionValidation = (await runQuery(validateSessionTokenRef, {
       workspaceId: args.workspaceId,
       visitorId: args.visitorId,
       sessionToken: args.sessionToken,
-    });
+    })) as { valid: boolean; reason?: string | null };
 
     if (!sessionValidation.valid) {
       throw new Error(sessionValidation.reason || "Session token validation failed");
     }
 
-    const originValidation = await ctx.runQuery(api.workspaces.validateOrigin, {
+    const validateOriginRef = getApiRef("workspaces:validateOrigin");
+    const originValidation = (await runQuery(validateOriginRef, {
       workspaceId: args.workspaceId,
       origin: args.origin ?? "",
-    });
+    })) as { valid: boolean; reason?: string | null };
     if (!originValidation.valid) {
-      throw new Error(`Origin validation failed: ${originValidation.reason}`);
+      throw new Error(originValidation.reason || "Origin validation failed");
     }
 
     const limit = Math.max(1, Math.min(args.limit || 3, 5));
 
-    const automationSettings: Doc<"automationSettings"> | null = await ctx.runQuery(
-      internal.suggestions.getAutomationSettings,
-      {
-        workspaceId: args.workspaceId,
-      }
-    );
+    const automationSettings = (await runQuery(getApiRef("suggestions:getAutomationSettings"), {
+      workspaceId: args.workspaceId,
+    })) as Doc<"automationSettings"> | null;
 
     if (!automationSettings?.suggestArticlesEnabled) {
       return [];
@@ -551,12 +570,9 @@ export const searchForWidget = action({
           _id: Id<"contentEmbeddings">;
           _score: number;
         }): Promise<WidgetSuggestionResult | null> => {
-          const doc: Doc<"contentEmbeddings"> | null = await ctx.runQuery(
-            internal.suggestions.getEmbeddingById,
-            {
-              id: result._id,
-            }
-          );
+          const doc = (await runQuery(getApiRef("suggestions:getEmbeddingById"), {
+            id: result._id,
+          })) as Doc<"contentEmbeddings"> | null;
           if (!doc) return null;
 
           return {

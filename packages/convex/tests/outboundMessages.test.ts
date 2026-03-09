@@ -19,7 +19,7 @@ describe("outboundMessages", () => {
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
     // Create a test visitor
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorId = visitor.visitorId;
@@ -28,7 +28,7 @@ describe("outboundMessages", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

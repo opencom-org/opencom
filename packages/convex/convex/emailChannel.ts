@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import {
   mutation,
   query,
@@ -6,7 +7,6 @@ import {
   internalMutation,
   internalAction,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { Resend } from "resend";
 import { getAuthenticatedUserFromSession } from "./auth";
@@ -16,6 +16,20 @@ import { formatReadableVisitorId } from "./visitorReadableId";
 const WEBHOOK_INTERNAL_SECRET =
   process.env.EMAIL_WEBHOOK_INTERNAL_SECRET ?? process.env.RESEND_WEBHOOK_SECRET ?? "";
 const ENFORCE_WEBHOOK_INTERNAL_SECRET = process.env.ENFORCE_WEBHOOK_SIGNATURES !== "false";
+
+function getShallowRunAfter(
+  ctx: { scheduler: { runAfter: unknown } }
+): (delayMs: number, functionRef: unknown, runArgs: Record<string, unknown>) => Promise<unknown> {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    runArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
 
 function assertWebhookInternalAccess(providedSecret?: string): void {
   if (!WEBHOOK_INTERNAL_SECRET) {
@@ -370,7 +384,9 @@ export const processInboundEmail = mutation({
     });
 
     // Notify about new message
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    const runAfter = getShallowRunAfter(ctx);
+    const notifyNewMessageRef = getInternalRef("notifications:notifyNewMessage");
+    await runAfter(0, notifyNewMessageRef, {
       conversationId,
       messageContent: content,
       senderType: "visitor",
@@ -487,7 +503,9 @@ export const processForwardedEmail = mutation({
     });
 
     // Notify about new conversation
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewConversation, {
+    const runAfter = getShallowRunAfter(ctx);
+    const notifyNewConversationRef = getInternalRef("notifications:notifyNewConversation");
+    await runAfter(0, notifyNewConversationRef, {
       conversationId,
     });
 
@@ -662,7 +680,9 @@ export const sendEmailReply = mutation({
     });
 
     // Schedule email sending (will be handled by action)
-    await ctx.scheduler.runAfter(0, internal.emailChannel.sendEmailViaProvider, {
+    const runAfter = getShallowRunAfter(ctx);
+    const sendEmailViaProviderRef = getInternalRef("emailChannel:sendEmailViaProvider");
+    await runAfter(0, sendEmailViaProviderRef, {
       messageId: dbMessageId,
       to: args.to,
       cc: args.cc,
@@ -756,7 +776,12 @@ export const sendEmailViaProvider = internalAction({
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
       console.error("RESEND_API_KEY not configured");
-      await ctx.runMutation(internal.emailChannel.updateDeliveryStatus, {
+      const runMutation = ctx.runMutation as unknown as (
+        mutation: unknown,
+        mutationArgs: Record<string, unknown>
+      ) => Promise<unknown>;
+      const updateDeliveryStatusRef = getInternalRef("emailChannel:updateDeliveryStatus");
+      await runMutation(updateDeliveryStatusRef, {
         messageId: args.messageId,
         status: "failed",
       });
@@ -794,7 +819,12 @@ export const sendEmailViaProvider = internalAction({
         headers,
       });
 
-      await ctx.runMutation(internal.emailChannel.updateDeliveryStatus, {
+      const runMutation = ctx.runMutation as unknown as (
+        mutation: unknown,
+        mutationArgs: Record<string, unknown>
+      ) => Promise<unknown>;
+      const updateDeliveryStatusRef = getInternalRef("emailChannel:updateDeliveryStatus");
+      await runMutation(updateDeliveryStatusRef, {
         messageId: args.messageId,
         status: "sent",
       });
@@ -802,7 +832,12 @@ export const sendEmailViaProvider = internalAction({
       return { success: true };
     } catch (error) {
       console.error("Failed to send email:", error);
-      await ctx.runMutation(internal.emailChannel.updateDeliveryStatus, {
+      const runMutation = ctx.runMutation as unknown as (
+        mutation: unknown,
+        mutationArgs: Record<string, unknown>
+      ) => Promise<unknown>;
+      const updateDeliveryStatusRef = getInternalRef("emailChannel:updateDeliveryStatus");
+      await runMutation(updateDeliveryStatusRef, {
         messageId: args.messageId,
         status: "failed",
       });

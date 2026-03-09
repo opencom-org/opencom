@@ -1,8 +1,33 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { jsonRecordValidator, jsonValueValidator } from "./validators";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as (
+    queryRef: unknown,
+    queryArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as unknown as (
+    actionRef: unknown,
+    actionArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as (
+    mutationRef: unknown,
+    mutationArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const EXPO_REMOVE_TOKEN_ERRORS = new Set([
@@ -109,6 +134,7 @@ export const sendPush = internalAction({
 
       const failedTickets = mappedTickets.filter((ticket) => ticket.status === "error");
       if (failedTickets.length > 0) {
+        const runMutation = getShallowRunMutation(ctx);
         await Promise.all(
           failedTickets.map(async (ticket) => {
             const removeToken = ticket.errorCode
@@ -116,12 +142,12 @@ export const sendPush = internalAction({
               : EXPO_REMOVE_TOKEN_ERRORS.has((ticket.error ?? "").split(":")[0] ?? "");
 
             await Promise.allSettled([
-              ctx.runMutation(internal.pushTokens.recordDeliveryFailure, {
+              runMutation(getInternalRef("pushTokens:recordDeliveryFailure"), {
                 token: ticket.token,
                 error: ticket.error ?? "Unknown error",
                 removeToken,
               }),
-              ctx.runMutation(internal.visitorPushTokens.recordDeliveryFailure, {
+              runMutation(getInternalRef("visitorPushTokens:recordDeliveryFailure"), {
                 token: ticket.token,
                 error: ticket.error ?? "Unknown error",
                 removeToken,
@@ -209,21 +235,30 @@ export const sendToVisitors = internalAction({
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
     // Get tokens for specified visitors
-    const tokens: string[] = await ctx.runQuery(internal.push.getTokensForVisitors, {
+    const runQuery = getShallowRunQuery(ctx);
+    const tokens = (await runQuery(getInternalRef("push:getTokensForVisitors"), {
       workspaceId: args.workspaceId,
       visitorIds: args.visitorIds,
-    });
+    })) as string[];
 
     if (tokens.length === 0) {
       return { success: true, sent: 0, message: "No push tokens found for visitors" };
     }
 
-    return await ctx.runAction(internal.push.sendPush, {
+    const runAction = getShallowRunAction(ctx);
+    return (await runAction(getInternalRef("push:sendPush"), {
       tokens,
       title: args.title,
       body: args.body,
       data: args.data,
-    });
+    })) as {
+      success: boolean;
+      sent: number;
+      message?: string;
+      failed?: number;
+      error?: string;
+      tickets?: Array<{ status: string; id?: string; error?: string }>;
+    };
   },
 });
 
@@ -246,20 +281,29 @@ export const sendToWorkspace = internalAction({
     error?: string;
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
-    const tokens: string[] = await ctx.runQuery(internal.push.getTokensForWorkspace, {
+    const runQuery = getShallowRunQuery(ctx);
+    const tokens = (await runQuery(getInternalRef("push:getTokensForWorkspace"), {
       workspaceId: args.workspaceId,
-    });
+    })) as string[];
 
     if (tokens.length === 0) {
       return { success: true, sent: 0, message: "No push tokens found in workspace" };
     }
 
-    return await ctx.runAction(internal.push.sendPush, {
+    const runAction = getShallowRunAction(ctx);
+    return (await runAction(getInternalRef("push:sendPush"), {
       tokens,
       title: args.title,
       body: args.body,
       data: args.data,
-    });
+    })) as {
+      success: boolean;
+      sent: number;
+      message?: string;
+      failed?: number;
+      error?: string;
+      tickets?: Array<{ status: string; id?: string; error?: string }>;
+    };
   },
 });
 
@@ -282,27 +326,26 @@ export const notifyNewMessage = internalAction({
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
     // Get conversation to find visitor
-    const conversation: Doc<"conversations"> | null = await ctx.runQuery(
-      internal.push.getConversation,
-      {
-        conversationId: args.conversationId,
-      }
-    );
+    const runQuery = getShallowRunQuery(ctx);
+    const conversation = (await runQuery(getInternalRef("push:getConversation"), {
+      conversationId: args.conversationId,
+    })) as Doc<"conversations"> | null;
 
     if (!conversation || !conversation.visitorId) {
       return { success: false, error: "Conversation or visitor not found" };
     }
 
     // Get visitor's push tokens
-    const tokens: string[] = await ctx.runQuery(internal.push.getTokensForVisitor, {
+    const tokens = (await runQuery(getInternalRef("push:getTokensForVisitor"), {
       visitorId: conversation.visitorId,
-    });
+    })) as string[];
 
     if (tokens.length === 0) {
       return { success: true, sent: 0, message: "Visitor has no push tokens" };
     }
 
-    return await ctx.runAction(internal.push.sendPush, {
+    const runAction = getShallowRunAction(ctx);
+    return (await runAction(getInternalRef("push:sendPush"), {
       tokens,
       title: args.senderName || "New message",
       body: args.messageBody,
@@ -310,7 +353,14 @@ export const notifyNewMessage = internalAction({
         type: "new_message",
         conversationId: args.conversationId,
       },
-    });
+    })) as {
+      success: boolean;
+      sent?: number;
+      message?: string;
+      failed?: number;
+      error?: string;
+      tickets?: Array<{ status: string; id?: string; error?: string }>;
+    };
   },
 });
 
@@ -406,32 +456,40 @@ export const sendWithTargeting = internalAction({
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
     // Get all visitors with push tokens in workspace
-    const eligibleVisitors: Array<import("./_generated/dataModel").Id<"visitors">> =
-      await ctx.runQuery(internal.push.getEligibleVisitors, {
-        workspaceId: args.workspaceId,
-        targeting: args.targeting,
-      });
+    const runQuery = getShallowRunQuery(ctx);
+    const eligibleVisitors = (await runQuery(getInternalRef("push:getEligibleVisitors"), {
+      workspaceId: args.workspaceId,
+      targeting: args.targeting,
+    })) as Array<import("./_generated/dataModel").Id<"visitors">>;
 
     if (eligibleVisitors.length === 0) {
       return { success: true, sent: 0, message: "No eligible visitors found" };
     }
 
     // Get tokens for eligible visitors
-    const tokens: string[] = await ctx.runQuery(internal.push.getTokensForVisitors, {
+    const tokens = (await runQuery(getInternalRef("push:getTokensForVisitors"), {
       workspaceId: args.workspaceId,
       visitorIds: eligibleVisitors,
-    });
+    })) as string[];
 
     if (tokens.length === 0) {
       return { success: true, sent: 0, message: "No push tokens found for eligible visitors" };
     }
 
-    return await ctx.runAction(internal.push.sendPush, {
+    const runAction = getShallowRunAction(ctx);
+    return (await runAction(getInternalRef("push:sendPush"), {
       tokens,
       title: args.title,
       body: args.body,
       data: args.data,
-    });
+    })) as {
+      success: boolean;
+      sent: number;
+      message?: string;
+      failed?: number;
+      error?: string;
+      tickets?: Array<{ status: string; id?: string; error?: string }>;
+    };
   },
 });
 

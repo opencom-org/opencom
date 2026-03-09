@@ -1,5 +1,5 @@
+import { anyApi } from "convex/server";
 import type { ObjectType, PropertyValidators } from "convex/values";
-import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import {
   action,
@@ -79,8 +79,7 @@ async function getWorkspaceIdForPermission<
 
 async function getActionUser(ctx: ActionCtx): Promise<AuthenticatedUser> {
   const runQuery = (ctx as ActionCtxWithRunQuery).runQuery;
-  // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
-  const currentUserRef = (api as unknown as { auth: { currentUser: unknown } }).auth.currentUser;
+  const currentUserRef = (anyApi as unknown as { auth: { currentUser: unknown } }).auth.currentUser;
   const currentUser = (await runQuery(currentUserRef, {})) as
     | { user?: AuthenticatedUser }
     | null;
@@ -179,8 +178,7 @@ export function authAction<ArgsValidator extends PropertyValidators, ReturnValue
           throw new Error("Auth wrapper misconfigured: missing workspace resolver");
         }
         const runQuery = (ctx as ActionCtxWithRunQuery).runQuery;
-        // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
-        const permissionRef = (internal as unknown as {
+        const permissionRef = (anyApi as unknown as {
           permissions: { requirePermissionForAction: unknown };
         }).permissions.requirePermissionForAction;
         await runQuery(permissionRef, {

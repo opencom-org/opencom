@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import {
   mutation,
   query,
@@ -7,7 +8,6 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
@@ -17,6 +17,10 @@ import {
   isPublicArticle,
   listUnifiedArticlesWithLegacyFallback,
 } from "./lib/unifiedArticles";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 const knowledgeSourceValidator = v.union(
@@ -660,8 +664,13 @@ export const handoffToHuman = mutation({
       aiLastResponseAt: now,
     });
 
-    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = ctx.scheduler.runAfter as unknown as (
+      delayMs: number,
+      functionRef: unknown,
+      runArgs: Record<string, unknown>
+    ) => Promise<unknown>;
+    const routeEventRef = getInternalRef("notifications:routeEvent");
+    await runAfter(0, routeEventRef, {
       eventType: "chat_message",
       domain: "chat",
       audience: "agent",

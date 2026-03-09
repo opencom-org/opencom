@@ -7,7 +7,6 @@ describe("messages", () => {
   let client: ConvexClient;
   let testWorkspaceId: Id<"workspaces">;
   let testConversationId: Id<"conversations">;
-  let testMessageId: Id<"messages">;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -16,14 +15,14 @@ describe("messages", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
-    const conversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: visitor.visitorId,
     });
@@ -33,7 +32,7 @@ describe("messages", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -44,18 +43,17 @@ describe("messages", () => {
   });
 
   it("should create a message from visitor", async () => {
-    const result = await client.mutation(api.testing.helpers.createTestMessage, {
+    const result = await client.mutation(api.testing_helpers.createTestMessage, {
       conversationId: testConversationId,
       content: "Hello from visitor!",
       senderType: "visitor",
     });
 
     expect(result.messageId).toBeDefined();
-    testMessageId = result.messageId;
   });
 
   it("should create a message from agent", async () => {
-    const result = await client.mutation(api.testing.helpers.createTestMessage, {
+    const result = await client.mutation(api.testing_helpers.createTestMessage, {
       conversationId: testConversationId,
       content: "Hello from agent!",
       senderType: "agent",
@@ -65,7 +63,7 @@ describe("messages", () => {
   });
 
   it("should list messages for conversation", async () => {
-    const messages = await client.mutation(api.testing.helpers.listTestMessages, {
+    const messages = await client.mutation(api.testing_helpers.listTestMessages, {
       conversationId: testConversationId,
     });
 
@@ -76,17 +74,17 @@ describe("messages", () => {
   });
 
   it("should update conversation lastMessageAt when sending message", async () => {
-    const beforeMessage = await client.mutation(api.testing.helpers.getTestConversation, {
+    const beforeMessage = await client.mutation(api.testing_helpers.getTestConversation, {
       id: testConversationId,
     });
 
-    await client.mutation(api.testing.helpers.createTestMessage, {
+    await client.mutation(api.testing_helpers.createTestMessage, {
       conversationId: testConversationId,
       content: "Another message",
       senderType: "visitor",
     });
 
-    const afterMessage = await client.mutation(api.testing.helpers.getTestConversation, {
+    const afterMessage = await client.mutation(api.testing_helpers.getTestConversation, {
       id: testConversationId,
     });
 

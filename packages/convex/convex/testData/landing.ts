@@ -30,7 +30,7 @@ const cleanupLandingDemo = internalMutation({
   handler: async (ctx, args) => {
     requireTestDataEnabled();
     const { workspaceId } = args;
-    let cleaned = {
+    const cleaned = {
       tours: 0,
       tourSteps: 0,
       checklists: 0,

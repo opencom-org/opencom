@@ -19,28 +19,28 @@ describe("Authorization", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "auth-test-visitor@test.com",
     });
     testVisitorId = visitor.visitorId;
 
-    const conv = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conv = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
     });
     testConversationId = conv.conversationId;
 
-    testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+    testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
       workspaceId: testWorkspaceId,
       title: "Auth Test Article",
       content: "Test content",
     });
 
-    testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    testTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Auth Test Tour",
     });
@@ -49,7 +49,7 @@ describe("Authorization", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -94,7 +94,7 @@ describe("Authorization", () => {
 
     it("send throws for unauthorized visitor access", async () => {
       // Create a second visitor who doesn't own the conversation
-      const otherVisitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const otherVisitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
         email: "other-visitor@test.com",
       });

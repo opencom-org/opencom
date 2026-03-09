@@ -24,6 +24,15 @@
 - Whole workspace:
   - `pnpm typecheck`
 
+### Convex TypeScript deep-instantiation workaround
+
+- If Convex typecheck hits `TS2589` (`Type instantiation is excessively deep and possibly infinite`) at generated refs like `api.foo.bar` or `internal.foo.bar`, prefer a **local escape hatch** instead of broad weakening.
+- First keep call signatures shallow at the hot spot:
+  - cast `ctx.scheduler.runAfter`, `ctx.runQuery`, or `ctx.runMutation` to a local shallow function type.
+- If merely referencing `api...` / `internal...` still triggers `TS2589`, use `makeFunctionReference("module:function")` from `convex/server` at that call site instead of property access on generated refs.
+- Keep this workaround **localized only to pathological sites**. Continue using generated `api` / `internal` refs normally elsewhere.
+- Expect hidden follow-on errors: rerun `pnpm --filter @opencom/convex typecheck` after each small batch of fixes, because resolving one deep-instantiation site can reveal additional ones.
+
 ### Tests
 
 - Convex targeted file:

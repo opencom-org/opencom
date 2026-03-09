@@ -6,8 +6,7 @@ import { Id } from "../convex/_generated/dataModel";
 describe("conversation list benchmarks", () => {
   let client: ConvexClient;
   let testWorkspaceId: Id<"workspaces">;
-  let testVisitorIds: Id<"visitors">[] = [];
-  let testConversationIds: Id<"conversations">[] = [];
+  const testVisitorIds: Id<"visitors">[] = [];
 
   const NUM_VISITORS = 20;
   const NUM_CONVERSATIONS_PER_VISITOR = 2;
@@ -21,12 +20,12 @@ describe("conversation list benchmarks", () => {
     client = new ConvexClient(convexUrl);
 
     // Create test workspace
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
     // Create multiple visitors with conversations
     for (let i = 0; i < NUM_VISITORS; i++) {
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
         email: `visitor${i}@benchmark.test`,
         name: `Benchmark Visitor ${i}`,
@@ -35,7 +34,7 @@ describe("conversation list benchmarks", () => {
 
       // Create conversations for each visitor
       for (let j = 0; j < NUM_CONVERSATIONS_PER_VISITOR; j++) {
-        const conv = await client.mutation(api.testing.helpers.createTestConversation, {
+        const conv = await client.mutation(api.testing_helpers.createTestConversation, {
           workspaceId: testWorkspaceId,
           visitorId: visitor.visitorId,
           status: j === 0 ? "open" : "closed",
@@ -44,7 +43,7 @@ describe("conversation list benchmarks", () => {
 
         // Add messages to each conversation
         for (let k = 0; k < MESSAGES_PER_CONVERSATION; k++) {
-          await client.mutation(api.testing.helpers.createTestMessage, {
+          await client.mutation(api.testing_helpers.createTestMessage, {
             conversationId: conv.conversationId,
             content: `Benchmark message ${k} in conversation ${j} for visitor ${i}`,
             senderType: k % 2 === 0 ? "visitor" : "agent",
@@ -57,7 +56,7 @@ describe("conversation list benchmarks", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -70,7 +69,7 @@ describe("conversation list benchmarks", () => {
   it("should list conversations for inbox efficiently", async () => {
     const startTime = performance.now();
 
-    const result = await client.mutation(api.testing.helpers.listTestConversations, {
+    const result = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -92,7 +91,7 @@ describe("conversation list benchmarks", () => {
     const testVisitorId = testVisitorIds[0];
     const startTime = performance.now();
 
-    const result = await client.mutation(api.testing.helpers.listTestConversations, {
+    const result = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -114,7 +113,7 @@ describe("conversation list benchmarks", () => {
   it("should paginate inbox results correctly", async () => {
     const pageSize = 10;
 
-    const allConversations = await client.mutation(api.testing.helpers.listTestConversations, {
+    const allConversations = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -136,7 +135,7 @@ describe("conversation list benchmarks", () => {
   it("should filter by status efficiently", async () => {
     const startTime = performance.now();
 
-    const allConversations = await client.mutation(api.testing.helpers.listTestConversations, {
+    const allConversations = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
     });
 

@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "lint": "eslint convex/helpCenterImports.ts convex/helpCenterImports --ext .ts",
+    "lint": "eslint convex scripts tests --ext .ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

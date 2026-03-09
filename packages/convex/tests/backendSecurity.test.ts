@@ -16,10 +16,10 @@ describe("Backend Security Hardening", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "security-test-visitor@test.com",
     });
@@ -30,7 +30,7 @@ describe("Backend Security Hardening", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -75,10 +75,10 @@ describe("Backend Security Hardening", () => {
   describe("conversation creation authorization (task 2.1)", () => {
     it("createForVisitor rejects visitor not in workspace", async () => {
       // Create a second workspace and visitor
-      const otherWorkspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+      const otherWorkspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
 
       // Session token is for testVisitorId in testWorkspaceId, but we're calling with otherWorkspace
-      const { sessionToken } = await client.mutation(api.testing.helpers.createTestSessionToken, {
+      const { sessionToken } = await client.mutation(api.testing_helpers.createTestSessionToken, {
         visitorId: testVisitorId,
         workspaceId: testWorkspaceId,
       });
@@ -92,13 +92,13 @@ describe("Backend Security Hardening", () => {
       ).rejects.toThrow();
 
       // Cleanup the other workspace
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: otherWorkspace.workspaceId,
       });
     });
 
     it("createForVisitor succeeds for visitor in correct workspace", async () => {
-      const { sessionToken } = await client.mutation(api.testing.helpers.createTestSessionToken, {
+      const { sessionToken } = await client.mutation(api.testing_helpers.createTestSessionToken, {
         visitorId: testVisitorId,
         workspaceId: testWorkspaceId,
       });
@@ -113,10 +113,10 @@ describe("Backend Security Hardening", () => {
     });
 
     it("getOrCreateForVisitor rejects visitor not in workspace", async () => {
-      const otherWorkspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+      const otherWorkspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
 
       // Session token is for testVisitorId in testWorkspaceId, but we're calling with otherWorkspace
-      const { sessionToken } = await client.mutation(api.testing.helpers.createTestSessionToken, {
+      const { sessionToken } = await client.mutation(api.testing_helpers.createTestSessionToken, {
         visitorId: testVisitorId,
         workspaceId: testWorkspaceId,
       });
@@ -129,7 +129,7 @@ describe("Backend Security Hardening", () => {
         })
       ).rejects.toThrow();
 
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: otherWorkspace.workspaceId,
       });
     });
@@ -170,17 +170,17 @@ describe("Backend Security Hardening", () => {
   describe("identity verification required mode (task 2.3)", () => {
     it("identify rejects userId without userHash in required mode", async () => {
       // Create a workspace with required identity verification
-      const ws = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+      const ws = await client.mutation(api.testing_helpers.createTestWorkspace, {});
 
       // Enable identity verification in required mode using test helper
-      await client.mutation(api.testing.helpers.updateWorkspaceSettings, {
+      await client.mutation(api.testing_helpers.updateWorkspaceSettings, {
         workspaceId: ws.workspaceId,
         identityVerificationEnabled: true,
         identityVerificationMode: "required",
         identitySecret: "test-secret-for-required-mode",
       });
 
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: ws.workspaceId,
         email: "iv-test@test.com",
       });
@@ -194,23 +194,23 @@ describe("Backend Security Hardening", () => {
         })
       ).rejects.toThrow(/[Ii]dentity verification failed/);
 
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: ws.workspaceId,
       });
     });
 
     it("identify allows userId without userHash in optional mode", async () => {
-      const ws = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+      const ws = await client.mutation(api.testing_helpers.createTestWorkspace, {});
 
       // Enable identity verification in optional mode
-      await client.mutation(api.testing.helpers.updateWorkspaceSettings, {
+      await client.mutation(api.testing_helpers.updateWorkspaceSettings, {
         workspaceId: ws.workspaceId,
         identityVerificationEnabled: true,
         identityVerificationMode: "optional",
         identitySecret: "test-secret-for-optional-mode",
       });
 
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: ws.workspaceId,
         email: "iv-optional@test.com",
       });
@@ -222,7 +222,7 @@ describe("Backend Security Hardening", () => {
       });
       expect(result).toBeDefined();
 
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: ws.workspaceId,
       });
     });

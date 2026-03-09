@@ -57,7 +57,13 @@ export function truncateString(str: string, maxLength: number): string {
  */
 export function sanitizeString(str: string): string {
   // Remove control characters except newlines and tabs
-  return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+  return str
+    .split("")
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code === 9 || code === 10 || code === 13 || (code >= 32 && code !== 127);
+    })
+    .join("");
 }
 
 /**

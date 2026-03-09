@@ -1,6 +1,6 @@
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { query, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { sendEmail, emailTemplates } from "./email";
 import { authAction, authMutation } from "./lib/authWrappers";
@@ -13,6 +13,10 @@ import {
   Role,
 } from "./permissions";
 import { logAudit } from "./auditLogs";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
 
 export const listByUser = query({
   args: {},
@@ -362,13 +366,22 @@ export const inviteToWorkspace = authAction({
   },
   permission: "users.invite",
   handler: async (ctx, args): Promise<{ status: "added" | "invited" }> => {
-    // @ts-ignore Convex generated API references can exceed TS instantiation depth in downstream package typechecks.
-    const result = await (ctx as any).runMutation((internal as any).workspaceMembers.createInvitation, {
+    const runMutation = (ctx as unknown as {
+      runMutation: (mutationRef: unknown, mutationArgs: Record<string, unknown>) => Promise<unknown>;
+    }).runMutation;
+    const createInvitationRef = getInternalRef("workspaceMembers:createInvitation");
+    const result = (await runMutation(createInvitationRef, {
       inviterId: ctx.user._id,
       workspaceId: args.workspaceId,
       email: args.email,
       role: args.role,
-    } as any);
+    })) as {
+      status: "added" | "invited";
+      workspaceName: string;
+      inviterName?: string | null;
+      targetEmail: string;
+      invitationToken?: string;
+    };
 
     if (result.status === "added") {
       const template = emailTemplates.workspaceAdded(

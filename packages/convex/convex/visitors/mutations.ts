@@ -1,6 +1,6 @@
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { getAuthenticatedUserFromSession } from "../auth";
 import { hasPermission } from "../permissions";
 import { requireValidOrigin } from "../originValidation";
@@ -18,6 +18,17 @@ import {
   reassignVisitorLinksBeforeDeletion,
   scheduleSeriesTriggerChanges,
 } from "./helpers";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as (
+    mutationRef: unknown,
+    mutationArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 export const identify = mutation({
   args: {
@@ -67,12 +78,13 @@ export const identify = mutation({
 
     // Verify identity if userHash is provided (task 5.5)
     if (args.externalUserId && args.userHash) {
-      const result = await ctx.runMutation(internal.identityVerification.verifyIdentity, {
+      const runMutation = getShallowRunMutation(ctx);
+      const result = (await runMutation(getInternalRef("identityVerification:verifyIdentity"), {
         workspaceId: visitor.workspaceId,
         visitorId: resolvedVisitorId,
         userId: args.externalUserId,
         userHash: args.userHash,
-      });
+      })) as { verified: boolean; skipped?: boolean };
 
       // Check if verification is required and failed
       if (!result.verified && !result.skipped) {

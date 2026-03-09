@@ -37,16 +37,24 @@ export async function storeAnswersAsAttributes(
     return;
   }
 
+  type AttributeValue =
+    | string
+    | number
+    | boolean
+    | (string | number | boolean | null)[]
+    | Record<string, string | number | boolean | null>
+    | null;
+
   const customAttributes = { ...(visitor.customAttributes || {}) } as Record<
     string,
-    string | number | boolean | (string | number)[] | {} | null
+    AttributeValue
   >;
   let hasUpdates = false;
 
   for (const answer of answers) {
     const question = survey.questions.find((q) => q.id === answer.questionId);
     if (question?.storeAsAttribute) {
-      const value = answer.value as string | number | boolean | (string | number)[] | {} | null;
+      const value = answer.value as AttributeValue;
       customAttributes[question.storeAsAttribute] = value;
       hasUpdates = true;
     }

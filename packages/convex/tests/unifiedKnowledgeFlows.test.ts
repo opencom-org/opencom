@@ -32,14 +32,14 @@ describe("unified knowledge flows", () => {
       description: "Knowledge lifecycle verification",
     });
 
-    const visitor = await authedClient.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await authedClient.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId,
       email: "visitor@example.com",
       name: "Visitor Knowledge",
     });
     visitorId = visitor.visitorId;
 
-    const session = await authedClient.mutation(api.testing.helpers.createTestSessionToken, {
+    const session = await authedClient.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId,
       workspaceId,
     });
@@ -49,7 +49,7 @@ describe("unified knowledge flows", () => {
   afterAll(async () => {
     if (workspaceId) {
       try {
-        await authedClient.mutation(api.testing.helpers.cleanupTestData, {
+        await authedClient.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId,
         });
       } catch (error) {
@@ -154,13 +154,13 @@ describe("unified knowledge flows", () => {
   });
 
   it("migrates legacy internal articles and keeps recent-content references usable", async () => {
-    const folderId = await authedClient.mutation(api.testing.helpers.createTestContentFolder, {
+    const folderId = await authedClient.mutation(api.testing_helpers.createTestContentFolder, {
       workspaceId,
       name: "Legacy Internal Folder",
     });
 
     const legacyInternalArticleId = await authedClient.mutation(
-      api.testing.helpers.createTestInternalArticle,
+      api.testing_helpers.createTestInternalArticle,
       {
         workspaceId,
         title: "Legacy escalation notes",
@@ -170,7 +170,7 @@ describe("unified knowledge flows", () => {
       }
     );
 
-    await authedClient.mutation(api.testing.helpers.publishTestInternalArticle, {
+    await authedClient.mutation(api.testing_helpers.publishTestInternalArticle, {
       id: legacyInternalArticleId,
     });
 

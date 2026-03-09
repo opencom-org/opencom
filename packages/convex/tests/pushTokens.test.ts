@@ -15,10 +15,10 @@ describe("pushTokens", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const user = await client.mutation(api.testing.helpers.createTestUser, {
+    const user = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: `push-test-${Date.now()}@test.opencom.dev`,
     });
@@ -28,7 +28,7 @@ describe("pushTokens", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

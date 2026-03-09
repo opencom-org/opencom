@@ -1,6 +1,6 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { internalMutation } from "../_generated/server";
-import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { jsonRecordValidator } from "../validators";
 import {
@@ -12,10 +12,22 @@ import {
   notificationAudienceValidator,
   notificationDomainValidator,
   notificationEventTypeValidator,
-  NotificationPushAttempt,
+  type NotificationPushAttempt,
 } from "./contracts";
 import { buildDefaultEventKey, truncatePreview } from "./helpers";
 import { resolveDefaultVisitorRecipients } from "./recipients";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    runArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 export const routeEvent = internalMutation({
   args: {
@@ -297,7 +309,9 @@ export const routeEvent = internalMutation({
     }
 
     if (attempts.length > 0) {
-      await ctx.scheduler.runAfter(0, internal.notifications.dispatchPushAttempts, {
+      const runAfter = getShallowRunAfter(ctx);
+      const dispatchPushAttemptsRef = getInternalRef("notifications:dispatchPushAttempts");
+      await runAfter(0, dispatchPushAttemptsRef, {
         workspaceId: args.workspaceId,
         eventId,
         eventKey,

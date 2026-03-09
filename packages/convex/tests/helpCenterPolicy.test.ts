@@ -28,13 +28,13 @@ describe("help center policy enforcement", () => {
     const authContext = await authenticateClientForWorkspace(authedClient);
     workspaceId = authContext.workspaceId;
 
-    collectionId = await authedClient.mutation(api.testing.helpers.createTestCollection, {
+    collectionId = await authedClient.mutation(api.testing_helpers.createTestCollection, {
       workspaceId,
       name: "Public Docs",
       description: "Public-facing docs",
     });
 
-    publishedArticleId = await authedClient.mutation(api.testing.helpers.createTestArticle, {
+    publishedArticleId = await authedClient.mutation(api.testing_helpers.createTestArticle, {
       workspaceId,
       collectionId,
       title: "Published Help Article",
@@ -42,21 +42,21 @@ describe("help center policy enforcement", () => {
       status: "published",
     });
 
-    draftArticleId = await authedClient.mutation(api.testing.helpers.createTestArticle, {
+    draftArticleId = await authedClient.mutation(api.testing_helpers.createTestArticle, {
       workspaceId,
       title: "Draft Help Article",
       content: "Draft-only guidance",
       status: "draft",
     });
 
-    const visitor = await authedClient.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await authedClient.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId,
       email: "help-center-visitor@example.com",
       name: "Help Center Visitor",
     });
     visitorId = visitor.visitorId;
 
-    const session = await authedClient.mutation(api.testing.helpers.createTestSessionToken, {
+    const session = await authedClient.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId,
       workspaceId,
     });
@@ -81,7 +81,7 @@ describe("help center policy enforcement", () => {
 
   afterAll(async () => {
     if (workspaceId) {
-      await authedClient.mutation(api.testing.helpers.cleanupTestData, {
+      await authedClient.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId,
       });
     }
@@ -91,7 +91,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("allows unauthenticated published reads when policy is public", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "public",
     });
@@ -120,7 +120,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("blocks unauthenticated reads when policy is restricted", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "restricted",
     });
@@ -149,7 +149,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("preserves authenticated member access when policy is restricted", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "restricted",
     });
@@ -172,7 +172,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("never exposes unpublished articles to unauthenticated callers", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "public",
     });
@@ -196,7 +196,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("keeps widget visitor article flows available when standalone public help access is restricted", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "restricted",
     });

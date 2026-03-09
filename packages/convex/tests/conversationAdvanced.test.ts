@@ -17,11 +17,11 @@ describe("conversations - advanced", () => {
     client = new ConvexClient(convexUrl);
 
     // Create workspace with a user for assignment tests
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
     testUserId = workspace.userId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "visitor@test.com",
       name: "Test Visitor",
@@ -32,7 +32,7 @@ describe("conversations - advanced", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -43,17 +43,17 @@ describe("conversations - advanced", () => {
   });
 
   it("should assign conversation to agent", async () => {
-    const conversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
     });
 
-    await client.mutation(api.testing.helpers.assignTestConversation, {
+    await client.mutation(api.testing_helpers.assignTestConversation, {
       id: conversation.conversationId,
       agentId: testUserId,
     });
 
-    const updated = await client.mutation(api.testing.helpers.getTestConversation, {
+    const updated = await client.mutation(api.testing_helpers.getTestConversation, {
       id: conversation.conversationId,
     });
 
@@ -61,12 +61,12 @@ describe("conversations - advanced", () => {
   });
 
   it("should get or create conversation for visitor", async () => {
-    const newVisitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const newVisitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "new-visitor@test.com",
     });
 
-    const { sessionToken } = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const { sessionToken } = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: newVisitor.visitorId,
       workspaceId: testWorkspaceId,
     });
@@ -92,80 +92,80 @@ describe("conversations - advanced", () => {
   });
 
   it("should mark conversation as read by agent", async () => {
-    const conversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
     });
 
     // Send a message from visitor to create unread count
-    await client.mutation(api.testing.helpers.sendTestMessageDirect, {
+    await client.mutation(api.testing_helpers.sendTestMessageDirect, {
       conversationId: conversation.conversationId,
       senderId: testVisitorId,
       senderType: "visitor",
       content: "Hello!",
     });
 
-    const beforeRead = await client.mutation(api.testing.helpers.getTestConversation, {
+    const beforeRead = await client.mutation(api.testing_helpers.getTestConversation, {
       id: conversation.conversationId,
     });
     expect(beforeRead?.unreadByAgent).toBeGreaterThanOrEqual(0);
 
-    await client.mutation(api.testing.helpers.markTestConversationAsRead, {
+    await client.mutation(api.testing_helpers.markTestConversationAsRead, {
       id: conversation.conversationId,
     });
 
-    const afterRead = await client.mutation(api.testing.helpers.getTestConversation, {
+    const afterRead = await client.mutation(api.testing_helpers.getTestConversation, {
       id: conversation.conversationId,
     });
     expect(afterRead?.unreadByAgent).toBe(0);
   });
 
   it("should mark conversation as read by visitor", async () => {
-    const conversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
     });
 
     // Send a message from agent to create unread count
-    await client.mutation(api.testing.helpers.sendTestMessageDirect, {
+    await client.mutation(api.testing_helpers.sendTestMessageDirect, {
       conversationId: conversation.conversationId,
       senderId: testUserId,
       senderType: "agent",
       content: "Hello visitor!",
     });
 
-    const beforeRead = await client.mutation(api.testing.helpers.getTestConversation, {
+    const beforeRead = await client.mutation(api.testing_helpers.getTestConversation, {
       id: conversation.conversationId,
     });
     expect(beforeRead?.unreadByVisitor).toBeGreaterThanOrEqual(0);
 
     // Mark as read (reset unreadByVisitor via direct patch)
-    await client.mutation(api.testing.helpers.markTestConversationAsRead, {
+    await client.mutation(api.testing_helpers.markTestConversationAsRead, {
       id: conversation.conversationId,
     });
 
-    const afterRead = await client.mutation(api.testing.helpers.getTestConversation, {
+    const afterRead = await client.mutation(api.testing_helpers.getTestConversation, {
       id: conversation.conversationId,
     });
     expect(afterRead?.unreadByAgent).toBe(0);
   });
 
   it("should list conversations by visitor", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
-    const { sessionToken } = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const { sessionToken } = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: visitor.visitorId,
       workspaceId: testWorkspaceId,
     });
 
-    await client.mutation(api.testing.helpers.createTestConversation, {
+    await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: visitor.visitorId,
     });
 
-    await client.mutation(api.testing.helpers.createTestConversation, {
+    await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: visitor.visitorId,
       status: "closed",
@@ -181,34 +181,34 @@ describe("conversations - advanced", () => {
   });
 
   it("should get total unread count for visitor", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
-    const { sessionToken } = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const { sessionToken } = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: visitor.visitorId,
       workspaceId: testWorkspaceId,
     });
 
-    const conv1 = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conv1 = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: visitor.visitorId,
     });
 
-    const conv2 = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conv2 = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: visitor.visitorId,
     });
 
     // Send messages from agents
-    await client.mutation(api.testing.helpers.sendTestMessageDirect, {
+    await client.mutation(api.testing_helpers.sendTestMessageDirect, {
       conversationId: conv1.conversationId,
       senderId: testUserId,
       senderType: "agent",
       content: "Message 1",
     });
 
-    await client.mutation(api.testing.helpers.sendTestMessageDirect, {
+    await client.mutation(api.testing_helpers.sendTestMessageDirect, {
       conversationId: conv2.conversationId,
       senderId: testUserId,
       senderType: "agent",
@@ -225,7 +225,7 @@ describe("conversations - advanced", () => {
   });
 
   it("should list conversations for workspace", async () => {
-    const conversations = await client.mutation(api.testing.helpers.listTestConversations, {
+    const conversations = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -235,12 +235,12 @@ describe("conversations - advanced", () => {
   });
 
   it("should create conversation for visitor with welcome message", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
     const conversation = await client.mutation(
-      api.testing.helpers.createTestConversationForVisitor,
+      api.testing_helpers.createTestConversationForVisitor,
       {
         workspaceId: testWorkspaceId,
         visitorId: visitor.visitorId,
@@ -250,7 +250,7 @@ describe("conversations - advanced", () => {
     expect(conversation).toBeDefined();
 
     // Check that welcome message was created
-    const messages = await client.mutation(api.testing.helpers.listTestMessages, {
+    const messages = await client.mutation(api.testing_helpers.listTestMessages, {
       conversationId: conversation!._id,
     });
 

@@ -50,7 +50,8 @@ export const get = query({
         // Redact secrets for non-owner/admin members
         const role = membership.role as string;
         if (role !== "owner" && role !== "admin") {
-          const { identitySecret, ...safe } = workspace;
+          const safe = { ...workspace };
+          delete safe.identitySecret;
           return safe;
         }
         return workspace;

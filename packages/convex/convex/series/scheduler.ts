@@ -1,6 +1,6 @@
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { internal } from "../_generated/api";
 import type { SeriesTriggerContext } from "./contracts";
 
 export type SeriesEntryTriggerContext = SeriesTriggerContext;
@@ -11,6 +11,25 @@ export type SeriesEvaluateEntryResult = {
   progressId?: Id<"seriesProgress">;
 };
 
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAfter(ctx: MutationCtx) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    runArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function getShallowRunMutation(ctx: MutationCtx) {
+  return ctx.runMutation as unknown as (
+    mutationRef: unknown,
+    mutationArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
 export async function scheduleSeriesEvaluateEnrollment(
   ctx: MutationCtx,
   args: {
@@ -19,7 +38,8 @@ export async function scheduleSeriesEvaluateEnrollment(
     triggerContext: SeriesEntryTriggerContext;
   }
 ): Promise<void> {
-  await ctx.scheduler.runAfter(0, internal.series.evaluateEnrollmentForVisitor, args);
+  const runAfter = getShallowRunAfter(ctx);
+  await runAfter(0, getInternalRef("series:evaluateEnrollmentForVisitor"), args);
 }
 
 export async function scheduleSeriesResumeWaitingForEvent(
@@ -30,7 +50,8 @@ export async function scheduleSeriesResumeWaitingForEvent(
     eventName: string;
   }
 ): Promise<void> {
-  await ctx.scheduler.runAfter(0, internal.series.resumeWaitingForEvent, args);
+  const runAfter = getShallowRunAfter(ctx);
+  await runAfter(0, getInternalRef("series:resumeWaitingForEvent"), args);
 }
 
 export async function scheduleSeriesProcessProgress(
@@ -40,7 +61,8 @@ export async function scheduleSeriesProcessProgress(
     progressId: Id<"seriesProgress">;
   }
 ): Promise<void> {
-  await ctx.scheduler.runAfter(args.delayMs, internal.series.processProgress, {
+  const runAfter = getShallowRunAfter(ctx);
+  await runAfter(args.delayMs, getInternalRef("series:processProgress"), {
     progressId: args.progressId,
   });
 }
@@ -53,7 +75,8 @@ export async function runSeriesEvaluateEntry(
     triggerContext?: SeriesEntryTriggerContext;
   }
 ): Promise<SeriesEvaluateEntryResult> {
-  return await ctx.runMutation(internal.series.evaluateEntry, args);
+  const runMutation = getShallowRunMutation(ctx);
+  return (await runMutation(getInternalRef("series:evaluateEntry"), args)) as SeriesEvaluateEntryResult;
 }
 
 export async function runSeriesEvaluateEnrollmentForVisitor(
@@ -64,7 +87,8 @@ export async function runSeriesEvaluateEnrollmentForVisitor(
     triggerContext: SeriesEntryTriggerContext;
   }
 ): Promise<unknown> {
-  return await ctx.runMutation(internal.series.evaluateEnrollmentForVisitor, args);
+  const runMutation = getShallowRunMutation(ctx);
+  return await runMutation(getInternalRef("series:evaluateEnrollmentForVisitor"), args);
 }
 
 export async function runSeriesResumeWaitingForEvent(
@@ -75,7 +99,8 @@ export async function runSeriesResumeWaitingForEvent(
     eventName: string;
   }
 ): Promise<unknown> {
-  return await ctx.runMutation(internal.series.resumeWaitingForEvent, args);
+  const runMutation = getShallowRunMutation(ctx);
+  return await runMutation(getInternalRef("series:resumeWaitingForEvent"), args);
 }
 
 export async function runSeriesProcessWaitingProgress(
@@ -85,5 +110,6 @@ export async function runSeriesProcessWaitingProgress(
     waitingLimitPerSeries?: number;
   }
 ): Promise<unknown> {
-  return await ctx.runMutation(internal.series.processWaitingProgress, args);
+  const runMutation = getShallowRunMutation(ctx);
+  return await runMutation(getInternalRef("series:processWaitingProgress"), args);
 }

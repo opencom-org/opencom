@@ -1,6 +1,18 @@
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
 import { authMutation, authQuery } from "./lib/authWrappers";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    args: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 export const create = authMutation({
   args: {
@@ -40,7 +52,8 @@ export const create = authMutation({
       createdBy: args.createdBy,
     });
 
-    await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("embeddings:generateInternal"), {
       workspaceId: args.workspaceId,
       contentType: "snippet",
       contentId: snippetId,
@@ -109,7 +122,8 @@ export const update = authMutation({
     await ctx.db.patch(args.id, updates);
 
     if (args.name !== undefined || args.content !== undefined) {
-      await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, getInternalRef("embeddings:generateInternal"), {
         workspaceId: snippet.workspaceId,
         contentType: "snippet",
         contentId: args.id,

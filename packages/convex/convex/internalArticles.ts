@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { makeFunctionReference } from "convex/server";
 import { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { authMutation, authQuery } from "./lib/authWrappers";
@@ -55,6 +55,18 @@ async function listInternalArticlesForWorkspace(
 ) {
   const records = await listUnifiedArticlesWithLegacyFallback(db, workspaceId);
   return records.filter(isInternalArticleRecord);
+}
+
+function getShallowRunAfter(ctx: MutationCtx) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    args: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
 }
 
 export const create = authMutation({
@@ -132,8 +144,9 @@ export const update = authMutation({
         article.article.status === "published" &&
         (args.title !== undefined || args.content !== undefined)
       ) {
-        // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-        await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+        const runAfter = getShallowRunAfter(ctx);
+        const generateInternalRef = getInternalRef("embeddings:generateInternal");
+        await runAfter(0, generateInternalRef, {
           workspaceId: article.article.workspaceId,
           contentType: "internalArticle",
           contentId: article.article._id,
@@ -176,8 +189,9 @@ export const update = authMutation({
       article.article.status === "published" &&
       (args.title !== undefined || args.content !== undefined)
     ) {
-      // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-      await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+      const runAfter = getShallowRunAfter(ctx);
+      const generateInternalRef = getInternalRef("embeddings:generateInternal");
+      await runAfter(0, generateInternalRef, {
         workspaceId: article.article.workspaceId,
         contentType: "internalArticle",
         contentId: article.article._id,
@@ -206,8 +220,9 @@ export const remove = authMutation({
     }
 
     await ctx.db.delete(article.article._id);
-    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-    await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+    const runAfter = getShallowRunAfter(ctx);
+    const removeEmbeddingRef = getInternalRef("embeddings:remove");
+    await runAfter(0, removeEmbeddingRef, {
       contentType: "internalArticle",
       contentId: article.article._id,
     });
@@ -294,8 +309,9 @@ export const publish = authMutation({
       updatedAt: Date.now(),
     });
 
-    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-    await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+    const runAfter = getShallowRunAfter(ctx);
+    const generateInternalRef = getInternalRef("embeddings:generateInternal");
+    await runAfter(0, generateInternalRef, {
       workspaceId: article.article.workspaceId,
       contentType: "internalArticle",
       contentId: article.article._id,
@@ -328,8 +344,9 @@ export const unpublish = authMutation({
       updatedAt: Date.now(),
     });
 
-    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-    await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+    const runAfter = getShallowRunAfter(ctx);
+    const removeEmbeddingRef = getInternalRef("embeddings:remove");
+    await runAfter(0, removeEmbeddingRef, {
       contentType: "internalArticle",
       contentId: article.article._id,
     });
@@ -358,8 +375,9 @@ export const archive = authMutation({
       updatedAt: Date.now(),
     });
 
-    // @ts-ignore Convex generated type graph can exceed TS instantiation depth.
-    await ctx.scheduler.runAfter(0, internal.embeddings.remove, {
+    const runAfter = getShallowRunAfter(ctx);
+    const removeEmbeddingRef = getInternalRef("embeddings:remove");
+    await runAfter(0, removeEmbeddingRef, {
       contentType: "internalArticle",
       contentId: article.article._id,
     });

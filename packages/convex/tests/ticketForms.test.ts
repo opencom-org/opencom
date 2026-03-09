@@ -15,10 +15,10 @@ describe("ticketForms", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const form = await client.mutation(api.testing.helpers.createTestTicketForm, {
+    const form = await client.mutation(api.testing_helpers.createTestTicketForm, {
       workspaceId: testWorkspaceId,
       name: "Support Request Form",
       description: "Form for support requests",
@@ -30,7 +30,7 @@ describe("ticketForms", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

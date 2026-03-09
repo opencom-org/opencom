@@ -41,7 +41,7 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig = {
-  transpilePackages: ["@opencom/ui"],
+  transpilePackages: ["@opencom/ui", "@opencom/web-shared"],
   experimental: {
     // Reduce memory usage during webpack compilation
     webpackMemoryOptimizations: true,

@@ -1,9 +1,20 @@
 import { v } from "convex/values";
+import { makeFunctionReference } from "convex/server";
 import { internalAction, internalMutation } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { jsonRecordValidator } from "../validators";
 import { sendEmail } from "../email";
 import { notificationChannelValidator, notificationRecipientTypeValidator } from "./contracts";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as unknown as (
+    actionRef: unknown,
+    actionArgs: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 export const sendPushNotification = internalAction({
   args: {
@@ -32,12 +43,25 @@ export const sendPushNotification = internalAction({
       return { success: true, sent: 0, tickets: [] };
     }
 
-    return await ctx.runAction(internal.push.sendPush, {
+    const runAction = getShallowRunAction(ctx);
+    return (await runAction(getInternalRef("push:sendPush"), {
       tokens: args.tokens,
       title: args.title,
       body: args.body,
       data: args.data,
-    });
+    })) as {
+      success: boolean;
+      sent: number;
+      failed?: number;
+      error?: string;
+      tickets: Array<{
+        status: string;
+        id?: string;
+        error?: string;
+        errorCode?: string;
+        token?: string;
+      }>;
+    };
   },
 });
 
@@ -118,10 +142,18 @@ export const dispatchPushAttempts = internalAction({
       reason?: string;
     }> = [];
 
+    const runAction = getShallowRunAction(ctx);
+    const runMutation = ctx.runMutation as unknown as (
+      mutationRef: unknown,
+      mutationArgs: Record<string, unknown>
+    ) => Promise<unknown>;
+    const sendPushRef = getInternalRef("push:sendPush");
+    const logDeliveryOutcomeRef = getInternalRef("notifications:logDeliveryOutcome");
+
     for (const attempt of args.attempts) {
       if (attempt.tokens.length === 0) {
         failed += 1;
-        await ctx.runMutation(internal.notifications.logDeliveryOutcome, {
+        await runMutation(logDeliveryOutcomeRef, {
           workspaceId: args.workspaceId,
           eventId: args.eventId,
           eventKey: args.eventKey,
@@ -144,12 +176,17 @@ export const dispatchPushAttempts = internalAction({
         continue;
       }
 
-      const result = await ctx.runAction(internal.push.sendPush, {
+      const result = (await runAction(sendPushRef, {
         tokens: attempt.tokens,
         title: args.title,
         body: args.body,
         data: args.data,
-      });
+      })) as {
+        sent?: number;
+        failed?: number;
+        error?: string;
+        tickets?: Array<{ status?: string; error?: string }>;
+      };
       const sent = result.sent ?? 0;
       const failedCount = result.failed ?? 0;
       const failedTicket = (result.tickets ?? []).find(
@@ -158,7 +195,7 @@ export const dispatchPushAttempts = internalAction({
 
       if (sent > 0) {
         delivered += 1;
-        await ctx.runMutation(internal.notifications.logDeliveryOutcome, {
+        await runMutation(logDeliveryOutcomeRef, {
           workspaceId: args.workspaceId,
           eventId: args.eventId,
           eventKey: args.eventKey,
@@ -189,7 +226,7 @@ export const dispatchPushAttempts = internalAction({
       } else {
         failed += 1;
         const errorMessage = result.error ?? failedTicket?.error ?? "Push transport error";
-        await ctx.runMutation(internal.notifications.logDeliveryOutcome, {
+        await runMutation(logDeliveryOutcomeRef, {
           workspaceId: args.workspaceId,
           eventId: args.eventId,
           eventKey: args.eventKey,

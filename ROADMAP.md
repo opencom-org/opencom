@@ -32,6 +32,15 @@ Goal: ship a professional open-source customer messaging platform with strong de
 - [ ] improved inbox management (sorting, filtering etc.)
 - [ ] dont allow requesting human support multiple times in a row on same chat
 - [ ] "resolve visitor from expression - session expired" - are we handling refresh properly?
+- [ ] maintain message state in mobile app when switching apps
+- [ ] telegram fixes
+  - [ ] chat attachments
+  - [ ] if skipped, dont re-ask for their email each time - give them a subtle affordance where they can add their email if they change their mind
+  - [ ] showcase the dashboard on the landing app?
+  - [ ] API for headless management?
+- [ ] publish to npm
+- [ ] paid plan
+
 
 - [ ] Check AI chat / article suggestions setup is working
   - [ ] Add links to relevant help center articles in the widget AI responses, and maybe in chat (suggested articles)

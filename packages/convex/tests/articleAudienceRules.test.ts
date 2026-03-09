@@ -19,11 +19,11 @@ describe("articleAudienceRules", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
     // Create visitor with email
-    const visitor1 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor1 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "test@example.com",
       name: "Test User",
@@ -34,19 +34,19 @@ describe("articleAudienceRules", () => {
     });
     testVisitorId = visitor1.visitorId;
 
-    const session1 = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const session1 = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: testVisitorId,
       workspaceId: testWorkspaceId,
     });
     testSessionToken = session1.sessionToken;
 
     // Create visitor without email
-    const visitor2 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor2 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorIdNoEmail = visitor2.visitorId;
 
-    const session2 = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const session2 = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: testVisitorIdNoEmail,
       workspaceId: testWorkspaceId,
     });
@@ -56,7 +56,7 @@ describe("articleAudienceRules", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -68,13 +68,13 @@ describe("articleAudienceRules", () => {
 
   describe("listForVisitor with audience rules", () => {
     it("should return article when no audience rules defined", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Public Article",
         content: "This article is for everyone",
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       const articles = await client.query(api.articles.listForVisitor, {
         workspaceId: testWorkspaceId,
@@ -84,17 +84,17 @@ describe("articleAudienceRules", () => {
 
       expect(articles.some((a) => a._id === testArticleId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
 
     it("should return article when visitor matches audience rules", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Pro Users Article",
         content: "This article is for pro users only",
       });
 
-      await client.mutation(api.testing.helpers.updateTestArticle, {
+      await client.mutation(api.testing_helpers.updateTestArticle, {
         id: testArticleId,
         audienceRules: {
           type: "group",
@@ -110,7 +110,7 @@ describe("articleAudienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       const articles = await client.query(api.articles.listForVisitor, {
         workspaceId: testWorkspaceId,
@@ -120,17 +120,17 @@ describe("articleAudienceRules", () => {
 
       expect(articles.some((a) => a._id === testArticleId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
 
     it("should not return article when visitor does not match audience rules", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Enterprise Article",
         content: "This article is for enterprise users only",
       });
 
-      await client.mutation(api.testing.helpers.updateTestArticle, {
+      await client.mutation(api.testing_helpers.updateTestArticle, {
         id: testArticleId,
         audienceRules: {
           type: "group",
@@ -146,7 +146,7 @@ describe("articleAudienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       const articles = await client.query(api.articles.listForVisitor, {
         workspaceId: testWorkspaceId,
@@ -156,17 +156,17 @@ describe("articleAudienceRules", () => {
 
       expect(articles.some((a) => a._id === testArticleId)).toBe(false);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
 
     it("should filter by email is_set rule", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Identified Users Article",
         content: "This article requires email",
       });
 
-      await client.mutation(api.testing.helpers.updateTestArticle, {
+      await client.mutation(api.testing_helpers.updateTestArticle, {
         id: testArticleId,
         audienceRules: {
           type: "group",
@@ -181,7 +181,7 @@ describe("articleAudienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       // Visitor with email should see it
       const articlesWithEmail = await client.query(api.articles.listForVisitor, {
@@ -199,19 +199,19 @@ describe("articleAudienceRules", () => {
       });
       expect(articlesNoEmail.some((a) => a._id === testArticleId)).toBe(false);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
   });
 
   describe("searchForVisitor with audience rules", () => {
     it("should return matching article in search when visitor matches rules", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Premium Features Guide",
         content: "Learn about premium features for pro users",
       });
 
-      await client.mutation(api.testing.helpers.updateTestArticle, {
+      await client.mutation(api.testing_helpers.updateTestArticle, {
         id: testArticleId,
         audienceRules: {
           type: "group",
@@ -227,7 +227,7 @@ describe("articleAudienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       const results = await client.query(api.articles.searchForVisitor, {
         workspaceId: testWorkspaceId,
@@ -238,17 +238,17 @@ describe("articleAudienceRules", () => {
 
       expect(results.some((a) => a._id === testArticleId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
 
     it("should not return article in search when visitor does not match rules", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Enterprise Admin Guide",
         content: "Admin features for enterprise customers",
       });
 
-      await client.mutation(api.testing.helpers.updateTestArticle, {
+      await client.mutation(api.testing_helpers.updateTestArticle, {
         id: testArticleId,
         audienceRules: {
           type: "group",
@@ -264,7 +264,7 @@ describe("articleAudienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       const results = await client.query(api.articles.searchForVisitor, {
         workspaceId: testWorkspaceId,
@@ -275,7 +275,7 @@ describe("articleAudienceRules", () => {
 
       expect(results.some((a) => a._id === testArticleId)).toBe(false);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
   });
 
@@ -313,13 +313,13 @@ describe("articleAudienceRules", () => {
 
   describe("article with OR conditions", () => {
     it("should match when any condition is true", async () => {
-      testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+      testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
         workspaceId: testWorkspaceId,
         title: "Pro or Premium Article",
         content: "For pro or premium tier users",
       });
 
-      await client.mutation(api.testing.helpers.updateTestArticle, {
+      await client.mutation(api.testing_helpers.updateTestArticle, {
         id: testArticleId,
         audienceRules: {
           type: "group",
@@ -341,7 +341,7 @@ describe("articleAudienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
       const articles = await client.query(api.articles.listForVisitor, {
         workspaceId: testWorkspaceId,
@@ -351,7 +351,7 @@ describe("articleAudienceRules", () => {
 
       expect(articles.some((a) => a._id === testArticleId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestArticle, { id: testArticleId });
+      await client.mutation(api.testing_helpers.removeTestArticle, { id: testArticleId });
     });
   });
 });

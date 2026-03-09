@@ -18,7 +18,7 @@
     "@opencom/types": "workspace:*",
     "@opencom/ui": "workspace:*",
     "@opencom/web-shared": "workspace:*",
-    "convex": "^1.31.7",
+    "convex": "^1.32.0",
     "dompurify": "^3.3.1",
     "fflate": "^0.8.2",
     "lucide-react": "^0.469.0",

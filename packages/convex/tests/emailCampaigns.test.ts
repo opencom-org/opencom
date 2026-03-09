@@ -20,7 +20,7 @@ describe("emailCampaigns", () => {
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
     // Create a test visitor with email
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorId = visitor.visitorId;
@@ -36,7 +36,7 @@ describe("emailCampaigns", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

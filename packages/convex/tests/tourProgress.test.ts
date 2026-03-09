@@ -18,14 +18,14 @@ describe("tourProgress", () => {
     client = new ConvexClient(convexUrl);
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "tour-visitor@test.com",
       name: "Tour Test Visitor",
     });
     testVisitorId = visitor.visitorId;
 
-    testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    testTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Progress Test Tour",
     });
@@ -45,13 +45,13 @@ describe("tourProgress", () => {
     });
 
     // Activate the tour
-    await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+    await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -118,7 +118,7 @@ describe("tourProgress", () => {
 
   it("should snooze a tour", async () => {
     // Create a new visitor for snooze test
-    const visitor2 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor2 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "snooze-visitor@test.com",
       name: "Snooze Test Visitor",
@@ -149,7 +149,7 @@ describe("tourProgress", () => {
 
   it("should dismiss a tour", async () => {
     // Create a new visitor for dismiss test
-    const visitor3 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor3 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "dismiss-visitor@test.com",
       name: "Dismiss Test Visitor",
@@ -180,7 +180,7 @@ describe("tourProgress", () => {
 
   it("should restart a tour", async () => {
     // Create a new visitor for restart test
-    const visitor4 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor4 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "restart-visitor@test.com",
       name: "Restart Test Visitor",
@@ -213,13 +213,13 @@ describe("tourProgress", () => {
   });
 
   it("persists route checkpoints and resumes multi-page progress", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "checkpoint-visitor@test.com",
       name: "Checkpoint Visitor",
     });
 
-    const checkpointTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    const checkpointTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Checkpoint Tour",
       displayMode: "first_time_only",
@@ -241,7 +241,7 @@ describe("tourProgress", () => {
       routePath: "/widget-demo?fixture=tour-step-2",
       advanceOn: "elementClick",
     });
-    await client.mutation(api.testing.helpers.activateTestTour, { id: checkpointTourId });
+    await client.mutation(api.testing_helpers.activateTestTour, { id: checkpointTourId });
 
     await client.mutation(api.tourProgress.start, {
       workspaceId: testWorkspaceId,
@@ -288,13 +288,13 @@ describe("tourProgress", () => {
   });
 
   it("enforces advancement mode preconditions and records diagnostics", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "mode-visitor@test.com",
       name: "Mode Visitor",
     });
 
-    const modeTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    const modeTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Mode Guard Tour",
     });
@@ -307,7 +307,7 @@ describe("tourProgress", () => {
       advanceOn: "elementClick",
       routePath: "/widget-demo",
     });
-    await client.mutation(api.testing.helpers.activateTestTour, { id: modeTourId });
+    await client.mutation(api.testing_helpers.activateTestTour, { id: modeTourId });
 
     await client.mutation(api.tourProgress.start, {
       workspaceId: testWorkspaceId,
@@ -337,13 +337,13 @@ describe("tourProgress", () => {
   });
 
   it("records diagnostics when skipping invalid selector steps", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "skip-visitor@test.com",
       name: "Skip Visitor",
     });
 
-    const skipTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    const skipTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Skip Tour",
     });
@@ -362,7 +362,7 @@ describe("tourProgress", () => {
       content: "Recovery step",
       advanceOn: "click",
     });
-    await client.mutation(api.testing.helpers.activateTestTour, { id: skipTourId });
+    await client.mutation(api.testing_helpers.activateTestTour, { id: skipTourId });
 
     await client.mutation(api.tourProgress.start, {
       workspaceId: testWorkspaceId,
@@ -399,7 +399,7 @@ describe("tourProgress", () => {
 
     beforeAll(async () => {
       // Create visitor for displayMode tests
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
         email: "displaymode-visitor@test.com",
         name: "DisplayMode Test Visitor",
@@ -407,7 +407,7 @@ describe("tourProgress", () => {
       displayModeVisitorId = visitor.visitorId;
 
       // Create first_time_only tour
-      firstTimeOnlyTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      firstTimeOnlyTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "First Time Only Tour",
         displayMode: "first_time_only",
@@ -418,10 +418,10 @@ describe("tourProgress", () => {
         type: "post",
         content: "First time step",
       });
-      await client.mutation(api.testing.helpers.activateTestTour, { id: firstTimeOnlyTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: firstTimeOnlyTourId });
 
       // Create until_dismissed tour
-      untilDismissedTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      untilDismissedTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Until Dismissed Tour",
         displayMode: "until_dismissed",
@@ -432,7 +432,7 @@ describe("tourProgress", () => {
         type: "post",
         content: "Until dismissed step",
       });
-      await client.mutation(api.testing.helpers.activateTestTour, { id: untilDismissedTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: untilDismissedTourId });
     });
 
     it("should exclude first_time_only tours after any progress exists", async () => {
@@ -507,14 +507,14 @@ describe("tourProgress", () => {
 
     it("should return tours sorted by priority", async () => {
       // Create a new visitor to test priority ordering
-      const priorityVisitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const priorityVisitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
         email: "priority-visitor@test.com",
         name: "Priority Test Visitor",
       });
 
       // Create tours with different priorities
-      const lowPriorityTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      const lowPriorityTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Low Priority Tour",
         priority: 10,
@@ -524,9 +524,9 @@ describe("tourProgress", () => {
         type: "post",
         content: "Low priority step",
       });
-      await client.mutation(api.testing.helpers.activateTestTour, { id: lowPriorityTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: lowPriorityTourId });
 
-      const highPriorityTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      const highPriorityTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "High Priority Tour",
         priority: 0,
@@ -536,7 +536,7 @@ describe("tourProgress", () => {
         type: "post",
         content: "High priority step",
       });
-      await client.mutation(api.testing.helpers.activateTestTour, { id: highPriorityTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: highPriorityTourId });
 
       // Get available tours
       const available = await client.query(api.tourProgress.getAvailableTours, {

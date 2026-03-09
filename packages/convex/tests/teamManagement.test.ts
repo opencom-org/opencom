@@ -7,7 +7,6 @@ describe("invitation flow - invite → signup → membership", () => {
   let client: ConvexClient;
   let testWorkspaceId: Id<"workspaces">;
   let adminUserId: Id<"users">;
-  let adminToken: string;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -16,7 +15,7 @@ describe("invitation flow - invite → signup → membership", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
     adminUserId = workspace.userId;
   });
@@ -24,7 +23,7 @@ describe("invitation flow - invite → signup → membership", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -37,7 +36,7 @@ describe("invitation flow - invite → signup → membership", () => {
   it("should create invitation for new user", async () => {
     const inviteEmail = `new-user-${Date.now()}@test.opencom.dev`;
 
-    const result = await client.mutation(api.testing.helpers.createTestInvitation, {
+    const result = await client.mutation(api.testing_helpers.createTestInvitation, {
       workspaceId: testWorkspaceId,
       email: inviteEmail,
       role: "agent",
@@ -50,14 +49,14 @@ describe("invitation flow - invite → signup → membership", () => {
   it("should list pending invitations", async () => {
     const inviteEmail = `pending-${Date.now()}@test.opencom.dev`;
 
-    await client.mutation(api.testing.helpers.createTestInvitation, {
+    await client.mutation(api.testing_helpers.createTestInvitation, {
       workspaceId: testWorkspaceId,
       email: inviteEmail,
       role: "agent",
       invitedBy: adminUserId,
     });
 
-    const invitations = await client.mutation(api.testing.helpers.listTestPendingInvitations, {
+    const invitations = await client.mutation(api.testing_helpers.listTestPendingInvitations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -71,7 +70,7 @@ describe("invitation flow - invite → signup → membership", () => {
     const inviteEmail = `auto-accept-${Date.now()}@test.opencom.dev`;
 
     // Create invitation first
-    const inviteResult = await client.mutation(api.testing.helpers.createTestInvitation, {
+    const inviteResult = await client.mutation(api.testing_helpers.createTestInvitation, {
       workspaceId: testWorkspaceId,
       email: inviteEmail,
       role: "agent",
@@ -81,12 +80,12 @@ describe("invitation flow - invite → signup → membership", () => {
     expect(inviteResult.invitationId).toBeDefined();
 
     // Accept the invitation via test helper
-    await client.mutation(api.testing.helpers.acceptTestInvitation, {
+    await client.mutation(api.testing_helpers.acceptTestInvitation, {
       invitationId: inviteResult.invitationId,
     });
 
     // Verify invitation is no longer pending
-    const invitations = await client.mutation(api.testing.helpers.listTestPendingInvitations, {
+    const invitations = await client.mutation(api.testing_helpers.listTestPendingInvitations, {
       workspaceId: testWorkspaceId,
     });
     const found = invitations.find((i: { email: string }) => i.email === inviteEmail);
@@ -96,18 +95,18 @@ describe("invitation flow - invite → signup → membership", () => {
   it("should cancel pending invitation", async () => {
     const inviteEmail = `cancel-${Date.now()}@test.opencom.dev`;
 
-    const inviteResult = await client.mutation(api.testing.helpers.createTestInvitation, {
+    const inviteResult = await client.mutation(api.testing_helpers.createTestInvitation, {
       workspaceId: testWorkspaceId,
       email: inviteEmail,
       role: "agent",
       invitedBy: adminUserId,
     });
 
-    await client.mutation(api.testing.helpers.cancelTestInvitation, {
+    await client.mutation(api.testing_helpers.cancelTestInvitation, {
       invitationId: inviteResult.invitationId,
     });
 
-    const invitations = await client.mutation(api.testing.helpers.listTestPendingInvitations, {
+    const invitations = await client.mutation(api.testing_helpers.listTestPendingInvitations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -119,7 +118,6 @@ describe("invitation flow - invite → signup → membership", () => {
 describe("role changes and member removal", () => {
   let client: ConvexClient;
   let testWorkspaceId: Id<"workspaces">;
-  let adminToken: string;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -128,14 +126,14 @@ describe("role changes and member removal", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -148,13 +146,13 @@ describe("role changes and member removal", () => {
   it("should change member role from agent to admin", async () => {
     const memberEmail = `agent-to-admin-${Date.now()}@test.opencom.dev`;
 
-    const member = await client.mutation(api.testing.helpers.createTestUser, {
+    const member = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: memberEmail,
       role: "agent",
     });
 
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -162,12 +160,12 @@ describe("role changes and member removal", () => {
     expect(membership).toBeDefined();
     expect(membership?.role).toBe("agent");
 
-    await client.mutation(api.testing.helpers.updateTestMemberRole, {
+    await client.mutation(api.testing_helpers.updateTestMemberRole, {
       membershipId: membership!._id,
       role: "admin",
     });
 
-    const updatedMembers = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const updatedMembers = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -181,25 +179,25 @@ describe("role changes and member removal", () => {
     const memberEmail = `admin-to-agent-${Date.now()}@test.opencom.dev`;
 
     // Create as admin first
-    const member = await client.mutation(api.testing.helpers.createTestUser, {
+    const member = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: memberEmail,
       role: "admin",
     });
 
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
     const membership = members.find((m: { userId: string }) => m.userId === member.userId);
 
     // Should succeed because there's still the original admin
-    await client.mutation(api.testing.helpers.updateTestMemberRole, {
+    await client.mutation(api.testing_helpers.updateTestMemberRole, {
       membershipId: membership!._id,
       role: "agent",
     });
 
-    const updatedMembers = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const updatedMembers = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -212,23 +210,23 @@ describe("role changes and member removal", () => {
   it("should remove member from workspace", async () => {
     const memberEmail = `remove-member-${Date.now()}@test.opencom.dev`;
 
-    const member = await client.mutation(api.testing.helpers.createTestUser, {
+    const member = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: memberEmail,
       role: "agent",
     });
 
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
     const membership = members.find((m: { userId: string }) => m.userId === member.userId);
 
-    await client.mutation(api.testing.helpers.removeTestMember, {
+    await client.mutation(api.testing_helpers.removeTestMember, {
       membershipId: membership!._id,
     });
 
-    const updatedMembers = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const updatedMembers = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -241,9 +239,6 @@ describe("admin-only restrictions on team management", () => {
   let client: ConvexClient;
   let testWorkspaceId: Id<"workspaces">;
   let adminUserId: Id<"users">;
-  let adminToken: string;
-  let agentToken: string;
-  let agentUserId: Id<"users">;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -253,24 +248,24 @@ describe("admin-only restrictions on team management", () => {
     client = new ConvexClient(convexUrl);
 
     // Create admin workspace
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
     adminUserId = workspace.userId;
 
     // Create agent in the same workspace
     const agentEmail = `agent-restrict-${Date.now()}@test.opencom.dev`;
-    const agent = await client.mutation(api.testing.helpers.createTestUser, {
+    const agent = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: agentEmail,
       role: "agent",
     });
-    agentUserId = agent.userId;
+    expect(agent.userId).toBeDefined();
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -281,28 +276,28 @@ describe("admin-only restrictions on team management", () => {
   });
 
   it("should prevent removing last admin", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
     const adminMembership = members.find((m: { userId: string }) => m.userId === adminUserId);
 
     await expect(
-      client.mutation(api.testing.helpers.removeTestMember, {
+      client.mutation(api.testing_helpers.removeTestMember, {
         membershipId: adminMembership!._id,
       })
     ).rejects.toThrow(/at least one admin/i);
   });
 
   it("should prevent demoting last admin", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
     const adminMembership = members.find((m: { userId: string }) => m.userId === adminUserId);
 
     await expect(
-      client.mutation(api.testing.helpers.updateTestMemberRole, {
+      client.mutation(api.testing_helpers.updateTestMemberRole, {
         membershipId: adminMembership!._id,
         role: "agent",
       })
@@ -312,7 +307,7 @@ describe("admin-only restrictions on team management", () => {
   it("should allow admin to cancel invitations", async () => {
     const inviteEmail = `admin-cancel-${Date.now()}@test.opencom.dev`;
 
-    const inviteResult = await client.mutation(api.testing.helpers.createTestInvitation, {
+    const inviteResult = await client.mutation(api.testing_helpers.createTestInvitation, {
       workspaceId: testWorkspaceId,
       email: inviteEmail,
       role: "agent",
@@ -320,11 +315,11 @@ describe("admin-only restrictions on team management", () => {
     });
 
     // Cancel the invitation
-    await client.mutation(api.testing.helpers.cancelTestInvitation, {
+    await client.mutation(api.testing_helpers.cancelTestInvitation, {
       invitationId: inviteResult.invitationId,
     });
 
-    const invitations = await client.mutation(api.testing.helpers.listTestPendingInvitations, {
+    const invitations = await client.mutation(api.testing_helpers.listTestPendingInvitations, {
       workspaceId: testWorkspaceId,
     });
 

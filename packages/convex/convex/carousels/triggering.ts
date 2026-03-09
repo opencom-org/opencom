@@ -1,5 +1,5 @@
+import { anyApi } from "convex/server";
 import { v } from "convex/values";
-import { internal, api } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authAction, authMutation, authQuery } from "../lib/authWrappers";
 import { evaluateRuleWithSegmentSupport } from "../audienceRules";
@@ -127,7 +127,36 @@ export const sendPushTrigger = authAction({
     error?: string;
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
-    const carousel = await ctx.runQuery(api.carousels.get, { id: args.carouselId });
+    const runQuery = ctx.runQuery as unknown as (
+      queryRef: unknown,
+      queryArgs: Record<string, unknown>
+    ) => Promise<unknown>;
+    const runMutation = ctx.runMutation as unknown as (
+      mutationRef: unknown,
+      mutationArgs: Record<string, unknown>
+    ) => Promise<unknown>;
+    const carouselGetRef = (anyApi as unknown as {
+      carousels: { get: unknown; getEligibleVisitorsWithPushTokens: unknown };
+      notifications: { routeEvent: unknown };
+    }).carousels.get;
+    const eligibleVisitorsRef = (anyApi as unknown as {
+      carousels: { getEligibleVisitorsWithPushTokens: unknown };
+    }).carousels.getEligibleVisitorsWithPushTokens;
+    const routeEventRef = (anyApi as unknown as {
+      notifications: { routeEvent: unknown };
+    }).notifications.routeEvent;
+    const carousel = (await runQuery(carouselGetRef, {
+      id: args.carouselId,
+    })) as
+      | {
+          _id: Id<"carousels">;
+          name: string;
+          status: string;
+          workspaceId: Id<"workspaces">;
+          updatedAt: number;
+          screens?: Array<{ title?: string; body?: string }>;
+        }
+      | null;
     if (!carousel) {
       throw new Error("Carousel not found");
     }
@@ -135,13 +164,13 @@ export const sendPushTrigger = authAction({
       throw new Error("Carousel must be active to trigger");
     }
 
-    const firstScreen = carousel.screens[0];
+    const firstScreen = carousel.screens?.[0];
     const title = firstScreen?.title || carousel.name;
     const body = firstScreen?.body || "Check out this new content";
 
-    const eligibleVisitors = await ctx.runQuery(api.carousels.getEligibleVisitorsWithPushTokens, {
+    const eligibleVisitors = (await runQuery(eligibleVisitorsRef, {
       carouselId: args.carouselId,
-    });
+    })) as Array<{ visitorId: Id<"visitors"> }>;
 
     if (eligibleVisitors.length === 0) {
       return { success: true, sent: 0, message: "No eligible visitors with push tokens" };
@@ -151,7 +180,7 @@ export const sendPushTrigger = authAction({
       new Set(eligibleVisitors.map((visitor: { visitorId: Id<"visitors"> }) => visitor.visitorId))
     ) as Id<"visitors">[];
 
-    const routed = await ctx.runMutation(internal.notifications.routeEvent, {
+    const routed = (await runMutation(routeEventRef, {
       eventType: "carousel_trigger",
       domain: "outbound",
       audience: "visitor",
@@ -165,7 +194,7 @@ export const sendPushTrigger = authAction({
       },
       recipientVisitorIds: visitorIds,
       eventKey: `carousel_trigger:${args.carouselId}:${carousel.updatedAt}`,
-    });
+    })) as { scheduled: number };
 
     return {
       success: true,

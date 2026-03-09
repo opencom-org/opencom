@@ -18,11 +18,11 @@ describe("Webhook Status Flow", () => {
     client = new ConvexClient(convexUrl);
 
     // Create test workspace
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
     // Create test visitor
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "webhook-test@example.com",
       name: "Webhook Test Visitor",
@@ -30,7 +30,7 @@ describe("Webhook Status Flow", () => {
     testVisitorId = visitor.visitorId;
 
     // Create test conversation
-    const conversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
       status: "open",
@@ -38,7 +38,7 @@ describe("Webhook Status Flow", () => {
     testConversationId = conversation.conversationId;
 
     // Create test message with external email ID
-    const message = await client.mutation(api.testing.helpers.createTestMessage, {
+    const message = await client.mutation(api.testing_helpers.createTestMessage, {
       conversationId: testConversationId,
       content: "Test email message",
       senderType: "agent",
@@ -50,7 +50,7 @@ describe("Webhook Status Flow", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -63,13 +63,13 @@ describe("Webhook Status Flow", () => {
   describe("Email delivery status updates", () => {
     it("should update message status on email.sent event", async () => {
       // Simulate webhook event for email sent
-      await client.mutation(api.testing.helpers.simulateEmailWebhook, {
+      await client.mutation(api.testing_helpers.simulateEmailWebhook, {
         eventType: "email.sent",
         emailId: "test-email-id-123",
       });
 
       // Verify message status was updated
-      const message = await client.mutation(api.testing.helpers.getTestMessage, {
+      const message = await client.mutation(api.testing_helpers.getTestMessage, {
         id: testMessageId,
       });
 
@@ -77,12 +77,12 @@ describe("Webhook Status Flow", () => {
     });
 
     it("should update message status on email.delivered event", async () => {
-      await client.mutation(api.testing.helpers.simulateEmailWebhook, {
+      await client.mutation(api.testing_helpers.simulateEmailWebhook, {
         eventType: "email.delivered",
         emailId: "test-email-id-123",
       });
 
-      const message = await client.mutation(api.testing.helpers.getTestMessage, {
+      const message = await client.mutation(api.testing_helpers.getTestMessage, {
         id: testMessageId,
       });
 
@@ -90,12 +90,12 @@ describe("Webhook Status Flow", () => {
     });
 
     it("should update message status on email.opened event", async () => {
-      await client.mutation(api.testing.helpers.simulateEmailWebhook, {
+      await client.mutation(api.testing_helpers.simulateEmailWebhook, {
         eventType: "email.opened",
         emailId: "test-email-id-123",
       });
 
-      const message = await client.mutation(api.testing.helpers.getTestMessage, {
+      const message = await client.mutation(api.testing_helpers.getTestMessage, {
         id: testMessageId,
       });
 
@@ -105,19 +105,19 @@ describe("Webhook Status Flow", () => {
 
     it("should update message status on email.bounced event", async () => {
       // Create another message for bounce test
-      const bounceMessage = await client.mutation(api.testing.helpers.createTestMessage, {
+      const bounceMessage = await client.mutation(api.testing_helpers.createTestMessage, {
         conversationId: testConversationId,
         content: "Test bounce message",
         senderType: "agent",
         externalEmailId: "test-bounce-email-123",
       });
 
-      await client.mutation(api.testing.helpers.simulateEmailWebhook, {
+      await client.mutation(api.testing_helpers.simulateEmailWebhook, {
         eventType: "email.bounced",
         emailId: "test-bounce-email-123",
       });
 
-      const message = await client.mutation(api.testing.helpers.getTestMessage, {
+      const message = await client.mutation(api.testing_helpers.getTestMessage, {
         id: bounceMessage.messageId,
       });
 
@@ -127,7 +127,7 @@ describe("Webhook Status Flow", () => {
     it("should handle unknown email IDs gracefully", async () => {
       // Should not throw when processing webhook for unknown email
       await expect(
-        client.mutation(api.testing.helpers.simulateEmailWebhook, {
+        client.mutation(api.testing_helpers.simulateEmailWebhook, {
           eventType: "email.delivered",
           emailId: "non-existent-email-id",
         })
@@ -150,7 +150,7 @@ describe("Webhook Status Flow", () => {
       for (const eventType of eventTypes) {
         // Should not throw for any valid event type
         await expect(
-          client.mutation(api.testing.helpers.simulateEmailWebhook, {
+          client.mutation(api.testing_helpers.simulateEmailWebhook, {
             eventType,
             emailId: `test-${eventType.replace(".", "-")}-email`,
           })
@@ -172,7 +172,7 @@ describe("Webhook delivery status mapping", () => {
   };
 
   it("should map Resend events to correct delivery statuses", () => {
-    Object.entries(statusMapping).forEach(([event, expectedStatus]) => {
+    Object.entries(statusMapping).forEach(([_event, expectedStatus]) => {
       expect(expectedStatus).toBeDefined();
       expect(typeof expectedStatus).toBe("string");
     });

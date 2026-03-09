@@ -1,6 +1,6 @@
+import { anyApi, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { internal, api } from "./_generated/api";
 import { Id, Doc } from "./_generated/dataModel";
 import { evaluateRuleWithSegmentSupport, validateAudienceRule } from "./audienceRules";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
@@ -415,14 +415,15 @@ export const sendPushForCampaign = authAction({
       mutationRef: unknown,
       mutationArgs: Record<string, unknown>
     ) => Promise<unknown>;
-    // @ts-ignore Convex generated API type graph can exceed TS instantiation depth in app package checks.
-    const unsafeApi = api as unknown as {
-      outboundMessages: { get: unknown; getEligibleVisitorsForPush: unknown };
+    const unsafeApi = anyApi as unknown as {
+      outboundMessages: { getEligibleVisitorsForPush: unknown };
     };
-    // @ts-ignore Convex generated API type graph can exceed TS instantiation depth in app package checks.
-    const unsafeInternal = internal as unknown as { notifications: { routeEvent: unknown } };
+    const unsafeInternal = anyApi as unknown as {
+      notifications: { routeEvent: unknown };
+    };
 
-    const message = (await runQuery(unsafeApi.outboundMessages.get, {
+    const getOutboundMessageRef = makeFunctionReference("outboundMessages:get");
+    const message = (await runQuery(getOutboundMessageRef, {
       id: args.messageId,
     })) as Doc<"outboundMessages"> | null;
     if (!message) throw new Error("Message not found");

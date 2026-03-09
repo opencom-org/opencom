@@ -1,6 +1,6 @@
+import { anyApi } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query, internalMutation, QueryCtx, MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { requireValidOrigin } from "./originValidation";
 import { getAuthenticatedUserFromSession } from "./auth";
@@ -240,12 +240,19 @@ export const boot = mutation({
     let identityVerified = false;
 
     if (args.externalUserId && args.userHash) {
-      const result = await ctx.runMutation(internal.identityVerification.verifyIdentity, {
+      const runMutation = ctx.runMutation as unknown as (
+        mutationRef: unknown,
+        mutationArgs: Record<string, unknown>
+      ) => Promise<unknown>;
+      const verifyIdentityRef = (anyApi as unknown as {
+        identityVerification: { verifyIdentity: unknown };
+      }).identityVerification.verifyIdentity;
+      const result = (await runMutation(verifyIdentityRef, {
         workspaceId: args.workspaceId,
         visitorId: visitor._id,
         userId: args.externalUserId,
         userHash: args.userHash,
-      });
+      })) as { verified: boolean; skipped?: boolean };
 
       if (result.verified) {
         identityVerified = true;

@@ -1,12 +1,24 @@
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { resolveVisitorFromSession } from "./widgetSessions";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { formDataValidator } from "./validators";
 import { authMutation, authQuery } from "./lib/authWrappers";
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
+  return ctx.scheduler.runAfter as unknown as (
+    delayMs: number,
+    functionRef: unknown,
+    args: Record<string, unknown>
+  ) => Promise<unknown>;
+}
 
 const ticketStatusValidator = v.union(
   v.literal("submitted"),
@@ -225,7 +237,8 @@ export const create = mutation({
       updatedAt: now,
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketCreated, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:notifyTicketCreated"), {
       ticketId,
     });
 
@@ -276,7 +289,8 @@ export const update = authMutation({
     await ctx.db.patch(args.id, updates);
 
     if (args.status !== undefined && args.status !== ticket.status) {
-      await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketStatusChanged, {
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, getInternalRef("notifications:notifyTicketStatusChanged"), {
         ticketId: args.id,
         oldStatus: ticket.status,
         newStatus: args.status,
@@ -286,7 +300,8 @@ export const update = authMutation({
     }
 
     if (args.assigneeId !== undefined && args.assigneeId !== ticket.assigneeId) {
-      await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketAssigned, {
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, getInternalRef("notifications:notifyTicketAssigned"), {
         ticketId: args.id,
         assigneeId: args.assigneeId,
         actorUserId: ctx.user._id,
@@ -473,7 +488,8 @@ export const convertFromConversation = authMutation({
       updatedAt: now,
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketCreated, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:notifyTicketCreated"), {
       ticketId,
     });
 
@@ -534,7 +550,8 @@ export const addComment = mutation({
     await ctx.db.patch(args.ticketId, { updatedAt: now });
 
     if (!isInternal && authorType === "agent") {
-      await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketComment, {
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, getInternalRef("notifications:notifyTicketComment"), {
         ticketId: args.ticketId,
         commentId,
         actorUserId: authorId as Id<"users">,
@@ -542,7 +559,8 @@ export const addComment = mutation({
     }
 
     if (authorType === "visitor" && ticket.assigneeId) {
-      await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketCustomerReply, {
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, getInternalRef("notifications:notifyTicketCustomerReply"), {
         ticketId: args.ticketId,
         assigneeId: ticket.assigneeId,
         commentId,
@@ -589,7 +607,8 @@ export const resolve = authMutation({
       });
     }
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyTicketResolved, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, getInternalRef("notifications:notifyTicketResolved"), {
       ticketId: args.id,
       resolutionSummary: args.resolutionSummary,
       actorUserId: ctx.user._id,

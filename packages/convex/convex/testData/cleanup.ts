@@ -17,7 +17,7 @@ const cleanupTestData = internalMutation({
   handler: async (ctx, args) => {
     requireTestDataEnabled();
     const { workspaceId } = args;
-    let cleaned = {
+    const cleaned = {
       tours: 0,
       tourSteps: 0,
       tourProgress: 0,
@@ -461,7 +461,7 @@ const cleanupAll = internalMutation({
   args: {},
   handler: async (ctx) => {
     requireTestDataEnabled();
-    let totalCleaned = {
+    const totalCleaned = {
       workspaces: 0,
       items: 0,
     };

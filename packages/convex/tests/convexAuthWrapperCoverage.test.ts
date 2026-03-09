@@ -21,22 +21,22 @@ describe("convex auth wrapper coverage", () => {
     const seedClient = new ConvexClient(convexUrl);
     testWorkspaceId = (await authenticateClientForWorkspace(seedClient)).workspaceId;
 
-    testTourId = await seedClient.mutation(api.testing.helpers.createTestTour, {
+    testTourId = await seedClient.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Wrapper Coverage Tour",
     });
 
-    testArticleId = await seedClient.mutation(api.testing.helpers.createTestArticle, {
+    testArticleId = await seedClient.mutation(api.testing_helpers.createTestArticle, {
       workspaceId: testWorkspaceId,
       title: "Wrapper Coverage Article",
       content: "Test content",
     });
 
-    const visitor = await seedClient.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await seedClient.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     const conversation = await seedClient.mutation(
-      api.testing.helpers.createTestConversationForVisitor,
+      api.testing_helpers.createTestConversationForVisitor,
       {
         workspaceId: testWorkspaceId,
         visitorId: visitor.visitorId,
@@ -62,7 +62,7 @@ describe("convex auth wrapper coverage", () => {
 
   afterAll(async () => {
     if (testWorkspaceId) {
-      await client.mutation(api.testing.helpers.cleanupTestData, { workspaceId: testWorkspaceId });
+      await client.mutation(api.testing_helpers.cleanupTestData, { workspaceId: testWorkspaceId });
     }
     await client.close();
   });

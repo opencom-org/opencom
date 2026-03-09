@@ -16,16 +16,16 @@ describe("events", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "test@example.com",
     });
     testVisitorId = visitor.visitorId;
 
-    const session = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const session = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: testVisitorId,
       workspaceId: testWorkspaceId,
     });
@@ -35,7 +35,7 @@ describe("events", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -143,7 +143,7 @@ describe("events", () => {
 
   describe("event-based tour targeting", () => {
     it("should match tour when event count meets criteria", async () => {
-      const tourId = await client.mutation(api.testing.helpers.createTestTour, {
+      const tourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Engaged User Tour",
         audienceRules: {
@@ -167,7 +167,7 @@ describe("events", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: tourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: tourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -177,11 +177,11 @@ describe("events", () => {
 
       expect(availableTours.some((t) => t.tour._id === tourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: tourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: tourId });
     });
 
     it("should not match tour when event count does not meet criteria", async () => {
-      const tourId = await client.mutation(api.testing.helpers.createTestTour, {
+      const tourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Power User Tour",
         audienceRules: {
@@ -205,7 +205,7 @@ describe("events", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: tourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: tourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -215,7 +215,7 @@ describe("events", () => {
 
       expect(availableTours.some((t) => t.tour._id === tourId)).toBe(false);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: tourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: tourId });
     });
   });
 
@@ -324,7 +324,7 @@ describe("events", () => {
     let rateLimitVisitorId: Id<"visitors">;
 
     beforeAll(async () => {
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
         email: "ratelimit@example.com",
       });
