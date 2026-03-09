@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppState } from "react-native";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   getVisitorState,
@@ -11,6 +10,11 @@ import {
 import type { Survey } from "../components/OpencomSurvey";
 import { useOpencomContext } from "../components/OpencomProvider";
 import { OpencomSDK } from "../OpencomSDK";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 type SurveyData = Survey &
   SurveyDeliveryCandidate<Id<"surveys">> & {
@@ -32,7 +36,7 @@ export function useSurveyDelivery(currentUrl: string = "") {
   const [displayedSurvey, setDisplayedSurvey] = useState<SurveyData | null>(null);
 
   const surveys = useQuery(
-    api.surveys.getActiveSurveys,
+    getQueryRef("surveys:getActiveSurveys"),
     visitorId && workspaceId && sessionToken
       ? {
           workspaceId: workspaceId as Id<"workspaces">,

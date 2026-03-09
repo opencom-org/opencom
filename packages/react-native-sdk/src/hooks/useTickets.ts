@@ -1,8 +1,16 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export type TicketId = Id<"tickets">;
 export type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
@@ -27,14 +35,14 @@ export function useTickets() {
   const { sessionToken } = state;
 
   const tickets = useQuery(
-    api.tickets.listByVisitor,
+    getQueryRef("tickets:listByVisitor"),
     visitorId && sessionToken && workspaceId
       ? { visitorId, sessionToken, workspaceId: workspaceId as Id<"workspaces"> }
       : "skip"
   );
 
-  const createTicketMutation = useMutation(api.tickets.create);
-  const addCommentMutation = useMutation(api.tickets.addComment);
+  const createTicketMutation = useMutation(getMutationRef("tickets:create"));
+  const addCommentMutation = useMutation(getMutationRef("tickets:addComment"));
 
   const createTicket = async (params: {
     subject: string;
@@ -78,14 +86,14 @@ export function useTicket(ticketId: TicketId | null) {
   const state = getVisitorState();
 
   const ticket = useQuery(
-    api.tickets.get,
+    getQueryRef("tickets:get"),
     ticketId && state.visitorId && state.sessionToken
       ? { id: ticketId, visitorId: state.visitorId, sessionToken: state.sessionToken }
       : "skip"
   );
 
   const comments = useQuery(
-    api.tickets.getComments,
+    getQueryRef("tickets:getComments"),
     ticketId && state.visitorId && state.sessionToken
       ? {
           ticketId,
@@ -96,7 +104,7 @@ export function useTicket(ticketId: TicketId | null) {
       : "skip"
   );
 
-  const addCommentMutation = useMutation(api.tickets.addComment);
+  const addCommentMutation = useMutation(getMutationRef("tickets:addComment"));
 
   const addComment = async (content: string): Promise<void> => {
     if (!ticketId || !state.visitorId || !state.sessionToken) return;

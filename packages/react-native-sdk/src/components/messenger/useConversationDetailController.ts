@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { FlatList } from "react-native";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { OpencomSDK } from "../../OpencomSDK";
 import { useConversation } from "../../hooks/useConversations";
 import { useAutomationSettings } from "../../hooks/useAutomationSettings";
 import { evaluateEmailCaptureDecision, normalizeOutgoingMessage } from "./messengerFlow";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 interface UseConversationDetailControllerInput {
   conversationId: Id<"conversations"> | null;
@@ -17,7 +21,8 @@ export function useConversationDetailController({ conversationId }: UseConversat
   const state = OpencomSDK.getVisitorState();
   const visitorId = state.visitorId;
   const automationSettings = useAutomationSettings();
-  const identifyVisitor = useMutation(api.visitors.identify);
+  const identifyVisitor = useMutation(getMutationRef("visitors:identify"));
+  const messageItems = messages as Array<{ senderType: string }>;
 
   const [inputValue, setInputValue] = useState("");
   const [emailInput, setEmailInput] = useState("");
@@ -26,19 +31,19 @@ export function useConversationDetailController({ conversationId }: UseConversat
   const [lastAgentMessageCount, setLastAgentMessageCount] = useState(0);
   const flatListRef = useRef<FlatList>(null);
 
-  const visitorMessages = messages.filter((message) => message.senderType === "visitor");
+  const visitorMessages = messageItems.filter((message) => message.senderType === "visitor");
   const hasVisitorSentMessage = visitorMessages.length > 0;
-  const agentMessageCount = messages.filter((message) => message.senderType !== "visitor").length;
+  const agentMessageCount = messageItems.filter((message) => message.senderType !== "visitor").length;
 
   useEffect(() => {
     markAsRead();
   }, [conversationId]);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messageItems.length > 0) {
       flatListRef.current?.scrollToEnd({ animated: true });
     }
-  }, [messages.length]);
+  }, [messageItems.length]);
 
   useEffect(() => {
     const decision = evaluateEmailCaptureDecision({

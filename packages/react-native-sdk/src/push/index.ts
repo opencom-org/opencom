@@ -2,9 +2,14 @@ import { Platform } from "react-native";
 import type { Id } from "@opencom/convex/dataModel";
 import { api } from "@opencom/convex";
 import { emitEvent, getClient, getConfig, getVisitorState } from "@opencom/sdk-core";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 
 let expoPushToken: string | null = null;
 let registeredBackendToken: string | null = null;
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 interface PushNotificationConfig {
   onNotificationReceived?: (notification: PushNotification) => void;
@@ -72,7 +77,7 @@ async function registerPushToken(token: string): Promise<boolean> {
   }
 
   const platform = Platform.OS === "ios" ? "ios" : "android";
-  await getClient().mutation(api.visitorPushTokens.register, {
+  await getClient().mutation(getMutationRef("visitorPushTokens:register"), {
     visitorId: context.visitorId,
     token,
     platform,
@@ -89,7 +94,7 @@ async function unregisterPushToken(token: string): Promise<boolean> {
     return false;
   }
 
-  await getClient().mutation(api.visitorPushTokens.unregister, {
+  await getClient().mutation(getMutationRef("visitorPushTokens:unregister"), {
     token,
     visitorId: context.visitorId,
     sessionToken: context.sessionToken,

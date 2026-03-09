@@ -1,7 +1,15 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { getVisitorState } from "@opencom/sdk-core";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export type AIResponseId = Id<"aiResponses">;
 export type ConversationId = Id<"conversations">;
@@ -28,14 +36,14 @@ export function useAIAgent(conversationId: ConversationId | null) {
   const { visitorId, sessionToken } = getVisitorState();
 
   const aiResponses = useQuery(
-    api.aiAgent.getConversationResponses,
+    getQueryRef("aiAgent:getConversationResponses"),
     conversationId && visitorId && sessionToken
       ? { conversationId, visitorId, sessionToken }
       : "skip"
   );
 
-  const submitFeedbackMutation = useMutation(api.aiAgent.submitFeedback);
-  const handoffMutation = useMutation(api.aiAgent.handoffToHuman);
+  const submitFeedbackMutation = useMutation(getMutationRef("aiAgent:submitFeedback"));
+  const handoffMutation = useMutation(getMutationRef("aiAgent:handoffToHuman"));
 
   const submitFeedback = async (
     responseId: AIResponseId,

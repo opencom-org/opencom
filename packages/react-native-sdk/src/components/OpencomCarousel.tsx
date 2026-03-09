@@ -13,11 +13,15 @@ import {
   type NativeScrollEvent,
 } from "react-native";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { OpencomSDK } from "../OpencomSDK";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
 import type { CarouselScreen, CarouselButton } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -42,7 +46,7 @@ export function OpencomCarousel({
   const effectivePrimaryColor = primaryColor ?? theme.primaryColor;
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  const recordImpression = useMutation(api.carousels.recordImpression);
+  const recordImpression = useMutation(getMutationRef("carousels:recordImpression"));
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);

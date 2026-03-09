@@ -1,12 +1,16 @@
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { useOpencomContext } from "../components/OpencomProvider";
 import { useColorScheme } from "react-native";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import {
   normalizePublicMessengerSettings,
   type PublicMessengerSettings,
 } from "@opencom/types";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 export interface OpencomTheme {
   primaryColor: string;
@@ -52,7 +56,7 @@ export function useMessengerSettings(): {
   const systemColorScheme = useColorScheme();
 
   const settingsData = useQuery(
-    api.messengerSettings.getPublicSettings,
+    getQueryRef("messengerSettings:getPublicSettings"),
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
   );
 

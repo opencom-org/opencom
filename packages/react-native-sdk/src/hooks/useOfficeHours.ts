@@ -1,7 +1,11 @@
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 export interface OfficeHoursStatus {
   isOpen: boolean;
@@ -13,12 +17,12 @@ export function useOfficeHours() {
   const { workspaceId } = useOpencomContext();
 
   const status = useQuery(
-    api.officeHours.isCurrentlyOpen,
+    getQueryRef("officeHours:isCurrentlyOpen"),
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
   );
 
   const expectedReplyTime = useQuery(
-    api.officeHours.getExpectedReplyTime,
+    getQueryRef("officeHours:getExpectedReplyTime"),
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
   );
 

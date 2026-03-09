@@ -11,12 +11,16 @@ import {
   Platform,
 } from "react-native";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import { useOpencomContext } from "./OpencomProvider";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
 import type { Id } from "@opencom/convex/dataModel";
 import type { TicketPriority } from "../hooks/useTickets";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 interface OpencomTicketCreateProps {
   onSuccess?: (ticketId: Id<"tickets">) => void;
@@ -40,7 +44,7 @@ export function OpencomTicketCreate({ onSuccess, onCancel, style }: OpencomTicke
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createTicketMutation = useMutation(api.tickets.create);
+  const createTicketMutation = useMutation(getMutationRef("tickets:create"));
 
   const handleSubmit = async () => {
     if (!subject.trim()) {

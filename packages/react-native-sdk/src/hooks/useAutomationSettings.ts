@@ -1,7 +1,11 @@
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 export interface AutomationSettings {
   suggestArticlesEnabled: boolean;
@@ -21,7 +25,7 @@ export function useAutomationSettings() {
   const { workspaceId } = useOpencomContext();
 
   const settings = useQuery(
-    api.automationSettings.get,
+    getQueryRef("automationSettings:get"),
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
   );
 

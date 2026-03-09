@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { getVisitorState, getConfig } from "@opencom/sdk-core";
 import {
@@ -19,6 +18,11 @@ import {
   type NormalizedHomeConfig,
 } from "@opencom/types";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 interface Conversation {
   _id: Id<"conversations">;
@@ -109,7 +113,7 @@ function ChevronRightIcon({ color = "#6b7280", size = 16 }) {
 
 export function useHomeConfig(workspaceId: string | undefined, isIdentified: boolean) {
   const homeConfig = useQuery(
-    api.messengerSettings.getPublicHomeConfig,
+    getQueryRef("messengerSettings:getPublicHomeConfig"),
     workspaceId ? { workspaceId: workspaceId as Id<"workspaces">, isIdentified } : "skip"
   ) as NormalizedHomeConfig | undefined;
 
@@ -145,23 +149,23 @@ export function OpencomHome({
   const wsId = (workspaceId || configWorkspaceId) as Id<"workspaces"> | undefined;
 
   const fetchedHomeConfig = useQuery(
-    api.messengerSettings.getPublicHomeConfig,
+    getQueryRef("messengerSettings:getPublicHomeConfig"),
     wsId ? { workspaceId: wsId, isIdentified } : "skip"
   ) as NormalizedHomeConfig | undefined;
   const homeConfig = fetchedHomeConfig ?? getDefaultHomeConfig();
 
   const conversations = useQuery(
-    api.conversations.listByVisitor,
+    getQueryRef("conversations:listByVisitor"),
     vid && sessionToken && wsId ? { visitorId: vid, sessionToken, workspaceId: wsId } : "skip"
   ) as Conversation[] | undefined;
 
   const featuredArticles = useQuery(
-    api.articles.listForVisitor,
+    getQueryRef("articles:listForVisitor"),
     vid && sessionToken && wsId ? { workspaceId: wsId, visitorId: vid, sessionToken } : "skip"
   ) as Article[] | undefined;
 
   const searchResults = useQuery(
-    api.articles.searchForVisitor,
+    getQueryRef("articles:searchForVisitor"),
     vid && sessionToken && wsId && searchQuery.length >= 2
       ? { workspaceId: wsId, visitorId: vid, sessionToken, query: searchQuery }
       : "skip"

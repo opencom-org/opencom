@@ -1,5 +1,4 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import type {
   EligibleOutboundMessage,
@@ -7,6 +6,15 @@ import type {
 } from "@opencom/types";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export type OutboundMessageId = Id<"outboundMessages">;
 
@@ -28,7 +36,7 @@ export function useOutboundMessages(currentUrl: string = "") {
   const sessionToken = state.sessionToken;
 
   const messages = useQuery(
-    api.outboundMessages.getEligible,
+    getQueryRef("outboundMessages:getEligible"),
     visitorId && workspaceId && sessionToken
       ? {
           workspaceId: workspaceId as Id<"workspaces">,
@@ -40,7 +48,7 @@ export function useOutboundMessages(currentUrl: string = "") {
       : "skip"
   );
 
-  const trackImpressionMutation = useMutation(api.outboundMessages.trackImpression);
+  const trackImpressionMutation = useMutation(getMutationRef("outboundMessages:trackImpression"));
 
   const markAsSeen = async (messageId: OutboundMessageId): Promise<void> => {
     if (!visitorId || !sessionToken) return;

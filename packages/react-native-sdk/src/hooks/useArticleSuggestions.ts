@@ -1,9 +1,13 @@
 import { useState, useCallback, useRef } from "react";
 import { useAction } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getActionRef(name: string): FunctionReference<"action"> {
+  return makeFunctionReference(name) as FunctionReference<"action">;
+}
 
 export interface ArticleSuggestion {
   id: string;
@@ -16,7 +20,7 @@ export function useArticleSuggestions() {
   const { workspaceId } = useOpencomContext();
   const [suggestions, setSuggestions] = useState<ArticleSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const searchAction = useAction(api.suggestions.searchForWidget);
+  const searchAction = useAction(getActionRef("suggestions:searchForWidget"));
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback(

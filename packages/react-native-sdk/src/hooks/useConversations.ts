@@ -1,7 +1,15 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState, getConfig } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export function useConversations() {
   const { visitorId, sessionToken } = getVisitorState();
@@ -13,14 +21,14 @@ export function useConversations() {
   }
 
   const conversations = useQuery(
-    api.conversations.listByVisitor,
+    getQueryRef("conversations:listByVisitor"),
     visitorId && sessionToken && workspaceId
       ? { visitorId, sessionToken, workspaceId: workspaceId as Id<"workspaces"> }
       : "skip"
   );
 
   const totalUnread = useQuery(
-    api.conversations.getTotalUnreadForVisitor,
+    getQueryRef("conversations:getTotalUnreadForVisitor"),
     visitorId && sessionToken && workspaceId
       ? { visitorId, sessionToken, workspaceId: workspaceId as Id<"workspaces"> }
       : "skip"
@@ -37,14 +45,14 @@ export function useConversation(conversationId: Id<"conversations"> | null) {
   const { visitorId, sessionToken } = getVisitorState();
 
   const messages = useQuery(
-    api.messages.list,
+    getQueryRef("messages:list"),
     conversationId && visitorId
       ? { conversationId, visitorId, sessionToken: sessionToken ?? undefined }
       : "skip"
   );
 
-  const sendMessageMutation = useMutation(api.messages.send);
-  const markAsReadMutation = useMutation(api.conversations.markAsRead);
+  const sendMessageMutation = useMutation(getMutationRef("messages:send"));
+  const markAsReadMutation = useMutation(getMutationRef("conversations:markAsRead"));
 
   const sendMessage = async (content: string) => {
     if (!conversationId || !visitorId) return;
@@ -79,7 +87,7 @@ export function useConversation(conversationId: Id<"conversations"> | null) {
 }
 
 export function useCreateConversation() {
-  const createConversationMutation = useMutation(api.conversations.createForVisitor);
+  const createConversationMutation = useMutation(getMutationRef("conversations:createForVisitor"));
 
   const createConversation = async (workspaceId: Id<"workspaces">) => {
     const { visitorId, sessionToken } = getVisitorState();

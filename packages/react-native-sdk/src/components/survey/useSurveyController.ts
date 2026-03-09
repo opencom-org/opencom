@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { OpencomSDK } from "../../OpencomSDK";
 import type { OpencomSurveyProps } from "./types";
 import {
@@ -15,6 +14,11 @@ import {
   normalizeSurveyAnswerValue,
   type SurveySubmissionState,
 } from "./surveyFlow";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSurveyProps) {
   const [currentIndex, setCurrentIndex] = useState(() => getInitialSurveyIndex(survey));
@@ -25,8 +29,8 @@ export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSu
     showThankYou: false,
   });
 
-  const submitResponse = useMutation(api.surveys.submitResponse);
-  const recordImpression = useMutation(api.surveys.recordImpression);
+  const submitResponse = useMutation(getMutationRef("surveys:submitResponse"));
+  const recordImpression = useMutation(getMutationRef("surveys:recordImpression"));
 
   const flowState = useMemo(() => getSurveyFlowState(survey, currentIndex), [survey, currentIndex]);
   const canProceed = canProceedFromQuestion(flowState.currentQuestion, answers);

@@ -1,8 +1,12 @@
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id, Doc } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 type Article = Doc<"articles">;
 
@@ -13,7 +17,7 @@ export function useArticles() {
   const sessionToken = state.sessionToken;
 
   const articles = useQuery(
-    api.articles.listForVisitor,
+    getQueryRef("articles:listForVisitor"),
     visitorId && sessionToken && workspaceId
       ? { workspaceId: workspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
@@ -32,7 +36,7 @@ export function useArticleSearch(query: string) {
   const sessionToken = state.sessionToken;
 
   const results = useQuery(
-    api.articles.searchForVisitor,
+    getQueryRef("articles:searchForVisitor"),
     visitorId && sessionToken && query.length >= 2 && workspaceId
       ? { workspaceId: workspaceId as Id<"workspaces">, visitorId, sessionToken, query }
       : "skip"
@@ -45,7 +49,7 @@ export function useArticleSearch(query: string) {
 }
 
 export function useArticle(articleId: Id<"articles"> | null) {
-  const article = useQuery(api.articles.get, articleId ? { id: articleId } : "skip");
+  const article = useQuery(getQueryRef("articles:get"), articleId ? { id: articleId } : "skip");
 
   return {
     article: article ?? null,

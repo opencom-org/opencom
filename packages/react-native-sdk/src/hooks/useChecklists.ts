@@ -1,8 +1,16 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { getVisitorState } from "@opencom/sdk-core";
 import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 export type ChecklistId = Id<"checklists">;
 
@@ -42,13 +50,13 @@ export function useChecklists() {
   const sessionToken = state.sessionToken;
 
   const eligibleChecklists = useQuery(
-    api.checklists.getEligible,
+    getQueryRef("checklists:getEligible"),
     visitorId && workspaceId && sessionToken
       ? { workspaceId: workspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
   );
 
-  const completeTaskMutation = useMutation(api.checklists.completeTask);
+  const completeTaskMutation = useMutation(getMutationRef("checklists:completeTask"));
 
   const completeTask = async (checklistId: ChecklistId, taskId: string): Promise<void> => {
     if (!visitorId || !workspaceId || !sessionToken) return;
