@@ -19,6 +19,13 @@ interface OpencomTicketDetailProps {
   style?: object;
 }
 
+type TicketComment = {
+  _id: string;
+  authorType: "visitor" | "agent";
+  createdAt: number;
+  content: string;
+};
+
 const STATUS_COLORS: Record<TicketStatus, string> = {
   submitted: "#792cd4",
   in_progress: "#F59E0B",
@@ -43,6 +50,7 @@ export function OpencomTicketDetail({ ticketId, onBack, style }: OpencomTicketDe
   const { ticket, comments, isLoading, addComment } = useTicket(ticketId);
   const [newComment, setNewComment] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const typedComments = comments as TicketComment[];
 
   const handleSendComment = async () => {
     if (!newComment.trim() || isSending) return;
@@ -115,14 +123,14 @@ export function OpencomTicketDetail({ ticketId, onBack, style }: OpencomTicketDe
         </View>
 
         <View style={styles.commentsSection}>
-          <Text style={[styles.sectionLabel, { color: theme.textMuted }]}>
-            Comments ({comments.length})
+          <Text style={[styles.sectionLabel, { color: theme.textMuted }]}> 
+            Comments ({typedComments.length})
           </Text>
 
-          {comments.length === 0 ? (
+          {typedComments.length === 0 ? (
             <Text style={[styles.noComments, { color: theme.textMuted }]}>No comments yet</Text>
           ) : (
-            comments.map((comment) => (
+            typedComments.map((comment: TicketComment) => (
               <View
                 key={comment._id}
                 style={[

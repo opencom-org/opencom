@@ -11,11 +11,67 @@ import {
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useBackend } from "../../src/contexts/BackendContext";
+import type { Id } from "@opencom/convex/dataModel";
 
 type VerificationStatus = "idle" | "checking" | "success" | "error";
+
+type HostedOnboardingState = {
+  status: "not_started" | "started" | "completed";
+  isWidgetVerified: boolean;
+  verificationToken?: string | null;
+} | null;
+
+type HostedOnboardingIntegrationSignals = {
+  integrations: Array<{
+    id: string;
+    integrationKey: string;
+    clientType: string;
+    clientVersion?: string | null;
+    status: "recognized" | "active" | "inactive";
+    isActiveNow: boolean;
+    matchesCurrentVerificationWindow: boolean;
+    origin?: string | null;
+    currentUrl?: string | null;
+    clientIdentifier?: string | null;
+    lastSeenAt?: number | null;
+    activeSessionCount: number;
+    detectedAt?: number | null;
+    metadata?: Record<string, unknown> | null;
+  }>;
+} | null;
+
+const hostedOnboardingStateQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  HostedOnboardingState
+>("workspaces:getHostedOnboardingState");
+
+const hostedOnboardingSignalsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  HostedOnboardingIntegrationSignals
+>("workspaces:getHostedOnboardingIntegrationSignals");
+
+const startHostedOnboardingMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  null
+>("workspaces:startHostedOnboarding");
+
+const issueVerificationTokenMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  { token: string }
+>("workspaces:issueHostedOnboardingVerificationToken");
+
+const completeWidgetStepMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; token?: string },
+  { success: boolean }
+>("workspaces:completeHostedOnboardingWidgetStep");
 
 const VERIFY_TIMEOUT_MS = 15000;
 
@@ -54,17 +110,17 @@ export default function OnboardingScreen() {
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
+    hostedOnboardingStateQueryRef,
     workspaceId ? { workspaceId } : "skip"
-  );
+  ) as HostedOnboardingState | undefined;
   const integrationSignals = useQuery(
-    api.workspaces.getHostedOnboardingIntegrationSignals,
+    hostedOnboardingSignalsQueryRef,
     workspaceId ? { workspaceId } : "skip"
-  );
+  ) as HostedOnboardingIntegrationSignals | undefined;
 
-  const startHostedOnboarding = useMutation(api.workspaces.startHostedOnboarding);
-  const issueVerificationToken = useMutation(api.workspaces.issueHostedOnboardingVerificationToken);
-  const completeWidgetStep = useMutation(api.workspaces.completeHostedOnboardingWidgetStep);
+  const startHostedOnboarding = useMutation(startHostedOnboardingMutationRef);
+  const issueVerificationToken = useMutation(issueVerificationTokenMutationRef);
+  const completeWidgetStep = useMutation(completeWidgetStepMutationRef);
 
   useEffect(() => {
     if (!onboardingState?.verificationToken) {

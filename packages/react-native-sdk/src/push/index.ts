@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
 import type { Id } from "@opencom/convex/dataModel";
-import { api } from "@opencom/convex";
 import { emitEvent, getClient, getConfig, getVisitorState } from "@opencom/sdk-core";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 
