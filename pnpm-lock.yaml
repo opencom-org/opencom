@@ -211,9 +211,6 @@ importers:
       '@opencom/convex':
         specifier: workspace:*
         version: link:../../packages/convex
-      '@opencom/sdk-core':
-        specifier: workspace:*
-        version: link:../../packages/sdk-core
       '@opencom/types':
         specifier: workspace:*
         version: link:../../packages/types
