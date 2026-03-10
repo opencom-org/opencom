@@ -33,6 +33,7 @@ Goal: ship a professional open-source customer messaging platform with strong de
 - [ ] dont allow requesting human support multiple times in a row on same chat
 - [ ] "resolve visitor from expression - session expired" - are we handling refresh properly?
 - [ ] maintain message state in mobile app when switching apps
+- [ ] Fix CI e2e
 - [ ] telegram fixes
   - [ ] chat attachments
   - [ ] if skipped, dont re-ask for their email each time - give them a subtle affordance where they can add their email if they change their mind
