@@ -460,7 +460,7 @@ const duplicateTestTour = internalMutation({
     const tour = await ctx.db.get(args.id);
     if (!tour) throw new Error("Tour not found");
     const now = Date.now();
-    const { _id: _tourId, _creationTime: _tourCreationTime, ...tourData } = tour;
+    const tourData = (({ _id, _creationTime, ...data }) => data)(tour);
     const newTourId = await ctx.db.insert("tours", {
       ...tourData,
       name: args.name || `${tour.name} (Copy)`,
@@ -473,7 +473,7 @@ const duplicateTestTour = internalMutation({
       .withIndex("by_tour", (q) => q.eq("tourId", args.id))
       .collect();
     for (const step of steps) {
-      const { _id: _stepId, _creationTime: _stepCreationTime, ...stepData } = step;
+      const stepData = (({ _id, _creationTime, ...data }) => data)(step);
       await ctx.db.insert("tourSteps", {
         ...stepData,
         workspaceId: tour.workspaceId,
