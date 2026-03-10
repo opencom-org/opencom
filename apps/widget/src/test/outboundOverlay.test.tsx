@@ -18,30 +18,6 @@ vi.mock("@opencom/convex", () => ({
   },
 }));
 
-function getFunctionPath(ref: unknown) {
-  if (typeof ref === "string") {
-    return ref;
-  }
-
-  if (ref && typeof ref === "object") {
-    const maybeRef = ref as {
-      functionName?: string;
-      name?: string;
-      reference?: { functionName?: string; name?: string };
-    };
-
-    return (
-      maybeRef.functionName ??
-      maybeRef.name ??
-      maybeRef.reference?.functionName ??
-      maybeRef.reference?.name ??
-      ""
-    );
-  }
-
-  return "";
-}
-
 describe("OutboundOverlay", () => {
   const workspaceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as Id<"workspaces">;
   const visitorId = "visitor_1" as Id<"visitors">;

@@ -7,7 +7,7 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("convex/server", () => ({
-  makeFunctionReference: (_type: string, functionName: string) => ({ functionName }),
+  makeFunctionReference: (functionName: string) => ({ functionName }),
 }));
 
 vi.mock("../icons", () => ({

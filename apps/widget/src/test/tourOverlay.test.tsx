@@ -73,7 +73,6 @@ describe("TourOverlay", () => {
   });
 
   it("shows recovery UI and allows guaranteed exit when selector is invalid", async () => {
-    const startMock = vi.fn().mockResolvedValue(undefined);
     const defaultMutationMock = vi.fn().mockResolvedValue(undefined);
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
@@ -105,7 +104,6 @@ describe("TourOverlay", () => {
   });
 
   it("defers tooltip reposition during smooth scroll until settle and keeps controls usable", async () => {
-    const startMock = vi.fn().mockResolvedValue(undefined);
     const defaultMutationMock = vi.fn().mockResolvedValue(undefined);
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
