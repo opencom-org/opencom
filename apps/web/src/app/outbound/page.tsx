@@ -43,9 +43,28 @@ function OutboundContent() {
     }>
   >("outboundMessages:list");
 
-  const createOutboundMessageRef = makeFunctionReference<"mutation", any, Id<"outboundMessages">>(
-    "outboundMessages:create"
-  );
+  const createOutboundMessageRef = makeFunctionReference<
+    "mutation",
+    {
+      workspaceId: Id<"workspaces">;
+      type: OutboundMessageType;
+      name: string;
+      content:
+        | { text: string }
+        | {
+            title: string;
+            body: string;
+            buttons: Array<{ text: string; action: "open_new_conversation" | "dismiss" }>;
+          }
+        | { text: string; style: string; dismissible: boolean };
+      targeting?: unknown;
+      triggers?: unknown;
+      frequency?: unknown;
+      scheduling?: unknown;
+      priority?: number;
+    },
+    Id<"outboundMessages">
+  >("outboundMessages:create");
 
   const deleteOutboundMessageRef = makeFunctionReference<
     "mutation",

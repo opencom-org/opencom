@@ -15,8 +15,6 @@ import {
   dismissSurvey,
   waitForHelpArticleVisible,
   waitForAIResponse,
-  waitForAIHandoffButton,
-  waitForAIFeedbackButtons,
 } from "./helpers/widget-helpers";
 import {
   ensureAuthenticatedInPage,

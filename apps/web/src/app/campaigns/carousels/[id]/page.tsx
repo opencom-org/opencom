@@ -82,7 +82,17 @@ function CarouselEditor() {
     { workspaceId: Id<"workspaces"> },
     string[]
   >("events:getDistinctNames");
-  const updateCarouselRef = makeFunctionReference<"mutation", any, unknown>("carousels:update");
+  const updateCarouselRef = makeFunctionReference<
+    "mutation",
+    {
+      id: Id<"carousels">;
+      name?: string;
+      screens?: CarouselScreen[];
+      targeting?: AudienceRule | null;
+      priority?: number;
+    },
+    unknown
+  >("carousels:update");
   const activateCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, unknown>(
     "carousels:activate"
   );
