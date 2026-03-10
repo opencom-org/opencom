@@ -1,12 +1,25 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const HELPER_PATH = resolve(process.cwd(), "src/test/convexFunctionRefs.ts");
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+
+const HELPER_PATH = resolve(TEST_DIR, "convexFunctionRefs.ts");
+const ADAPTER_PATH = resolve(TEST_DIR, "../lib/convex/hooks.ts");
+const CONVERSATION_WRAPPER_PATH = resolve(
+  TEST_DIR,
+  "../hooks/convex/useConversationViewConvex.ts"
+);
+const TOUR_WRAPPER_PATH = resolve(TEST_DIR, "../hooks/convex/useTourProgressConvex.ts");
 const MIGRATED_TEST_FILES = [
-  resolve(process.cwd(), "src/test/useWidgetSession.test.tsx"),
-  resolve(process.cwd(), "src/test/widgetNewConversation.test.tsx"),
-  resolve(process.cwd(), "src/components/ConversationView.test.tsx"),
+  resolve(TEST_DIR, "useWidgetSession.test.tsx"),
+  resolve(TEST_DIR, "widgetNewConversation.test.tsx"),
+  resolve(TEST_DIR, "../components/ConversationView.test.tsx"),
+];
+const MIGRATED_RUNTIME_FILES = [
+  resolve(TEST_DIR, "../components/ConversationView.tsx"),
+  resolve(TEST_DIR, "../tourOverlay/useTourOverlayActions.ts"),
 ];
 
 describe("widget ref hardening guards", () => {
@@ -23,6 +36,34 @@ describe("widget ref hardening guards", () => {
 
       expect(source).toContain("matchesFunctionPath");
       expect(source).not.toMatch(/\bfunction getFunctionPath\(/);
+    }
+  });
+
+  it("provides a widget-local Convex adapter layer for typed wrapper hooks", () => {
+    const source = readFileSync(ADAPTER_PATH, "utf8");
+
+    expect(source).toContain("export function widgetQueryRef");
+    expect(source).toContain("export function widgetMutationRef");
+    expect(source).toContain("export function widgetActionRef");
+    expect(source).toContain("export function useWidgetQuery");
+    expect(source).toContain("export function useWidgetMutation");
+    expect(source).toContain("export function useWidgetAction");
+  });
+
+  it("keeps migrated runtime modules on widget-local Convex wrappers", () => {
+    const conversationWrapperSource = readFileSync(CONVERSATION_WRAPPER_PATH, "utf8");
+    const tourWrapperSource = readFileSync(TOUR_WRAPPER_PATH, "utf8");
+
+    expect(conversationWrapperSource).toContain("useWidgetQuery");
+    expect(conversationWrapperSource).toContain("useWidgetMutation");
+    expect(conversationWrapperSource).toContain("useWidgetAction");
+    expect(tourWrapperSource).toContain("useWidgetMutation");
+
+    for (const filePath of MIGRATED_RUNTIME_FILES) {
+      const source = readFileSync(filePath, "utf8");
+
+      expect(source).not.toContain('from "convex/react"');
+      expect(source).not.toContain("makeFunctionReference(");
     }
   });
 });

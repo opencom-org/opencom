@@ -8,6 +8,7 @@ The current hardening change proved the approach in targeted pilots, but repo-wi
 - Keep the older package-specific proposals as the owners for unfinished web, widget, and React Native SDK wrapper-boundary work where the current codebase still matches their scope.
 - Treat `fix-sdk-core-convex-type-surface` as a tactical predecessor: verify/archive it if the implemented code satisfies its narrower stability scope, and open only a small follow-on delta if residual sdk-core hardening beyond that scope is still desired.
 - Document the repo rule that generated `api.*` / `internal.*` refs remain preferred, localized `makeFunctionReference("module:function")` is an acceptable escape hatch only for verified `TS2589` hotspots, and generic `name: string` ref factories are not the default end state.
+- Record `packages/convex/convex/testAdmin.ts` as the only accepted dynamic exception in the residual backend set, with explicit guardrails that keep it scoped to secret-protected test-only modules.
 - Use this change to coordinate residual backend Convex cleanup that is not already owned elsewhere, plus shared anti-regression guardrails and verification/closeout rules.
 - Keep rollout validation-first with micro-batches small enough to rerun package typecheck and focused tests before widening scope.
 

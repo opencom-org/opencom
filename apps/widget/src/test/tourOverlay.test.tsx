@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation } from "convex/react";
 import type { Id } from "@opencom/convex/dataModel";
 import { TourOverlay } from "../TourOverlay";
+import { matchesFunctionPath } from "./convexFunctionRefs";
 
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
@@ -74,9 +75,15 @@ describe("TourOverlay", () => {
 
   it("shows recovery UI and allows guaranteed exit when selector is invalid", async () => {
     const defaultMutationMock = vi.fn().mockResolvedValue(undefined);
+    const pendingSkipMutationMock = vi.fn(() => new Promise<never>(() => {}));
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
-    mockedUseMutation.mockReturnValue(defaultMutationMock);
+    mockedUseMutation.mockImplementation((mutationRef: unknown) => {
+      if (matchesFunctionPath(mutationRef, "tourProgress:skipStep")) {
+        return pendingSkipMutationMock;
+      }
+      return defaultMutationMock;
+    });
 
     render(
       <TourOverlay
@@ -107,7 +114,7 @@ describe("TourOverlay", () => {
     const defaultMutationMock = vi.fn().mockResolvedValue(undefined);
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
-    mockedUseMutation.mockReturnValue(defaultMutationMock);
+    mockedUseMutation.mockImplementation(() => defaultMutationMock);
 
     const targetElement = document.createElement("button");
     targetElement.setAttribute("data-testid", "tour-scroll-target");
@@ -215,15 +222,21 @@ describe("TourOverlay", () => {
     const defaultMutationMock = vi.fn().mockResolvedValue(undefined);
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
-    mockedUseMutation
-      .mockReturnValueOnce(startMock)
-      .mockReturnValueOnce(advanceMock)
-      .mockReturnValueOnce(dismissMock)
-      .mockReturnValueOnce(defaultMutationMock)
-      .mockReturnValueOnce(defaultMutationMock)
-      .mockReturnValueOnce(defaultMutationMock)
-      .mockReturnValueOnce(defaultMutationMock)
-      .mockReturnValueOnce(checkpointMock);
+    mockedUseMutation.mockImplementation((mutationRef: unknown) => {
+      if (matchesFunctionPath(mutationRef, "tourProgress:start")) {
+        return startMock;
+      }
+      if (matchesFunctionPath(mutationRef, "tourProgress:advance")) {
+        return advanceMock;
+      }
+      if (matchesFunctionPath(mutationRef, "tourProgress:dismiss")) {
+        return dismissMock;
+      }
+      if (matchesFunctionPath(mutationRef, "tourProgress:checkpoint")) {
+        return checkpointMock;
+      }
+      return defaultMutationMock;
+    });
 
     const stepOneTarget = document.createElement("button");
     stepOneTarget.setAttribute("data-testid", "tour-step-one-target");
@@ -316,25 +329,21 @@ describe("TourOverlay", () => {
       fireEvent.click(screen.getByTestId("tour-primary-action"));
 
       await waitFor(() => {
-        expect(
-          screen.queryByText("Second step") || screen.queryByTestId("tour-recovery-hint")
-        ).toBeTruthy();
+        expect(stepTwoScrollIntoViewMock).toHaveBeenCalledTimes(1);
       });
 
-      if (!screen.queryByTestId("tour-recovery-hint")) {
-        expect(stepTwoScrollIntoViewMock).toHaveBeenCalledTimes(1);
-        expect(screen.queryByText("Second step")).not.toBeInTheDocument();
-        expect(screen.queryByTestId("tour-step-card")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("tour-recovery-hint")).not.toBeInTheDocument();
+      expect(screen.queryByText("Second step")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("tour-step-card")).not.toBeInTheDocument();
 
-        stepTwoTop = 220;
-        stepTwoLeft = 160;
-        window.dispatchEvent(new Event("scroll"));
+      stepTwoTop = 220;
+      stepTwoLeft = 160;
+      window.dispatchEvent(new Event("scroll"));
 
-        await waitFor(() => {
-          expect(screen.getByText("Second step")).toBeVisible();
-        });
-        expect(screen.getByTestId("tour-step-card")).toBeVisible();
-      }
+      await waitFor(() => {
+        expect(screen.getByText("Second step")).toBeVisible();
+      });
+      expect(screen.getByTestId("tour-step-card")).toBeVisible();
     } finally {
       stepOneTarget.remove();
       stepTwoTarget.remove();

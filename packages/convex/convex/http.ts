@@ -1,4 +1,4 @@
-import { httpRouter, makeFunctionReference } from "convex/server";
+import { httpRouter, makeFunctionReference, type FunctionReference } from "convex/server";
 import { httpAction } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { auth } from "./authConvex";
@@ -177,9 +177,140 @@ function getCorsHeaders(
 }
 
 type ValidateOriginResult = { valid: boolean; reason: string };
+type DiscoveryMetadata = {
+  version: string;
+  name: string;
+  features: unknown;
+  signupMode?: "invite-only" | "domain-allowlist";
+  authMethods?: ("password" | "otp")[];
+};
 
-function getApiRef(name: string): unknown {
-  return makeFunctionReference(name);
+type PublicQueryRef<Args extends Record<string, unknown>, Return> = FunctionReference<
+  "query",
+  "public",
+  Args,
+  Return
+>;
+
+type MutationRef<
+  Visibility extends "public" | "internal",
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", Visibility, Args, Return>;
+
+type ValidateOriginArgs = {
+  workspaceId: Id<"workspaces">;
+  origin: string;
+};
+
+type GetEmailConfigByForwardingAddressArgs = {
+  forwardingAddress: string;
+  webhookSecret?: string;
+};
+
+type InboundAttachment = {
+  filename: string;
+  contentType: string;
+  size: number;
+};
+
+type ProcessForwardedEmailArgs = {
+  workspaceId: Id<"workspaces">;
+  webhookSecret?: string;
+  forwarderEmail: string;
+  originalFrom: string;
+  to: string[];
+  subject: string;
+  textBody?: string;
+  htmlBody?: string;
+  messageId: string;
+  attachments?: InboundAttachment[];
+};
+
+type ProcessInboundEmailArgs = {
+  workspaceId: Id<"workspaces">;
+  webhookSecret?: string;
+  from: string;
+  to: string[];
+  cc?: string[];
+  subject: string;
+  textBody?: string;
+  htmlBody?: string;
+  messageId: string;
+  inReplyTo?: string;
+  references?: string[];
+  attachments?: InboundAttachment[];
+};
+
+type UpdateDeliveryStatusByExternalIdArgs = {
+  externalEmailId: string;
+  status: "delivered" | "bounced";
+};
+
+const VALIDATE_ORIGIN_REF = makeFunctionReference<
+  "query",
+  ValidateOriginArgs,
+  ValidateOriginResult
+>("workspaces.validateOrigin") as PublicQueryRef<ValidateOriginArgs, ValidateOriginResult>;
+
+const GET_METADATA_REF = makeFunctionReference<"query", Record<string, never>, DiscoveryMetadata>(
+  "discovery:getMetadata"
+) as PublicQueryRef<Record<string, never>, DiscoveryMetadata>;
+
+const GET_EMAIL_CONFIG_BY_FORWARDING_ADDRESS_REF = makeFunctionReference<
+  "query",
+  GetEmailConfigByForwardingAddressArgs,
+  Doc<"emailConfigs"> | null
+>("emailChannel:getEmailConfigByForwardingAddress") as PublicQueryRef<
+  GetEmailConfigByForwardingAddressArgs,
+  Doc<"emailConfigs"> | null
+>;
+
+const PROCESS_FORWARDED_EMAIL_REF = makeFunctionReference<
+  "mutation",
+  ProcessForwardedEmailArgs,
+  Record<string, unknown>
+>("emailChannel:processForwardedEmail") as MutationRef<
+  "public",
+  ProcessForwardedEmailArgs,
+  Record<string, unknown>
+>;
+
+const PROCESS_INBOUND_EMAIL_REF = makeFunctionReference<
+  "mutation",
+  ProcessInboundEmailArgs,
+  Record<string, unknown>
+>("emailChannel:processInboundEmail") as MutationRef<
+  "public",
+  ProcessInboundEmailArgs,
+  Record<string, unknown>
+>;
+
+const UPDATE_DELIVERY_STATUS_BY_EXTERNAL_ID_REF = makeFunctionReference<
+  "mutation",
+  UpdateDeliveryStatusByExternalIdArgs,
+  unknown
+>("emailChannel:updateDeliveryStatusByExternalId") as unknown as MutationRef<
+  "internal",
+  UpdateDeliveryStatusByExternalIdArgs
+>;
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+    query: PublicQueryRef<Args, Return>,
+    args: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as <
+    Visibility extends "public" | "internal",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    mutation: MutationRef<Visibility, Args, Return>,
+    args: Args
+  ) => Promise<Return>;
 }
 
 async function validateOriginForWorkspace(
@@ -194,12 +325,8 @@ async function validateOriginForWorkspace(
   }
 
   try {
-    const runQuery = ctx.runQuery as unknown as (
-      query: unknown,
-      args: { workspaceId: Id<"workspaces">; origin: string }
-    ) => Promise<ValidateOriginResult>;
-    const validateOriginRef = getApiRef("workspaces.validateOrigin");
-    const result = await runQuery(validateOriginRef, {
+    const runQuery = getShallowRunQuery(ctx);
+    const result = await runQuery(VALIDATE_ORIGIN_REF, {
       workspaceId: workspaceId as Id<"workspaces">,
       origin: origin || "",
     });
@@ -324,18 +451,8 @@ http.route({
     }
 
     try {
-      const runQuery = ctx.runQuery as unknown as (
-        query: unknown,
-        args: Record<string, unknown>
-      ) => Promise<unknown>;
-      const getMetadataRef = getApiRef("discovery:getMetadata");
-      const metadata = (await runQuery(getMetadataRef, {})) as {
-        version: string;
-        name: string;
-        features: unknown;
-        signupMode?: "invite-only" | "domain-allowlist";
-        authMethods?: ("password" | "otp")[];
-      };
+      const runQuery = getShallowRunQuery(ctx);
+      const metadata = await runQuery(GET_METADATA_REF, {});
       const settings = metadata as {
         signupMode?: "invite-only" | "domain-allowlist";
         authMethods?: ("password" | "otp")[];
@@ -419,29 +536,23 @@ http.route({
       // Find workspace by forwarding address
       const toAddresses = Array.isArray(to) ? to : [to];
       let emailConfig: Doc<"emailConfigs"> | null = null;
-      const runQuery = ctx.runQuery as unknown as (
-        query: unknown,
-        args: Record<string, unknown>
-      ) => Promise<unknown>;
-      const getEmailConfigByForwardingAddressRef = getApiRef(
-        "emailChannel:getEmailConfigByForwardingAddress"
-      );
+      const runQuery = getShallowRunQuery(ctx);
 
       for (const toAddr of toAddresses) {
         const addr = toAddr.toLowerCase().trim();
-        emailConfig = (await runQuery(getEmailConfigByForwardingAddressRef, {
+        emailConfig = await runQuery(GET_EMAIL_CONFIG_BY_FORWARDING_ADDRESS_REF, {
           forwardingAddress: addr,
           webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
-        })) as Doc<"emailConfigs"> | null;
+        });
         if (emailConfig) break;
 
         // Try extracting just the email part
         const match = addr.match(/<([^>]+)>/) || [null, addr];
         if (match[1]) {
-          emailConfig = (await runQuery(getEmailConfigByForwardingAddressRef, {
+          emailConfig = await runQuery(GET_EMAIL_CONFIG_BY_FORWARDING_ADDRESS_REF, {
             forwardingAddress: match[1],
             webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
-          })) as Doc<"emailConfigs"> | null;
+          });
           if (emailConfig) break;
         }
       }
@@ -470,12 +581,8 @@ http.route({
         const originalFromMatch = (text || html || "").match(/from:\s*([^\n\r]+)/i);
         const originalFrom = originalFromMatch ? originalFromMatch[1].trim() : from;
 
-        const runMutation = ctx.runMutation as unknown as (
-          mutation: unknown,
-          args: Record<string, unknown>
-        ) => Promise<Record<string, unknown>>;
-        const processForwardedEmailRef = getApiRef("emailChannel:processForwardedEmail");
-        result = await runMutation(processForwardedEmailRef, {
+        const runMutation = getShallowRunMutation(ctx);
+        result = await runMutation(PROCESS_FORWARDED_EMAIL_REF, {
           workspaceId: emailConfig.workspaceId,
           webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
           forwarderEmail: from,
@@ -494,12 +601,8 @@ http.route({
           ),
         });
       } else {
-        const runMutation = ctx.runMutation as unknown as (
-          mutation: unknown,
-          args: Record<string, unknown>
-        ) => Promise<Record<string, unknown>>;
-        const processInboundEmailRef = getApiRef("emailChannel:processInboundEmail");
-        result = await runMutation(processInboundEmailRef, {
+        const runMutation = getShallowRunMutation(ctx);
+        result = await runMutation(PROCESS_INBOUND_EMAIL_REF, {
           workspaceId: emailConfig.workspaceId,
           webhookSecret: EMAIL_WEBHOOK_INTERNAL_SECRET || undefined,
           from,
@@ -566,14 +669,8 @@ http.route({
 
           const newStatus = statusMap[type];
           if (newStatus) {
-            const runMutation = ctx.runMutation as unknown as (
-              mutation: unknown,
-              args: Record<string, unknown>
-            ) => Promise<unknown>;
-            const updateDeliveryStatusByExternalIdRef = getApiRef(
-              "emailChannel:updateDeliveryStatusByExternalId"
-            );
-            await runMutation(updateDeliveryStatusByExternalIdRef, {
+            const runMutation = getShallowRunMutation(ctx);
+            await runMutation(UPDATE_DELIVERY_STATUS_BY_EXTERNAL_ID_REF, {
               externalEmailId,
               status: newStatus,
             });

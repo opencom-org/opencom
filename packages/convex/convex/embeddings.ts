@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { embed, embedMany } from "ai";
@@ -13,29 +13,38 @@ import {
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
+type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "query",
+  "internal",
+  Args,
+  Return
+>;
+
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"mutation", "internal", Args, Return>;
+
+type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"action", "internal", Args, Return>;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as (
-    queryRef: unknown,
-    queryArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+    queryRef: InternalQueryRef<Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as (
-    mutationRef: unknown,
-    mutationArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+    mutationRef: InternalMutationRef<Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
 }
 
 function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as (
-    actionRef: unknown,
-    actionArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+    actionRef: InternalActionRef<Args, Return>,
+    actionArgs: Args
+  ) => Promise<Return>;
 }
 
 type BatchItem = {
@@ -51,6 +60,133 @@ type BatchItemWithHash = BatchItem & {
   textHash: string;
   snippet: string;
 };
+
+type GenerateEmbeddingArgs = {
+  workspaceId: Id<"workspaces">;
+  contentType: BatchItem["contentType"];
+  contentId: string;
+  title: string;
+  content: string;
+  model?: string;
+};
+
+type GenerateEmbeddingResult = {
+  id: Id<"contentEmbeddings">;
+  skipped: boolean;
+};
+
+type GenerateBatchArgs = {
+  items: BatchItem[];
+  model?: string;
+};
+
+type GenerateBatchResult = {
+  processed: number;
+  skipped: number;
+};
+
+type GetByContentArgs = {
+  contentType: BatchItem["contentType"];
+  contentId: string;
+};
+
+type InsertEmbeddingArgs = {
+  workspaceId: Id<"workspaces">;
+  contentType: BatchItem["contentType"];
+  contentId: string;
+  embedding: number[];
+  textHash: string;
+  title: string;
+  snippet: string;
+};
+
+type UpdateEmbeddingArgs = {
+  id: Id<"contentEmbeddings">;
+  embedding: number[];
+  textHash: string;
+  title: string;
+  snippet: string;
+};
+
+type PermissionForActionArgs = {
+  userId: Id<"users">;
+  workspaceId: Id<"workspaces">;
+  permission: string;
+};
+
+type WorkspaceArgs = {
+  workspaceId: Id<"workspaces">;
+};
+
+type ListedArticle = {
+  _id: string;
+  title: string;
+  content: string;
+};
+
+type ListedSnippet = {
+  _id: string;
+  name: string;
+  content: string;
+};
+
+const GET_BY_CONTENT_REF = makeFunctionReference<
+  "query",
+  GetByContentArgs,
+  Doc<"contentEmbeddings"> | null
+>("embeddings:getByContent") as unknown as InternalQueryRef<
+  GetByContentArgs,
+  Doc<"contentEmbeddings"> | null
+>;
+
+const UPDATE_EMBEDDING_REF = makeFunctionReference<"mutation", UpdateEmbeddingArgs, unknown>(
+  "embeddings:update"
+) as unknown as InternalMutationRef<UpdateEmbeddingArgs>;
+
+const INSERT_EMBEDDING_REF = makeFunctionReference<
+  "mutation",
+  InsertEmbeddingArgs,
+  Id<"contentEmbeddings">
+>("embeddings:insert") as unknown as InternalMutationRef<
+  InsertEmbeddingArgs,
+  Id<"contentEmbeddings">
+>;
+
+const GENERATE_INTERNAL_REF = makeFunctionReference<
+  "action",
+  GenerateEmbeddingArgs,
+  GenerateEmbeddingResult
+>("embeddings:generateInternal") as unknown as InternalActionRef<
+  GenerateEmbeddingArgs,
+  GenerateEmbeddingResult
+>;
+
+const REQUIRE_PERMISSION_FOR_ACTION_REF = makeFunctionReference<
+  "query",
+  PermissionForActionArgs,
+  unknown
+>("permissions:requirePermissionForAction") as unknown as InternalQueryRef<PermissionForActionArgs>;
+
+const LIST_ARTICLES_REF = makeFunctionReference<"query", WorkspaceArgs, ListedArticle[]>(
+  "embeddings:listArticles"
+) as unknown as InternalQueryRef<WorkspaceArgs, ListedArticle[]>;
+
+const LIST_INTERNAL_ARTICLES_REF = makeFunctionReference<"query", WorkspaceArgs, ListedArticle[]>(
+  "embeddings:listInternalArticles"
+) as unknown as InternalQueryRef<WorkspaceArgs, ListedArticle[]>;
+
+const LIST_SNIPPETS_REF = makeFunctionReference<"query", WorkspaceArgs, ListedSnippet[]>(
+  "embeddings:listSnippets"
+) as unknown as InternalQueryRef<WorkspaceArgs, ListedSnippet[]>;
+
+const GENERATE_BATCH_INTERNAL_REF = makeFunctionReference<
+  "action",
+  GenerateBatchArgs,
+  GenerateBatchResult
+>("embeddings:generateBatchInternal") as unknown as InternalActionRef<
+  GenerateBatchArgs,
+  GenerateBatchResult
+>;
 
 async function createTextHash(text: string): Promise<string> {
   const data = new TextEncoder().encode(text);
@@ -78,22 +214,15 @@ export const generateInternal = internalAction({
     content: v.string(),
     model: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ id: Id<"contentEmbeddings">; skipped: boolean }> => {
+  handler: async (ctx, args): Promise<GenerateEmbeddingResult> => {
     const textToEmbed = `${args.title}\n\n${args.content}`;
     const textHash = await createTextHash(textToEmbed);
 
-    const runQuery = ctx.runQuery as unknown as (
-      queryRef: unknown,
-      queryArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const getByContentRef = getInternalRef("embeddings:getByContent");
-    const existing = (await runQuery(
-      getByContentRef,
-      {
-        contentType: args.contentType,
-        contentId: args.contentId,
-      }
-    )) as Doc<"contentEmbeddings"> | null;
+    const runQuery = getShallowRunQuery(ctx);
+    const existing = await runQuery(GET_BY_CONTENT_REF, {
+      contentType: args.contentType,
+      contentId: args.contentId,
+    });
 
     if (existing && existing.textHash === textHash) {
       return { id: existing._id, skipped: true };
@@ -108,11 +237,9 @@ export const generateInternal = internalAction({
 
     const snippetText = createSnippet(args.content);
     const runMutation = getShallowRunMutation(ctx);
-    const updateEmbeddingRef = getInternalRef("embeddings:update");
-    const insertEmbeddingRef = getInternalRef("embeddings:insert");
 
     if (existing) {
-      await runMutation(updateEmbeddingRef, {
+      await runMutation(UPDATE_EMBEDDING_REF, {
         id: existing._id,
         embedding: embedding,
         textHash,
@@ -122,7 +249,7 @@ export const generateInternal = internalAction({
       return { id: existing._id, skipped: false };
     }
 
-    const id = (await runMutation(insertEmbeddingRef, {
+    const id = await runMutation(INSERT_EMBEDDING_REF, {
       workspaceId: args.workspaceId,
       contentType: args.contentType,
       contentId: args.contentId,
@@ -130,7 +257,7 @@ export const generateInternal = internalAction({
       textHash,
       title: args.title,
       snippet: snippetText,
-    })) as Id<"contentEmbeddings">;
+    });
 
     return { id, skipped: false };
   },
@@ -146,17 +273,16 @@ export const generate = authAction({
     model: v.optional(v.string()),
   },
   permission: "articles.read",
-  handler: async (ctx, args): Promise<{ id: Id<"contentEmbeddings">; skipped: boolean }> => {
+  handler: async (ctx, args): Promise<GenerateEmbeddingResult> => {
     const runAction = getShallowRunAction(ctx);
-    const generateInternalRef = getInternalRef("embeddings:generateInternal");
-    return (await runAction(generateInternalRef, {
+    return await runAction(GENERATE_INTERNAL_REF, {
       workspaceId: args.workspaceId,
       contentType: args.contentType,
       contentId: args.contentId,
       title: args.title,
       content: args.content,
       model: args.model,
-    })) as { id: Id<"contentEmbeddings">; skipped: boolean };
+    });
   },
 });
 
@@ -185,7 +311,7 @@ export const generateBatch = authAction({
     const runQuery = getShallowRunQuery(ctx);
     const workspaceIds = [...new Set(args.items.map((item) => item.workspaceId))];
     for (const workspaceId of workspaceIds) {
-      await runQuery(getInternalRef("permissions:requirePermissionForAction"), {
+      await runQuery(REQUIRE_PERMISSION_FOR_ACTION_REF, {
         userId: ctx.user._id,
         workspaceId,
         permission: "articles.read",
@@ -203,10 +329,10 @@ export const generateBatch = authAction({
 
     const existingEmbeddings: (Doc<"contentEmbeddings"> | null)[] = await Promise.all(
       itemsWithHash.map((item: BatchItemWithHash) =>
-        runQuery(getInternalRef("embeddings:getByContent"), {
+        runQuery(GET_BY_CONTENT_REF, {
           contentType: item.contentType,
           contentId: item.contentId,
-        }) as Promise<Doc<"contentEmbeddings"> | null>
+        })
       )
     );
 
@@ -229,8 +355,6 @@ export const generateBatch = authAction({
     });
 
     const runMutation = getShallowRunMutation(ctx);
-    const updateEmbeddingRef = getInternalRef("embeddings:update");
-    const insertEmbeddingRef = getInternalRef("embeddings:insert");
 
     for (let i = 0; i < itemsToProcess.length; i++) {
       const item = itemsToProcess[i];
@@ -241,7 +365,7 @@ export const generateBatch = authAction({
       const existing = existingEmbeddings[existingIndex];
 
       if (existing) {
-        await runMutation(updateEmbeddingRef, {
+        await runMutation(UPDATE_EMBEDDING_REF, {
           id: existing._id,
           embedding,
           textHash: item.textHash,
@@ -249,7 +373,7 @@ export const generateBatch = authAction({
           snippet: item.snippet,
         });
       } else {
-        await runMutation(insertEmbeddingRef, {
+        await runMutation(INSERT_EMBEDDING_REF, {
           workspaceId: item.workspaceId,
           contentType: item.contentType,
           contentId: item.contentId,
@@ -295,9 +419,9 @@ export const backfillExisting = authAction({
     const items: ContentItem[] = [];
 
     if (contentTypes.includes("article")) {
-      const articles = (await runQuery(getInternalRef("embeddings:listArticles"), {
+      const articles = await runQuery(LIST_ARTICLES_REF, {
         workspaceId: args.workspaceId,
-      })) as Array<{ _id: string; title: string; content: string }>;
+      });
       for (const article of articles) {
         items.push({
           workspaceId: args.workspaceId,
@@ -310,9 +434,9 @@ export const backfillExisting = authAction({
     }
 
     if (contentTypes.includes("internalArticle")) {
-      const internalArticles = (await runQuery(getInternalRef("embeddings:listInternalArticles"), {
+      const internalArticles = await runQuery(LIST_INTERNAL_ARTICLES_REF, {
         workspaceId: args.workspaceId,
-      })) as Array<{ _id: string; title: string; content: string }>;
+      });
       for (const article of internalArticles) {
         items.push({
           workspaceId: args.workspaceId,
@@ -325,9 +449,9 @@ export const backfillExisting = authAction({
     }
 
     if (contentTypes.includes("snippet")) {
-      const snippets = (await runQuery(getInternalRef("embeddings:listSnippets"), {
+      const snippets = await runQuery(LIST_SNIPPETS_REF, {
         workspaceId: args.workspaceId,
-      })) as Array<{ _id: string; name: string; content: string }>;
+      });
       for (const snippet of snippets) {
         items.push({
           workspaceId: args.workspaceId,
@@ -344,10 +468,10 @@ export const backfillExisting = authAction({
 
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
-      const result = (await runAction(getInternalRef("embeddings:generateBatchInternal"), {
+      const result = await runAction(GENERATE_BATCH_INTERNAL_REF, {
         items: batch,
         model: args.model,
-      })) as { processed: number; skipped: number };
+      });
       totalProcessed += result.processed;
       totalSkipped += result.skipped;
     }
@@ -394,10 +518,10 @@ export const generateBatchInternal = internalAction({
 
     const existingEmbeddings: (Doc<"contentEmbeddings"> | null)[] = await Promise.all(
       itemsWithHash.map((item: BatchItemWithHash) =>
-        runQuery(getInternalRef("embeddings:getByContent"), {
+        runQuery(GET_BY_CONTENT_REF, {
           contentType: item.contentType,
           contentId: item.contentId,
-        }) as Promise<Doc<"contentEmbeddings"> | null>
+        })
       )
     );
 
@@ -420,8 +544,6 @@ export const generateBatchInternal = internalAction({
     });
 
     const runMutation = getShallowRunMutation(ctx);
-    const updateEmbeddingRef = getInternalRef("embeddings:update");
-    const insertEmbeddingRef = getInternalRef("embeddings:insert");
 
     for (let i = 0; i < itemsToProcess.length; i++) {
       const item = itemsToProcess[i];
@@ -432,7 +554,7 @@ export const generateBatchInternal = internalAction({
       const existing = existingEmbeddings[existingIndex];
 
       if (existing) {
-        await runMutation(updateEmbeddingRef, {
+        await runMutation(UPDATE_EMBEDDING_REF, {
           id: existing._id,
           embedding,
           textHash: item.textHash,
@@ -440,7 +562,7 @@ export const generateBatchInternal = internalAction({
           snippet: item.snippet,
         });
       } else {
-        await runMutation(insertEmbeddingRef, {
+        await runMutation(INSERT_EMBEDDING_REF, {
           workspaceId: item.workspaceId,
           contentType: item.contentType,
           contentId: item.contentId,

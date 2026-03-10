@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import {
   mutation,
   query,
@@ -12,15 +11,12 @@ import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authMutation, authQuery } from "./lib/authWrappers";
+import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
 import {
   isInternalArticle,
   isPublicArticle,
   listUnifiedArticlesWithLegacyFallback,
 } from "./lib/unifiedArticles";
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 const knowledgeSourceValidator = v.union(
@@ -664,12 +660,7 @@ export const handoffToHuman = mutation({
       aiLastResponseAt: now,
     });
 
-    const runAfter = ctx.scheduler.runAfter as unknown as (
-      delayMs: number,
-      functionRef: unknown,
-      runArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const routeEventRef = getInternalRef("notifications:routeEvent");
+    const runAfter = getShallowRunAfter(ctx);
     await runAfter(0, routeEventRef, {
       eventType: "chat_message",
       domain: "chat",

@@ -139,7 +139,6 @@ Frozen owner map:
   - `packages/convex/convex/pushCampaigns.ts`
   - `packages/convex/convex/series/scheduler.ts`
   - `packages/convex/convex/snippets.ts`
-  - `packages/convex/convex/testAdmin.ts`
   - `packages/convex/convex/testing/helpers/notifications.ts`
   - `packages/convex/convex/tickets.ts`
   - `packages/convex/convex/visitors/mutations.ts`
@@ -153,6 +152,10 @@ Frozen owner map:
   - `apps/widget/src/test/widgetTourBridgeLifecycle.test.tsx`
   - `apps/widget/src/test/widgetTourStart.test.tsx`
   - `packages/convex/tests/runtimeTypeHardeningGuard.test.ts`
+- Accepted dynamic exception documented and guarded by `close-repo-wide-convex-ref-hardening-gaps`:
+  - `packages/convex/convex/testAdmin.ts`
+    - This file may continue to use caller-selected `makeFunctionReference(name)` dispatch because it is the secret-protected test admin gateway.
+    - The exception remains valid only while dispatch stays limited to the `testData` and `testing` module prefixes and guard tests pin that scope.
 
 Rationale:
 
@@ -202,6 +205,8 @@ Alternatives considered:
   - Mitigation: separate predecessor verification from any follow-on hardening objective.
 - [Risk] Guardrails can become vague if inventory is not exact.
   - Mitigation: freeze the file list before adding broad checks.
+- [Risk] The accepted `testAdmin.ts` exception could expand into a general runtime escape hatch.
+  - Mitigation: document it as the only residual dynamic exception and keep explicit guard assertions on its allowed module prefixes.
 - [Risk] Multiple active changes increase administrative overhead.
   - Mitigation: use this change to drive validation and closure order instead of merging everything.
 

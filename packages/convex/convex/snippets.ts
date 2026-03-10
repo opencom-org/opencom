@@ -1,16 +1,30 @@
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery } from "./lib/authWrappers";
 
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
+type InternalSchedulableRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"action" | "mutation", "internal", Args, Return>;
+
+type GenerateSnippetEmbeddingArgs = {
+  workspaceId: Id<"workspaces">;
+  contentType: "snippet";
+  contentId: Id<"snippets">;
+  title: string;
+  content: string;
+};
+
+const GENERATE_SNIPPET_EMBEDDINGS_REF = makeFunctionReference<
+  "action",
+  GenerateSnippetEmbeddingArgs,
+  unknown
+>("embeddings:generateInternal") as unknown as InternalSchedulableRef<GenerateSnippetEmbeddingArgs>;
 
 function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as (
+  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
-    functionRef: unknown,
-    args: Record<string, unknown>
+    functionRef: InternalSchedulableRef<Args, Return>,
+    args: Args
   ) => Promise<unknown>;
 }
 
@@ -53,7 +67,7 @@ export const create = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("embeddings:generateInternal"), {
+    await runAfter(0, GENERATE_SNIPPET_EMBEDDINGS_REF, {
       workspaceId: args.workspaceId,
       contentType: "snippet",
       contentId: snippetId,
@@ -123,7 +137,7 @@ export const update = authMutation({
 
     if (args.name !== undefined || args.content !== undefined) {
       const runAfter = getShallowRunAfter(ctx);
-      await runAfter(0, getInternalRef("embeddings:generateInternal"), {
+      await runAfter(0, GENERATE_SNIPPET_EMBEDDINGS_REF, {
         workspaceId: snippet.workspaceId,
         contentType: "snippet",
         contentId: args.id,

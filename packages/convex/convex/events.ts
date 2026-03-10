@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { mutation, query, MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { resolveVisitorFromSession } from "./widgetSessions";
@@ -17,15 +17,28 @@ type AutoEventType = (typeof AUTO_EVENT_TYPES)[number];
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_EVENTS = 100;
 
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"mutation", "internal", Args, Return>;
+
+type CheckAutoCompletionArgs = {
+  visitorId: Id<"visitors">;
+  workspaceId: Id<"workspaces">;
+  eventName: string;
+};
+
+const CHECK_AUTO_COMPLETION_REF = makeFunctionReference<
+  "mutation",
+  CheckAutoCompletionArgs,
+  unknown
+>("checklists:checkAutoCompletion") as unknown as InternalMutationRef<
+  CheckAutoCompletionArgs
+>;
 
 function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as (
+  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
-    functionRef: unknown,
-    runArgs: Record<string, unknown>
+    functionRef: InternalMutationRef<Args, Return>,
+    runArgs: Args
   ) => Promise<unknown>;
 }
 
@@ -92,8 +105,7 @@ export const track = mutation({
 
     // Trigger checklist auto-completion check
     const runAfter = getShallowRunAfter(ctx);
-    const checkAutoCompletionRef = getInternalRef("checklists:checkAutoCompletion");
-    await runAfter(0, checkAutoCompletionRef, {
+    await runAfter(0, CHECK_AUTO_COMPLETION_REF, {
       visitorId: resolvedVisitorId,
       workspaceId: args.workspaceId,
       eventName: args.name,

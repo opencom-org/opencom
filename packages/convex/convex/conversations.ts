@@ -1,22 +1,14 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { mutation, query, MutationCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
+import {
+  getShallowRunAfter,
+  notifyAssignmentRef,
+  notifyNewConversationRef,
+} from "./notifications/functionRefs";
 import { requirePermission, hasPermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
-
-function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as (
-    delayMs: number,
-    functionRef: unknown,
-    runArgs: Record<string, unknown>
-  ) => Promise<unknown>;
-}
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
 
 // Helper function to create a new conversation (shared by getOrCreateForVisitor and createForVisitor)
 async function createConversationInternal(
@@ -44,7 +36,6 @@ async function createConversationInternal(
   });
 
   const runAfter = getShallowRunAfter(ctx);
-  const notifyNewConversationRef = getInternalRef("notifications:notifyNewConversation");
   await runAfter(0, notifyNewConversationRef, {
     conversationId: id,
   });
@@ -236,7 +227,6 @@ export const assign = mutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const notifyAssignmentRef = getInternalRef("notifications:notifyAssignment");
     await runAfter(0, notifyAssignmentRef, {
       conversationId: args.id,
       assignedAgentId: args.agentId,

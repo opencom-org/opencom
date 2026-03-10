@@ -10,6 +10,12 @@ Every remaining Convex ref-boundary gap identified by the repo-wide inventory SH
 - **THEN** the inventory records exactly one owner change for addressing it
 - **AND** the gap is not left duplicated across multiple active proposals
 
+#### Scenario: Team accepts a narrowly constrained dynamic exception
+
+- **WHEN** a remaining gap cannot use fixed typed refs because the target function name is intentionally caller-selected
+- **THEN** the inventory records that file as an explicit accepted exception instead of silently treating it as unfinished migration work
+- **AND** the exception documents the narrow allowed scope and the guardrail that prevents it from expanding into a general runtime pattern
+
 ### Requirement: Existing package-specific hardening changes MUST remain the owners where their target architecture still applies
 
 Older package-specific changes for web, widget, and React Native SDK boundary architecture SHALL remain the implementation owners when the current codebase still matches their intended migration model.

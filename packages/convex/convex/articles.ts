@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import {
   evaluateRule,
@@ -10,6 +9,11 @@ import {
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { authMutation, authQuery } from "./lib/authWrappers";
+import {
+  generateInternalEmbeddingRef,
+  getShallowRunAfter,
+  removeEmbeddingRef,
+} from "./embeddings/functionRefs";
 import { requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
 import { generateSlug, ensureUniqueSlug } from "./utils/strings";
@@ -316,18 +320,6 @@ async function backfillLegacyInternalArticles(
   };
 }
 
-function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as (
-    delayMs: number,
-    functionRef: unknown,
-    runArgs: Record<string, unknown>
-  ) => Promise<unknown>;
-}
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
-
 export const create = mutation({
   args: {
     workspaceId: v.id("workspaces"),
@@ -424,8 +416,7 @@ export const update = mutation({
         (args.title !== undefined || args.content !== undefined)
       ) {
         const runAfter = getShallowRunAfter(ctx);
-        const generateInternalRef = getInternalRef("embeddings:generateInternal");
-        await runAfter(0, generateInternalRef, {
+        await runAfter(0, generateInternalEmbeddingRef, {
           workspaceId: resolved.article.workspaceId,
           contentType: "internalArticle",
           contentId: resolved.article._id,
@@ -497,7 +488,6 @@ export const update = mutation({
 
     if (resolved.article.status === "published" && previousContentType !== nextContentType) {
       const runAfter = getShallowRunAfter(ctx);
-      const removeEmbeddingRef = getInternalRef("embeddings:remove");
       await runAfter(0, removeEmbeddingRef, {
         contentType: previousContentType,
         contentId: resolved.article._id,
@@ -509,8 +499,7 @@ export const update = mutation({
       (args.title !== undefined || args.content !== undefined || args.visibility !== undefined)
     ) {
       const runAfter = getShallowRunAfter(ctx);
-      const generateInternalRef = getInternalRef("embeddings:generateInternal");
-      await runAfter(0, generateInternalRef, {
+      await runAfter(0, generateInternalEmbeddingRef, {
         workspaceId: resolved.article.workspaceId,
         contentType: nextContentType,
         contentId: resolved.article._id,
@@ -543,7 +532,6 @@ export const remove = mutation({
     if (resolved.kind === "legacyInternal") {
       await ctx.db.delete(resolved.article._id);
       const runAfter = getShallowRunAfter(ctx);
-      const removeEmbeddingRef = getInternalRef("embeddings:remove");
       await runAfter(0, removeEmbeddingRef, {
         contentType: "internalArticle",
         contentId: resolved.article._id,
@@ -553,7 +541,6 @@ export const remove = mutation({
 
     await ctx.db.delete(resolved.article._id);
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings:remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType: getArticleContentType(resolved.article),
       contentId: resolved.article._id,
@@ -729,8 +716,7 @@ export const publish = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const generateInternalRef = getInternalRef("embeddings:generateInternal");
-    await runAfter(0, generateInternalRef, {
+    await runAfter(0, generateInternalEmbeddingRef, {
       workspaceId: resolved.article.workspaceId,
       contentType:
         resolved.kind === "legacyInternal"
@@ -767,7 +753,6 @@ export const unpublish = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings.remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType:
         resolved.kind === "legacyInternal"
@@ -801,7 +786,6 @@ export const archive = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings.remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType:
         resolved.kind === "legacyInternal"

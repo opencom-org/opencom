@@ -1,23 +1,83 @@
 import { internalMutation } from "../../_generated/server";
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+import type { Id } from "../../_generated/dataModel";
 
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"mutation", "internal", Args, Return>;
+
+type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "query",
+  "internal",
+  Args,
+  Return
+>;
+
+type SendForTestingArgs = {
+  id: Id<"pushCampaigns">;
+};
+
+type SendForTestingResult = {
+  recipientCount: number;
+};
+
+type PendingRecipientsArgs = {
+  campaignId: Id<"pushCampaigns">;
+  limit?: number;
+};
+
+type MemberRecipientsArgs = {
+  workspaceId: Id<"workspaces">;
+};
+
+type VisitorRecipientsArgs = {
+  conversationId: Id<"conversations">;
+  channel?: "chat" | "email";
+};
+
+const SEND_FOR_TESTING_REF = makeFunctionReference<
+  "mutation",
+  SendForTestingArgs,
+  SendForTestingResult
+>("pushCampaigns:sendForTesting") as unknown as InternalMutationRef<
+  SendForTestingArgs,
+  SendForTestingResult
+>;
+
+const GET_PENDING_RECIPIENTS_REF = makeFunctionReference<
+  "query",
+  PendingRecipientsArgs,
+  unknown
+>("pushCampaigns:getPendingRecipients") as unknown as InternalQueryRef<PendingRecipientsArgs>;
+
+const GET_MEMBER_RECIPIENTS_FOR_NEW_VISITOR_MESSAGE_REF = makeFunctionReference<
+  "query",
+  MemberRecipientsArgs,
+  unknown
+>("notifications:getMemberRecipientsForNewVisitorMessage") as unknown as InternalQueryRef<
+  MemberRecipientsArgs
+>;
+
+const GET_VISITOR_RECIPIENTS_FOR_SUPPORT_REPLY_REF = makeFunctionReference<
+  "query",
+  VisitorRecipientsArgs,
+  unknown
+>("notifications:getVisitorRecipientsForSupportReply") as unknown as InternalQueryRef<
+  VisitorRecipientsArgs
+>;
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as (
-    mutationRef: unknown,
-    mutationArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+    mutationRef: InternalMutationRef<Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
 }
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as (
-    queryRef: unknown,
-    queryArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+    queryRef: InternalQueryRef<Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
 }
 
 const createTestPushCampaign = internalMutation({
@@ -62,9 +122,9 @@ const sendTestPushCampaign: ReturnType<typeof internalMutation> = internalMutati
   args: {
     campaignId: v.id("pushCampaigns"),
   },
-  handler: async (ctx, args): Promise<unknown> => {
+  handler: async (ctx, args): Promise<SendForTestingResult> => {
     const runMutation = getShallowRunMutation(ctx);
-    return await runMutation(getInternalRef("pushCampaigns:sendForTesting"), {
+    return await runMutation(SEND_FOR_TESTING_REF, {
       id: args.campaignId,
     });
   },
@@ -78,7 +138,7 @@ const getTestPendingPushCampaignRecipients: ReturnType<typeof internalMutation> 
     },
     handler: async (ctx, args): Promise<unknown> => {
       const runQuery = getShallowRunQuery(ctx);
-      return await runQuery(getInternalRef("pushCampaigns:getPendingRecipients"), {
+      return await runQuery(GET_PENDING_RECIPIENTS_REF, {
         campaignId: args.campaignId,
         limit: args.limit,
       });
@@ -258,7 +318,7 @@ const getTestMemberRecipientsForNewVisitorMessage: ReturnType<typeof internalMut
     },
     handler: async (ctx, args): Promise<unknown> => {
       const runQuery = getShallowRunQuery(ctx);
-      return await runQuery(getInternalRef("notifications:getMemberRecipientsForNewVisitorMessage"), {
+      return await runQuery(GET_MEMBER_RECIPIENTS_FOR_NEW_VISITOR_MESSAGE_REF, {
         workspaceId: args.workspaceId,
       });
     },
@@ -271,7 +331,7 @@ const getTestVisitorRecipientsForSupportReply: ReturnType<typeof internalMutatio
     },
     handler: async (ctx, args): Promise<unknown> => {
       const runQuery = getShallowRunQuery(ctx);
-      return await runQuery(getInternalRef("notifications:getVisitorRecipientsForSupportReply"), {
+      return await runQuery(GET_VISITOR_RECIPIENTS_FOR_SUPPORT_REPLY_REF, {
         conversationId: args.conversationId,
         channel: args.channel,
       });

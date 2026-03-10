@@ -71,6 +71,16 @@ type NotifyNewMessageArgs = {
   mode?: NotifyNewMessageMode;
 };
 
+type NotifyNewConversationArgs = {
+  conversationId: Id<"conversations">;
+};
+
+type NotifyAssignmentArgs = {
+  conversationId: Id<"conversations">;
+  assignedAgentId: Id<"users">;
+  actorUserId?: Id<"users">;
+};
+
 type SendNotificationEmailArgs = {
   to: string;
   subject: string;
@@ -147,6 +157,24 @@ export const routeEventRef = makeFunctionReference<"mutation", RouteEventArgs, u
 export const notifyNewMessageRef = makeFunctionReference<"mutation", NotifyNewMessageArgs, unknown>(
   "notifications:notifyNewMessage"
 ) as unknown as InternalFunctionRef<"mutation", NotifyNewMessageArgs>;
+
+export const notifyNewConversationRef = makeFunctionReference<
+  "mutation",
+  NotifyNewConversationArgs,
+  unknown
+>("notifications:notifyNewConversation") as unknown as InternalFunctionRef<
+  "mutation",
+  NotifyNewConversationArgs
+>;
+
+export const notifyAssignmentRef = makeFunctionReference<
+  "mutation",
+  NotifyAssignmentArgs,
+  unknown
+>("notifications:notifyAssignment") as unknown as InternalFunctionRef<
+  "mutation",
+  NotifyAssignmentArgs
+>;
 
 export const sendNotificationEmailRef = makeFunctionReference<
   "action",

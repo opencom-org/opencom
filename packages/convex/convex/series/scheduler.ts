@@ -1,4 +1,4 @@
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { SeriesTriggerContext } from "./contracts";
@@ -11,23 +11,87 @@ export type SeriesEvaluateEntryResult = {
   progressId?: Id<"seriesProgress">;
 };
 
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"mutation", "internal", Args, Return>;
+
+type SeriesEvaluateEnrollmentArgs = {
+  workspaceId: Id<"workspaces">;
+  visitorId: Id<"visitors">;
+  triggerContext: SeriesEntryTriggerContext;
+};
+
+type SeriesResumeWaitingForEventArgs = {
+  workspaceId: Id<"workspaces">;
+  visitorId: Id<"visitors">;
+  eventName: string;
+};
+
+type SeriesProcessProgressArgs = {
+  progressId: Id<"seriesProgress">;
+  maxDepth?: number;
+};
+
+type SeriesEvaluateEntryArgs = {
+  seriesId: Id<"series">;
+  visitorId: Id<"visitors">;
+  triggerContext?: SeriesEntryTriggerContext;
+};
+
+type SeriesProcessWaitingProgressArgs = {
+  seriesLimit?: number;
+  waitingLimitPerSeries?: number;
+};
+
+const EVALUATE_ENROLLMENT_FOR_VISITOR_REF = makeFunctionReference<
+  "mutation",
+  SeriesEvaluateEnrollmentArgs,
+  unknown
+>("series:evaluateEnrollmentForVisitor") as unknown as InternalMutationRef<
+  SeriesEvaluateEnrollmentArgs
+>;
+
+const RESUME_WAITING_FOR_EVENT_REF = makeFunctionReference<
+  "mutation",
+  SeriesResumeWaitingForEventArgs,
+  unknown
+>("series:resumeWaitingForEvent") as unknown as InternalMutationRef<
+  SeriesResumeWaitingForEventArgs
+>;
+
+const PROCESS_PROGRESS_REF = makeFunctionReference<"mutation", SeriesProcessProgressArgs, unknown>(
+  "series:processProgress"
+) as unknown as InternalMutationRef<SeriesProcessProgressArgs>;
+
+const EVALUATE_ENTRY_REF = makeFunctionReference<
+  "mutation",
+  SeriesEvaluateEntryArgs,
+  SeriesEvaluateEntryResult
+>("series:evaluateEntry") as unknown as InternalMutationRef<
+  SeriesEvaluateEntryArgs,
+  SeriesEvaluateEntryResult
+>;
+
+const PROCESS_WAITING_PROGRESS_REF = makeFunctionReference<
+  "mutation",
+  SeriesProcessWaitingProgressArgs,
+  unknown
+>("series:processWaitingProgress") as unknown as InternalMutationRef<
+  SeriesProcessWaitingProgressArgs
+>;
 
 function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as (
+  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
-    functionRef: unknown,
-    runArgs: Record<string, unknown>
+    functionRef: InternalMutationRef<Args, Return>,
+    runArgs: Args
   ) => Promise<unknown>;
 }
 
 function getShallowRunMutation(ctx: MutationCtx) {
-  return ctx.runMutation as unknown as (
-    mutationRef: unknown,
-    mutationArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+    mutationRef: InternalMutationRef<Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
 }
 
 export async function scheduleSeriesEvaluateEnrollment(
@@ -39,7 +103,7 @@ export async function scheduleSeriesEvaluateEnrollment(
   }
 ): Promise<void> {
   const runAfter = getShallowRunAfter(ctx);
-  await runAfter(0, getInternalRef("series:evaluateEnrollmentForVisitor"), args);
+  await runAfter(0, EVALUATE_ENROLLMENT_FOR_VISITOR_REF, args);
 }
 
 export async function scheduleSeriesResumeWaitingForEvent(
@@ -51,7 +115,7 @@ export async function scheduleSeriesResumeWaitingForEvent(
   }
 ): Promise<void> {
   const runAfter = getShallowRunAfter(ctx);
-  await runAfter(0, getInternalRef("series:resumeWaitingForEvent"), args);
+  await runAfter(0, RESUME_WAITING_FOR_EVENT_REF, args);
 }
 
 export async function scheduleSeriesProcessProgress(
@@ -62,7 +126,7 @@ export async function scheduleSeriesProcessProgress(
   }
 ): Promise<void> {
   const runAfter = getShallowRunAfter(ctx);
-  await runAfter(args.delayMs, getInternalRef("series:processProgress"), {
+  await runAfter(args.delayMs, PROCESS_PROGRESS_REF, {
     progressId: args.progressId,
   });
 }
@@ -76,7 +140,7 @@ export async function runSeriesEvaluateEntry(
   }
 ): Promise<SeriesEvaluateEntryResult> {
   const runMutation = getShallowRunMutation(ctx);
-  return (await runMutation(getInternalRef("series:evaluateEntry"), args)) as SeriesEvaluateEntryResult;
+  return await runMutation(EVALUATE_ENTRY_REF, args);
 }
 
 export async function runSeriesEvaluateEnrollmentForVisitor(
@@ -88,7 +152,7 @@ export async function runSeriesEvaluateEnrollmentForVisitor(
   }
 ): Promise<unknown> {
   const runMutation = getShallowRunMutation(ctx);
-  return await runMutation(getInternalRef("series:evaluateEnrollmentForVisitor"), args);
+  return await runMutation(EVALUATE_ENROLLMENT_FOR_VISITOR_REF, args);
 }
 
 export async function runSeriesResumeWaitingForEvent(
@@ -100,7 +164,7 @@ export async function runSeriesResumeWaitingForEvent(
   }
 ): Promise<unknown> {
   const runMutation = getShallowRunMutation(ctx);
-  return await runMutation(getInternalRef("series:resumeWaitingForEvent"), args);
+  return await runMutation(RESUME_WAITING_FOR_EVENT_REF, args);
 }
 
 export async function runSeriesProcessWaitingProgress(
@@ -111,5 +175,5 @@ export async function runSeriesProcessWaitingProgress(
   }
 ): Promise<unknown> {
   const runMutation = getShallowRunMutation(ctx);
-  return await runMutation(getInternalRef("series:processWaitingProgress"), args);
+  return await runMutation(PROCESS_WAITING_PROGRESS_REF, args);
 }

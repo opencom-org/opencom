@@ -1,15 +1,12 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const TEAM_MEMBERS_SETTINGS_PATH = resolve(
-  process.cwd(),
-  "src/app/settings/useTeamMembersSettings.ts"
-);
-const EMAIL_CAMPAIGN_PAGE_PATH = resolve(
-  process.cwd(),
-  "src/app/campaigns/email/[id]/page.tsx"
-);
+const APP_DIR = dirname(fileURLToPath(import.meta.url));
+
+const TEAM_MEMBERS_SETTINGS_PATH = resolve(APP_DIR, "settings/useTeamMembersSettings.ts");
+const EMAIL_CAMPAIGN_PAGE_PATH = resolve(APP_DIR, "campaigns/email/[id]/page.tsx");
 
 describe("convex ref hardening guards", () => {
   it("keeps settings team-members on fixed refs without generic name helpers", () => {

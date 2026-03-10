@@ -1,33 +1,8 @@
 import { useCallback, useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
+import { useTourProgressConvex } from "../hooks/convex/useTourProgressConvex";
 import { getAdvanceGuidance, getBlockedReasonMessage } from "./messages";
 import type { AdvanceOn, DiagnosticReason, TourData, TourStep } from "./types";
-
-const advanceTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "tourProgress:advance"
-);
-const dismissTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "tourProgress:dismiss"
-);
-const dismissTourPermanentlyMutationRef = makeFunctionReference<
-  "mutation",
-  Record<string, unknown>,
-  unknown
->("tourProgress:dismissPermanently");
-const snoozeTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "tourProgress:snooze"
-);
-const restartTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "tourProgress:restart"
-);
-const skipTourStepMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "tourProgress:skipStep"
-);
-const checkpointTourMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "tourProgress:checkpoint"
-);
 
 interface UseTourOverlayActionsOptions {
   workspaceId: Id<"workspaces">;
@@ -74,13 +49,15 @@ export function useTourOverlayActions({
   skipHandledStepRef,
   fieldListenerRef,
 }: UseTourOverlayActionsOptions) {
-  const advanceTour = useMutation(advanceTourMutationRef);
-  const dismissTour = useMutation(dismissTourMutationRef);
-  const dismissPermanently = useMutation(dismissTourPermanentlyMutationRef);
-  const snoozeTour = useMutation(snoozeTourMutationRef);
-  const restartTour = useMutation(restartTourMutationRef);
-  const skipTourStep = useMutation(skipTourStepMutationRef);
-  const checkpointTour = useMutation(checkpointTourMutationRef);
+  const {
+    advanceTour,
+    checkpointTour,
+    dismissPermanently,
+    dismissTour,
+    restartTour,
+    skipTourStep,
+    snoozeTour,
+  } = useTourProgressConvex();
 
   const checkpointCurrentStep = useCallback(
     (opts?: {
@@ -116,7 +93,7 @@ export function useTourOverlayActions({
       skipHandledStepRef.current = currentStep._id;
 
       try {
-        const result = (await skipTourStep({
+        const result = await skipTourStep({
           workspaceId,
           visitorId,
           sessionToken: sessionToken ?? undefined,
@@ -124,7 +101,7 @@ export function useTourOverlayActions({
           reason,
           selector: currentStep.elementSelector,
           currentUrl: window.location.href,
-        })) as { nextStep?: number; status?: string; reason?: string } | null | undefined;
+        });
 
         const fallbackNextStep = currentStepIndex + 1;
         const nextStep =
@@ -172,7 +149,7 @@ export function useTourOverlayActions({
 
       try {
         const mode = opts?.mode ?? "click";
-        const result = (await advanceTour({
+        const result = await advanceTour({
           workspaceId,
           visitorId,
           sessionToken: sessionToken ?? undefined,
@@ -182,12 +159,7 @@ export function useTourOverlayActions({
           fieldValue: opts?.fieldValue,
           selector: opts?.selector,
           currentUrl: window.location.href,
-        })) as {
-          advanced: boolean;
-          blockedReason?: string | null;
-          nextStep: number;
-          status: string;
-        };
+        });
 
         if (!result.advanced) {
           setAdvanceHint(

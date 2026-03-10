@@ -1,5 +1,6 @@
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
 import { mutation } from "../_generated/server";
 import { getAuthenticatedUserFromSession } from "../auth";
 import { hasPermission } from "../permissions";
@@ -19,15 +20,35 @@ import {
   scheduleSeriesTriggerChanges,
 } from "./helpers";
 
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"mutation", "internal", Args, Return>;
+
+type VerifyIdentityArgs = {
+  workspaceId: Id<"workspaces">;
+  visitorId: Id<"visitors">;
+  userId: string;
+  userHash: string;
+};
+
+type VerifyIdentityResult = {
+  verified: boolean;
+  skipped?: boolean;
+};
+
+const VERIFY_IDENTITY_REF = makeFunctionReference<
+  "mutation",
+  VerifyIdentityArgs,
+  VerifyIdentityResult
+>("identityVerification:verifyIdentity") as unknown as InternalMutationRef<
+  VerifyIdentityArgs,
+  VerifyIdentityResult
+>;
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as (
-    mutationRef: unknown,
-    mutationArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+    mutationRef: InternalMutationRef<Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
 }
 
 export const identify = mutation({
@@ -79,12 +100,12 @@ export const identify = mutation({
     // Verify identity if userHash is provided (task 5.5)
     if (args.externalUserId && args.userHash) {
       const runMutation = getShallowRunMutation(ctx);
-      const result = (await runMutation(getInternalRef("identityVerification:verifyIdentity"), {
+      const result = await runMutation(VERIFY_IDENTITY_REF, {
         workspaceId: visitor.workspaceId,
         visitorId: resolvedVisitorId,
         userId: args.externalUserId,
         userHash: args.userHash,
-      })) as { verified: boolean; skipped?: boolean };
+      });
 
       // Check if verification is required and failed
       if (!result.verified && !result.skipped) {

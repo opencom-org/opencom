@@ -1,9 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { ChevronLeft, X, User } from "../icons";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { useConversationViewConvex } from "../hooks/convex/useConversationViewConvex";
 import { parseMarkdown } from "../utils/parseMarkdown";
 import { MANUAL_HANDOFF_REASON } from "./conversationView/constants";
 import { ConversationFooter } from "./conversationView/Footer";
@@ -14,74 +13,7 @@ import type {
   ArticleSuggestion,
   ConversationMessage,
   ConversationViewProps,
-  CsatEligibility,
 } from "./conversationView/types";
-
-type PersistedVisitorProfile = {
-  email?: string;
-  externalUserId?: string;
-} | null;
-
-type AiSettings = {
-  enabled?: boolean;
-} | null;
-
-type AiResponseRecord = {
-  _id?: string;
-  messageId: string;
-  handedOff?: boolean;
-};
-
-type ConversationDataRecord = {
-  aiWorkflowState?: string | null;
-} | null;
-
-const sendMessageMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "messages:send"
-);
-const identifyVisitorMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "visitors:identify"
-);
-const generateAiResponseActionRef = makeFunctionReference<"action", Record<string, unknown>, unknown>(
-  "aiAgentActions:generateResponse"
-);
-const submitAiFeedbackMutationRef = makeFunctionReference<
-  "mutation",
-  Record<string, unknown>,
-  unknown
->("aiAgent:submitFeedback");
-const handoffToHumanMutationRef = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(
-  "aiAgent:handoffToHuman"
-);
-const searchArticleSuggestionsActionRef = makeFunctionReference<
-  "action",
-  Record<string, unknown>,
-  ArticleSuggestion[]
->("suggestions:searchForWidget");
-const messagesListQueryRef = makeFunctionReference<"query", Record<string, unknown>, ConversationMessage[]>(
-  "messages:list"
-);
-const visitorBySessionQueryRef = makeFunctionReference<
-  "query",
-  { sessionId: string },
-  PersistedVisitorProfile
->("visitors:getBySession");
-const publicAiSettingsQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  AiSettings
->("aiAgent:getPublicSettings");
-const conversationResponsesQueryRef = makeFunctionReference<
-  "query",
-  Record<string, unknown>,
-  AiResponseRecord[]
->("aiAgent:getConversationResponses");
-const conversationGetQueryRef = makeFunctionReference<"query", Record<string, unknown>, ConversationDataRecord>(
-  "conversations:get"
-);
-const csatEligibilityQueryRef = makeFunctionReference<"query", Record<string, unknown>, CsatEligibility>(
-  "reporting:getCsatEligibility"
-);
 
 export function ConversationView({
   conversationId,
@@ -126,27 +58,28 @@ export function ConversationView({
 
   const debouncedInputValue = useDebouncedValue(inputValue, 300);
 
-  const sendMessageMutation = useMutation(sendMessageMutationRef);
-  const identifyVisitor = useMutation(identifyVisitorMutationRef);
-  const generateAiResponse = useAction(generateAiResponseActionRef);
-  const submitAiFeedback = useMutation(submitAiFeedbackMutationRef);
-  const handoffToHuman = useMutation(handoffToHumanMutationRef);
-  const searchArticleSuggestions = useAction(searchArticleSuggestionsActionRef);
+  const {
+    aiResponses,
+    aiSettings,
+    conversationData,
+    csatEligibility,
+    generateAiResponse,
+    handoffToHuman,
+    identifyVisitor,
+    messages,
+    persistedVisitorProfile,
+    searchArticleSuggestions,
+    sendMessageMutation,
+    submitAiFeedback,
+  } = useConversationViewConvex({
+    conversationId,
+    visitorId,
+    activeWorkspaceId,
+    sessionId,
+    sessionToken,
+    shouldEvaluateCsat,
+  });
 
-  const messages = useQuery(
-    messagesListQueryRef,
-    conversationId
-      ? {
-          conversationId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  ) as ConversationMessage[] | undefined;
-  const persistedVisitorProfile = useQuery(
-    visitorBySessionQueryRef,
-    sessionId ? { sessionId } : "skip"
-  ) as PersistedVisitorProfile | undefined;
   const isVisitorAlreadyIdentified = Boolean(
     emailCapturedThisSession ||
     userInfo?.email ||
@@ -155,41 +88,6 @@ export function ConversationView({
   );
   const agentMessageCount =
     messages?.filter((m: { senderType: string }) => m.senderType !== "visitor").length ?? 0;
-
-  const aiSettings = useQuery(publicAiSettingsQueryRef, {
-    workspaceId: activeWorkspaceId as Id<"workspaces">,
-  }) as AiSettings | undefined;
-
-  const aiResponses = useQuery(
-    conversationResponsesQueryRef,
-    conversationId
-      ? {
-          conversationId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  ) as AiResponseRecord[] | undefined;
-  const conversationData = useQuery(
-    conversationGetQueryRef,
-    conversationId
-      ? {
-          id: conversationId,
-          visitorId: visitorId ?? undefined,
-        }
-      : "skip"
-  ) as ConversationDataRecord | undefined;
-
-  const csatEligibility = useQuery(
-    csatEligibilityQueryRef,
-    shouldEvaluateCsat
-      ? {
-          conversationId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  ) as CsatEligibility | undefined;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });

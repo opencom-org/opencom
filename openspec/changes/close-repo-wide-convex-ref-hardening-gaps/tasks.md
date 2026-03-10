@@ -13,11 +13,11 @@
 ## 3. Residual Backend Micro-Batches
 
 - [x] 3.1 Migrate the first residual Convex backend file cluster that still uses `getInternalRef(name: string)` / `getApiRef(name: string)` to explicit typed boundaries and run focused verification.
-- [ ] 3.2 Continue residual backend cleanup in additional file clusters only after the previous cluster passes `pnpm --filter @opencom/convex typecheck` and targeted tests.
-- [ ] 3.3 Confirm residual backend behavior remains unchanged for covered runtime paths after each micro-batch.
+- [x] 3.2 Continue residual backend cleanup in additional file clusters only after the previous cluster passes `pnpm --filter @opencom/convex typecheck` and targeted tests.
+- [x] 3.3 Confirm residual backend behavior remains unchanged for covered runtime paths after each micro-batch.
 
 ## 4. Shared Guardrails And Final Validation
 
-- [ ] 4.1 Add or expand guard tests/checks for covered residual backend files and shared test-helper paths so prohibited broad ref-boundary patterns cannot re-enter.
+- [x] 4.1 Add or expand guard tests/checks for covered residual backend files and shared test-helper paths so prohibited broad ref-boundary patterns cannot re-enter.
 - [x] 4.2 Run the final repo-wide scan against the frozen inventory to confirm every remaining gap is either closed or explicitly reassigned to its owner change.
 - [x] 4.3 Run `openspec validate close-repo-wide-convex-ref-hardening-gaps --strict --no-interactive` and any touched dependent change validations once ownership and residual work are consistent.

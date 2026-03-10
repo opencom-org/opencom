@@ -1,7 +1,11 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  generateInternalEmbeddingRef,
+  getShallowRunAfter,
+  removeEmbeddingRef,
+} from "./embeddings/functionRefs";
 import { authMutation, authQuery } from "./lib/authWrappers";
 import {
   articleOrLegacyInternalArticleIdValidator,
@@ -55,18 +59,6 @@ async function listInternalArticlesForWorkspace(
 ) {
   const records = await listUnifiedArticlesWithLegacyFallback(db, workspaceId);
   return records.filter(isInternalArticleRecord);
-}
-
-function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as (
-    delayMs: number,
-    functionRef: unknown,
-    args: Record<string, unknown>
-  ) => Promise<unknown>;
-}
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
 }
 
 export const create = authMutation({
@@ -145,8 +137,7 @@ export const update = authMutation({
         (args.title !== undefined || args.content !== undefined)
       ) {
         const runAfter = getShallowRunAfter(ctx);
-        const generateInternalRef = getInternalRef("embeddings:generateInternal");
-        await runAfter(0, generateInternalRef, {
+        await runAfter(0, generateInternalEmbeddingRef, {
           workspaceId: article.article.workspaceId,
           contentType: "internalArticle",
           contentId: article.article._id,
@@ -190,8 +181,7 @@ export const update = authMutation({
       (args.title !== undefined || args.content !== undefined)
     ) {
       const runAfter = getShallowRunAfter(ctx);
-      const generateInternalRef = getInternalRef("embeddings:generateInternal");
-      await runAfter(0, generateInternalRef, {
+      await runAfter(0, generateInternalEmbeddingRef, {
         workspaceId: article.article.workspaceId,
         contentType: "internalArticle",
         contentId: article.article._id,
@@ -221,7 +211,6 @@ export const remove = authMutation({
 
     await ctx.db.delete(article.article._id);
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings:remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType: "internalArticle",
       contentId: article.article._id,
@@ -310,8 +299,7 @@ export const publish = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const generateInternalRef = getInternalRef("embeddings:generateInternal");
-    await runAfter(0, generateInternalRef, {
+    await runAfter(0, generateInternalEmbeddingRef, {
       workspaceId: article.article.workspaceId,
       contentType: "internalArticle",
       contentId: article.article._id,
@@ -345,7 +333,6 @@ export const unpublish = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings:remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType: "internalArticle",
       contentId: article.article._id,
@@ -376,7 +363,6 @@ export const archive = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings:remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType: "internalArticle",
       contentId: article.article._id,
