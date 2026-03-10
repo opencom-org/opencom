@@ -3,43 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation } from "convex/react";
 import { useWidgetSession } from "../hooks/useWidgetSession";
 import type { Id } from "@opencom/convex/dataModel";
+import { matchesFunctionPath } from "./convexFunctionRefs";
 
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
 }));
-
- function getFunctionPath(ref: unknown) {
-  if (typeof ref === "string") {
-    return ref;
-  }
-
-  if (ref && typeof ref === "object") {
-    const maybeRef = ref as {
-      functionName?: string;
-      name?: string;
-      reference?: { functionName?: string; name?: string };
-    };
-
-    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
-      String(symbol).includes("functionName")
-    );
-
-    const symbolValue = symbolFunctionName
-      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
-      : undefined;
-
-    return (
-      (typeof symbolValue === "string" ? symbolValue : undefined) ??
-      maybeRef.functionName ??
-      maybeRef.name ??
-      maybeRef.reference?.functionName ??
-      maybeRef.reference?.name ??
-      ""
-    );
-  }
-
-  return "";
- }
 
 vi.mock("@opencom/convex", () => ({
   api: {
@@ -86,18 +54,13 @@ describe("useWidgetSession", () => {
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
 
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      const functionPath = getFunctionPath(mutationRef);
-
-      if (functionPath === "widgetSessions:boot" || functionPath === "widgetSessions.boot") {
+      if (matchesFunctionPath(mutationRef, "widgetSessions:boot")) {
         return bootMock;
       }
-      if (
-        functionPath === "widgetSessions:refresh" ||
-        functionPath === "widgetSessions.refresh"
-      ) {
+      if (matchesFunctionPath(mutationRef, "widgetSessions:refresh")) {
         return refreshMock;
       }
-      if (functionPath === "visitors:heartbeat" || functionPath === "visitors.heartbeat") {
+      if (matchesFunctionPath(mutationRef, "visitors:heartbeat")) {
         return heartbeatMock;
       }
       return vi.fn();

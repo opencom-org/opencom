@@ -14,6 +14,55 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
+type EmailCampaignRecord = {
+  _id: Id<"emailCampaigns">;
+  name: string;
+  subject: string;
+  previewText?: string;
+  content: string;
+  status: string;
+  audienceRules?: AudienceRule | null;
+  targeting?: AudienceRule | null;
+};
+
+type EmailCampaignStats = {
+  total: number;
+  pending: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  unsubscribed: number;
+  openRate: number;
+  clickRate: number;
+  bounceRate: number;
+};
+
+type UpdateCampaignArgs = {
+  id: Id<"emailCampaigns">;
+  name?: string;
+  subject?: string;
+  previewText?: string;
+  content?: string;
+  templateId?: Id<"emailTemplates">;
+  senderId?: Id<"users">;
+  targeting?: AudienceRule;
+  schedule?: {
+    type: "immediate" | "scheduled";
+    scheduledAt?: number;
+    timezone?: string;
+  };
+};
+
+type SendCampaignArgs = {
+  id: Id<"emailCampaigns">;
+};
+
+type SendCampaignResult = {
+  recipientCount: number;
+};
+
 function EmailCampaignEditor() {
   const params = useParams();
   const router = useRouter();
@@ -23,31 +72,13 @@ function EmailCampaignEditor() {
   const campaignQuery = makeFunctionReference<
     "query",
     { id: Id<"emailCampaigns"> },
-    {
-      _id: Id<"emailCampaigns">;
-      name: string;
-      subject: string;
-      previewText?: string;
-      content: string;
-      status: string;
-      audienceRules?: AudienceRule | null;
-      targeting?: AudienceRule | null;
-    } | null
+    EmailCampaignRecord | null
   >("emailCampaigns:get");
 
   const campaignStatsQuery = makeFunctionReference<
     "query",
     { id: Id<"emailCampaigns"> },
-    {
-      sent?: number;
-      delivered?: number;
-      opened?: number;
-      clicked?: number;
-      total?: number;
-      openRate?: number;
-      clickRate?: number;
-      bounceRate?: number;
-    } | null
+    EmailCampaignStats
   >("emailCampaigns:getStats");
 
   const eventNamesQuery = makeFunctionReference<
@@ -56,9 +87,11 @@ function EmailCampaignEditor() {
     string[]
   >("events:getDistinctNames");
 
-  const updateCampaignRef = makeFunctionReference<"mutation", any, unknown>("emailCampaigns:update");
+  const updateCampaignRef = makeFunctionReference<"mutation", UpdateCampaignArgs, Id<"emailCampaigns">>(
+    "emailCampaigns:update"
+  );
 
-  const sendCampaignRef = makeFunctionReference<"mutation", { id: Id<"emailCampaigns"> }, unknown>(
+  const sendCampaignRef = makeFunctionReference<"mutation", SendCampaignArgs, SendCampaignResult>(
     "emailCampaigns:send"
   );
 

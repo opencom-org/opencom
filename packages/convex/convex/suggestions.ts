@@ -1,33 +1,30 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { action, internalAction, internalQuery } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
 import { embed } from "ai";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
 import { getUnifiedArticleByIdOrLegacyInternalId, isInternalArticle } from "./lib/unifiedArticles";
+import type { Permission } from "./permissions";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
 const FEEDBACK_STATS_MAX_LIMIT = 20000;
 const WIDGET_QUERY_MAX_LENGTH = 200;
 
-function getApiRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
-
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as (
-    queryRef: unknown,
-    queryArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+    queryRef: SuggestionQueryRef<Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
 }
 
 function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as (
-    actionRef: unknown,
-    actionArgs: Record<string, unknown>
-  ) => Promise<unknown>;
+  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+    actionRef: SuggestionActionRef<Args, Return>,
+    actionArgs: Args
+  ) => Promise<Return>;
 }
 
 function normalizeSuggestionQuery(query: string): string {
@@ -52,6 +49,157 @@ type WidgetSuggestionResult = {
   snippet: string;
   score: number;
 };
+
+type SuggestionQueryRef<Args extends Record<string, unknown>, Return> = FunctionReference<
+  "query",
+  "public" | "internal",
+  Args,
+  Return
+>;
+
+type SuggestionActionRef<Args extends Record<string, unknown>, Return> = FunctionReference<
+  "action",
+  "public" | "internal",
+  Args,
+  Return
+>;
+
+type PermissionCheckResult = { ok: true };
+
+type SuggestionContentRecord = {
+  content: string;
+  title: string;
+} | null;
+
+type SessionValidationResult =
+  | {
+      valid: true;
+      visitorId: Id<"visitors">;
+      identityVerified: boolean;
+    }
+  | {
+      valid: false;
+      reason: string;
+    };
+
+type OriginValidationResult = {
+  valid: boolean;
+  reason: string;
+};
+
+const GET_EMBEDDING_BY_ID_REF: SuggestionQueryRef<
+  { id: Id<"contentEmbeddings"> },
+  Doc<"contentEmbeddings"> | null
+> = makeFunctionReference<"query", { id: Id<"contentEmbeddings"> }, Doc<"contentEmbeddings"> | null>(
+  "suggestions:getEmbeddingById"
+);
+
+const GET_CONVERSATION_REF: SuggestionQueryRef<
+  { conversationId: Id<"conversations"> },
+  Doc<"conversations"> | null
+> = makeFunctionReference<
+  "query",
+  { conversationId: Id<"conversations"> },
+  Doc<"conversations"> | null
+>("suggestions:getConversation");
+
+const REQUIRE_PERMISSION_FOR_ACTION_REF: SuggestionQueryRef<
+  {
+    userId: Id<"users">;
+    workspaceId: Id<"workspaces">;
+    permission: Permission;
+  },
+  PermissionCheckResult
+> = makeFunctionReference<
+  "query",
+  {
+    userId: Id<"users">;
+    workspaceId: Id<"workspaces">;
+    permission: Permission;
+  },
+  PermissionCheckResult
+>("permissions:requirePermissionForAction");
+
+const GET_AI_SETTINGS_REF: SuggestionQueryRef<
+  { workspaceId: Id<"workspaces"> },
+  Doc<"aiAgentSettings"> | null
+> = makeFunctionReference<"query", { workspaceId: Id<"workspaces"> }, Doc<"aiAgentSettings"> | null>(
+  "suggestions:getAiSettings"
+);
+
+const GET_RECENT_MESSAGES_REF: SuggestionQueryRef<
+  { conversationId: Id<"conversations">; limit: number },
+  Doc<"messages">[]
+> = makeFunctionReference<
+  "query",
+  { conversationId: Id<"conversations">; limit: number },
+  Doc<"messages">[]
+>("suggestions:getRecentMessages");
+
+const SEARCH_SIMILAR_INTERNAL_REF: SuggestionActionRef<
+  {
+    workspaceId: Id<"workspaces">;
+    query: string;
+    contentTypes?: SuggestionContentType[];
+    limit?: number;
+    model?: string;
+  },
+  SuggestionResultWithContent[]
+> = makeFunctionReference<
+  "action",
+  {
+    workspaceId: Id<"workspaces">;
+    query: string;
+    contentTypes?: SuggestionContentType[];
+    limit?: number;
+    model?: string;
+  },
+  SuggestionResultWithContent[]
+>("suggestions:searchSimilarInternal");
+
+const GET_CONTENT_BY_ID_REF: SuggestionQueryRef<
+  { contentType: SuggestionContentType; contentId: string },
+  SuggestionContentRecord
+> = makeFunctionReference<
+  "query",
+  { contentType: SuggestionContentType; contentId: string },
+  SuggestionContentRecord
+>("suggestions:getContentById");
+
+const VALIDATE_SESSION_TOKEN_REF: SuggestionQueryRef<
+  {
+    workspaceId: Id<"workspaces">;
+    sessionToken: string;
+    visitorId?: Id<"visitors">;
+  },
+  SessionValidationResult
+> = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    sessionToken: string;
+    visitorId?: Id<"visitors">;
+  },
+  SessionValidationResult
+>("widgetSessions:validateSessionToken");
+
+const VALIDATE_ORIGIN_REF: SuggestionQueryRef<
+  { workspaceId: Id<"workspaces">; origin: string },
+  OriginValidationResult
+> = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; origin: string },
+  OriginValidationResult
+>("workspaces:validateOrigin");
+
+const GET_AUTOMATION_SETTINGS_REF: SuggestionQueryRef<
+  { workspaceId: Id<"workspaces"> },
+  Doc<"automationSettings"> | null
+> = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Doc<"automationSettings"> | null
+>("suggestions:getAutomationSettings");
 
 function normalizeSuggestionContentType(value: string): SuggestionContentType | null {
   switch (value) {
@@ -129,9 +277,9 @@ export const searchSimilar = authAction({
           _id: Id<"contentEmbeddings">;
           _score: number;
         }): Promise<SuggestionResult | null> => {
-          const doc = (await runQuery(getApiRef("suggestions:getEmbeddingById"), {
+          const doc = await runQuery(GET_EMBEDDING_BY_ID_REF, {
             id: result._id,
-          })) as Doc<"contentEmbeddings"> | null;
+          });
           if (!doc) return null;
           return {
             id: doc.contentId,
@@ -159,32 +307,32 @@ export const getForConversation = authAction({
     const runQuery = getShallowRunQuery(ctx);
     const runAction = getShallowRunAction(ctx);
 
-    const conversation = (await runQuery(getApiRef("suggestions:getConversation"), {
+    const conversation = await runQuery(GET_CONVERSATION_REF, {
       conversationId: args.conversationId,
-    })) as Doc<"conversations"> | null;
+    });
 
     if (!conversation) {
       return [];
     }
 
-    await runQuery(getApiRef("permissions:requirePermissionForAction"), {
+    await runQuery(REQUIRE_PERMISSION_FOR_ACTION_REF, {
       userId: ctx.user._id,
       workspaceId: conversation.workspaceId,
       permission: "articles.read",
     });
 
-    const settings = (await runQuery(getApiRef("suggestions:getAiSettings"), {
+    const settings = await runQuery(GET_AI_SETTINGS_REF, {
       workspaceId: conversation.workspaceId,
-    })) as Doc<"aiAgentSettings"> | null;
+    });
 
     if (!settings?.suggestionsEnabled) {
       return [];
     }
 
-    const messages = (await runQuery(getApiRef("suggestions:getRecentMessages"), {
+    const messages = await runQuery(GET_RECENT_MESSAGES_REF, {
       conversationId: args.conversationId,
       limit: 5,
-    })) as Doc<"messages">[];
+    });
 
     if (messages.length === 0) {
       return [];
@@ -195,13 +343,13 @@ export const getForConversation = authAction({
       settings.knowledgeSources as unknown as string[] | undefined
     );
 
-    const results = (await runAction(getApiRef("suggestions:searchSimilarInternal"), {
+    const results = await runAction(SEARCH_SIMILAR_INTERNAL_REF, {
       workspaceId: conversation.workspaceId,
       query: contextText,
       contentTypes: normalizedContentTypes,
       limit,
       model: settings.embeddingModel,
-    })) as SuggestionResultWithContent[];
+    });
 
     return results;
   },
@@ -272,25 +420,15 @@ export const searchSimilarInternal = internalAction({
           _id: Id<"contentEmbeddings">;
           _score: number;
         }): Promise<EnrichedResult> => {
-          const doc: {
-            contentType: "article" | "internalArticle" | "snippet";
-            contentId: string;
-            title: string;
-            snippet: string;
-          } | null = (await runQuery(getApiRef("suggestions:getEmbeddingById"), {
+          const doc = await runQuery(GET_EMBEDDING_BY_ID_REF, {
             id: result._id,
-          })) as {
-            contentType: "article" | "internalArticle" | "snippet";
-            contentId: string;
-            title: string;
-            snippet: string;
-          } | null;
+          });
           if (!doc) return null;
 
-          const content = (await runQuery(getApiRef("suggestions:getContentById"), {
+          const content = await runQuery(GET_CONTENT_BY_ID_REF, {
             contentType: doc.contentType,
             contentId: doc.contentId,
-          })) as { content?: string; title?: string } | null;
+          });
 
           return {
             id: doc.contentId,
@@ -515,31 +653,29 @@ export const searchForWidget = action({
     }
 
     const runQuery = getShallowRunQuery(ctx);
-    const validateSessionTokenRef = getApiRef("widgetSessions:validateSessionToken");
-    const sessionValidation = (await runQuery(validateSessionTokenRef, {
+    const sessionValidation = await runQuery(VALIDATE_SESSION_TOKEN_REF, {
       workspaceId: args.workspaceId,
       visitorId: args.visitorId,
       sessionToken: args.sessionToken,
-    })) as { valid: boolean; reason?: string | null };
+    });
 
     if (!sessionValidation.valid) {
       throw new Error(sessionValidation.reason || "Session token validation failed");
     }
 
-    const validateOriginRef = getApiRef("workspaces:validateOrigin");
-    const originValidation = (await runQuery(validateOriginRef, {
+    const originValidation = await runQuery(VALIDATE_ORIGIN_REF, {
       workspaceId: args.workspaceId,
       origin: args.origin ?? "",
-    })) as { valid: boolean; reason?: string | null };
+    });
     if (!originValidation.valid) {
       throw new Error(originValidation.reason || "Origin validation failed");
     }
 
     const limit = Math.max(1, Math.min(args.limit || 3, 5));
 
-    const automationSettings = (await runQuery(getApiRef("suggestions:getAutomationSettings"), {
+    const automationSettings = await runQuery(GET_AUTOMATION_SETTINGS_REF, {
       workspaceId: args.workspaceId,
-    })) as Doc<"automationSettings"> | null;
+    });
 
     if (!automationSettings?.suggestArticlesEnabled) {
       return [];
@@ -570,9 +706,9 @@ export const searchForWidget = action({
           _id: Id<"contentEmbeddings">;
           _score: number;
         }): Promise<WidgetSuggestionResult | null> => {
-          const doc = (await runQuery(getApiRef("suggestions:getEmbeddingById"), {
+          const doc = await runQuery(GET_EMBEDDING_BY_ID_REF, {
             id: result._id,
-          })) as Doc<"contentEmbeddings"> | null;
+          });
           if (!doc) return null;
 
           return {

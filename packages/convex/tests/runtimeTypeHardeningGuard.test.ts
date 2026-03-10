@@ -6,6 +6,8 @@ const TARGET_FILES = [
   "../convex/series/runtime.ts",
   "../convex/series/scheduler.ts",
   "../convex/lib/authWrappers.ts",
+  "../convex/tickets.ts",
+  "../convex/suggestions.ts",
 ];
 
 describe("runtime type hardening guards", () => {
@@ -34,5 +36,23 @@ describe("runtime type hardening guards", () => {
     expect(eventsSource).toContain("scheduleSeriesResumeWaitingForEvent");
     expect(seriesSchedulerSource).toContain("scheduleSeriesProcessProgress");
     expect(seriesRuntimeSource).toContain("runSeriesEvaluateEntry");
+  });
+
+  it("uses fixed typed notification refs for ticket scheduling", () => {
+    const ticketsSource = readFileSync(new URL("../convex/tickets.ts", import.meta.url), "utf8");
+
+    expect(ticketsSource).not.toContain("function getInternalRef(name: string)");
+    expect(ticketsSource).toContain("NOTIFY_TICKET_CREATED_REF");
+    expect(ticketsSource).toContain("scheduleTicketCreatedNotification");
+    expect(ticketsSource).toContain("scheduleTicketResolvedNotification");
+  });
+
+  it("uses fixed typed refs for suggestion cross-function calls", () => {
+    const suggestionsSource = readFileSync(new URL("../convex/suggestions.ts", import.meta.url), "utf8");
+
+    expect(suggestionsSource).not.toContain("function getApiRef(name: string)");
+    expect(suggestionsSource).toContain("GET_EMBEDDING_BY_ID_REF");
+    expect(suggestionsSource).toContain("SEARCH_SIMILAR_INTERNAL_REF");
+    expect(suggestionsSource).toContain("VALIDATE_SESSION_TOKEN_REF");
   });
 });

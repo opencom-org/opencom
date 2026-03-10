@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { matchesFunctionPath } from "../test/convexFunctionRefs";
 
 let ConversationView: typeof import("./ConversationView").ConversationView;
 
@@ -106,30 +107,6 @@ vi.mock("./conversationView/Footer", () => ({
   ),
 }));
 
-function getFunctionPath(ref: unknown) {
-  if (typeof ref === "string") {
-    return ref;
-  }
-
-  if (ref && typeof ref === "object") {
-    const maybeRef = ref as {
-      functionName?: string;
-      name?: string;
-      reference?: { functionName?: string; name?: string };
-    };
-
-    return (
-      maybeRef.functionName ??
-      maybeRef.name ??
-      maybeRef.reference?.functionName ??
-      maybeRef.reference?.name ??
-      ""
-    );
-  }
-
-  return "";
-}
-
 vi.mock("@opencom/convex", () => ({
   api: {
     messages: {
@@ -218,18 +195,16 @@ describe.skip("ConversationView personas", () => {
 
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      const functionPath = getFunctionPath(mutationRef);
-
-      if (functionPath === "messages:send" || functionPath === "messages.send") {
+      if (matchesFunctionPath(mutationRef, "messages:send")) {
         return sendMessageMutationMock;
       }
-      if (functionPath === "visitors:identify" || functionPath === "visitors.identify") {
+      if (matchesFunctionPath(mutationRef, "visitors:identify")) {
         return identifyVisitorMutationMock;
       }
-      if (functionPath === "aiAgent:submitFeedback" || functionPath === "aiAgent.submitFeedback") {
+      if (matchesFunctionPath(mutationRef, "aiAgent:submitFeedback")) {
         return submitAiFeedbackMutationMock;
       }
-      if (functionPath === "aiAgent:handoffToHuman" || functionPath === "aiAgent.handoffToHuman") {
+      if (matchesFunctionPath(mutationRef, "aiAgent:handoffToHuman")) {
         return handoffToHumanMutationMock;
       }
       return vi.fn().mockResolvedValue(undefined);
@@ -237,18 +212,10 @@ describe.skip("ConversationView personas", () => {
 
     const mockedUseAction = useAction as unknown as ReturnType<typeof vi.fn>;
     mockedUseAction.mockImplementation((actionRef: unknown) => {
-      const functionPath = getFunctionPath(actionRef);
-
-      if (
-        functionPath === "aiAgentActions:generateResponse" ||
-        functionPath === "aiAgentActions.generateResponse"
-      ) {
+      if (matchesFunctionPath(actionRef, "aiAgentActions:generateResponse")) {
         return generateAiResponseActionMock;
       }
-      if (
-        functionPath === "suggestions:searchForWidget" ||
-        functionPath === "suggestions.searchForWidget"
-      ) {
+      if (matchesFunctionPath(actionRef, "suggestions:searchForWidget")) {
         return searchSuggestionsActionMock;
       }
       return vi.fn().mockResolvedValue([]);
@@ -256,39 +223,31 @@ describe.skip("ConversationView personas", () => {
 
     const mockedUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
     mockedUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
-      const functionPath = getFunctionPath(queryRef);
-
       if (args === "skip") {
         return undefined;
       }
 
-      if (functionPath === "messages:list" || functionPath === "messages.list") {
+      if (matchesFunctionPath(queryRef, "messages:list")) {
         return messagesResult;
       }
 
-      if (functionPath === "conversations:get" || functionPath === "conversations.get") {
+      if (matchesFunctionPath(queryRef, "conversations:get")) {
         return conversationResult;
       }
 
-      if (functionPath === "visitors:getBySession" || functionPath === "visitors.getBySession") {
+      if (matchesFunctionPath(queryRef, "visitors:getBySession")) {
         return null;
       }
 
-      if (functionPath === "aiAgent:getPublicSettings" || functionPath === "aiAgent.getPublicSettings") {
+      if (matchesFunctionPath(queryRef, "aiAgent:getPublicSettings")) {
         return { enabled: true };
       }
 
-      if (
-        functionPath === "aiAgent:getConversationResponses" ||
-        functionPath === "aiAgent.getConversationResponses"
-      ) {
+      if (matchesFunctionPath(queryRef, "aiAgent:getConversationResponses")) {
         return aiResponsesResult;
       }
 
-      if (
-        functionPath === "reporting:getCsatEligibility" ||
-        functionPath === "reporting.getCsatEligibility"
-      ) {
+      if (matchesFunctionPath(queryRef, "reporting:getCsatEligibility")) {
         return { eligible: false, reason: "not_eligible" };
       }
 
