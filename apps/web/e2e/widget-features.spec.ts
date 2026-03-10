@@ -40,8 +40,12 @@ import { Id } from "@opencom/convex/dataModel";
  * Tests pass workspaceId as a URL param to connect to the test workspace.
  */
 
-function getWidgetDemoUrl(workspaceId: string): string {
-  return `/widget-demo?workspaceId=${workspaceId}`;
+function getWidgetDemoUrl(workspaceId: string, visitorKey?: string): string {
+  const params = new URLSearchParams({ workspaceId });
+  if (visitorKey) {
+    params.set("visitorKey", visitorKey);
+  }
+  return `/widget-demo?${params.toString()}`;
 }
 
 async function gotoWidgetDemoAndWait(page: import("@playwright/test").Page, url: string) {
@@ -236,7 +240,13 @@ test.describe("Widget E2E Tests - Product Tours", () => {
 // Skipped: These tests require additional seeding infrastructure
 test.describe("Widget E2E Tests - Surveys", () => {
   let workspaceId: Id<"workspaces"> | null = null;
-  let widgetDemoUrl = "/widget-demo";
+
+  function surveyWidgetDemoUrl(visitorKey: string): string {
+    if (!workspaceId) {
+      throw new Error("workspaceId is required for survey widget tests");
+    }
+    return getWidgetDemoUrl(workspaceId, visitorKey);
+  }
 
   test.beforeAll(async () => {
     await refreshAuthState();
@@ -247,7 +257,6 @@ test.describe("Widget E2E Tests - Surveys", () => {
       return;
     }
     workspaceId = state.workspaceId as Id<"workspaces">;
-    widgetDemoUrl = getWidgetDemoUrl(state.workspaceId);
 
     // Seed a test NPS survey
     try {
@@ -272,7 +281,7 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("small format survey displays as floating banner", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoFreshWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-banner"));
 
     // Survey should be visible for a first-time visitor with immediate trigger
     await waitForSurveyVisible(page, 15000);
@@ -280,7 +289,7 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("NPS question allows 0-10 scale interaction", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoFreshWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-nps-scale"));
 
     await waitForSurveyVisible(page, 10000);
 
@@ -293,7 +302,7 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("survey completion shows thank you step", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoFreshWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-thank-you"));
 
     await waitForSurveyVisible(page, 10000);
 
@@ -307,7 +316,7 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("survey can be dismissed", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoFreshWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-dismiss"));
 
     await waitForSurveyVisible(page, 10000);
 
@@ -319,8 +328,9 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("survey frequency controls (show once) work", async ({ page }) => {
     if (!workspaceId) return test.skip();
+    const frequencyTestUrl = surveyWidgetDemoUrl("survey-frequency-once");
     // First visit - complete survey
-    await gotoWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoWidgetDemoAndWait(page, frequencyTestUrl);
 
     const surveyVisible = await isSurveyVisible(page);
     if (surveyVisible) {

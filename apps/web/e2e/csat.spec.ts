@@ -27,7 +27,6 @@ const VIEWPORT_CASES: ViewportCase[] = [
   { name: "mobile", width: 390, height: 844 },
 ];
 
-const WIDGET_TEST_EMAIL = "e2e_test_visitor@test.opencom.dev";
 const AUTH_ROUTE_RE = /\/(login|signup)(\/|$|\?)/;
 
 function requireWorkspaceId(): Id<"workspaces"> {
@@ -38,8 +37,12 @@ function requireWorkspaceId(): Id<"workspaces"> {
   return state.workspaceId as Id<"workspaces">;
 }
 
-function widgetDemoUrl(workspaceId: Id<"workspaces">): string {
-  return `/widget-demo?workspaceId=${workspaceId}`;
+function widgetVisitorEmail(visitorKey: string): string {
+  return `e2e_test_visitor_${visitorKey}@test.opencom.dev`;
+}
+
+function widgetDemoUrl(workspaceId: Id<"workspaces">, visitorKey: string): string {
+  return `/widget-demo?workspaceId=${workspaceId}&visitorKey=${visitorKey}`;
 }
 
 function isAuthRoute(page: Page): boolean {
@@ -69,9 +72,10 @@ async function gotoProtectedRoute(page: Page, path: string, readyLocator: Locato
 
 async function openFirstWidgetConversation(
   page: Page,
-  workspaceId: Id<"workspaces">
+  workspaceId: Id<"workspaces">,
+  visitorKey: string
 ): Promise<Locator> {
-  await gotoWithAuthRecovery(page, widgetDemoUrl(workspaceId));
+  await gotoWithAuthRecovery(page, widgetDemoUrl(workspaceId, visitorKey));
 
   const widget = await openWidgetChat(page);
 
@@ -132,9 +136,10 @@ test.describe("CSAT deterministic lifecycle", () => {
   for (const viewport of VIEWPORT_CASES) {
     test(`shows CSAT prompt interaction on ${viewport.name} viewport`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const visitorKey = `csat-${viewport.name}`;
 
       const seeded = await createInboxConversationFixture(workspaceId, {
-        visitorEmail: WIDGET_TEST_EMAIL,
+        visitorEmail: widgetVisitorEmail(visitorKey),
         visitorName: `E2E CSAT ${viewport.name}`,
         status: "open",
         initialMessages: [
@@ -142,7 +147,7 @@ test.describe("CSAT deterministic lifecycle", () => {
         ],
       });
 
-      const widget = await openFirstWidgetConversation(page, workspaceId);
+      const widget = await openFirstWidgetConversation(page, workspaceId, visitorKey);
 
       await expect(widget.getByTestId("widget-csat-prompt")).toHaveCount(0);
       await setInboxConversationStatus(seeded.conversationId, "closed");
@@ -161,14 +166,15 @@ test.describe("CSAT deterministic lifecycle", () => {
   }
 
   test("resolve -> prompt -> submit -> report visibility", async ({ page }) => {
+    const visitorKey = "csat-flow";
     const seeded = await createInboxConversationFixture(workspaceId, {
-      visitorEmail: WIDGET_TEST_EMAIL,
+      visitorEmail: widgetVisitorEmail(visitorKey),
       visitorName: "E2E CSAT Flow",
       status: "open",
       initialMessages: [{ content: "Please close and rate this", senderType: "visitor" }],
     });
 
-    const widget = await openFirstWidgetConversation(page, workspaceId);
+    const widget = await openFirstWidgetConversation(page, workspaceId, visitorKey);
 
     await setInboxConversationStatus(seeded.conversationId, "closed");
     await expect(widget.getByTestId("widget-csat-prompt")).toBeVisible({ timeout: 10000 });
@@ -183,7 +189,7 @@ test.describe("CSAT deterministic lifecycle", () => {
 
     await page.reload();
 
-    const reopenedWidget = await openFirstWidgetConversation(page, workspaceId);
+    const reopenedWidget = await openFirstWidgetConversation(page, workspaceId, visitorKey);
     await expect(reopenedWidget.getByTestId("widget-csat-prompt")).toHaveCount(0, {
       timeout: 10000,
     });
@@ -215,6 +221,7 @@ test.describe("CSAT deterministic lifecycle", () => {
   });
 
   test("disabled Ask for Rating suppresses prompt", async ({ page }) => {
+    const visitorKey = "csat-disabled";
     await upsertAutomationSettings(workspaceId, {
       askForRatingEnabled: false,
       collectEmailEnabled: false,
@@ -223,7 +230,7 @@ test.describe("CSAT deterministic lifecycle", () => {
     });
 
     const seeded = await createInboxConversationFixture(workspaceId, {
-      visitorEmail: WIDGET_TEST_EMAIL,
+      visitorEmail: widgetVisitorEmail(visitorKey),
       visitorName: "E2E CSAT Disabled",
       status: "closed",
       initialMessages: [{ content: "Closed with CSAT disabled", senderType: "visitor" }],
@@ -231,7 +238,7 @@ test.describe("CSAT deterministic lifecycle", () => {
 
     await setInboxConversationStatus(seeded.conversationId, "closed");
 
-    const widget = await openFirstWidgetConversation(page, workspaceId);
+    const widget = await openFirstWidgetConversation(page, workspaceId, visitorKey);
     await expect(widget.getByTestId("widget-conversation-status")).toBeVisible({ timeout: 10000 });
     await expect(widget.getByTestId("widget-conversation-status")).toContainText(/disabled/i);
     await expect(widget.getByTestId("widget-csat-prompt")).toHaveCount(0);
