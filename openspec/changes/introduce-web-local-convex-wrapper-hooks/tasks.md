@@ -6,10 +6,10 @@
 
 ## 2. Initial domain migrations
 
-- [ ] 2.1 Add domain-specific wrapper hooks for settings/security and workspace member settings flows.
-- [ ] 2.2 Add domain-specific wrapper hooks for outbound list/editor flows.
-- [ ] 2.3 Add domain-specific wrapper hooks for tours/editor and related authoring flows.
-- [ ] 2.4 Migrate covered UI files away from direct generated Convex hook calls where wrapper coverage exists.
+- [ ] 2.1 Add domain-specific wrapper hooks for the current settings and messaging admin hotspot files: `src/app/settings/page.tsx`, `src/app/settings/MessengerSettingsSection.tsx`, and `src/app/inbox/page.tsx`.
+- [ ] 2.2 Add domain-specific wrapper hooks for the current content and support authoring hotspot files: `src/app/articles/page.tsx`, `src/app/articles/[id]/page.tsx`, and `src/app/articles/collections/page.tsx`.
+- [ ] 2.3 Add domain-specific wrapper hooks for the current campaigns/outbound/checklists/tooltips hotspot files: `src/app/campaigns/page.tsx`, `src/app/campaigns/push/[id]/page.tsx`, `src/app/campaigns/carousels/[id]/page.tsx`, `src/app/campaigns/series/[id]/page.tsx`, `src/app/outbound/[id]/page.tsx`, `src/app/checklists/page.tsx`, `src/app/checklists/[id]/page.tsx`, and `src/app/tooltips/page.tsx`.
+- [ ] 2.4 Migrate covered UI files away from direct generated Convex hook calls and page-local `makeFunctionReference(...)` escape hatches where wrapper coverage exists.
 
 ## 3. Controller/composition adoption
 

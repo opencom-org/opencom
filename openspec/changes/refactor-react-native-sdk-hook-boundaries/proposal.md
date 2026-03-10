@@ -6,7 +6,7 @@ The React Native SDK exports hooks and components that currently mix visitor/ses
 
 - Refactor React Native SDK hook boundaries so exported hooks and components depend on clearer internal data-access and controller boundaries.
 - Introduce internal adapter/wrapper layers where needed so generated Convex hook complexity and visitor/session transport details do not sprawl across exported hook modules.
-- Separate public SDK hook ergonomics from internal transport/gating helpers for conversations, tickets, articles, messenger/home config, and related domains.
+- Separate public SDK hook ergonomics from internal transport/gating helpers for the current March 10, 2026 hotspot clusters: conversations/tickets, home/content/settings/support, and AI/survey/carousel/push supporting domains.
 - Preserve existing public SDK behavior, payload semantics, and runtime expectations for consuming apps.
 
 ## Capabilities

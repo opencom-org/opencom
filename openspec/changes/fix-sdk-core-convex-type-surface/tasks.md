@@ -8,6 +8,6 @@
 ## 2. Verification
 
 - [x] 2.1 Run `pnpm --filter @opencom/sdk-core typecheck` if/when available for the touched package surface.
-- [ ] 2.2 Run dependent consumer verification, including `pnpm --filter @opencom/web build`.
-- [ ] 2.3 Run any relevant SDK package verification affected by touched wrappers.
-- [ ] 2.4 Run `openspec validate fix-sdk-core-convex-type-surface --strict --no-interactive`.
+- [x] 2.2 Run dependent consumer verification, including `pnpm --filter @opencom/web build`.
+- [x] 2.3 Run any relevant SDK package verification affected by touched wrappers.
+- [x] 2.4 Run `openspec validate fix-sdk-core-convex-type-surface --strict --no-interactive`.

@@ -6,9 +6,9 @@
 
 ## 2. Initial domain migrations
 
-- [ ] 2.1 Refactor conversations and tickets hooks onto the new internal boundary pattern.
-- [ ] 2.2 Refactor home configuration, article, and messenger settings hooks/components onto the new pattern.
-- [ ] 2.3 Update exported components/controllers that currently duplicate transport logic inline.
+- [ ] 2.1 Refactor the current conversations/tickets cluster onto the new internal boundary pattern: `src/hooks/useConversations.ts`, `src/hooks/useTickets.ts`, `src/components/messenger/useConversationDetailController.ts`, and `src/components/OpencomTicketCreate.tsx`.
+- [ ] 2.2 Refactor the current home/content/settings/support cluster onto the new pattern: `src/components/OpencomHome.tsx`, `src/hooks/useArticles.ts`, `src/hooks/useMessengerSettings.ts`, `src/hooks/useAutomationSettings.ts`, `src/hooks/useOfficeHours.ts`, `src/hooks/useChecklists.ts`, and `src/hooks/useOutboundMessages.ts`.
+- [ ] 2.3 Refactor the remaining AI/survey/carousel/push supporting cluster and any exported controllers that still duplicate transport logic inline: `src/hooks/useAIAgent.ts`, `src/hooks/useArticleSuggestions.ts`, `src/hooks/useSurveyDelivery.ts`, `src/components/survey/useSurveyController.ts`, `src/components/OpencomCarousel.tsx`, and `src/push/index.ts`.
 
 ## 3. Compatibility verification
 

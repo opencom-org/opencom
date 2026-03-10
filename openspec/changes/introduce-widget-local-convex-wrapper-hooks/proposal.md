@@ -6,7 +6,7 @@ The widget runtime and overlay surfaces perform many direct `useQuery`, `useMuta
 
 - Introduce widget-local typed Convex wrapper hooks that isolate generated API ref usage behind app-owned widget modules.
 - Add a minimal widget-local adapter boundary, where needed, so unavoidable type escape hatches stay out of central runtime and overlay modules.
-- Provide explicit domain wrapper hooks for high-churn widget areas first, including session/bootstrap, conversation flows, home/help content, tours, outbound, surveys, and authoring overlays.
+- Provide explicit domain wrapper hooks for the current March 10, 2026 hotspot modules first, starting with conversation runtime and tour overlay action flows before widening to other widget domains.
 - Allow central widget controller/runtime hooks to compose domain wrappers while keeping runtime-state and navigation concerns separate from data-access typing concerns.
 - Preserve existing widget behavior, API targets, payload semantics, visitor-visible capabilities, and embedding/runtime integrations.
 

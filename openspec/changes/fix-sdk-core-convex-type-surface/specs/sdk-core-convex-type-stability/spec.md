@@ -1,10 +1,4 @@
-# sdk-core-convex-type-stability Specification
-
-## Purpose
-
-Define requirements for keeping `@opencom/sdk-core` Convex wrapper modules type-stable for workspace consumers without changing public SDK behavior.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: SDK-core Convex wrappers remain build-safe for dependent packages
 The system SHALL ensure `@opencom/sdk-core` wrapper modules do not fail dependent package typecheck or build verification because of deep generated Convex type expansion.

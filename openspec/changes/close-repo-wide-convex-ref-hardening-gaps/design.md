@@ -1,144 +1,225 @@
 ## Context
 
-The current change `stabilize-convex-function-ref-boundaries` validated the hardening pattern in pilot slices, but a full-repo scan shows the same anti-patterns still present outside those pilots:
+The pilot change `stabilize-convex-function-ref-boundaries` proved the hardening pattern in selected Convex, web, and widget slices. A full-repo scan then found three different states across the remaining surfaces:
 
-- broad string-based Convex ref factories (`get*Ref(name: string)`, `getInternalRef(name: string)`, `getApiRef(name: string)`) across Convex backend modules, SDK packages, and web tooling pages
-- source-level `makeFunctionReference<..., any|unknown, ...>` in remaining web and widget runtime domains
-- duplicated test-local function-path extraction/matching logic in remaining widget suites
+- residual backend Convex modules that still use broad dynamic ref helpers
+- package-specific frontend/SDK areas that still need migration and are already covered by older active changes
+- tactical predecessor work, especially `fix-sdk-core-convex-type-surface`, where implementation largely exists but verification/closure is incomplete
 
-This change extends the validated boundary pattern to all remaining source surfaces while preserving the same validation-first rollout model. It must coordinate backend (`packages/convex`), web/widget runtimes (`apps/web`, `apps/widget`), SDK wrappers (`packages/sdk-core`), and React Native SDK surfaces (`packages/react-native-sdk`) so boundary quality is consistent and enforceable.
+The problem is no longer "invent the pattern." It is "close the remaining gaps without duplicating ownership or creating migration batches large enough to re-trigger broad type explosions."
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- Eliminate remaining generic string ref factories in covered source files by replacing them with fixed typed refs or typed boundary adapters.
-- Eliminate remaining source-level `makeFunctionReference<..., any|unknown, ...>` hot spots in covered domains.
-- Standardize widget test ref matching on shared helpers with Convex-supported function-name extraction.
-- Add repo guardrails for covered domains so these broad patterns do not re-enter after migration.
-- Preserve package typecheck and behavior by shipping in verification-gated batches.
+- Assign every known remaining gap to a single owning change or explicit exception.
+- Keep older web/widget/react-native package proposals in place where they still match the current source shape.
+- Verify whether older tactical changes are actually implemented in code even if their tasks are not marked complete.
+- Use this change to own residual backend Convex cleanup not already covered elsewhere, plus shared guardrails and verification closure.
+- Sequence work in micro-batches small enough to rerun package verification before broadening scope.
 
 **Non-Goals:**
 
-- Rewriting business logic, permissions, or UX behavior unrelated to type boundaries.
-- Enforcing an immediate repo-wide ban in untouched domains that are not covered by this change.
-- Converting every Convex call site to generated `api`/`internal` refs where known `TS2589` hotspots still require local escape hatches.
-- Performing release-process changes for SDK packages beyond type-boundary hardening in source.
+- Collapsing all active hardening changes into one mega-change.
+- Rewriting the established wrapper-hook architecture changes for web, widget, or React Native SDK.
+- Treating unchecked OpenSpec tasks as proof that implementation is missing.
+- Forcing sdk-core follow-on hardening into its older tactical proposal if that proposal's implemented scope is already satisfied.
 
 ## Decisions
 
-### 1) Scope closure is package-batch based, not domain-pilot based
+### 1) Do not combine the older package-specific proposals into one mega-change
 
 Decision:
 
-- Expand from pilot domains to a finite list of remaining files grouped by package (`convex`, `web`, `widget`, `sdk-core`, `react-native-sdk`).
-- Treat each package batch as complete only after package typecheck and targeted tests pass.
+- Keep `introduce-web-local-convex-wrapper-hooks`, `introduce-widget-local-convex-wrapper-hooks`, and `refactor-react-native-sdk-hook-boundaries` as the owning changes for their respective package migrations.
+- This change coordinates, verifies, and fills residual gaps rather than absorbing those changes wholesale.
 
 Rationale:
 
-- The remaining gaps are now distributed across multiple packages, so domain-by-domain sequencing is slower and harder to track.
-- Package-batch gating keeps failure isolation while reducing repeated cross-package churn.
+- The existing proposals encode package-specific target architectures that still match the codebase.
+- Combining them now would blur responsibility, lose progress fidelity, and increase migration batch size unnecessarily.
 
 Alternatives considered:
 
-- One-shot repo-wide replacement. Rejected due high risk of multi-package type explosion.
-- Continue pilot-only coverage. Rejected because it leaves known unsafe boundary patterns in active code paths.
+- Merge all active hardening proposals into this change. Rejected because the resulting scope would be too large to validate safely and would duplicate active architecture work already specified elsewhere.
 
-### 2) Source modules use explicit typed ref constants or typed adapters only
+### 2) Treat `fix-sdk-core-convex-type-surface` as a tactical predecessor, not the final ideal state
 
 Decision:
 
-- Replace generic `name: string` ref helper functions with fixed typed function refs or typed adapter functions per domain.
-- Keep shallow Convex runner casts localized to dedicated adapters where needed for `TS2589` escape hatches.
+- Verify the implemented sdk-core code against `fix-sdk-core-convex-type-surface`.
+- If the code satisfies that narrower stability scope, finish its remaining verification tasks and archive it.
+- If additional sdk-core cleanup is still desired beyond that scope, track it as a separate follow-on delta or under explicit residual inventory here, rather than pretending the old proposal still owns the stronger end state.
+- Treat the current localized `makeFunctionReference(name)` helper pattern in `packages/sdk-core/src/api/**` as an accepted predecessor outcome, not as residual work for this coordinating change, unless a separate explicit sdk-core follow-on delta is opened.
+- Prefer generated `api.*` / `internal.*` refs by default; use `makeFunctionReference("module:function")` only when a verified hotspot still triggers `TS2589` after shallower local boundaries are considered.
+- If a future sdk-core follow-on is opened, prefer explicit per-function constants over broad `getMutationRef(name: string)` / `getQueryRef(name: string)` factories.
 
 Rationale:
 
-- Fixed refs retain function-path and payload guarantees.
-- Localized adapters preserve deep-instantiation mitigation without normalizing untyped dynamic lookup.
+- Current sdk-core code largely matches the old proposal's localized type-stability workaround, even though verification tasks remain unchecked.
+- The stronger "no generic string ref factory" end state is a different goal from the old proposal's tactical stability objective.
 
 Alternatives considered:
 
-- Retain generic `get*Ref(name: string)` helpers with stronger comments. Rejected because contract safety is still bypassed.
-- Revert to generated refs everywhere immediately. Rejected because known pathological sites may regress to `TS2589`.
+- Keep sdk-core fully inside this new cross-surface change. Rejected because it mixes predecessor verification with new implementation work.
 
-### 3) Test ref matching converges on shared canonical helper
+### 3) Freeze the remaining owner map as of March 10, 2026
 
 Decision:
 
-- Migrate remaining widget tests to shared `matchesFunctionPath`/`getFunctionPath` helper built on `getFunctionName(...)` with canonical dot/colon normalization.
+- Freeze the current remaining-gap inventory so active owner changes can be updated against a stable file list.
+- Treat shared test-helper cleanup separately from package runtime/UI migrations when the issue is helper duplication rather than boundary architecture.
+
+Frozen owner map:
+
+- Accepted predecessor outcome under `fix-sdk-core-convex-type-surface`:
+  - `packages/sdk-core/src/api/aiAgent.ts`
+  - `packages/sdk-core/src/api/articles.ts`
+  - `packages/sdk-core/src/api/carousels.ts`
+  - `packages/sdk-core/src/api/checklists.ts`
+  - `packages/sdk-core/src/api/commonIssues.ts`
+  - `packages/sdk-core/src/api/conversations.ts`
+  - `packages/sdk-core/src/api/events.ts`
+  - `packages/sdk-core/src/api/officeHours.ts`
+  - `packages/sdk-core/src/api/outbound.ts`
+  - `packages/sdk-core/src/api/sessions.ts`
+  - `packages/sdk-core/src/api/tickets.ts`
+  - `packages/sdk-core/src/api/visitors.ts`
+- `introduce-web-local-convex-wrapper-hooks` owns the current web hotspot cluster:
+  - `apps/web/src/app/articles/[id]/page.tsx`
+  - `apps/web/src/app/articles/collections/page.tsx`
+  - `apps/web/src/app/articles/page.tsx`
+  - `apps/web/src/app/campaigns/carousels/[id]/page.tsx`
+  - `apps/web/src/app/campaigns/page.tsx`
+  - `apps/web/src/app/campaigns/push/[id]/page.tsx`
+  - `apps/web/src/app/campaigns/series/[id]/page.tsx`
+  - `apps/web/src/app/checklists/[id]/page.tsx`
+  - `apps/web/src/app/checklists/page.tsx`
+  - `apps/web/src/app/inbox/page.tsx`
+  - `apps/web/src/app/outbound/[id]/page.tsx`
+  - `apps/web/src/app/settings/MessengerSettingsSection.tsx`
+  - `apps/web/src/app/settings/page.tsx`
+  - `apps/web/src/app/tooltips/page.tsx`
+- `introduce-widget-local-convex-wrapper-hooks` owns the current widget hotspot cluster:
+  - `apps/widget/src/components/ConversationView.tsx`
+  - `apps/widget/src/tourOverlay/useTourOverlayActions.ts`
+- `refactor-react-native-sdk-hook-boundaries` owns the current React Native SDK hotspot cluster:
+  - `packages/react-native-sdk/src/components/OpencomCarousel.tsx`
+  - `packages/react-native-sdk/src/components/OpencomHome.tsx`
+  - `packages/react-native-sdk/src/components/OpencomTicketCreate.tsx`
+  - `packages/react-native-sdk/src/components/messenger/useConversationDetailController.ts`
+  - `packages/react-native-sdk/src/components/survey/useSurveyController.ts`
+  - `packages/react-native-sdk/src/hooks/useAIAgent.ts`
+  - `packages/react-native-sdk/src/hooks/useArticleSuggestions.ts`
+  - `packages/react-native-sdk/src/hooks/useArticles.ts`
+  - `packages/react-native-sdk/src/hooks/useAutomationSettings.ts`
+  - `packages/react-native-sdk/src/hooks/useChecklists.ts`
+  - `packages/react-native-sdk/src/hooks/useConversations.ts`
+  - `packages/react-native-sdk/src/hooks/useMessengerSettings.ts`
+  - `packages/react-native-sdk/src/hooks/useOfficeHours.ts`
+  - `packages/react-native-sdk/src/hooks/useOutboundMessages.ts`
+  - `packages/react-native-sdk/src/hooks/useSurveyDelivery.ts`
+  - `packages/react-native-sdk/src/hooks/useTickets.ts`
+  - `packages/react-native-sdk/src/push/index.ts`
+- `close-repo-wide-convex-ref-hardening-gaps` directly owns the current residual backend and shared guardrail cluster:
+  - `packages/convex/convex/aiAgent.ts`
+  - `packages/convex/convex/articles.ts`
+  - `packages/convex/convex/conversations.ts`
+  - `packages/convex/convex/emailChannel.ts`
+  - `packages/convex/convex/embeddings.ts`
+  - `packages/convex/convex/events.ts`
+  - `packages/convex/convex/http.ts`
+  - `packages/convex/convex/internalArticles.ts`
+  - `packages/convex/convex/messages.ts`
+  - `packages/convex/convex/notifications/dispatch.ts`
+  - `packages/convex/convex/notifications/emitters/chat.ts`
+  - `packages/convex/convex/notifications/emitters/ticket.ts`
+  - `packages/convex/convex/notifications/routing.ts`
+  - `packages/convex/convex/push.ts`
+  - `packages/convex/convex/pushCampaigns.ts`
+  - `packages/convex/convex/series/scheduler.ts`
+  - `packages/convex/convex/snippets.ts`
+  - `packages/convex/convex/testAdmin.ts`
+  - `packages/convex/convex/testing/helpers/notifications.ts`
+  - `packages/convex/convex/tickets.ts`
+  - `packages/convex/convex/visitors/mutations.ts`
+  - `packages/convex/convex/workspaceMembers.ts`
+  - `apps/web/src/app/articles/[id]/page.test.tsx`
+  - `apps/web/src/app/settings/MessengerSettingsSection.test.tsx`
+  - `apps/web/src/app/typeHardeningGuard.test.ts`
+  - `apps/widget/src/test/convexFunctionRefs.ts`
+  - `apps/widget/src/test/widgetShellOrchestration.test.tsx`
+  - `apps/widget/src/test/widgetTicketErrorFeedback.test.tsx`
+  - `apps/widget/src/test/widgetTourBridgeLifecycle.test.tsx`
+  - `apps/widget/src/test/widgetTourStart.test.tsx`
+  - `packages/convex/tests/runtimeTypeHardeningGuard.test.ts`
 
 Rationale:
 
-- Reduces duplication and removes private-shape probing as the primary path for function-name detection.
-- Keeps mixed mock styles stable while hardening toward public APIs.
+- This is the smallest owner map that matches the live scan without reopening the verified sdk-core predecessor work.
+- Widget and web test helper duplication is a shared guardrail concern, not a reason to broaden the package runtime-owner changes.
 
-Alternatives considered:
-
-- Leave per-test extraction logic in place. Rejected because it is brittle and duplicated.
-
-### 4) Guardrails are package-local and explicit
+### 4) Residual implementation work is owned by file-cluster micro-batches, not package-wide batches
 
 Decision:
 
-- Add lightweight guard tests/checks in each covered package to block reintroduction of:
-  - generic string ref factory functions in covered paths
-  - source-level `makeFunctionReference<..., any|unknown, ...>` in covered paths
-  - duplicated function-path helpers in covered widget tests
-- Keep guard scope explicit to covered directories and files to avoid premature global blocking.
+- Break remaining implementation into small file clusters within each owning package or change.
+- Require package typecheck and focused tests after each cluster.
 
 Rationale:
 
-- Package-local guards are actionable and produce clear remediation paths.
-- Explicit scope prevents noisy failures in unrelated untouched domains.
+- The user goal is explicit: validate types before going deep and avoid large type-error cascades.
+- Package-wide migration batches are still too coarse for that goal.
 
 Alternatives considered:
 
-- Single global regex gate. Rejected due poor signal and high false positives.
+- Package-batch migration. Rejected because even a single package such as `apps/web` or `packages/react-native-sdk` still contains too many unrelated hotspots to change safely in one pass.
 
-### 5) Verification matrix is mandatory per batch
+### 5) This change owns residual backend cleanup plus cross-change guardrails
 
 Decision:
 
-- Each batch SHALL run:
-  - touched package typecheck
-  - focused tests for touched files/domains
-- Final phase SHALL run strict OpenSpec validation for this change.
+- Keep this change focused on:
+  - freezing the repo-wide inventory
+  - mapping each gap to the correct owner
+  - residual `packages/convex` cleanup not already claimed elsewhere
+  - shared guardrails and verification rules across the related changes
 
 Rationale:
 
-- Prevents migration drift and catches hidden follow-on errors early.
+- That is the missing coordination layer the repo does not currently have.
+- It avoids leaving residual backend-only gaps orphaned while respecting the package-specific architecture changes.
 
 Alternatives considered:
 
-- Rely only on workspace-wide checks at the end. Rejected because blast radius is too large for fast rollback.
+- Use this change only as documentation. Rejected because residual backend and guardrail work still needs an implementation owner.
 
 ## Risks / Trade-offs
 
-- [Risk] Broad replacement can trigger new `TS2589` sites once intermediate casts are removed.
-  - Mitigation: apply and verify in package batches; keep localized shallow adapter escape hatches where needed.
-- [Risk] Handwritten ref argument/return types can drift from backend implementation.
-  - Mitigation: co-locate typed refs with domain wrappers, keep test coverage focused on call contracts, and run package typecheck after each batch.
-- [Risk] Guardrails may block legitimate edge cases with intentionally opaque payloads.
-  - Mitigation: define narrow allowlists and document exceptions in the guard source.
-- [Risk] Multi-package scope increases coordination overhead.
-  - Mitigation: sequence batches, keep strict completion gates, and avoid parallel in-flight rewrites across packages.
+- [Risk] Ownership mapping may reveal that some older proposals need scope adjustments.
+  - Mitigation: update those proposal task lists explicitly rather than silently re-owning their work here.
+- [Risk] sdk-core may sit awkwardly between "implemented tactical workaround" and "not yet ideal boundary shape."
+  - Mitigation: separate predecessor verification from any follow-on hardening objective.
+- [Risk] Guardrails can become vague if inventory is not exact.
+  - Mitigation: freeze the file list before adding broad checks.
+- [Risk] Multiple active changes increase administrative overhead.
+  - Mitigation: use this change to drive validation and closure order instead of merging everything.
 
 ## Migration Plan
 
-1. Freeze and commit the remaining-gap inventory by package from the full-repo scan.
-2. Migrate remaining `packages/convex` generic ref factories to typed adapters/fixed refs and validate `pnpm --filter @opencom/convex typecheck` plus targeted Convex tests.
-3. Migrate remaining web source hot spots (`apps/web`) away from `any|unknown` and generic ref helper patterns; validate `pnpm --filter @opencom/web typecheck` plus targeted tests.
-4. Migrate remaining widget runtime and tests (`apps/widget`) to explicit refs and shared ref helper; validate `pnpm --filter @opencom/widget typecheck` plus targeted tests.
-5. Migrate `packages/sdk-core` API modules and `packages/react-native-sdk` hooks/components off generic ref factories; validate package typechecks and relevant targeted tests.
-6. Add/expand package-local hardening guard tests for covered paths.
-7. Run final verification sweep and `openspec validate close-repo-wide-convex-ref-hardening-gaps --strict --no-interactive`.
+1. Freeze the remaining-gap inventory and map each file cluster to one owner change or explicit exception.
+2. Verify actual implementation state of overlapping older changes against current code, starting with `fix-sdk-core-convex-type-surface`.
+3. Finish verification and archive predecessor changes whose implemented scope is already satisfied.
+4. Update older owning changes where current code still clearly matches their unfinished scope (`apps/web`, `apps/widget`, `packages/react-native-sdk`).
+5. Implement residual backend Convex cleanup and cross-change guardrails in micro-batches with package verification after each batch.
+6. Run strict OpenSpec validation for this change and any touched dependent changes.
 
 Rollback:
 
-- Revert only the failing package batch; keep previously validated batches intact.
+- Revert only the current micro-batch or task-sync change; do not collapse or rewrite the other active proposals during rollback.
 
 ## Open Questions
 
-- Which minimal exception list (if any) should remain for intentionally opaque Convex return types in notification scheduling paths?
-- Should SDK packages share a generated typed-ref catalog, or keep explicit handwritten refs per module as the steady state?
-- Do we want a follow-up change to consolidate package-local guard logic into shared tooling after this scope closes?
+- Which exact residual sdk-core gaps are true follow-on hardening work versus acceptable under the archived tactical stability scope?
+- Should the final inventory live only in this change, or also be copied into the dependent owning changes for clarity?
+- Do we want a separate small follow-on for sdk-core final-state cleanup if the stronger end state is still required after predecessor verification?

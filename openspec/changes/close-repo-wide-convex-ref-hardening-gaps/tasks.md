@@ -1,30 +1,23 @@
-## 1. Scope Lock And Batch Verification Matrix
+## 1. Inventory And Ownership Mapping
 
-- [ ] 1.1 Record the full remaining-gap inventory in this change (Convex backend, web, widget, sdk-core, react-native-sdk, and remaining test matcher duplication files) so migration scope is explicit and finite.
-- [ ] 1.2 Define batch-level verification commands per package (`@opencom/convex`, `@opencom/web`, `@opencom/widget`, `@opencom/sdk-core`, `@opencom/react-native-sdk`) including targeted tests for each touched slice.
-- [ ] 1.3 Confirm and document any approved temporary exceptions for intentionally opaque Convex return payloads before implementation starts.
+- [x] 1.1 Freeze the full remaining-gap inventory from the repo-wide scan and map each file cluster to one owner change or an explicit accepted exception.
+- [x] 1.2 Verify actual implementation state of overlapping older changes against current code before changing their task status.
+- [x] 1.3 Record which residual backend files and shared guardrails are owned directly by this change after the ownership map is complete.
 
-## 2. Hardening Remaining Convex Backend Boundaries
+## 2. Predecessor Verification And Closure
 
-- [ ] 2.1 Replace remaining `getInternalRef(name: string)` / `getApiRef(name: string)` helpers in uncovered Convex modules (including notifications, messaging, conversation, visitor, article/content, campaign, auth/event, and series scheduler paths) with fixed typed refs or typed adapters.
-- [ ] 2.2 Remove remaining broad unknown ref return signatures in covered Convex notification/runtime boundaries where payload/result shapes are known.
-- [ ] 2.3 Run `pnpm --filter @opencom/convex typecheck` and targeted Convex tests for touched modules before moving to frontend/SDK batches.
+- [x] 2.1 Verify `fix-sdk-core-convex-type-surface` against the current sdk-core implementation, run its remaining verification commands, and update/archive it if its narrower scope is already satisfied.
+- [x] 2.2 Decide whether any stronger sdk-core end-state cleanup remains after predecessor verification and document that as either an accepted exception or a separate follow-on delta.
+- [x] 2.3 Update the dependent active changes (`introduce-web-local-convex-wrapper-hooks`, `introduce-widget-local-convex-wrapper-hooks`, `refactor-react-native-sdk-hook-boundaries`) if their task lists need to reflect the now-confirmed remaining file inventory.
 
-## 3. Hardening Remaining Web And Widget Source Boundaries
+## 3. Residual Backend Micro-Batches
 
-- [ ] 3.1 Migrate remaining web pages/components with `makeFunctionReference<..., any|unknown, ...>` (campaigns, outbound, settings, articles, checklists, inbox, messenger settings, and tooltips helper patterns) to explicit typed refs or local typed wrappers.
-- [ ] 3.2 Migrate remaining widget runtime files using broad `Record<string, unknown>`/`unknown` Convex ref signatures to explicit typed boundaries.
-- [ ] 3.3 Replace remaining duplicated dot-vs-colon function-path test matching in widget and web test files with shared canonical matcher utilities.
-- [ ] 3.4 Run `pnpm --filter @opencom/web typecheck`, `pnpm --filter @opencom/widget typecheck`, and focused web/widget tests for all touched domains.
+- [ ] 3.1 Migrate the first residual Convex backend file cluster that still uses `getInternalRef(name: string)` / `getApiRef(name: string)` to explicit typed boundaries and run focused verification.
+- [ ] 3.2 Continue residual backend cleanup in additional file clusters only after the previous cluster passes `pnpm --filter @opencom/convex typecheck` and targeted tests.
+- [ ] 3.3 Confirm residual backend behavior remains unchanged for covered runtime paths after each micro-batch.
 
-## 4. Hardening Remaining SDK-Core And React-Native-SDK Boundaries
+## 4. Shared Guardrails And Final Validation
 
-- [ ] 4.1 Replace generic `getQueryRef/getMutationRef/getActionRef(name: string)` patterns across `packages/sdk-core/src/api/**` with fixed typed refs or typed boundary modules.
-- [ ] 4.2 Replace equivalent generic ref-factory patterns across `packages/react-native-sdk/src/hooks/**`, `src/components/**`, and `src/push/**` with explicit typed boundaries.
-- [ ] 4.3 Run `pnpm --filter @opencom/sdk-core typecheck`, `pnpm --filter @opencom/sdk-core test`, `pnpm --filter @opencom/react-native-sdk typecheck`, and targeted react-native-sdk tests for touched modules.
-
-## 5. Guardrails, Final Validation, And Handoff
-
-- [ ] 5.1 Add or expand package-local hardening guard tests/checks to prevent reintroduction of generic string ref factories, broad `any|unknown` Convex ref signatures, and duplicated ref-name matcher logic in covered paths.
-- [ ] 5.2 Run a final full-scope grep/guard scan to verify no remaining gaps persist in covered files from the inventory.
-- [ ] 5.3 Run `openspec validate close-repo-wide-convex-ref-hardening-gaps --strict --no-interactive` and mark all tasks complete once verification is green.
+- [ ] 4.1 Add or expand guard tests/checks for covered residual backend files and shared test-helper paths so prohibited broad ref-boundary patterns cannot re-enter.
+- [x] 4.2 Run the final repo-wide scan against the frozen inventory to confirm every remaining gap is either closed or explicitly reassigned to its owner change.
+- [x] 4.3 Run `openspec validate close-repo-wide-convex-ref-hardening-gaps --strict --no-interactive` and any touched dependent change validations once ownership and residual work are consistent.

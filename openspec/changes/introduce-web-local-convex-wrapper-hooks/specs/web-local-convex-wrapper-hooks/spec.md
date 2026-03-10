@@ -27,8 +27,8 @@ Any unavoidable cast or `@ts-expect-error` required because of generated Convex 
 - **THEN** the escape hatch is contained in the adapter or domain wrapper layer
 - **AND** consuming UI files remain free of repeated inline suppression comments for that covered operation
 
-### Requirement: Large web admin routes SHOULD compose wrapper hooks through controller hooks when orchestration is complex
-Large web routes with multiple related Convex operations SHOULD use route-local controller/composition hooks to combine domain wrappers when that reduces page complexity without changing behavior.
+### Requirement: Large web admin routes MUST support controller-hook composition when orchestration is complex
+Large web routes with multiple related Convex operations MUST support route-local controller/composition hooks that combine domain wrappers when that reduces page complexity without changing behavior.
 
 #### Scenario: Editor route composes multiple wrapped operations
 - **GIVEN** a route such as an outbound or tour editor that needs several related queries and mutations

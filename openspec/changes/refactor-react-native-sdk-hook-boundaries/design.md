@@ -27,8 +27,9 @@ This change refactors the React Native SDK so public hooks and exported componen
 
 ### Domain-first migration
 
-- Start with high-usage SDK domains such as conversations, tickets, home configuration, and articles.
-- Follow with AI, outbound, surveys, office hours, and other supporting hooks once the layering pattern is stable.
+- Start with the current March 10, 2026 hotspot cluster for conversations and tickets: `hooks/useConversations.ts`, `hooks/useTickets.ts`, `components/messenger/useConversationDetailController.ts`, and `components/OpencomTicketCreate.tsx`.
+- Follow with the home/content/settings/support cluster: `components/OpencomHome.tsx`, `hooks/useArticles.ts`, `hooks/useMessengerSettings.ts`, `hooks/useAutomationSettings.ts`, `hooks/useOfficeHours.ts`, `hooks/useChecklists.ts`, and `hooks/useOutboundMessages.ts`.
+- Then migrate the remaining AI/survey/carousel/push supporting cluster: `hooks/useAIAgent.ts`, `hooks/useArticleSuggestions.ts`, `hooks/useSurveyDelivery.ts`, `components/survey/useSurveyController.ts`, `components/OpencomCarousel.tsx`, and `push/index.ts`.
 - Avoid leaking internal adapter/helper details into the SDK public surface.
 
 ### Boundary design rules
@@ -56,5 +57,5 @@ This change refactors the React Native SDK so public hooks and exported componen
 ## Rollout Notes
 
 - Establish internal SDK transport/helper boundaries first.
-- Migrate conversations, tickets, and home configuration next.
-- Follow with remaining exported hook domains incrementally.
+- Migrate the conversations/tickets cluster next, followed by the home/content/settings/support cluster.
+- Follow with the remaining AI/survey/carousel/push supporting cluster incrementally.

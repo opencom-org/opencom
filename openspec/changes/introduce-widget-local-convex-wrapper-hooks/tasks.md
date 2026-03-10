@@ -6,10 +6,10 @@
 
 ## 2. Initial domain migrations
 
-- [ ] 2.1 Add wrapper hooks for widget shell/session/bootstrap and conversation flow domains.
-- [ ] 2.2 Add wrapper hooks for tours, outbound, surveys, and checklist delivery domains.
-- [ ] 2.3 Add wrapper hooks for authoring and overlay flows where generated Convex hooks currently live in runtime/UI modules.
-- [ ] 2.4 Migrate covered widget modules away from direct generated Convex hook calls where wrapper coverage exists.
+- [ ] 2.1 Add wrapper hooks for the current conversation runtime hotspot file: `src/components/ConversationView.tsx`.
+- [ ] 2.2 Add wrapper hooks for the current tour overlay hotspot file: `src/tourOverlay/useTourOverlayActions.ts`.
+- [ ] 2.3 Keep any follow-on widget runtime/controller hardening aligned with the extracted wrapper boundaries without re-owning shared test-helper cleanup from the cross-surface guardrail change.
+- [ ] 2.4 Migrate covered widget modules away from direct local `makeFunctionReference(...)` usage where wrapper coverage exists.
 
 ## 3. Runtime/controller adoption
 

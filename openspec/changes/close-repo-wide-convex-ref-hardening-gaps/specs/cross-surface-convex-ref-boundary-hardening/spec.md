@@ -1,51 +1,51 @@
 ## ADDED Requirements
 
-### Requirement: Covered source modules MUST not use generic string-based Convex ref factories
+### Requirement: Remaining hardening gaps MUST have a single explicit owner
 
-Covered source files in `packages/convex`, `apps/web`, `apps/widget`, `packages/sdk-core`, and `packages/react-native-sdk` SHALL route Convex calls through fixed typed refs or typed boundary adapters, and SHALL not define generic helpers that accept arbitrary `name: string` to build refs.
+Every remaining Convex ref-boundary gap identified by the repo-wide inventory SHALL be assigned to one owning change or an explicit accepted exception.
 
-#### Scenario: Covered module calls a Convex function
+#### Scenario: Team records a remaining gap from the full-repo scan
 
-- **WHEN** a covered module needs a query, mutation, action, internal call, or scheduler target
-- **THEN** the call site uses a fixed typed function reference or typed adapter API for the specific function
-- **AND** the module does not expose `get*Ref(name: string)`, `getInternalRef(name: string)`, or `getApiRef(name: string)` helper patterns
+- **WHEN** a file cluster is identified as still using a prohibited broad ref-boundary pattern
+- **THEN** the inventory records exactly one owner change for addressing it
+- **AND** the gap is not left duplicated across multiple active proposals
 
-### Requirement: Covered source modules MUST avoid broad `any`/`unknown` Convex ref signatures
+### Requirement: Existing package-specific hardening changes MUST remain the owners where their target architecture still applies
 
-Covered source files SHALL not declare ad hoc `makeFunctionReference<..., any|unknown, ...>` or equivalent broad boundary signatures when payload structure is known.
+Older package-specific changes for web, widget, and React Native SDK boundary architecture SHALL remain the implementation owners when the current codebase still matches their intended migration model.
 
-#### Scenario: Covered module declares Convex ref constants
+#### Scenario: Remaining web, widget, or React Native SDK gap matches an active older proposal
 
-- **WHEN** a covered module defines a Convex function reference
-- **THEN** the args and return types are explicit domain shapes (or constrained shared types)
-- **AND** broad `any`/`unknown` generics are not used except for documented, approved exceptions
+- **WHEN** a remaining gap is found in `apps/web`, `apps/widget`, or `packages/react-native-sdk`
+- **THEN** the gap is tracked under the relevant existing package-specific change if that change already defines the intended boundary architecture
+- **AND** this cross-surface change does not duplicate the same implementation ownership
 
-### Requirement: Ref-name matching in covered tests MUST use shared canonical helpers
+### Requirement: Tactical predecessor changes MUST be verified before closure or supersession
 
-Covered test suites that route mock behavior by Convex function identity SHALL use shared helper utilities that normalize function path comparisons and rely on supported Convex APIs for real refs.
+Older tactical type-stability changes SHALL be checked against the current codebase to determine whether they are already implemented but unverified, or whether genuine follow-on work is still required.
 
-#### Scenario: Test routes mock behavior by function reference
+#### Scenario: Older tactical change has unchecked tasks
 
-- **WHEN** a covered test compares a Convex function ref path
-- **THEN** it uses a shared helper such as `matchesFunctionPath(...)`
-- **AND** dot-vs-colon fallback logic is centralized in that helper rather than repeated inline in each test file
+- **WHEN** an older tactical change still has incomplete task checkboxes
+- **THEN** the team verifies the current implementation against the change artifacts rather than assuming the work is missing
+- **AND** the change is either completed/archived if its implemented scope is satisfied or followed by a narrower explicit delta for remaining work
 
-### Requirement: Hardening rollout MUST be batch-gated by package verification
+### Requirement: Residual backend and guardrail work MUST ship in verification-gated micro-batches
 
-Cross-surface ref hardening SHALL expand package-by-package only after each package batch passes required typecheck and focused tests.
+Residual implementation owned by this change SHALL be delivered in small file clusters with package verification after each cluster.
 
-#### Scenario: Team completes a package hardening batch
+#### Scenario: Team completes a residual backend or guardrail micro-batch
 
-- **WHEN** a package batch migration is marked complete
-- **THEN** the package typecheck command for that package has passed
-- **AND** targeted tests covering changed ref boundaries in that package have passed before the next batch begins
+- **WHEN** a residual `packages/convex` cleanup or shared guardrail batch is ready to expand
+- **THEN** the touched package typecheck has already passed
+- **AND** focused tests for the touched file cluster have already passed before the next cluster begins
 
-### Requirement: Covered domains MUST include anti-regression guardrails
+### Requirement: Covered paths MUST include anti-regression guardrails
 
-Covered packages SHALL include guardrails that detect reintroduction of prohibited broad ref factory and untyped boundary patterns in covered paths.
+Covered residual backend and shared test-helper paths SHALL include guardrails that detect reintroduction of prohibited broad ref-boundary patterns.
 
-#### Scenario: New code reintroduces broad ref pattern in covered path
+#### Scenario: New code reintroduces a prohibited broad ref pattern in a covered path
 
-- **WHEN** a change introduces a prohibited pattern in a covered path
-- **THEN** a guard test or quality check fails in CI/local verification
-- **AND** the failure message identifies the violating pattern and covered scope
+- **WHEN** a change adds a prohibited broad helper or untyped Convex ref boundary in a covered path
+- **THEN** a guard test or quality check fails during verification
+- **AND** the failure identifies the violating pattern and covered scope

@@ -6,7 +6,7 @@ The web app currently performs many direct `useQuery`, `useMutation`, and `useAc
 
 - Introduce a web-local typed Convex wrapper hook layer that centralizes generated API ref interaction behind app-owned hooks.
 - Add thin typed adapter primitives, where needed, so unavoidable casts or suppressions live in one constrained layer instead of across page files.
-- Provide domain-scoped wrapper hooks for high-churn web admin areas first, starting with settings/security, outbound authoring, and tours/editor flows.
+- Provide domain-scoped wrapper hooks for the current March 10, 2026 hotspot clusters first: settings and messaging admin flows, content/support authoring flows, and campaigns/outbound/checklist/tooltip authoring flows.
 - Allow large route/controller hooks to compose domain wrappers for page orchestration, while keeping UI files free of direct generated Convex hook calls where practical.
 - Preserve all existing Convex query/mutation/action targets, payload semantics, permissions, routing, and user-visible behavior.
 
@@ -21,6 +21,6 @@ The web app currently performs many direct `useQuery`, `useMutation`, and `useAc
 
 ## Impact
 
-- Affected code: `apps/web/src/app/**`, `apps/web/src/components/**`, new wrapper layers under `apps/web/src/lib` and/or `apps/web/src/hooks`, and targeted tests for migrated domains.
+- Affected code: `apps/web/src/app/**`, `apps/web/src/components/**`, new wrapper layers under `apps/web/src/lib` and/or `apps/web/src/hooks`, and targeted tests for migrated domains including the current hotspot files under `articles`, `campaigns`, `checklists`, `inbox`, `outbound`, `settings`, and `tooltips`.
 - Affected contributors: web contributors working on settings, editor surfaces, reports, inbox, and other Convex-backed admin routes.
 - Dependencies: no external package changes; internal web hook boundaries and local typing conventions will be introduced.

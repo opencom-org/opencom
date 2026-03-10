@@ -27,8 +27,8 @@ This change introduces a widget-local wrapper hook layer so generated Convex hoo
 
 ### Domain-first migration
 
-- Prioritize the widget shell and central controller modules first because they currently aggregate many runtime and data-access concerns.
-- Follow with high-churn overlays and flow hooks such as conversations, tour overlays, outbound overlays, and survey/checklist delivery.
+- Prioritize the current remaining runtime hotspots first: `components/ConversationView.tsx` and `tourOverlay/useTourOverlayActions.ts`.
+- Follow with any additional shell or overlay modules only after those hotspots establish the wrapper pattern.
 - Keep new widget code from introducing more direct generated Convex hook usage in runtime/UI modules once wrapper coverage exists for a domain.
 
 ### Wrapper design rules
@@ -56,5 +56,5 @@ This change introduces a widget-local wrapper hook layer so generated Convex hoo
 ## Rollout Notes
 
 - Establish widget-local wrapper foundations first.
-- Migrate shell/session and central conversation flow modules next.
-- Follow with overlays and authoring flows once the core pattern is stable.
+- Migrate `ConversationView` first, then the tour overlay action boundary.
+- Keep shared widget test-helper cleanup coordinated under the cross-surface guardrail change rather than broadening this change's runtime scope.

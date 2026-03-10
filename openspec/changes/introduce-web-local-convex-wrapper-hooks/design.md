@@ -27,7 +27,7 @@ This change introduces an app-local wrapper hook layer in `apps/web` so generate
 
 ### Domain-first migration
 
-- Start with high-value domains that already show suppression pressure and dense direct hook usage: settings/security, workspace member settings, outbound flows, and tours.
+- Start with the current March 10, 2026 hotspot clusters: settings and messaging admin (`settings/page.tsx`, `settings/MessengerSettingsSection.tsx`, `inbox/page.tsx`), content/support authoring (`articles/page.tsx`, `articles/[id]/page.tsx`, `articles/collections/page.tsx`), and campaigns/outbound/checklists/tooltips (`campaigns/**`, `outbound/[id]/page.tsx`, `checklists/**`, `tooltips/page.tsx`).
 - After the pattern is established, migrate additional high-churn admin routes incrementally.
 - Keep new code from introducing more direct generated Convex hook usage in UI modules once wrapper coverage exists for a domain.
 
@@ -58,6 +58,6 @@ This change introduces an app-local wrapper hook layer in `apps/web` so generate
 ## Rollout Notes
 
 - Establish the wrapper foundation first.
-- Migrate settings/security and workspace member flows next because they already contain concentrated suppressions and repeated direct hook usage.
-- Follow with outbound and tours editor/controller hooks.
+- Migrate settings and messaging admin flows next because they already contain concentrated local escape hatches and repeated direct hook usage.
+- Follow with content/support authoring and campaign/outbound/checklist/tooltip controller hooks.
 - Treat remaining web admin routes as incremental follow-on migrations once the pattern is validated.
