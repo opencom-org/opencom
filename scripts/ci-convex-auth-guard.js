@@ -185,7 +185,8 @@ function extractBalancedObject(source, objectStart) {
 function parsePrivilegedRawHandlers(filePath, guardRegexes) {
   const source = fs.readFileSync(filePath, "utf8");
   const handlers = [];
-  const exportPattern = /export\s+const\s+([A-Za-z0-9_]+)\s*=\s*(mutation|query|action)\s*\(/g;
+  const exportPattern =
+    /export\s+const\s+([A-Za-z0-9_]+)\s*=\s*(mutation|query|action|authMutation|authQuery|authAction)\s*\(/g;
 
   let match;
   while ((match = exportPattern.exec(source)) !== null) {
@@ -220,7 +221,14 @@ function parsePrivilegedRawHandlers(filePath, guardRegexes) {
 }
 
 function buildModuleSnapshots(guardMarkers) {
-  const guardRegexes = guardMarkers.map((marker) => ({
+  const normalizedGuardMarkers = [...guardMarkers];
+  for (const wrapperMarker of ["authMutation", "authQuery", "authAction"]) {
+    if (!normalizedGuardMarkers.includes(wrapperMarker)) {
+      normalizedGuardMarkers.push(wrapperMarker);
+    }
+  }
+
+  const guardRegexes = normalizedGuardMarkers.map((marker) => ({
     marker,
     regex: new RegExp(`\\b${marker.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*\\(`),
   }));

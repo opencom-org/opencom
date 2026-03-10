@@ -18,14 +18,14 @@
     },
     {
       "file": "packages/convex/convex/articles.ts",
-      "handlerCount": 8,
-      "digest": "b269cf2bb6bfdf26726b7df98c70b075fad13615e38d23841da99cbf7080c30b",
+      "handlerCount": 6,
+      "digest": "ab8f651a908d49886fee67268f788ccdd6fe316bea830582f47915785168f88c",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
       "file": "packages/convex/convex/assignmentRules.ts",
-      "handlerCount": 7,
-      "digest": "e07006e068de9739d6dadc043ff7d45b3a03c1eef1b68f8cd3d70dd2b41adea8",
+      "handlerCount": 3,
+      "digest": "de275c7305c61b63e94ee7d040354cd883c2ff07e483be717527cd25260b7b05",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
@@ -47,12 +47,6 @@
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
-      "file": "packages/convex/convex/carousels.ts",
-      "handlerCount": 4,
-      "digest": "75d3235948364942fcb33dfa1289af36016b63451a32bceaccff5073ba1add3e",
-      "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
-    },
-    {
       "file": "packages/convex/convex/checklists.ts",
       "handlerCount": 5,
       "digest": "beaa75f02e535556d3431bd0e4852b23b9d00af3ea403666deb713ab5844e373",
@@ -66,8 +60,8 @@
     },
     {
       "file": "packages/convex/convex/commonIssueButtons.ts",
-      "handlerCount": 6,
-      "digest": "0b5baf9e9bb97ee5e22d95e4c69a047dabe43cde60da4d3d1dea20500e90ced0",
+      "handlerCount": 2,
+      "digest": "26eef7eb48fd4950ea122e4ee3101b53af1ce804f2bd0c4ab2f64011a6a379c8",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
@@ -96,8 +90,8 @@
     },
     {
       "file": "packages/convex/convex/identityVerification.ts",
-      "handlerCount": 7,
-      "digest": "a226ffe0652ad8a50f5567b7b2e80ab2b1000e2c56a350a7bb126d5250725c5d",
+      "handlerCount": 2,
+      "digest": "5cf8f40c447e1acea6037d3ae5f1442977fcb1edecd3cd65acd43afee9d9981a",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
@@ -132,8 +126,8 @@
     },
     {
       "file": "packages/convex/convex/segments.ts",
-      "handlerCount": 7,
-      "digest": "1f4c99bf1f42e03b997395cc8168c2b6aebc69b5c04d241cb2c1cfabe5b4efb3",
+      "handlerCount": 4,
+      "digest": "66d08e0d196a7b9d7813eab673d31791f88c03aee5179b4f99b811314d86e27c",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
@@ -143,9 +137,15 @@
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
-      "file": "packages/convex/convex/surveys.ts",
-      "handlerCount": 4,
-      "digest": "201bd0d051da17c431d30bb72e564ca78b3cd3267e9777d2322ea96b34a59981",
+      "file": "packages/convex/convex/surveys/delivery.ts",
+      "handlerCount": 2,
+      "digest": "d30f8b05b2357fb4741df34e100a83668c6366d8641fe5a8e39fe4d0c0db62f5",
+      "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
+    },
+    {
+      "file": "packages/convex/convex/surveys/responses.ts",
+      "handlerCount": 2,
+      "digest": "27a862b71cffa3bb0a3475762ca2f0afd8aa0b6a4720e01c70c21d525ddf8647",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
@@ -179,9 +179,21 @@
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
-      "file": "packages/convex/convex/visitors.ts",
-      "handlerCount": 8,
-      "digest": "1477d4b888209e1dd6b06674a7a56d33ae0c5c6043c5e7b522c0c5e899eb413c",
+      "file": "packages/convex/convex/visitors/coreQueries.ts",
+      "handlerCount": 4,
+      "digest": "f9e41562b7b9984b374110ab6240bc9de372dd1ae8ec553f88c6a003aae4491c",
+      "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
+    },
+    {
+      "file": "packages/convex/convex/visitors/directoryQueries.ts",
+      "handlerCount": 1,
+      "digest": "8bd2fe35c3ee65c7cd306ea28416078c03e783cc0d93d491d5086ef103109278",
+      "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
+    },
+    {
+      "file": "packages/convex/convex/visitors/mutations.ts",
+      "handlerCount": 3,
+      "digest": "f4ee48349d6a1dd4cc55a92f4da26bcae55ac9c4228af382b04b73753a9823ce",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
@@ -192,14 +204,14 @@
     },
     {
       "file": "packages/convex/convex/workspaceMembers.ts",
-      "handlerCount": 11,
-      "digest": "7b36b1f47c246f53eb73ea2306302f9e19bb94f28b0c0355ef538e41a7dbcee6",
+      "handlerCount": 5,
+      "digest": "b800c9bd6183e84c96353dd05ef3a91983577847ff5cbef434280a297120d4a8",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     },
     {
       "file": "packages/convex/convex/workspaces.ts",
-      "handlerCount": 12,
-      "digest": "6faca872d7b21a67eec4f74fc47e8228be1e072ad2db7336812be78f3c0ac51a",
+      "handlerCount": 2,
+      "digest": "4de73bf2d08ee73a201b9a919a240720cbeadd10affaf0b98fe87a6702b93f9c",
       "rationale": "Privileged raw handlers in this module are governance-reviewed via digest snapshot."
     }
   ]
