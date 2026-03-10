@@ -12,7 +12,7 @@
 
 ## 3. Residual Backend Micro-Batches
 
-- [ ] 3.1 Migrate the first residual Convex backend file cluster that still uses `getInternalRef(name: string)` / `getApiRef(name: string)` to explicit typed boundaries and run focused verification.
+- [x] 3.1 Migrate the first residual Convex backend file cluster that still uses `getInternalRef(name: string)` / `getApiRef(name: string)` to explicit typed boundaries and run focused verification.
 - [ ] 3.2 Continue residual backend cleanup in additional file clusters only after the previous cluster passes `pnpm --filter @opencom/convex typecheck` and targeted tests.
 - [ ] 3.3 Confirm residual backend behavior remains unchanged for covered runtime paths after each micro-batch.
 

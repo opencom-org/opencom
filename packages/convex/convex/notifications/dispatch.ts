@@ -1,20 +1,14 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { internalAction, internalMutation } from "../_generated/server";
 import { jsonRecordValidator } from "../validators";
 import { sendEmail } from "../email";
 import { notificationChannelValidator, notificationRecipientTypeValidator } from "./contracts";
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
-
-function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as (
-    actionRef: unknown,
-    actionArgs: Record<string, unknown>
-  ) => Promise<unknown>;
-}
+import {
+  getShallowRunAction,
+  getShallowRunMutation,
+  logDeliveryOutcomeRef,
+  sendPushRef,
+} from "./functionRefs";
 
 export const sendPushNotification = internalAction({
   args: {
@@ -44,24 +38,12 @@ export const sendPushNotification = internalAction({
     }
 
     const runAction = getShallowRunAction(ctx);
-    return (await runAction(getInternalRef("push:sendPush"), {
+    return await runAction(sendPushRef, {
       tokens: args.tokens,
       title: args.title,
       body: args.body,
       data: args.data,
-    })) as {
-      success: boolean;
-      sent: number;
-      failed?: number;
-      error?: string;
-      tickets: Array<{
-        status: string;
-        id?: string;
-        error?: string;
-        errorCode?: string;
-        token?: string;
-      }>;
-    };
+    });
   },
 });
 
@@ -143,12 +125,7 @@ export const dispatchPushAttempts = internalAction({
     }> = [];
 
     const runAction = getShallowRunAction(ctx);
-    const runMutation = ctx.runMutation as unknown as (
-      mutationRef: unknown,
-      mutationArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const sendPushRef = getInternalRef("push:sendPush");
-    const logDeliveryOutcomeRef = getInternalRef("notifications:logDeliveryOutcome");
+    const runMutation = getShallowRunMutation(ctx);
 
     for (const attempt of args.attempts) {
       if (attempt.tokens.length === 0) {

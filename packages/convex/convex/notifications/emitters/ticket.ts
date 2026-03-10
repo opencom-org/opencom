@@ -1,20 +1,8 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { internalMutation } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { truncatePreview } from "../helpers";
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
-
-function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as (
-    delayMs: number,
-    functionRef: unknown,
-    runArgs: Record<string, unknown>
-  ) => Promise<unknown>;
-}
+import { getShallowRunAfter, routeEventRef } from "../functionRefs";
 
 export const notifyTicketCreated = internalMutation({
   args: {
@@ -35,7 +23,7 @@ export const notifyTicketCreated = internalMutation({
     }
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "ticket_created",
       domain: "ticket",
       audience: "agent",
@@ -67,7 +55,7 @@ export const notifyTicketStatusChanged = internalMutation({
     if (!ticket || !ticket.visitorId) return;
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "ticket_status_changed",
       domain: "ticket",
       audience: "visitor",
@@ -110,7 +98,7 @@ export const notifyTicketAssigned = internalMutation({
     }
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "ticket_assigned",
       domain: "ticket",
       audience: "agent",
@@ -144,7 +132,7 @@ export const notifyTicketComment = internalMutation({
     if (!comment) return;
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "ticket_comment",
       domain: "ticket",
       audience: "visitor",
@@ -186,7 +174,7 @@ export const notifyTicketCustomerReply = internalMutation({
     }
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "ticket_customer_reply",
       domain: "ticket",
       audience: "agent",
@@ -220,7 +208,7 @@ export const notifyTicketResolved = internalMutation({
     if (!ticket || !ticket.visitorId) return;
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "ticket_resolved",
       domain: "ticket",
       audience: "visitor",

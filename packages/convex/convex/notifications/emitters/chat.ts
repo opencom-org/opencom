@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import { makeFunctionReference } from "convex/server";
 import { internalMutation, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import type { Doc, Id } from "../../_generated/dataModel";
 import { EMAIL_DEBOUNCE_MS, MAX_THREAD_MESSAGES } from "../contracts";
@@ -13,27 +12,17 @@ import {
   renderConversationThreadHtml,
   renderMetadataList,
 } from "../helpers";
+import {
+  getMemberRecipientsForNewVisitorMessageRef,
+  getShallowRunAfter,
+  getShallowRunQuery,
+  getVisitorRecipientsForSupportReplyRef,
+  notifyNewMessageRef,
+  routeEventRef,
+  sendNotificationEmailRef,
+} from "../functionRefs";
 
 type SenderLookupCtx = Pick<QueryCtx | MutationCtx, "db">;
-
-function getInternalRef(name: string): unknown {
-  return makeFunctionReference(name);
-}
-
-function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as (
-    queryRef: unknown,
-    queryArgs: Record<string, unknown>
-  ) => Promise<unknown>;
-}
-
-function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as (
-    delayMs: number,
-    functionRef: unknown,
-    runArgs: Record<string, unknown>
-  ) => Promise<unknown>;
-}
 
 async function resolveSupportSenderLabels(
   ctx: SenderLookupCtx,
@@ -143,12 +132,9 @@ export const notifyNewMessage = internalMutation({
 
       if (args.mode === "send_member_email") {
         const runQuery = getShallowRunQuery(ctx);
-        const recipients = (await runQuery(
-          getInternalRef("notifications:getMemberRecipientsForNewVisitorMessage"),
-          {
-            workspaceId: conversation.workspaceId,
-          }
-        )) as { emailRecipients: string[]; pushRecipients: unknown[] };
+        const recipients = await runQuery(getMemberRecipientsForNewVisitorMessageRef, {
+          workspaceId: conversation.workspaceId,
+        });
 
         if (recipients.emailRecipients.length === 0) {
           return;
@@ -180,7 +166,7 @@ export const notifyNewMessage = internalMutation({
 
         const runAfter = getShallowRunAfter(ctx);
         for (const recipient of recipients.emailRecipients) {
-          await runAfter(0, getInternalRef("notifications:sendNotificationEmail"), {
+          await runAfter(0, sendNotificationEmailRef, {
             to: recipient,
             subject,
             html: `<p>You have new visitor message activity.</p>${openConversationHtml}${detailsHtml}<p><strong>Recent conversation (last ${MAX_THREAD_MESSAGES} messages)</strong></p>${threadHtml}`,
@@ -195,13 +181,10 @@ export const notifyNewMessage = internalMutation({
       }
 
       const runQuery = getShallowRunQuery(ctx);
-      const visitorRecipients = (await runQuery(
-        getInternalRef("notifications:getVisitorRecipientsForSupportReply"),
-        {
-          conversationId: args.conversationId,
-          channel: args.channel,
-        }
-      )) as { emailRecipient?: string | null };
+      const visitorRecipients = await runQuery(getVisitorRecipientsForSupportReplyRef, {
+        conversationId: args.conversationId,
+        channel: args.channel,
+      });
 
       if (!visitorRecipients.emailRecipient) {
         return;
@@ -227,7 +210,7 @@ export const notifyNewMessage = internalMutation({
           : "New message from support";
 
       const runAfter = getShallowRunAfter(ctx);
-      await runAfter(0, getInternalRef("notifications:sendNotificationEmail"), {
+      await runAfter(0, sendNotificationEmailRef, {
         to: visitorRecipients.emailRecipient,
         subject,
         html: `<p>You have new messages from support.</p>${openWebsiteChatHtml}${detailsHtml}<p><strong>Recent conversation (last ${MAX_THREAD_MESSAGES} messages)</strong></p>${threadHtml}`,
@@ -238,12 +221,9 @@ export const notifyNewMessage = internalMutation({
 
     if (args.senderType === "visitor") {
       const runQuery = getShallowRunQuery(ctx);
-      const recipients = (await runQuery(
-        getInternalRef("notifications:getMemberRecipientsForNewVisitorMessage"),
-        {
-          workspaceId: conversation.workspaceId,
-        }
-      )) as { emailRecipients: string[]; pushRecipients: unknown[] };
+      const recipients = await runQuery(getMemberRecipientsForNewVisitorMessageRef, {
+        workspaceId: conversation.workspaceId,
+      });
 
       if (recipients.emailRecipients.length > 0 || recipients.pushRecipients.length > 0) {
         let visitor: Doc<"visitors"> | null = null;
@@ -258,7 +238,7 @@ export const notifyNewMessage = internalMutation({
         }
 
         const runAfter = getShallowRunAfter(ctx);
-        await runAfter(0, getInternalRef("notifications:routeEvent"), {
+        await runAfter(0, routeEventRef, {
           eventType: "chat_message",
           domain: "chat",
           audience: "agent",
@@ -276,7 +256,7 @@ export const notifyNewMessage = internalMutation({
         });
 
         if (recipients.emailRecipients.length > 0) {
-          await runAfter(EMAIL_DEBOUNCE_MS, getInternalRef("notifications:notifyNewMessage"), {
+          await runAfter(EMAIL_DEBOUNCE_MS, notifyNewMessageRef, {
             conversationId: args.conversationId,
             messageContent: args.messageContent,
             senderType: args.senderType,
@@ -293,16 +273,13 @@ export const notifyNewMessage = internalMutation({
     if (isSupportSenderType(args.senderType)) {
       if (conversation.visitorId) {
         const runQuery = getShallowRunQuery(ctx);
-        const visitorRecipients = (await runQuery(
-          getInternalRef("notifications:getVisitorRecipientsForSupportReply"),
-          {
-            conversationId: args.conversationId,
-            channel: args.channel,
-          }
-        )) as { emailRecipient?: string | null };
+        const visitorRecipients = await runQuery(getVisitorRecipientsForSupportReplyRef, {
+          conversationId: args.conversationId,
+          channel: args.channel,
+        });
 
         const runAfter = getShallowRunAfter(ctx);
-        await runAfter(0, getInternalRef("notifications:routeEvent"), {
+        await runAfter(0, routeEventRef, {
           eventType: "chat_message",
           domain: "chat",
           audience: "visitor",
@@ -323,7 +300,7 @@ export const notifyNewMessage = internalMutation({
         });
 
         if (visitorRecipients.emailRecipient) {
-          await runAfter(EMAIL_DEBOUNCE_MS, getInternalRef("notifications:notifyNewMessage"), {
+          await runAfter(EMAIL_DEBOUNCE_MS, notifyNewMessageRef, {
             conversationId: args.conversationId,
             messageContent: args.messageContent,
             senderType: args.senderType,
@@ -358,7 +335,7 @@ export const notifyNewConversation = internalMutation({
     }
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "new_conversation",
       domain: "chat",
       audience: "agent",
@@ -398,7 +375,7 @@ export const notifyAssignment = internalMutation({
     }
 
     const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, getInternalRef("notifications:routeEvent"), {
+    await runAfter(0, routeEventRef, {
       eventType: "assignment",
       domain: "chat",
       audience: "agent",

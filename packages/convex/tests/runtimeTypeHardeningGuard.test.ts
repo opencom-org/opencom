@@ -55,4 +55,42 @@ describe("runtime type hardening guards", () => {
     expect(suggestionsSource).toContain("SEARCH_SIMILAR_INTERNAL_REF");
     expect(suggestionsSource).toContain("VALIDATE_SESSION_TOKEN_REF");
   });
+
+  it("uses shared fixed refs for notification routing and emitter scheduling", () => {
+    const functionRefsSource = readFileSync(
+      new URL("../convex/notifications/functionRefs.ts", import.meta.url),
+      "utf8"
+    );
+    const routingSource = readFileSync(
+      new URL("../convex/notifications/routing.ts", import.meta.url),
+      "utf8"
+    );
+    const dispatchSource = readFileSync(
+      new URL("../convex/notifications/dispatch.ts", import.meta.url),
+      "utf8"
+    );
+    const chatEmitterSource = readFileSync(
+      new URL("../convex/notifications/emitters/chat.ts", import.meta.url),
+      "utf8"
+    );
+    const ticketEmitterSource = readFileSync(
+      new URL("../convex/notifications/emitters/ticket.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(routingSource).not.toContain("function getInternalRef(name: string)");
+    expect(dispatchSource).not.toContain("function getInternalRef(name: string)");
+    expect(chatEmitterSource).not.toContain("function getInternalRef(name: string)");
+    expect(ticketEmitterSource).not.toContain("function getInternalRef(name: string)");
+
+    expect(functionRefsSource).toContain("routeEventRef");
+    expect(functionRefsSource).toContain("notifyNewMessageRef");
+    expect(functionRefsSource).toContain("dispatchPushAttemptsRef");
+    expect(functionRefsSource).toContain("sendNotificationEmailRef");
+
+    expect(chatEmitterSource).toContain("getMemberRecipientsForNewVisitorMessageRef");
+    expect(chatEmitterSource).toContain("getVisitorRecipientsForSupportReplyRef");
+    expect(dispatchSource).toContain("logDeliveryOutcomeRef");
+    expect(dispatchSource).toContain("sendPushRef");
+  });
 });
