@@ -747,7 +747,8 @@ export async function ensureAuthenticatedInPage(page: Page): Promise<boolean> {
     }
 
     const settled = await waitForRouteSettled(page, 3000);
-    if (settled && !(await isRouteErrorBoundaryVisible(page))) {
+    const hasWorkspace = await waitForActiveWorkspaceStorage(page, 5000);
+    if (settled && hasWorkspace && !(await isRouteErrorBoundaryVisible(page))) {
       return true;
     }
   }
@@ -776,7 +777,8 @@ export async function ensureAuthenticatedInPage(page: Page): Promise<boolean> {
   );
   if (autoRecovered && !isAuthRoute(page.url())) {
     const settled = await waitForRouteSettled(page, Math.min(NAV_TIMEOUT_MS, 12000));
-    if (settled) {
+    const hasWorkspace = await waitForActiveWorkspaceStorage(page, 10000);
+    if (settled && hasWorkspace) {
       return true;
     }
   }
@@ -791,6 +793,11 @@ export async function ensureAuthenticatedInPage(page: Page): Promise<boolean> {
     const loggedIn = await performPasswordLogin(page, state);
     if (!loggedIn) {
       console.warn("[auth-refresh] In-page login stayed on auth route");
+      return false;
+    }
+    const hasWorkspace = await waitForActiveWorkspaceStorage(page, 10000);
+    if (!hasWorkspace) {
+      console.warn("[auth-refresh] In-page login completed without active workspace storage");
       return false;
     }
     await page.context().storageState({ path: getAuthStatePath() });

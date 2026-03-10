@@ -20,9 +20,7 @@ test.describe("Articles Admin", () => {
   test.beforeEach(async ({ page }) => {
     await refreshAuthState();
     const ok = await ensureAuthenticatedInPage(page);
-    if (!ok) {
-      test.skip(true, "[knowledge.spec] Could not authenticate test page");
-    }
+    expect(ok).toBe(true);
   });
 
   test("redirects legacy knowledge route to articles", async ({ page }) => {

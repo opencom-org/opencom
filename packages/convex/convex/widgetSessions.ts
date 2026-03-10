@@ -1,4 +1,4 @@
-import { anyApi } from "convex/server";
+import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query, internalMutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
@@ -13,6 +13,7 @@ const DEFAULT_SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MIN_SESSION_LIFETIME_MS = 1 * 60 * 60 * 1000; // 1 hour
 const MAX_SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const REFRESH_THRESHOLD = 0.25; // Refresh when <25% lifetime remains
+const VERIFY_IDENTITY_INTERNAL_REF = makeFunctionReference("identityVerification:verifyIdentity");
 
 /**
  * Generate a cryptographically random session token with `wst_` prefix.
@@ -244,10 +245,7 @@ export const boot = mutation({
         mutationRef: unknown,
         mutationArgs: Record<string, unknown>
       ) => Promise<unknown>;
-      const verifyIdentityRef = (anyApi as unknown as {
-        identityVerification: { verifyIdentity: unknown };
-      }).identityVerification.verifyIdentity;
-      const result = (await runMutation(verifyIdentityRef, {
+      const result = (await runMutation(VERIFY_IDENTITY_INTERNAL_REF, {
         workspaceId: args.workspaceId,
         visitorId: visitor._id,
         userId: args.externalUserId,

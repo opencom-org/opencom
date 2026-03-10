@@ -51,6 +51,29 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const ACTIVE_WORKSPACE_KEY = "opencom_active_workspace";
+const currentUserQuery = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  {
+    user: User | null;
+    workspaces: Workspace[];
+  } | null
+>("auth:currentUser");
+const switchWorkspaceRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  unknown
+>("auth:switchWorkspace");
+const completeSignupProfileRef = makeFunctionReference<
+  "mutation",
+  { name?: string; workspaceName?: string },
+  unknown
+>("auth:completeSignupProfile");
+const hostedOnboardingStateQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  { isWidgetVerified: boolean }
+>("workspaces:getHostedOnboardingState");
 
 export function AuthProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
@@ -58,30 +81,6 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
 
   // Convex Auth hooks
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
-
-  const currentUserQuery = makeFunctionReference<
-    "query",
-    Record<string, never>,
-    {
-      user: User | null;
-      workspaces: Workspace[];
-    } | null
-  >("auth:currentUser");
-  const switchWorkspaceRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces"> },
-    unknown
-  >("auth:switchWorkspace");
-  const completeSignupProfileRef = makeFunctionReference<
-    "mutation",
-    { name?: string; workspaceName?: string },
-    unknown
-  >("auth:completeSignupProfile");
-  const hostedOnboardingStateQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { isWidgetVerified: boolean }
-  >("workspaces:getHostedOnboardingState");
 
   // Query current user from Convex Auth session
   const convexAuthUser = useQuery(currentUserQuery);

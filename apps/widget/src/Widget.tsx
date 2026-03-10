@@ -697,6 +697,38 @@ export function Widget({
   });
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!window.location.href.includes("/widget-demo")) {
+      return;
+    }
+    console.log("[Opencom Widget][survey-debug]", {
+      activeWorkspaceId,
+      visitorId,
+      hasSessionToken: Boolean(sessionToken),
+      activeSurveysCount: activeSurveys?.length,
+      candidateSurveyId: candidateSurvey?._id ?? null,
+      candidateSurveyFormat: candidateSurvey?.format ?? null,
+      displayedSurveyId: displayedSurvey?._id ?? null,
+      displayedSurveyFormat: displayedSurvey?.format ?? null,
+      surveyEligibilityUnavailable,
+      activeBlockingExperience,
+      hasAnyPendingBlockingCandidate,
+    });
+  }, [
+    activeWorkspaceId,
+    visitorId,
+    sessionToken,
+    activeSurveys,
+    candidateSurvey,
+    displayedSurvey,
+    surveyEligibilityUnavailable,
+    activeBlockingExperience,
+    hasAnyPendingBlockingCandidate,
+  ]);
+
+  useEffect(() => {
     if (!(isValidIdFormat && visitorId && sessionToken && activeWorkspaceId)) {
       setSurveyEligibilityUnavailable(false);
       return;
@@ -740,7 +772,7 @@ export function Widget({
       if (!allowLargeSurveyBlocking) {
         return;
       }
-    } else if (activeBlockingExperience !== null || hasAnyPendingBlockingCandidate) {
+    } else if (activeBlockingExperience !== null) {
       return;
     }
 

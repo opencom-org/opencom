@@ -424,7 +424,7 @@ export const update = mutation({
         (args.title !== undefined || args.content !== undefined)
       ) {
         const runAfter = getShallowRunAfter(ctx);
-        const generateInternalRef = getInternalRef("embeddings.generateInternal");
+        const generateInternalRef = getInternalRef("embeddings:generateInternal");
         await runAfter(0, generateInternalRef, {
           workspaceId: resolved.article.workspaceId,
           contentType: "internalArticle",
@@ -497,7 +497,7 @@ export const update = mutation({
 
     if (resolved.article.status === "published" && previousContentType !== nextContentType) {
       const runAfter = getShallowRunAfter(ctx);
-      const removeEmbeddingRef = getInternalRef("embeddings.remove");
+      const removeEmbeddingRef = getInternalRef("embeddings:remove");
       await runAfter(0, removeEmbeddingRef, {
         contentType: previousContentType,
         contentId: resolved.article._id,
@@ -509,7 +509,7 @@ export const update = mutation({
       (args.title !== undefined || args.content !== undefined || args.visibility !== undefined)
     ) {
       const runAfter = getShallowRunAfter(ctx);
-      const generateInternalRef = getInternalRef("embeddings.generateInternal");
+      const generateInternalRef = getInternalRef("embeddings:generateInternal");
       await runAfter(0, generateInternalRef, {
         workspaceId: resolved.article.workspaceId,
         contentType: nextContentType,
@@ -543,7 +543,7 @@ export const remove = mutation({
     if (resolved.kind === "legacyInternal") {
       await ctx.db.delete(resolved.article._id);
       const runAfter = getShallowRunAfter(ctx);
-      const removeEmbeddingRef = getInternalRef("embeddings.remove");
+      const removeEmbeddingRef = getInternalRef("embeddings:remove");
       await runAfter(0, removeEmbeddingRef, {
         contentType: "internalArticle",
         contentId: resolved.article._id,
@@ -553,7 +553,7 @@ export const remove = mutation({
 
     await ctx.db.delete(resolved.article._id);
     const runAfter = getShallowRunAfter(ctx);
-    const removeEmbeddingRef = getInternalRef("embeddings.remove");
+    const removeEmbeddingRef = getInternalRef("embeddings:remove");
     await runAfter(0, removeEmbeddingRef, {
       contentType: getArticleContentType(resolved.article),
       contentId: resolved.article._id,
@@ -729,7 +729,7 @@ export const publish = authMutation({
     });
 
     const runAfter = getShallowRunAfter(ctx);
-    const generateInternalRef = getInternalRef("embeddings.generateInternal");
+    const generateInternalRef = getInternalRef("embeddings:generateInternal");
     await runAfter(0, generateInternalRef, {
       workspaceId: resolved.article.workspaceId,
       contentType:

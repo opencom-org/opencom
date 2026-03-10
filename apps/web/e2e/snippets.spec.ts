@@ -18,9 +18,7 @@ test.describe("Web Admin - Saved Reply Snippets", () => {
   test.beforeEach(async ({ page }) => {
     await refreshAuthState();
     const ok = await ensureAuthenticatedInPage(page);
-    if (!ok) {
-      test.skip(true, "[snippets.spec] Could not authenticate test page");
-    }
+    expect(ok).toBe(true);
   });
 
   test("should navigate to snippets page", async ({ page }) => {

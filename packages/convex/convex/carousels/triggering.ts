@@ -1,9 +1,11 @@
-import { anyApi } from "convex/server";
+import { anyApi, makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authAction, authMutation, authQuery } from "../lib/authWrappers";
 import { evaluateRuleWithSegmentSupport } from "../audienceRules";
 import { hasTerminalImpression } from "./helpers";
+
+const NOTIFICATIONS_ROUTE_EVENT_INTERNAL_REF = makeFunctionReference("notifications:routeEvent");
 
 export const triggerForVisitors = authMutation({
   args: {
@@ -137,14 +139,10 @@ export const sendPushTrigger = authAction({
     ) => Promise<unknown>;
     const carouselGetRef = (anyApi as unknown as {
       carousels: { get: unknown; getEligibleVisitorsWithPushTokens: unknown };
-      notifications: { routeEvent: unknown };
     }).carousels.get;
     const eligibleVisitorsRef = (anyApi as unknown as {
       carousels: { getEligibleVisitorsWithPushTokens: unknown };
     }).carousels.getEligibleVisitorsWithPushTokens;
-    const routeEventRef = (anyApi as unknown as {
-      notifications: { routeEvent: unknown };
-    }).notifications.routeEvent;
     const carousel = (await runQuery(carouselGetRef, {
       id: args.carouselId,
     })) as
@@ -180,7 +178,7 @@ export const sendPushTrigger = authAction({
       new Set(eligibleVisitors.map((visitor: { visitorId: Id<"visitors"> }) => visitor.visitorId))
     ) as Id<"visitors">[];
 
-    const routed = (await runMutation(routeEventRef, {
+    const routed = (await runMutation(NOTIFICATIONS_ROUTE_EVENT_INTERNAL_REF, {
       eventType: "carousel_trigger",
       domain: "outbound",
       audience: "visitor",

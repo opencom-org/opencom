@@ -37,9 +37,13 @@ Goal: ship a professional open-source customer messaging platform with strong de
   - [ ] chat attachments
   - [ ] if skipped, dont re-ask for their email each time - give them a subtle affordance where they can add their email if they change their mind
   - [ ] showcase the dashboard on the landing app?
-  - [ ] API for headless management?
+  - [ ] API for headless management
 - [ ] publish to npm
 - [ ] paid plan
+- [ ] AI updates
+  - [ ] BYOK for AI in hosted / paid plan
+  - [ ] pull available models from provider API and display them in the settings UI to control which model is used
+  - [ ] allow customising the agent's system prompt? 
 
 
 - [ ] Check AI chat / article suggestions setup is working
