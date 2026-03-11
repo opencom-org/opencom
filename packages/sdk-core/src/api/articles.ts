@@ -4,6 +4,8 @@ import { getClient, getConfig } from "./client";
 import type { VisitorId, ArticleId, ArticleData } from "../types";
 import { getVisitorState } from "../state/visitor";
 
+// Generated api.articles.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit article refs only.
 const SEARCH_ARTICLES_FOR_VISITOR_REF =
   makeFunctionReference("articles:searchForVisitor") as FunctionReference<"query">;
 const LIST_ARTICLES_FOR_VISITOR_REF =

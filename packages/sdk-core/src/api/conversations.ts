@@ -4,18 +4,18 @@ import { getClient, getConfig } from "./client";
 import type { VisitorId, ConversationId } from "../types";
 import { getVisitorState } from "../state/visitor";
 
+// Generated api.conversations.* and api.messages.* refs trigger TS2589 in sdk-core,
+// so keep the fallback localized to these explicit conversation refs only.
 const CREATE_CONVERSATION_REF =
   makeFunctionReference("conversations:createForVisitor") as FunctionReference<"mutation">;
 const GET_OR_CREATE_CONVERSATION_REF =
   makeFunctionReference("conversations:getOrCreateForVisitor") as FunctionReference<"mutation">;
-const LIST_MESSAGES_REF =
-  makeFunctionReference("messages:list") as FunctionReference<"query">;
+const LIST_MESSAGES_REF = makeFunctionReference("messages:list") as FunctionReference<"query">;
 const LIST_CONVERSATIONS_BY_VISITOR_REF =
   makeFunctionReference("conversations:listByVisitor") as FunctionReference<"query">;
 const MARK_AS_READ_REF =
   makeFunctionReference("conversations:markAsRead") as FunctionReference<"mutation">;
-const SEND_MESSAGE_REF =
-  makeFunctionReference("messages:send") as FunctionReference<"mutation">;
+const SEND_MESSAGE_REF = makeFunctionReference("messages:send") as FunctionReference<"mutation">;
 
 function requireVisitorSessionToken(sessionToken?: string): string {
   const resolvedSessionToken = sessionToken ?? getVisitorState().sessionToken ?? undefined;

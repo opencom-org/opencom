@@ -4,6 +4,8 @@ import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 
+// Generated api.checklists.* refs trigger TS2589 in sdk-core, so keep the
+// fallback localized to these explicit checklist refs only.
 const GET_ELIGIBLE_CHECKLISTS_REF =
   makeFunctionReference("checklists:getEligible") as FunctionReference<"query">;
 const GET_CHECKLIST_PROGRESS_REF =

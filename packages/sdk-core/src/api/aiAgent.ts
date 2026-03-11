@@ -4,6 +4,8 @@ import { getClient, getConfig } from "./client";
 import type { ConversationId, VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
 
+// Generated api.aiAgent.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit AI agent refs only.
 const GET_PUBLIC_AI_SETTINGS_REF =
   makeFunctionReference("aiAgent:getPublicSettings") as FunctionReference<"query">;
 const GET_RELEVANT_KNOWLEDGE_REF =

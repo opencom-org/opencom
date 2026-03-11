@@ -4,6 +4,8 @@ import { getClient, getConfig } from "./client";
 import type { VisitorId, CarouselId, CarouselData, CarouselScreen } from "../types";
 import { getVisitorState } from "../state/visitor";
 
+// Generated api.carousels.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit carousel refs only.
 const GET_CAROUSEL_REF = makeFunctionReference("carousels:get") as FunctionReference<"query">;
 const RECORD_CAROUSEL_IMPRESSION_REF =
   makeFunctionReference("carousels:recordImpression") as FunctionReference<"mutation">;

@@ -4,6 +4,8 @@ import { getClient, getConfig } from "./client";
 import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
 
+// Generated api.tickets.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit ticket refs only.
 const CREATE_TICKET_REF = makeFunctionReference("tickets:create") as FunctionReference<"mutation">;
 const LIST_TICKETS_BY_VISITOR_REF =
   makeFunctionReference("tickets:listByVisitor") as FunctionReference<"query">;

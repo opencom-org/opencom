@@ -3,6 +3,8 @@ import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId, EventProperties } from "../types";
 
+// Generated api.events.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit event refs only.
 const TRACK_EVENT_REF = makeFunctionReference("events:track") as FunctionReference<"mutation">;
 const TRACK_AUTO_EVENT_REF =
   makeFunctionReference("events:trackAutoEvent") as FunctionReference<"mutation">;

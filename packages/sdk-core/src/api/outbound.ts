@@ -8,6 +8,8 @@ import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 
+// Generated api.outboundMessages.* refs trigger TS2589 in sdk-core, so keep the
+// fallback localized to these explicit outbound refs only.
 const GET_ELIGIBLE_OUTBOUND_MESSAGES_REF =
   makeFunctionReference("outboundMessages:getEligible") as FunctionReference<"query">;
 const TRACK_OUTBOUND_IMPRESSION_REF =

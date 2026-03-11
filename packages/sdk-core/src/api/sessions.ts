@@ -3,6 +3,8 @@ import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { DeviceInfo, UserIdentification } from "../types";
 
+// Generated api.widgetSessions.* refs trigger TS2589 in sdk-core, so keep the
+// fallback localized to these explicit session refs only.
 const BOOT_SESSION_REF =
   makeFunctionReference("widgetSessions:boot") as FunctionReference<"mutation">;
 const REFRESH_SESSION_REF =

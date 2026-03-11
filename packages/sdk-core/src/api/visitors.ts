@@ -3,6 +3,8 @@ import { getClient } from "./client";
 import { getVisitorState } from "../state/visitor";
 import type { UserIdentification, DeviceInfo, LocationInfo, VisitorId } from "../types";
 
+// Generated api.visitors.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit visitor refs only.
 const IDENTIFY_VISITOR_REF =
   makeFunctionReference("visitors:identify") as FunctionReference<"mutation">;
 const HEARTBEAT_VISITOR_REF =

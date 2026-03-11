@@ -2,6 +2,8 @@ import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 
+// Generated api.officeHours.* refs trigger TS2589 in sdk-core, so keep the
+// fallback localized to these explicit office-hours refs only.
 const IS_CURRENTLY_OPEN_REF =
   makeFunctionReference("officeHours:isCurrentlyOpen") as FunctionReference<"query">;
 const GET_EXPECTED_REPLY_TIME_REF =

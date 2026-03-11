@@ -2,6 +2,8 @@ import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 
+// Generated api.commonIssueButtons.* refs trigger TS2589 in sdk-core, so keep
+// the fallback localized to these explicit common-issue refs only.
 const LIST_COMMON_ISSUE_BUTTONS_REF =
   makeFunctionReference("commonIssueButtons:list") as FunctionReference<"query">;
 
