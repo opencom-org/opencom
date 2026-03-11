@@ -6,7 +6,7 @@ import {
   useMutation,
   useQuery,
 } from "convex/react";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import type { FunctionReference } from "convex/server";
 
 type MobileArgs = Record<string, unknown>;
 
@@ -30,24 +30,6 @@ export type MobileActionRef<Args extends MobileArgs, Result> = FunctionReference
   Args,
   Result
 >;
-
-export function mobileQueryRef<Args extends MobileArgs, Result>(
-  functionName: string
-): MobileQueryRef<Args, Result> {
-  return makeFunctionReference<"query", Args, Result>(functionName);
-}
-
-export function mobileMutationRef<Args extends MobileArgs, Result>(
-  functionName: string
-): MobileMutationRef<Args, Result> {
-  return makeFunctionReference<"mutation", Args, Result>(functionName);
-}
-
-export function mobileActionRef<Args extends MobileArgs, Result>(
-  functionName: string
-): MobileActionRef<Args, Result> {
-  return makeFunctionReference<"action", Args, Result>(functionName);
-}
 
 function toMobileQueryArgs<Args extends MobileArgs, Result>(
   args: Args | "skip"

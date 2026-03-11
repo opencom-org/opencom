@@ -1,10 +1,6 @@
 import type { Id } from "@opencom/convex/dataModel";
-import {
-  mobileMutationRef,
-  mobileQueryRef,
-  useMobileMutation,
-  useMobileQuery,
-} from "../../lib/convex/hooks";
+import { makeFunctionReference } from "convex/server";
+import { useMobileMutation, useMobileQuery } from "../../lib/convex/hooks";
 import type {
   MobileConversationMessage,
   MobileConversationRecord,
@@ -37,26 +33,36 @@ type MarkConversationReadArgs = {
   readerType: "agent" | "visitor";
 };
 
-const CONVERSATION_GET_QUERY_REF = mobileQueryRef<
+const CONVERSATION_GET_QUERY_REF = makeFunctionReference<
+  "query",
   ConversationIdArgs,
   MobileConversationRecord | null
 >("conversations:get");
-const VISITOR_GET_QUERY_REF = mobileQueryRef<{ id: Id<"visitors"> }, MobileVisitorRecord>(
-  "visitors:get"
-);
-const MESSAGES_LIST_QUERY_REF = mobileQueryRef<MessagesListArgs, MobileConversationMessage[]>(
-  "messages:list"
-);
-const SEND_MESSAGE_MUTATION_REF = mobileMutationRef<SendMessageArgs, Id<"messages">>(
-  "messages:send"
-);
-const UPDATE_CONVERSATION_STATUS_MUTATION_REF = mobileMutationRef<
+const VISITOR_GET_QUERY_REF = makeFunctionReference<
+  "query",
+  { id: Id<"visitors"> },
+  MobileVisitorRecord
+>("visitors:get");
+const MESSAGES_LIST_QUERY_REF = makeFunctionReference<
+  "query",
+  MessagesListArgs,
+  MobileConversationMessage[]
+>("messages:list");
+const SEND_MESSAGE_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  SendMessageArgs,
+  Id<"messages">
+>("messages:send");
+const UPDATE_CONVERSATION_STATUS_MUTATION_REF = makeFunctionReference<
+  "mutation",
   UpdateConversationStatusArgs,
   null
 >("conversations:updateStatus");
-const MARK_CONVERSATION_READ_MUTATION_REF = mobileMutationRef<MarkConversationReadArgs, null>(
-  "conversations:markAsRead"
-);
+const MARK_CONVERSATION_READ_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  MarkConversationReadArgs,
+  null
+>("conversations:markAsRead");
 
 function resolveConversationId(
   conversationId?: string | Id<"conversations"> | null

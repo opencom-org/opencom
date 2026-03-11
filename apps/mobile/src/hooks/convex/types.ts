@@ -24,30 +24,68 @@ export type MobileCurrentUserRecord = {
   workspaces: MobileWorkspace[];
 } | null;
 
-export type HostedOnboardingState = {
-  status: "not_started" | "started" | "completed";
+export type HostedOnboardingStatus = "not_started" | "in_progress" | "completed";
+
+export type HostedOnboardingView = {
+  status: HostedOnboardingStatus;
+  currentStep: number;
+  completedSteps: string[];
+  onboardingVerificationToken: string | null;
+  verificationToken: string | null;
+  verificationTokenIssuedAt: number | null;
+  widgetVerifiedAt: number | null;
   isWidgetVerified: boolean;
-  verificationToken?: string | null;
-} | null;
+  updatedAt: number | null;
+};
+
+export type HostedOnboardingState =
+  | (HostedOnboardingView & {
+      hasRecognizedInstall: boolean;
+      latestDetectedAt: number | null;
+      latestRecognizedDetectedAt: number | null;
+      detectedIntegrationCount: number;
+    })
+  | null;
+
+export type HostedOnboardingVerificationTokenResult = {
+  token: string;
+  issuedAt: number;
+};
+
+export type CompleteHostedOnboardingWidgetStepResult =
+  | {
+      success: true;
+      status: "completed";
+      currentStep: number;
+      completedSteps: string[];
+      updatedAt: number;
+    }
+  | {
+      success: false;
+      reason: "token_mismatch" | "not_verified";
+    };
 
 export type HostedOnboardingIntegrationSignal = {
   id: string;
-  integrationKey: string;
   clientType: string;
-  clientVersion?: string | null;
-  status: "recognized" | "active" | "inactive";
+  clientVersion: string | null;
+  clientIdentifier: string | null;
+  origin: string | null;
+  currentUrl: string | null;
+  devicePlatform: string | null;
+  sessionCount: number;
+  activeSessionCount: number;
+  lastSeenAt: number;
+  latestSessionExpiresAt: number;
   isActiveNow: boolean;
   matchesCurrentVerificationWindow: boolean;
-  origin?: string | null;
-  currentUrl?: string | null;
-  clientIdentifier?: string | null;
-  lastSeenAt?: number | null;
-  activeSessionCount: number;
-  detectedAt?: number | null;
-  metadata?: Record<string, unknown> | null;
 };
 
 export type HostedOnboardingIntegrationSignals = {
+  tokenIssuedAt: number | null;
+  hasRecognizedInstall: boolean;
+  latestDetectedAt: number | null;
+  latestRecognizedDetectedAt: number | null;
   integrations: HostedOnboardingIntegrationSignal[];
 } | null;
 

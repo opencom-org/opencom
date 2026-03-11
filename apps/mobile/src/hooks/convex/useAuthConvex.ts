@@ -1,11 +1,7 @@
 import type { Id } from "@opencom/convex/dataModel";
-import {
-  mobileMutationRef,
-  mobileQueryRef,
-  useMobileMutation,
-  useMobileQuery,
-} from "../../lib/convex/hooks";
-import type { HostedOnboardingState, MobileCurrentUserRecord } from "./types";
+import { makeFunctionReference } from "convex/server";
+import { useMobileMutation, useMobileQuery } from "../../lib/convex/hooks";
+import type { HostedOnboardingState, MobileAuthUser, MobileCurrentUserRecord } from "./types";
 
 type WorkspaceArgs = {
   workspaceId: Id<"workspaces">;
@@ -20,21 +16,46 @@ type CompleteSignupProfileArgs = {
   workspaceName?: string;
 };
 
-const CURRENT_USER_QUERY_REF = mobileQueryRef<Record<string, never>, MobileCurrentUserRecord>(
-  "auth:currentUser"
-);
-const SWITCH_WORKSPACE_MUTATION_REF = mobileMutationRef<SwitchWorkspaceArgs, null>(
-  "auth:switchWorkspace"
-);
-const COMPLETE_SIGNUP_PROFILE_MUTATION_REF = mobileMutationRef<CompleteSignupProfileArgs, null>(
-  "auth:completeSignupProfile"
-);
-const UNREGISTER_ALL_PUSH_TOKENS_MUTATION_REF = mobileMutationRef<Record<string, never>, null>(
-  "pushTokens:unregisterAllForCurrentUser"
-);
-const HOSTED_ONBOARDING_STATE_QUERY_REF = mobileQueryRef<WorkspaceArgs, HostedOnboardingState>(
-  "workspaces:getHostedOnboardingState"
-);
+type SwitchWorkspaceResult = {
+  user: MobileAuthUser;
+};
+
+type CompleteSignupProfileResult = {
+  success: true;
+  userNameUpdated: boolean;
+  workspaceNameUpdated: boolean;
+};
+
+type UnregisterAllPushTokensResult = {
+  success: true;
+  removed: number;
+};
+
+const CURRENT_USER_QUERY_REF = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  MobileCurrentUserRecord
+>("auth:currentUser");
+const SWITCH_WORKSPACE_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  SwitchWorkspaceArgs,
+  SwitchWorkspaceResult
+>("auth:switchWorkspace");
+const COMPLETE_SIGNUP_PROFILE_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  CompleteSignupProfileArgs,
+  CompleteSignupProfileResult
+>("auth:completeSignupProfile");
+const UNREGISTER_ALL_PUSH_TOKENS_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  Record<string, never>,
+  UnregisterAllPushTokensResult
+>("pushTokens:unregisterAllForCurrentUser");
+const HOSTED_ONBOARDING_STATE_QUERY_REF = makeFunctionReference<
+  "query",
+  WorkspaceArgs,
+  HostedOnboardingState
+>("workspaces:getHostedOnboardingState");
 
 export function useAuthContextConvex() {
   return {

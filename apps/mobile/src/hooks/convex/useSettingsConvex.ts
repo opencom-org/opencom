@@ -1,12 +1,6 @@
 import type { Id } from "@opencom/convex/dataModel";
-import {
-  mobileActionRef,
-  mobileMutationRef,
-  mobileQueryRef,
-  useMobileAction,
-  useMobileMutation,
-  useMobileQuery,
-} from "../../lib/convex/hooks";
+import { makeFunctionReference } from "convex/server";
+import { useMobileAction, useMobileMutation, useMobileQuery } from "../../lib/convex/hooks";
 import type {
   InviteToWorkspaceResult,
   MobileNotificationPreferencesRecord,
@@ -59,39 +53,59 @@ type UpdateMyNotificationPreferencesArgs = {
   muted: boolean;
 };
 
-const MY_NOTIFICATION_PREFERENCES_QUERY_REF = mobileQueryRef<
+type MutationSuccessResult = {
+  success: true;
+};
+
+const MY_NOTIFICATION_PREFERENCES_QUERY_REF = makeFunctionReference<
+  "query",
   WorkspaceArgs,
   MobileNotificationPreferencesRecord
 >("notificationSettings:getMyPreferences");
-const WORKSPACE_GET_QUERY_REF = mobileQueryRef<WorkspaceGetArgs, MobileWorkspaceRecord>(
-  "workspaces:get"
-);
-const WORKSPACE_MEMBERS_LIST_QUERY_REF = mobileQueryRef<
+const WORKSPACE_GET_QUERY_REF = makeFunctionReference<
+  "query",
+  WorkspaceGetArgs,
+  MobileWorkspaceRecord
+>("workspaces:get");
+const WORKSPACE_MEMBERS_LIST_QUERY_REF = makeFunctionReference<
+  "query",
   WorkspaceArgs,
   MobileWorkspaceMemberRecord[]
 >("workspaceMembers:listByWorkspace");
-const PUSH_TOKENS_BY_USER_QUERY_REF = mobileQueryRef<PushTokensByUserArgs, MobilePushTokenRecord[]>(
-  "pushTokens:getByUser"
-);
-const UPDATE_ALLOWED_ORIGINS_MUTATION_REF = mobileMutationRef<UpdateAllowedOriginsArgs, null>(
-  "workspaces:updateAllowedOrigins"
-);
-const INVITE_TO_WORKSPACE_ACTION_REF = mobileActionRef<
+const PUSH_TOKENS_BY_USER_QUERY_REF = makeFunctionReference<
+  "query",
+  PushTokensByUserArgs,
+  MobilePushTokenRecord[]
+>("pushTokens:getByUser");
+const UPDATE_ALLOWED_ORIGINS_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  UpdateAllowedOriginsArgs,
+  void
+>("workspaces:updateAllowedOrigins");
+const INVITE_TO_WORKSPACE_ACTION_REF = makeFunctionReference<
+  "action",
   InviteToWorkspaceArgs,
   InviteToWorkspaceResult
 >("workspaceMembers:inviteToWorkspace");
-const UPDATE_WORKSPACE_ROLE_MUTATION_REF = mobileMutationRef<UpdateWorkspaceRoleArgs, null>(
-  "workspaceMembers:updateRole"
-);
-const REMOVE_WORKSPACE_MEMBER_MUTATION_REF = mobileMutationRef<RemoveWorkspaceMemberArgs, null>(
-  "workspaceMembers:remove"
-);
-const UPDATE_SIGNUP_SETTINGS_MUTATION_REF = mobileMutationRef<UpdateSignupSettingsArgs, null>(
-  "workspaces:updateSignupSettings"
-);
-const UPDATE_MY_NOTIFICATION_PREFERENCES_MUTATION_REF = mobileMutationRef<
+const UPDATE_WORKSPACE_ROLE_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  UpdateWorkspaceRoleArgs,
+  MutationSuccessResult
+>("workspaceMembers:updateRole");
+const REMOVE_WORKSPACE_MEMBER_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  RemoveWorkspaceMemberArgs,
+  MutationSuccessResult
+>("workspaceMembers:remove");
+const UPDATE_SIGNUP_SETTINGS_MUTATION_REF = makeFunctionReference<
+  "mutation",
+  UpdateSignupSettingsArgs,
+  void
+>("workspaces:updateSignupSettings");
+const UPDATE_MY_NOTIFICATION_PREFERENCES_MUTATION_REF = makeFunctionReference<
+  "mutation",
   UpdateMyNotificationPreferencesArgs,
-  null
+  Id<"notificationPreferences">
 >("notificationSettings:updateMyPreferences");
 
 type UseSettingsConvexOptions = {

@@ -1,5 +1,6 @@
 import type { Id } from "@opencom/convex/dataModel";
-import { mobileQueryRef, useMobileQuery } from "../../lib/convex/hooks";
+import { makeFunctionReference } from "convex/server";
+import { useMobileQuery } from "../../lib/convex/hooks";
 import type { MobileConversationStatus, MobileInboxPageResult } from "./types";
 
 type VisitorArgs = {
@@ -11,8 +12,10 @@ type InboxArgs = {
   status?: MobileConversationStatus;
 };
 
-const VISITOR_IS_ONLINE_QUERY_REF = mobileQueryRef<VisitorArgs, boolean>("visitors:isOnline");
-const INBOX_LIST_QUERY_REF = mobileQueryRef<InboxArgs, MobileInboxPageResult>(
+const VISITOR_IS_ONLINE_QUERY_REF = makeFunctionReference<"query", VisitorArgs, boolean>(
+  "visitors:isOnline"
+);
+const INBOX_LIST_QUERY_REF = makeFunctionReference<"query", InboxArgs, MobileInboxPageResult>(
   "conversations:listForInbox"
 );
 
