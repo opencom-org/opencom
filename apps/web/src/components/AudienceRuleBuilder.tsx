@@ -28,6 +28,18 @@ interface AudienceRuleBuilderProps {
   showSegmentSelector?: boolean;
 }
 
+const LIST_SEGMENTS_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Array<{ _id: Id<"segments">; name: string }>
+>("segments:list");
+
+const PREVIEW_AUDIENCE_RULES_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; audienceRules: AudienceRule },
+  { matching: number; total: number }
+>("tours:previewAudienceRules");
+
 const SYSTEM_PROPERTIES = [
   { key: "email", label: "Email", type: "string" },
   { key: "name", label: "Name", type: "string" },
@@ -513,22 +525,10 @@ export function AudienceRuleBuilder({
     isSegmentRule(value) ? "segment" : "custom"
   );
 
-  const listSegmentsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{ _id: Id<"segments">; name: string }>
-  >("segments:list");
-
-  const previewAudienceRulesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces">; audienceRules: AudienceRule },
-    { matching: number; total: number }
-  >("tours:previewAudienceRules");
-
-  const segments = useQuery(listSegmentsQuery, workspaceId ? { workspaceId } : "skip");
+  const segments = useQuery(LIST_SEGMENTS_QUERY, workspaceId ? { workspaceId } : "skip");
 
   const preview = useQuery(
-    previewAudienceRulesQuery,
+    PREVIEW_AUDIENCE_RULES_QUERY,
     workspaceId && isEnabled && value ? { workspaceId, audienceRules: value } : "skip"
   );
 

@@ -32,6 +32,40 @@ interface SuggestionsPanelProps {
   onSuggestionsUpdated?: (count: number) => void;
 }
 
+const AI_SETTINGS_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  { suggestionsEnabled?: boolean } | null
+>("aiAgent:getSettings");
+
+const GET_SUGGESTIONS_ACTION = makeFunctionReference<
+  "action",
+  { conversationId: Id<"conversations">; limit: number },
+  Suggestion[]
+>("suggestions:getForConversation");
+
+const TRACK_USAGE_REF = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    conversationId: Id<"conversations">;
+    contentType: Suggestion["type"];
+    contentId: string;
+  },
+  null
+>("suggestions:trackUsage");
+
+const TRACK_DISMISSAL_REF = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    conversationId: Id<"conversations">;
+    contentType: Suggestion["type"];
+    contentId: string;
+  },
+  null
+>("suggestions:trackDismissal");
+
 export function SuggestionsPanel({
   conversationId,
   workspaceId,
@@ -43,41 +77,10 @@ export function SuggestionsPanel({
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
-  const aiSettingsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { suggestionsEnabled?: boolean } | null
-  >("aiAgent:getSettings");
-  const getSuggestionsAction = makeFunctionReference<
-    "action",
-    { conversationId: Id<"conversations">; limit: number },
-    Suggestion[]
-  >("suggestions:getForConversation");
-  const trackUsageRef = makeFunctionReference<
-    "mutation",
-    {
-      workspaceId: Id<"workspaces">;
-      conversationId: Id<"conversations">;
-      contentType: Suggestion["type"];
-      contentId: string;
-    },
-    null
-  >("suggestions:trackUsage");
-  const trackDismissalRef = makeFunctionReference<
-    "mutation",
-    {
-      workspaceId: Id<"workspaces">;
-      conversationId: Id<"conversations">;
-      contentType: Suggestion["type"];
-      contentId: string;
-    },
-    null
-  >("suggestions:trackDismissal");
-
-  const settings = useQuery(aiSettingsQuery, { workspaceId });
-  const getSuggestions = useAction(getSuggestionsAction);
-  const trackUsage = useMutation(trackUsageRef);
-  const trackDismissal = useMutation(trackDismissalRef);
+  const settings = useQuery(AI_SETTINGS_QUERY, { workspaceId });
+  const getSuggestions = useAction(GET_SUGGESTIONS_ACTION);
+  const trackUsage = useMutation(TRACK_USAGE_REF);
+  const trackDismissal = useMutation(TRACK_DISMISSAL_REF);
 
   const fetchSuggestions = useCallback(async () => {
     if (!settings?.suggestionsEnabled) {
