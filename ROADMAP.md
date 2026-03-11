@@ -46,6 +46,18 @@ Goal: ship a professional open-source customer messaging platform with strong de
   - [ ] pull available models from provider API and display them in the settings UI to control which model is used
   - [ ] allow customising the agent's system prompt? 
 
+  apps/web/src/app/outbound/[id]/OutboundTriggerPanel.tsx
+Comment on lines +67 to 71
+              value={value.delaySeconds ?? 5}
+              onChange={(e) =>
+                onChange({ ...value, delaySeconds: Number.parseInt(e.target.value, 10) })
+                onChange({ ...value, delaySeconds: parseOptionalInteger(e.target.value) })
+              }
+              min={1}
+Switching from || to ?? means a value of 0 will now be treated as valid and shown in the number input, even though the input has min={1}. Consider normalizing/clamping parsed values (e.g., treat <= 0 as undefined/default) to avoid persisting an invalid delaySeconds state.
+
+
+
 
 - [ ] Check AI chat / article suggestions setup is working
   - [ ] Add links to relevant help center articles in the widget AI responses, and maybe in chat (suggested articles)

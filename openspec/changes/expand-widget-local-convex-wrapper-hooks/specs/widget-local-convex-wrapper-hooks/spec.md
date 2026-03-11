@@ -15,3 +15,12 @@ The system MUST limit direct `convex/react` imports in `apps/widget` to explicit
 - **WHEN** a widget source file outside the approved adapter, bootstrap, or targeted test boundaries imports `convex/react`
 - **THEN** hardening guard verification treats it as a regression
 - **AND** the module must migrate to widget-local wrapper or feature-local helper composition instead
+
+### Requirement: Widget adapter escape hatches MUST remain explicit and localized
+The system MUST keep any widget-specific Convex hook typing escape hatches confined to `apps/widget/src/lib/convex/hooks.ts`, and the adapter MUST use the narrowest practical helper or cast shape instead of broad runtime-facing boundaries.
+
+#### Scenario: Widget adapter still needs a type escape hatch
+- **WHEN** `apps/widget/src/lib/convex/hooks.ts` cannot satisfy `convex/react` hook signatures directly for a widget-local wrapper
+- **THEN** the adapter uses the smallest practical helper signature or cast within that file
+- **AND** covered widget runtime, shell, session, overlay, and tracking modules do not reintroduce equivalent Convex hook cast boundaries
+- **AND** widget hardening verification keeps the residual adapter boundary explicit
