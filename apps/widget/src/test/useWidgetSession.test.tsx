@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useMutation } from "convex/react";
 import { useWidgetSession } from "../hooks/useWidgetSession";
 import type { Id } from "@opencom/convex/dataModel";
+import { matchesFunctionPath } from "./convexFunctionRefs";
 
 vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
@@ -53,13 +54,13 @@ describe("useWidgetSession", () => {
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
 
     mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      if (mutationRef === "widgetSessions.boot") {
+      if (matchesFunctionPath(mutationRef, "widgetSessions:boot")) {
         return bootMock;
       }
-      if (mutationRef === "widgetSessions.refresh") {
+      if (matchesFunctionPath(mutationRef, "widgetSessions:refresh")) {
         return refreshMock;
       }
-      if (mutationRef === "visitors.heartbeat") {
+      if (matchesFunctionPath(mutationRef, "visitors:heartbeat")) {
         return heartbeatMock;
       }
       return vi.fn();

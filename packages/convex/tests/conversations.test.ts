@@ -16,10 +16,10 @@ describe("conversations", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "visitor@test.com",
       name: "Test Visitor",
@@ -30,7 +30,7 @@ describe("conversations", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -41,7 +41,7 @@ describe("conversations", () => {
   });
 
   it("should create a conversation", async () => {
-    const result = await client.mutation(api.testing.helpers.createTestConversation, {
+    const result = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
       status: "open",
@@ -52,7 +52,7 @@ describe("conversations", () => {
   });
 
   it("should list conversations for workspace", async () => {
-    const conversations = await client.mutation(api.testing.helpers.listTestConversations, {
+    const conversations = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
     });
 
@@ -61,7 +61,7 @@ describe("conversations", () => {
   });
 
   it("should get a conversation by id", async () => {
-    const conversation = await client.mutation(api.testing.helpers.getTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.getTestConversation, {
       id: testConversationId,
     });
 
@@ -71,12 +71,12 @@ describe("conversations", () => {
   });
 
   it("should update conversation status to closed", async () => {
-    await client.mutation(api.testing.helpers.updateTestConversationStatus, {
+    await client.mutation(api.testing_helpers.updateTestConversationStatus, {
       id: testConversationId,
       status: "closed",
     });
 
-    const conversation = await client.mutation(api.testing.helpers.getTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.getTestConversation, {
       id: testConversationId,
     });
 
@@ -84,12 +84,12 @@ describe("conversations", () => {
   });
 
   it("should update conversation status to snoozed", async () => {
-    await client.mutation(api.testing.helpers.updateTestConversationStatus, {
+    await client.mutation(api.testing_helpers.updateTestConversationStatus, {
       id: testConversationId,
       status: "snoozed",
     });
 
-    const conversation = await client.mutation(api.testing.helpers.getTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.getTestConversation, {
       id: testConversationId,
     });
 
@@ -97,7 +97,7 @@ describe("conversations", () => {
   });
 
   it("should filter conversations by status", async () => {
-    const snoozedConversations = await client.mutation(api.testing.helpers.listTestConversations, {
+    const snoozedConversations = await client.mutation(api.testing_helpers.listTestConversations, {
       workspaceId: testWorkspaceId,
       status: "snoozed",
     });

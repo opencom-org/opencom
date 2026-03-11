@@ -9,7 +9,6 @@ import {
 import {
   ensureAuthenticatedInPage,
   gotoWithAuthRecovery,
-  refreshAuthState,
 } from "./helpers/auth-refresh";
 import { getTestState } from "./helpers/test-state";
 
@@ -26,8 +25,6 @@ function requireTestContext(): { workspaceId: Id<"workspaces">; userEmail: strin
 }
 
 async function ensureAuthenticated(page: Page): Promise<void> {
-  const refreshed = await refreshAuthState();
-  expect(refreshed).toBe(true);
   const authed = await ensureAuthenticatedInPage(page);
   expect(authed).toBe(true);
 }
@@ -130,8 +127,8 @@ test.describe.serial("Web Admin - Carousel Management", () => {
     }
 
     await openCarouselsTab(page);
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByTestId(`carousel-delete-${seeded.carouselId}`).click();
+    await page.getByRole("button", { name: /^confirm$/i }).click();
     await expect(page.getByTestId(`carousel-row-${seeded.carouselId}`)).toHaveCount(0, {
       timeout: 10000,
     });

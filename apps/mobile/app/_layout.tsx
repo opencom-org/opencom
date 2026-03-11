@@ -36,10 +36,10 @@ function AuthNavigationGuard({ children }: { children: React.ReactNode }) {
     const onBackendScreen = inAuthGroup && segments.length <= 1;
     const inAppGroup = segments[0] === "(app)";
     const onAppRoot = inAppGroup && segments.length === 1;
-    const currentAppRoute = (segments[1] ?? "") as string;
+    const currentAppRoute = segments.at(1) ?? "";
     const onWorkspaceRoute = inAppGroup && currentAppRoute === "workspace";
     const onOnboardingRoute = inAppGroup && currentAppRoute === "onboarding";
-    const onHomeEntryRoute = inAppGroup && (onAppRoot || currentAppRoute === "index");
+    const onHomeEntryRoute = inAppGroup && onAppRoot;
 
     const homeRoute =
       defaultHomePath === "/workspace"

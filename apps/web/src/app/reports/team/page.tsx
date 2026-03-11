@@ -2,12 +2,47 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
+import type { Id } from "@opencom/convex/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { Users, Clock, CheckCircle, Download, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+
+const agentMetricsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  Array<{
+    agentId: string;
+    agentName: string;
+    conversationsHandled: number;
+    resolved: number;
+    avgResponseTimeMs: number;
+    avgResolutionTimeMs: number;
+  }>
+>("reporting:getAgentMetrics");
+
+const agentWorkloadDistributionQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  {
+    total: number;
+    unassigned: number;
+    distribution: Array<{ agentId: string; agentName: string; openConversations: number }>;
+  } | null
+>("reporting:getAgentWorkloadDistribution");
+
+const csatByAgentQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
+  Array<{
+    agentId: string;
+    agentName: string;
+    averageRating: number;
+    totalResponses: number;
+  }>
+>("reporting:getCsatByAgent");
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -25,17 +60,17 @@ function TeamReportContent() {
     now - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
 
   const agentMetrics = useQuery(
-    api.reporting.getAgentMetrics,
+    agentMetricsQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 
   const workloadDistribution = useQuery(
-    api.reporting.getAgentWorkloadDistribution,
+    agentWorkloadDistributionQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
   const csatByAgent = useQuery(
-    api.reporting.getCsatByAgent,
+    csatByAgentQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
   );
 

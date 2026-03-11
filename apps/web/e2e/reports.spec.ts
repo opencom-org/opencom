@@ -1,19 +1,8 @@
 import { test, expect } from "./fixtures";
-import {
-  ensureAuthenticatedInPage,
-  gotoWithAuthRecovery,
-  refreshAuthState,
-} from "./helpers/auth-refresh";
+import { ensureAuthenticatedInPage, gotoWithAuthRecovery } from "./helpers/auth-refresh";
 
 test.describe("Web Admin - Reports & Analytics", () => {
-  // Auth is handled by global setup via storageState in playwright.config.ts
-  test.beforeAll(async () => {
-    await refreshAuthState();
-  });
-
   test.beforeEach(async ({ page }) => {
-    const refreshed = await refreshAuthState();
-    expect(refreshed).toBe(true);
     const authed = await ensureAuthenticatedInPage(page);
     expect(authed).toBe(true);
   });

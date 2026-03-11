@@ -1,12 +1,129 @@
 import { v } from "convex/values";
 import { authMutation, authQuery } from "./lib/authWrappers";
 import { Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  getArticleVisibility,
+  getUnifiedArticleByIdOrLegacyInternalId,
+  isInternalArticle,
+  isPublicArticle,
+  listUnifiedArticlesWithLegacyFallback,
+  type CompatibilityArticle,
+} from "./lib/unifiedArticles";
 
 const contentTypeValidator = v.union(
   v.literal("article"),
   v.literal("internalArticle"),
   v.literal("snippet")
 );
+
+type KnowledgeContentType = "article" | "internalArticle" | "snippet";
+type KnowledgeContext = QueryCtx | MutationCtx;
+type KnowledgeSearchResult = {
+  id: string;
+  type: KnowledgeContentType;
+  title: string;
+  content: string;
+  snippet: string;
+  slug?: string;
+  tags?: string[];
+  relevanceScore: number;
+  updatedAt: number;
+};
+
+const createSnippet = (content: string, term: string): string => {
+  const lowerContent = content.toLowerCase();
+  const index = lowerContent.indexOf(term);
+  if (index === -1) {
+    return content.slice(0, 150) + (content.length > 150 ? "..." : "");
+  }
+  const start = Math.max(0, index - 50);
+  const end = Math.min(content.length, index + term.length + 100);
+  let snippet = content.slice(start, end);
+  if (start > 0) snippet = "..." + snippet;
+  if (end < content.length) snippet = snippet + "...";
+  return snippet;
+};
+
+const calculateScore = (title: string, content: string, term: string): number => {
+  let score = 0;
+  const lowerTitle = title.toLowerCase();
+  const lowerContent = content.toLowerCase();
+
+  if (lowerTitle.includes(term)) {
+    score += 10;
+    if (lowerTitle.startsWith(term)) score += 5;
+    if (lowerTitle === term) score += 10;
+  }
+
+  const contentMatches = (lowerContent.match(new RegExp(term, "g")) || []).length;
+  score += Math.min(contentMatches, 5);
+
+  return score;
+};
+
+function matchesKnowledgeSearch(
+  article: Pick<CompatibilityArticle, "title" | "content" | "tags">,
+  searchTerm: string
+) {
+  return (
+    article.title.toLowerCase().includes(searchTerm) ||
+    article.content.toLowerCase().includes(searchTerm) ||
+    (article.tags && article.tags.some((tag) => tag.toLowerCase().includes(searchTerm)))
+  );
+}
+
+async function resolveArticleKnowledgeItem(
+  ctx: Pick<KnowledgeContext, "db">,
+  workspaceId: Id<"workspaces">,
+  contentType: "article" | "internalArticle",
+  contentId: string
+) {
+  if (contentType === "internalArticle") {
+    const internalArticle = (await listUnifiedArticlesWithLegacyFallback(ctx.db, workspaceId)).find(
+      (entry) =>
+        isInternalArticle(entry) &&
+        (entry._id === (contentId as Id<"articles"> | Id<"internalArticles">) ||
+          entry.legacyInternalArticleId === (contentId as Id<"internalArticles">))
+    );
+
+    if (internalArticle) {
+      return {
+        id: internalArticle._id,
+        type: "internalArticle" as const,
+        title: internalArticle.title,
+        content: internalArticle.content,
+        slug: internalArticle.slug,
+        tags: internalArticle.tags,
+      };
+    }
+  }
+
+  const article = await getUnifiedArticleByIdOrLegacyInternalId(
+    ctx.db,
+    contentId as Id<"articles"> | Id<"internalArticles">
+  );
+  if (article) {
+    const visibility = getArticleVisibility(article);
+    if (
+      (contentType === "article" && visibility !== "public") ||
+      (contentType === "internalArticle" && visibility !== "internal")
+    ) {
+      return null;
+    }
+
+    return {
+      id: article._id,
+      type: contentType,
+      title: article.title,
+      content: article.content,
+      slug: article.slug,
+      tags: article.tags,
+    };
+  }
+
+  return null;
+}
 
 export const search = authQuery({
   args: {
@@ -23,171 +140,92 @@ export const search = authQuery({
     const limit = args.limit ?? 50;
     const contentTypes = args.contentTypes ?? ["article", "internalArticle", "snippet"];
 
-    type SearchResult = {
-      id: string;
-      type: "article" | "internalArticle" | "snippet";
-      title: string;
-      content: string;
-      snippet: string;
-      folderId?: string;
-      tags?: string[];
-      relevanceScore: number;
-      updatedAt: number;
-    };
+    const unifiedArticles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
+    const results: KnowledgeSearchResult[] = [];
 
-    const results: SearchResult[] = [];
-
-    // Helper to create snippet from content
-    const createSnippet = (content: string, term: string): string => {
-      const lowerContent = content.toLowerCase();
-      const index = lowerContent.indexOf(term);
-      if (index === -1) {
-        return content.slice(0, 150) + (content.length > 150 ? "..." : "");
-      }
-      const start = Math.max(0, index - 50);
-      const end = Math.min(content.length, index + term.length + 100);
-      let snippet = content.slice(start, end);
-      if (start > 0) snippet = "..." + snippet;
-      if (end < content.length) snippet = snippet + "...";
-      return snippet;
-    };
-
-    // Helper to calculate relevance score
-    const calculateScore = (title: string, content: string, term: string): number => {
-      let score = 0;
-      const lowerTitle = title.toLowerCase();
-      const lowerContent = content.toLowerCase();
-
-      // Title match is worth more
-      if (lowerTitle.includes(term)) {
-        score += 10;
-        if (lowerTitle.startsWith(term)) score += 5;
-        if (lowerTitle === term) score += 10;
-      }
-
-      // Content matches
-      const contentMatches = (lowerContent.match(new RegExp(term, "g")) || []).length;
-      score += Math.min(contentMatches, 5);
-
-      return score;
-    };
-
-    // Search public articles
     if (contentTypes.includes("article")) {
-      let articles = await ctx.db
-        .query("articles")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect();
-
-      // Filter published only for public articles
-      articles = articles.filter((a) => a.status === "published");
-
-      // Filter by folder if specified
-      if (args.folderId) {
-        articles = articles.filter((a) => a.folderId === args.folderId);
-      }
-
-      for (const article of articles) {
-        if (
-          article.title.toLowerCase().includes(searchTerm) ||
-          article.content.toLowerCase().includes(searchTerm)
-        ) {
-          results.push({
-            id: article._id,
-            type: "article",
-            title: article.title,
-            content: article.content,
-            snippet: createSnippet(article.content, searchTerm),
-            folderId: article.folderId,
-            relevanceScore: calculateScore(article.title, article.content, searchTerm),
-            updatedAt: article.updatedAt,
-          });
+      for (const article of unifiedArticles) {
+        if (!isPublicArticle(article) || article.status !== "published") {
+          continue;
         }
+        if (!matchesKnowledgeSearch(article, searchTerm)) {
+          continue;
+        }
+
+        results.push({
+          id: article._id,
+          type: "article",
+          title: article.title,
+          content: article.content,
+          snippet: createSnippet(article.content, searchTerm),
+          slug: article.slug,
+          relevanceScore: calculateScore(article.title, article.content, searchTerm),
+          updatedAt: article.updatedAt,
+        });
       }
     }
 
-    // Search internal articles
     if (contentTypes.includes("internalArticle")) {
-      let internalArticles = await ctx.db
-        .query("internalArticles")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect();
-
-      // Filter out archived
-      internalArticles = internalArticles.filter((a) => a.status !== "archived");
-
-      // Filter by folder if specified
-      if (args.folderId) {
-        internalArticles = internalArticles.filter((a) => a.folderId === args.folderId);
-      }
-
-      // Filter by tags if specified
-      if (args.tags && args.tags.length > 0) {
-        internalArticles = internalArticles.filter(
-          (a) => a.tags && args.tags!.some((tag: string) => a.tags!.includes(tag))
-        );
-      }
-
-      for (const article of internalArticles) {
-        const matchesSearch =
-          article.title.toLowerCase().includes(searchTerm) ||
-          article.content.toLowerCase().includes(searchTerm) ||
-          (article.tags && article.tags.some((tag) => tag.toLowerCase().includes(searchTerm)));
-
-        if (matchesSearch) {
-          results.push({
-            id: article._id,
-            type: "internalArticle",
-            title: article.title,
-            content: article.content,
-            snippet: createSnippet(article.content, searchTerm),
-            folderId: article.folderId,
-            tags: article.tags,
-            relevanceScore: calculateScore(article.title, article.content, searchTerm),
-            updatedAt: article.updatedAt,
-          });
+      for (const article of unifiedArticles) {
+        if (!isInternalArticle(article) || article.status !== "published") {
+          continue;
         }
+        if (args.tags && args.tags.length > 0) {
+          const articleTags = article.tags ?? [];
+          if (!args.tags.some((tag) => articleTags.includes(tag))) {
+            continue;
+          }
+        }
+        if (!matchesKnowledgeSearch(article, searchTerm)) {
+          continue;
+        }
+
+        results.push({
+          id: article._id,
+          type: "internalArticle",
+          title: article.title,
+          content: article.content,
+          snippet: createSnippet(article.content, searchTerm),
+          slug: article.slug,
+          tags: article.tags,
+          relevanceScore: calculateScore(article.title, article.content, searchTerm),
+          updatedAt: article.updatedAt,
+        });
       }
     }
 
-    // Search snippets
     if (contentTypes.includes("snippet")) {
-      let snippets = await ctx.db
+      const snippets = await ctx.db
         .query("snippets")
         .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
         .collect();
 
-      // Filter by folder if specified
-      if (args.folderId) {
-        snippets = snippets.filter((s) => s.folderId === args.folderId);
-      }
-
       for (const snippet of snippets) {
         if (
-          snippet.name.toLowerCase().includes(searchTerm) ||
-          snippet.content.toLowerCase().includes(searchTerm) ||
-          (snippet.shortcut && snippet.shortcut.toLowerCase().includes(searchTerm))
+          !snippet.name.toLowerCase().includes(searchTerm) &&
+          !snippet.content.toLowerCase().includes(searchTerm) &&
+          !(snippet.shortcut && snippet.shortcut.toLowerCase().includes(searchTerm))
         ) {
-          results.push({
-            id: snippet._id,
-            type: "snippet",
-            title: snippet.name,
-            content: snippet.content,
-            snippet: createSnippet(snippet.content, searchTerm),
-            folderId: snippet.folderId,
-            relevanceScore: calculateScore(snippet.name, snippet.content, searchTerm),
-            updatedAt: snippet.updatedAt,
-          });
+          continue;
         }
+
+        results.push({
+          id: snippet._id,
+          type: "snippet",
+          title: snippet.name,
+          content: snippet.content,
+          snippet: createSnippet(snippet.content, searchTerm),
+          relevanceScore: calculateScore(snippet.name, snippet.content, searchTerm),
+          updatedAt: snippet.updatedAt,
+        });
       }
     }
 
-    // Sort by relevance score (descending), then by updated date
-    results.sort((a, b) => {
-      if (b.relevanceScore !== a.relevanceScore) {
-        return b.relevanceScore - a.relevanceScore;
+    results.sort((left, right) => {
+      if (right.relevanceScore !== left.relevanceScore) {
+        return right.relevanceScore - left.relevanceScore;
       }
-      return b.updatedAt - a.updatedAt;
+      return right.updatedAt - left.updatedAt;
     });
 
     return results.slice(0, limit);
@@ -208,7 +246,6 @@ export const trackAccess = authMutation({
     }
     const now = Date.now();
 
-    // Check if there's an existing access record
     const existing = await ctx.db
       .query("recentContentAccess")
       .withIndex("by_user_content", (q) =>
@@ -220,12 +257,10 @@ export const trackAccess = authMutation({
       .first();
 
     if (existing) {
-      // Update the access time
       await ctx.db.patch(existing._id, { accessedAt: now });
       return existing._id;
     }
 
-    // Create new access record
     const accessId = await ctx.db.insert("recentContentAccess", {
       userId: args.userId,
       workspaceId: args.workspaceId,
@@ -234,7 +269,6 @@ export const trackAccess = authMutation({
       accessedAt: now,
     });
 
-    // Clean up old records (keep only last 50)
     const allAccess = await ctx.db
       .query("recentContentAccess")
       .withIndex("by_user_workspace", (q) =>
@@ -244,8 +278,7 @@ export const trackAccess = authMutation({
 
     if (allAccess.length > 50) {
       const sorted = allAccess.sort((a, b) => b.accessedAt - a.accessedAt);
-      const toDelete = sorted.slice(50);
-      for (const record of toDelete) {
+      for (const record of sorted.slice(50)) {
         await ctx.db.delete(record._id);
       }
     }
@@ -274,56 +307,44 @@ export const getRecentlyUsed = authQuery({
       )
       .collect();
 
-    // Sort by access time
-    const sorted = accessRecords.sort((a, b) => b.accessedAt - a.accessedAt);
-    const recent = sorted.slice(0, limit);
-
-    // Fetch the actual content
-    type RecentItem = {
+    const results: Array<{
       id: string;
-      type: "article" | "internalArticle" | "snippet";
+      type: KnowledgeContentType;
       title: string;
       content: string;
+      slug?: string;
       accessedAt: number;
-    };
+    }> = [];
 
-    const results: RecentItem[] = [];
-
-    for (const record of recent) {
-      if (record.contentType === "article") {
-        const article = await ctx.db.get(record.contentId as Id<"articles">);
-        if (article) {
-          results.push({
-            id: record.contentId,
-            type: "article",
-            title: article.title,
-            content: article.content,
-            accessedAt: record.accessedAt,
-          });
-        }
-      } else if (record.contentType === "internalArticle") {
-        const article = await ctx.db.get(record.contentId as Id<"internalArticles">);
-        if (article) {
-          results.push({
-            id: record.contentId,
-            type: "internalArticle",
-            title: article.title,
-            content: article.content,
-            accessedAt: record.accessedAt,
-          });
-        }
-      } else if (record.contentType === "snippet") {
+    for (const record of accessRecords.sort((a, b) => b.accessedAt - a.accessedAt).slice(0, limit)) {
+      if (record.contentType === "snippet") {
         const snippet = await ctx.db.get(record.contentId as Id<"snippets">);
-        if (snippet) {
-          results.push({
-            id: record.contentId,
-            type: "snippet",
-            title: snippet.name,
-            content: snippet.content,
-            accessedAt: record.accessedAt,
-          });
+        if (!snippet) {
+          continue;
         }
+        results.push({
+          id: snippet._id,
+          type: "snippet",
+          title: snippet.name,
+          content: snippet.content,
+          accessedAt: record.accessedAt,
+        });
+        continue;
       }
+
+      const article = await resolveArticleKnowledgeItem(
+        ctx,
+        record.workspaceId,
+        record.contentType,
+        record.contentId
+      );
+      if (!article) {
+        continue;
+      }
+      results.push({
+        ...article,
+        accessedAt: record.accessedAt,
+      });
     }
 
     return results;
@@ -350,10 +371,9 @@ export const getFrequentlyUsed = authQuery({
       )
       .collect();
 
-    // Count accesses per content item
     const accessCounts = new Map<
       string,
-      { count: number; type: "article" | "internalArticle" | "snippet"; lastAccess: number }
+      { count: number; type: KnowledgeContentType; lastAccess: number }
     >();
 
     for (const record of accessRecords) {
@@ -371,63 +391,49 @@ export const getFrequentlyUsed = authQuery({
       }
     }
 
-    // Sort by count, then by last access
-    const sorted = Array.from(accessCounts.entries())
-      .sort((a, b) => {
-        if (b[1].count !== a[1].count) {
-          return b[1].count - a[1].count;
-        }
-        return b[1].lastAccess - a[1].lastAccess;
-      })
-      .slice(0, limit);
-
-    // Fetch the actual content
-    type FrequentItem = {
+    const results: Array<{
       id: string;
-      type: "article" | "internalArticle" | "snippet";
+      type: KnowledgeContentType;
       title: string;
       content: string;
+      slug?: string;
       accessCount: number;
-    };
+    }> = [];
 
-    const results: FrequentItem[] = [];
+    for (const [key, data] of Array.from(accessCounts.entries())
+      .sort((left, right) => {
+        if (right[1].count !== left[1].count) {
+          return right[1].count - left[1].count;
+        }
+        return right[1].lastAccess - left[1].lastAccess;
+      })
+      .slice(0, limit)) {
+      const [, contentId] = key.split(":");
 
-    for (const [key, data] of sorted) {
-      const [type, id] = key.split(":");
-      if (type === "article") {
-        const article = await ctx.db.get(id as Id<"articles">);
-        if (article) {
-          results.push({
-            id,
-            type: "article",
-            title: article.title,
-            content: article.content,
-            accessCount: data.count,
-          });
+      if (data.type === "snippet") {
+        const snippet = await ctx.db.get(contentId as Id<"snippets">);
+        if (!snippet) {
+          continue;
         }
-      } else if (type === "internalArticle") {
-        const article = await ctx.db.get(id as Id<"internalArticles">);
-        if (article) {
-          results.push({
-            id,
-            type: "internalArticle",
-            title: article.title,
-            content: article.content,
-            accessCount: data.count,
-          });
-        }
-      } else if (type === "snippet") {
-        const snippet = await ctx.db.get(id as Id<"snippets">);
-        if (snippet) {
-          results.push({
-            id,
-            type: "snippet",
-            title: snippet.name,
-            content: snippet.content,
-            accessCount: data.count,
-          });
-        }
+        results.push({
+          id: snippet._id,
+          type: "snippet",
+          title: snippet.name,
+          content: snippet.content,
+          accessCount: data.count,
+        });
+        continue;
       }
+
+      const article = await resolveArticleKnowledgeItem(ctx, args.workspaceId, data.type, contentId);
+      if (!article) {
+        continue;
+      }
+
+      results.push({
+        ...article,
+        accessCount: data.count,
+      });
     }
 
     return results;

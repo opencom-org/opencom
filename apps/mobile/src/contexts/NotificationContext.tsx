@@ -3,7 +3,7 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "./AuthContext";
 import { router, usePathname } from "expo-router";
 import {
@@ -12,6 +12,18 @@ import {
   getNotificationNavigationTarget,
   shouldSuppressForegroundNotification,
 } from "../utils/notificationRouting";
+
+const registerPushTokenMutationRef = makeFunctionReference<
+  "mutation",
+  { token: string; userId: string; platform: "ios" | "android" },
+  null
+>("pushTokens:register");
+
+const pushDebugLogMutationRef = makeFunctionReference<
+  "mutation",
+  { stage: string; details?: string },
+  null
+>("pushTokens:debugLog");
 
 interface NotificationContextType {
   expoPushToken: string | null;
@@ -46,8 +58,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   const { user, isAuthenticated } = useAuth();
-  const registerToken = useMutation(api.pushTokens.register);
-  const debugLog = useMutation(api.pushTokens.debugLog);
+  const registerToken = useMutation(registerPushTokenMutationRef);
+  const debugLog = useMutation(pushDebugLogMutationRef);
 
   useEffect(() => {
     activeConversationIdRef.current = getActiveConversationIdFromPath(pathname);

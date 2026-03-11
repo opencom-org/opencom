@@ -52,6 +52,47 @@ vi.mock("expo-notifications", () => ({
 }));
 
 describe("push registration lifecycle", () => {
+  const resolveFunctionPath = (ref: unknown): string => {
+    if (typeof ref === "string") {
+      return ref;
+    }
+
+    if (!ref || typeof ref !== "object") {
+      return "";
+    }
+
+    const maybeRef = ref as {
+      functionName?: string;
+      reference?: { functionName?: string };
+      name?: string;
+      referencePath?: string;
+      function?: { name?: string };
+      [key: string]: unknown;
+    };
+
+    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+      String(symbol).includes("functionName")
+    );
+    const symbolValue = symbolFunctionName
+      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+      : undefined;
+
+    return (
+      (typeof symbolValue === "string" ? symbolValue : undefined) ??
+      maybeRef.functionName ??
+      maybeRef.reference?.functionName ??
+      maybeRef.name ??
+      maybeRef.referencePath ??
+      maybeRef.function?.name ??
+      ""
+    );
+  };
+
+  const expectFunctionPath = (ref: unknown, expectedPath: string) => {
+    const actualPath = resolveFunctionPath(ref);
+    expect([expectedPath, expectedPath.replace(":", ".")]).toContain(actualPath);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
@@ -79,7 +120,9 @@ describe("push registration lifecycle", () => {
     const token = await registerForPushNotifications();
 
     expect(token).toBe("ExponentPushToken[first-token]");
-    expect(mutationMock).toHaveBeenCalledWith("visitorPushTokens.register", {
+    expect(mutationMock).toHaveBeenCalledTimes(1);
+    expectFunctionPath(mutationMock.mock.calls[0][0], "visitorPushTokens:register");
+    expect(mutationMock.mock.calls[0][1]).toEqual({
       visitorId: "visitor_123",
       token: "ExponentPushToken[first-token]",
       platform: "ios",
@@ -119,37 +162,30 @@ describe("push registration lifecycle", () => {
     await registerForPushNotifications();
     await registerForPushNotifications();
 
-    expect(mutationMock.mock.calls).toEqual([
-      [
-        "visitorPushTokens.register",
-        {
-          visitorId: "visitor_123",
-          token: "ExponentPushToken[first-token]",
-          platform: "ios",
-          sessionToken: "wst_test",
-          workspaceId: "workspace_123",
-        },
-      ],
-      [
-        "visitorPushTokens.unregister",
-        {
-          token: "ExponentPushToken[first-token]",
-          visitorId: "visitor_123",
-          sessionToken: "wst_test",
-          workspaceId: "workspace_123",
-        },
-      ],
-      [
-        "visitorPushTokens.register",
-        {
-          visitorId: "visitor_123",
-          token: "ExponentPushToken[second-token]",
-          platform: "ios",
-          sessionToken: "wst_test",
-          workspaceId: "workspace_123",
-        },
-      ],
-    ]);
+    expect(mutationMock).toHaveBeenCalledTimes(3);
+    expectFunctionPath(mutationMock.mock.calls[0][0], "visitorPushTokens:register");
+    expect(mutationMock.mock.calls[0][1]).toEqual({
+      visitorId: "visitor_123",
+      token: "ExponentPushToken[first-token]",
+      platform: "ios",
+      sessionToken: "wst_test",
+      workspaceId: "workspace_123",
+    });
+    expectFunctionPath(mutationMock.mock.calls[1][0], "visitorPushTokens:unregister");
+    expect(mutationMock.mock.calls[1][1]).toEqual({
+      token: "ExponentPushToken[first-token]",
+      visitorId: "visitor_123",
+      sessionToken: "wst_test",
+      workspaceId: "workspace_123",
+    });
+    expectFunctionPath(mutationMock.mock.calls[2][0], "visitorPushTokens:register");
+    expect(mutationMock.mock.calls[2][1]).toEqual({
+      visitorId: "visitor_123",
+      token: "ExponentPushToken[second-token]",
+      platform: "ios",
+      sessionToken: "wst_test",
+      workspaceId: "workspace_123",
+    });
   });
 
   it("supports explicit unregister flow", async () => {
@@ -161,7 +197,8 @@ describe("push registration lifecycle", () => {
 
     expect(result).toBe(true);
     expect(getPushToken()).toBeNull();
-    expect(mutationMock).toHaveBeenLastCalledWith("visitorPushTokens.unregister", {
+    expectFunctionPath(mutationMock.mock.lastCall?.[0], "visitorPushTokens:unregister");
+    expect(mutationMock.mock.lastCall?.[1]).toEqual({
       token: "ExponentPushToken[first-token]",
       visitorId: "visitor_123",
       sessionToken: "wst_test",
@@ -176,7 +213,9 @@ describe("push registration lifecycle", () => {
     const token = await register();
 
     expect(token).toBe("ExponentPushToken[first-token]");
-    expect(mutationMock).toHaveBeenCalledWith("visitorPushTokens.register", {
+    expect(mutationMock).toHaveBeenCalledTimes(1);
+    expectFunctionPath(mutationMock.mock.calls[0][0], "visitorPushTokens:register");
+    expect(mutationMock.mock.calls[0][1]).toEqual({
       visitorId: "visitor_123",
       token: "ExponentPushToken[first-token]",
       platform: "ios",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 
 interface TooltipTriggerContext {
@@ -20,6 +20,20 @@ interface UseNavigationTrackingOptions {
   onTrackEvent: (name: string, properties?: Record<string, unknown>) => void;
   onTooltipContextChange: (updater: (prev: TooltipTriggerContext) => TooltipTriggerContext) => void;
 }
+
+const trackAutoEventMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    eventType: "page_view" | "session_start" | "session_end";
+    url: string;
+    sessionId: string;
+    properties?: Record<string, unknown>;
+  },
+  null
+>("events:trackAutoEvent");
 
 /**
  * Tracks page views, scroll depth, exit intent, and session start/end events.
@@ -44,7 +58,7 @@ export function useNavigationTracking({
   const maxScrollDepth = useRef(0);
   const scrollDepthThresholds = useRef(new Set<number>());
 
-  const trackAutoEventMutation = useMutation(api.events.trackAutoEvent);
+  const trackAutoEventMutation = useMutation(trackAutoEventMutationRef);
 
   const trackPageView = useCallback(() => {
     if (!visitorId || !activeWorkspaceId) return;

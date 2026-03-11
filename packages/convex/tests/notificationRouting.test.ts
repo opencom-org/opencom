@@ -229,6 +229,284 @@ describe("notification routing", () => {
     });
   });
 
+  it("routes visitor messages via notifyNewMessage with recipient selection parity", async () => {
+    const seeded = await t.run(async (ctx) => {
+      const now = Date.now();
+      const workspaceId = await ctx.db.insert("workspaces", {
+        name: "Notify Message Routing Workspace",
+        createdAt: now,
+      });
+
+      const activeUserId = await ctx.db.insert("users", {
+        workspaceId,
+        role: "agent",
+        createdAt: now,
+      });
+      const mutedUserId = await ctx.db.insert("users", {
+        workspaceId,
+        role: "agent",
+        createdAt: now,
+      });
+      const noTokenUserId = await ctx.db.insert("users", {
+        workspaceId,
+        role: "agent",
+        createdAt: now,
+      });
+
+      await ctx.db.insert("pushTokens", {
+        userId: activeUserId,
+        token: "ExponentPushToken[notify-message-active]",
+        platform: "ios",
+        notificationsEnabled: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("pushTokens", {
+        userId: mutedUserId,
+        token: "ExponentPushToken[notify-message-muted]",
+        platform: "ios",
+        notificationsEnabled: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await ctx.db.insert("notificationPreferences", {
+        userId: mutedUserId,
+        workspaceId,
+        muted: false,
+        events: {
+          newVisitorMessage: {
+            push: false,
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      const visitorId = await ctx.db.insert("visitors", {
+        workspaceId,
+        sessionId: "notify-message-session",
+        createdAt: now,
+      });
+      const conversationId = await ctx.db.insert("conversations", {
+        workspaceId,
+        visitorId,
+        status: "open",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const messageId = await ctx.db.insert("messages", {
+        conversationId,
+        senderType: "visitor",
+        senderId: visitorId,
+        content: "Need help with billing",
+        channel: "chat",
+        createdAt: now,
+      });
+
+      return {
+        activeUserId,
+        mutedUserId,
+        noTokenUserId,
+        messageId,
+        conversationId,
+      };
+    });
+
+    await t.mutation(internal.notifications.notifyNewMessage, {
+      conversationId: seeded.conversationId,
+      messageContent: "Need help with billing",
+      senderType: "visitor",
+      messageId: seeded.messageId,
+      senderId: "visitor",
+      sentAt: Date.now(),
+      channel: "chat",
+    });
+
+    await t.finishAllScheduledFunctions(() => {
+      vi.runAllTimers();
+    });
+
+    await t.run(async (ctx) => {
+      const eventKey = `chat_message:${seeded.messageId}`;
+      const events = await ctx.db
+        .query("notificationEvents")
+        .withIndex("by_event_key", (q) => q.eq("eventKey", eventKey))
+        .collect();
+      expect(events).toHaveLength(1);
+      expect(events[0].audience).toBe("agent");
+      expect(events[0].actorType).toBe("visitor");
+
+      const dedupeRows = await ctx.db
+        .query("notificationDedupeKeys")
+        .withIndex("by_event", (q) => q.eq("eventId", events[0]._id))
+        .collect();
+      expect(dedupeRows).toHaveLength(1);
+      expect(dedupeRows[0].userId).toBe(seeded.activeUserId);
+
+      const deliveries = await ctx.db
+        .query("notificationDeliveries")
+        .withIndex("by_event", (q) => q.eq("eventId", events[0]._id))
+        .collect();
+      const suppressionReasons = new Set(
+        deliveries
+          .filter((delivery) => delivery.status === "suppressed")
+          .map((delivery) => delivery.reason)
+      );
+
+      expect(suppressionReasons.has("preference_muted")).toBe(true);
+      expect(suppressionReasons.has("missing_push_token")).toBe(true);
+      expect(
+        deliveries.some(
+          (delivery) => delivery.userId === seeded.noTokenUserId && delivery.reason === "missing_push_token"
+        )
+      ).toBe(true);
+      expect(
+        deliveries.some(
+          (delivery) => delivery.userId === seeded.mutedUserId && delivery.reason === "preference_muted"
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("preserves ticket routing parity across assignment, status change, and comment events", async () => {
+    const seeded = await t.run(async (ctx) => {
+      const now = Date.now();
+      const workspaceId = await ctx.db.insert("workspaces", {
+        name: "Ticket Routing Workspace",
+        createdAt: now,
+      });
+
+      const assigneeId = await ctx.db.insert("users", {
+        workspaceId,
+        role: "agent",
+        createdAt: now,
+      });
+      const actorUserId = await ctx.db.insert("users", {
+        workspaceId,
+        role: "agent",
+        createdAt: now,
+      });
+
+      const visitorId = await ctx.db.insert("visitors", {
+        workspaceId,
+        sessionId: "ticket-routing-session",
+        createdAt: now,
+      });
+      const ticketId = await ctx.db.insert("tickets", {
+        workspaceId,
+        visitorId,
+        subject: "Broken checkout flow",
+        status: "submitted",
+        priority: "normal",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const commentId = await ctx.db.insert("ticketComments", {
+        ticketId,
+        authorType: "agent",
+        authorId: actorUserId,
+        content: "We are investigating this now.",
+        isInternal: false,
+        createdAt: now,
+      });
+
+      return { assigneeId, actorUserId, visitorId, ticketId, commentId };
+    });
+
+    await t.mutation(internal.notifications.notifyTicketAssigned, {
+      ticketId: seeded.ticketId,
+      assigneeId: seeded.assigneeId,
+      actorUserId: seeded.actorUserId,
+    });
+    await t.mutation(internal.notifications.notifyTicketStatusChanged, {
+      ticketId: seeded.ticketId,
+      oldStatus: "open",
+      newStatus: "resolved",
+      actorUserId: seeded.actorUserId,
+      changedAt: 123456789,
+    });
+    await t.mutation(internal.notifications.notifyTicketComment, {
+      ticketId: seeded.ticketId,
+      commentId: seeded.commentId,
+      actorUserId: seeded.actorUserId,
+    });
+
+    await t.finishAllScheduledFunctions(() => {
+      vi.runAllTimers();
+    });
+
+    await t.run(async (ctx) => {
+      const assignedEvent = await ctx.db
+        .query("notificationEvents")
+        .withIndex("by_event_key", (q) =>
+          q.eq("eventKey", `ticket_assigned:${seeded.ticketId}:${seeded.assigneeId}`)
+        )
+        .first();
+      expect(assignedEvent).toBeTruthy();
+      expect(assignedEvent?.audience).toBe("agent");
+
+      const statusEvent = await ctx.db
+        .query("notificationEvents")
+        .withIndex("by_event_key", (q) =>
+          q.eq("eventKey", `ticket_status_changed:${seeded.ticketId}:resolved:123456789`)
+        )
+        .first();
+      expect(statusEvent).toBeTruthy();
+      expect(statusEvent?.audience).toBe("visitor");
+
+      const commentEvent = await ctx.db
+        .query("notificationEvents")
+        .withIndex("by_event_key", (q) => q.eq("eventKey", `ticket_comment:${seeded.commentId}`))
+        .first();
+      expect(commentEvent).toBeTruthy();
+      expect(commentEvent?.audience).toBe("visitor");
+
+      const assignedDeliveries = assignedEvent
+        ? await ctx.db
+            .query("notificationDeliveries")
+            .withIndex("by_event", (q) => q.eq("eventId", assignedEvent._id))
+            .collect()
+        : [];
+      const statusDeliveries = statusEvent
+        ? await ctx.db
+            .query("notificationDeliveries")
+            .withIndex("by_event", (q) => q.eq("eventId", statusEvent._id))
+            .collect()
+        : [];
+      const commentDeliveries = commentEvent
+        ? await ctx.db
+            .query("notificationDeliveries")
+            .withIndex("by_event", (q) => q.eq("eventId", commentEvent._id))
+            .collect()
+        : [];
+
+      expect(
+        assignedDeliveries.some(
+          (delivery) =>
+            delivery.userId === seeded.assigneeId &&
+            delivery.recipientType === "agent" &&
+            delivery.reason === "missing_push_token"
+        )
+      ).toBe(true);
+      expect(
+        statusDeliveries.some(
+          (delivery) =>
+            delivery.visitorId === seeded.visitorId &&
+            delivery.recipientType === "visitor" &&
+            delivery.reason === "missing_push_token"
+        )
+      ).toBe(true);
+      expect(
+        commentDeliveries.some(
+          (delivery) =>
+            delivery.visitorId === seeded.visitorId &&
+            delivery.recipientType === "visitor" &&
+            delivery.reason === "missing_push_token"
+        )
+      ).toBe(true);
+    });
+  });
+
   it("removes invalid agent and visitor tokens after transport errors", async () => {
     const seeded = await t.run(async (ctx) => {
       const now = Date.now();

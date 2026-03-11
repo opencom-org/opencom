@@ -31,7 +31,6 @@ All 5 are in `apps/web/e2e/widget-features.spec.ts` and are currently conditiona
 These are guardrails that may skip depending on environment/auth/data state:
 
 - `TEST_ADMIN_SECRET` prerequisites:
-  - `apps/web/e2e/public-pages.spec.ts`
   - `apps/web/e2e/widget-outbound-and-tour-recovery.spec.ts`
 - Auth bootstrap guard (`Could not authenticate test page`) in:
   - `apps/web/e2e/audit-logs.spec.ts`
@@ -42,7 +41,6 @@ These are guardrails that may skip depending on environment/auth/data state:
   - `apps/web/e2e/snippets.spec.ts`
   - `apps/web/e2e/widget-features.spec.ts`
 - Feature/route availability guards:
-  - `apps/web/e2e/knowledge.spec.ts`
   - `apps/web/e2e/segments.spec.ts`
   - `apps/web/e2e/home-settings.spec.ts` (`Messenger Home section not visible after retry`)
 

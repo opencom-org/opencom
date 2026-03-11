@@ -1,0 +1,225 @@
+import type { Id } from "@opencom/convex/dataModel";
+import type {
+  AuthoringMessageButton,
+  AuthoringOutboundMessageContent,
+  AuthoringOutboundPrimaryButtonAction,
+  OutboundClickAction,
+  OutboundClickActionType,
+  OutboundMessageType,
+} from "@opencom/types";
+
+export type MessageType = OutboundMessageType;
+export type MessageClickActionType = OutboundClickActionType;
+export type PostPrimaryActionType = AuthoringOutboundPrimaryButtonAction;
+
+export type MessageClickAction = OutboundClickAction<Id<"articles">>;
+export type MessageButton = AuthoringMessageButton<Id<"tours">, Id<"articles">>;
+export type MessageContent = AuthoringOutboundMessageContent<
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
+
+export interface ClickActionFormState {
+  type: MessageClickActionType;
+  tabId: string;
+  articleId: string;
+  url: string;
+  prefillMessage: string;
+}
+
+export interface PostButtonFormState {
+  primaryButtonText: string;
+  primaryActionType: PostPrimaryActionType;
+  primaryActionUrl: string;
+  primaryActionTabId: string;
+  primaryActionArticleId: string;
+  primaryActionPrefillMessage: string;
+  dismissEnabled: boolean;
+  dismissButtonText: string;
+}
+
+export interface PostPreviewButton {
+  text: string;
+  variant: "primary" | "secondary";
+}
+
+export const CLICK_ACTION_OPTIONS = [
+  { value: "open_messenger", label: "Open Messenger" },
+  { value: "open_new_conversation", label: "Start New Conversation" },
+  { value: "open_widget_tab", label: "Open Widget Tab" },
+  { value: "open_help_article", label: "Open Help Article" },
+  { value: "open_url", label: "Open URL" },
+  { value: "dismiss", label: "Dismiss Message" },
+] as const satisfies ReadonlyArray<{ value: MessageClickActionType; label: string }>;
+
+export const POST_PRIMARY_ACTION_OPTIONS = [
+  { value: "open_new_conversation", label: "Start New Conversation" },
+  { value: "open_widget_tab", label: "Open Widget Tab" },
+  { value: "open_help_article", label: "Open Help Article" },
+  { value: "url", label: "Open URL" },
+] as const satisfies ReadonlyArray<{ value: PostPrimaryActionType; label: string }>;
+
+export const WIDGET_TAB_OPTIONS = [
+  { value: "home", label: "Home" },
+  { value: "messages", label: "Messages" },
+  { value: "help", label: "Help Center" },
+  { value: "tickets", label: "Tickets" },
+] as const satisfies ReadonlyArray<{ value: string; label: string }>;
+
+const DEFAULT_CLICK_ACTION_STATE: ClickActionFormState = {
+  type: "open_messenger",
+  tabId: "",
+  articleId: "",
+  url: "",
+  prefillMessage: "",
+};
+
+const DEFAULT_POST_BUTTON_STATE: PostButtonFormState = {
+  primaryButtonText: "Learn More",
+  primaryActionType: "open_new_conversation",
+  primaryActionUrl: "",
+  primaryActionTabId: "messages",
+  primaryActionArticleId: "",
+  primaryActionPrefillMessage: "",
+  dismissEnabled: true,
+  dismissButtonText: "Dismiss",
+};
+
+export function createDefaultClickActionFormState(): ClickActionFormState {
+  return { ...DEFAULT_CLICK_ACTION_STATE };
+}
+
+export function toClickActionFormState(
+  clickAction: MessageClickAction | undefined
+): ClickActionFormState {
+  if (!clickAction) {
+    return createDefaultClickActionFormState();
+  }
+
+  return {
+    type: clickAction.type,
+    tabId: clickAction.tabId ?? "",
+    articleId: (clickAction.articleId as string | undefined) ?? "",
+    url: clickAction.url ?? "",
+    prefillMessage: clickAction.prefillMessage ?? "",
+  };
+}
+
+export function toMessageClickAction(formState: ClickActionFormState): MessageClickAction {
+  return {
+    type: formState.type,
+    ...(formState.type === "open_widget_tab" && formState.tabId ? { tabId: formState.tabId } : {}),
+    ...(formState.type === "open_help_article" && formState.articleId
+      ? { articleId: formState.articleId as Id<"articles"> }
+      : {}),
+    ...(formState.type === "open_url" && formState.url ? { url: formState.url } : {}),
+    ...(formState.type === "open_new_conversation" && formState.prefillMessage
+      ? { prefillMessage: formState.prefillMessage }
+      : {}),
+  };
+}
+
+export function getClickActionSummary(formState: ClickActionFormState): string {
+  switch (formState.type) {
+    case "open_messenger":
+      return "Open Messenger";
+    case "open_new_conversation":
+      return "Start Conversation";
+    case "open_widget_tab":
+      return `Open Tab (${formState.tabId || "—"})`;
+    case "open_help_article":
+      return "Open Article";
+    case "open_url":
+      return "Open URL";
+    case "dismiss":
+      return "Dismiss";
+  }
+}
+
+export function createDefaultPostButtonFormState(): PostButtonFormState {
+  return { ...DEFAULT_POST_BUTTON_STATE };
+}
+
+export function getPostPreviewButtons(formState: PostButtonFormState): PostPreviewButton[] {
+  return [
+    ...(formState.primaryButtonText.trim()
+      ? [{ text: formState.primaryButtonText.trim(), variant: "primary" as const }]
+      : []),
+    ...(formState.dismissEnabled && formState.dismissButtonText.trim()
+      ? [{ text: formState.dismissButtonText.trim(), variant: "secondary" as const }]
+      : []),
+  ];
+}
+
+export function toPostButtonFormState(buttons: MessageButton[] | undefined): PostButtonFormState {
+  if (!buttons || buttons.length === 0) {
+    return createDefaultPostButtonFormState();
+  }
+
+  const primaryButton = buttons.find((button) => button.action !== "dismiss");
+  const dismissButton = buttons.find((button) => button.action === "dismiss");
+  const hasExistingPostButtons = buttons.length > 0;
+
+  if (!primaryButton) {
+    return {
+      ...createDefaultPostButtonFormState(),
+      dismissEnabled: dismissButton ? true : !hasExistingPostButtons,
+      dismissButtonText: dismissButton?.text ?? DEFAULT_POST_BUTTON_STATE.dismissButtonText,
+    };
+  }
+
+  const parsedPrimaryAction: PostPrimaryActionType =
+    primaryButton.action === "url" ||
+    primaryButton.action === "open_new_conversation" ||
+    primaryButton.action === "open_widget_tab" ||
+    primaryButton.action === "open_help_article"
+      ? primaryButton.action
+      : "open_new_conversation";
+
+  return {
+    primaryButtonText: primaryButton.text || DEFAULT_POST_BUTTON_STATE.primaryButtonText,
+    primaryActionType: parsedPrimaryAction,
+    primaryActionUrl: primaryButton.url || "",
+    primaryActionTabId: primaryButton.tabId || DEFAULT_POST_BUTTON_STATE.primaryActionTabId,
+    primaryActionArticleId: (primaryButton.articleId as string | undefined) || "",
+    primaryActionPrefillMessage: primaryButton.prefillMessage || "",
+    dismissEnabled: dismissButton ? true : !hasExistingPostButtons,
+    dismissButtonText: dismissButton?.text || DEFAULT_POST_BUTTON_STATE.dismissButtonText,
+  };
+}
+
+export function toPostButtons(formState: PostButtonFormState): MessageButton[] | undefined {
+  const buttons: MessageButton[] = [];
+
+  const trimmedPrimaryText = formState.primaryButtonText.trim();
+  if (trimmedPrimaryText) {
+    buttons.push({
+      text: trimmedPrimaryText,
+      action: formState.primaryActionType,
+      ...(formState.primaryActionType === "url" && formState.primaryActionUrl.trim()
+        ? { url: formState.primaryActionUrl.trim() }
+        : {}),
+      ...(formState.primaryActionType === "open_widget_tab" && formState.primaryActionTabId
+        ? { tabId: formState.primaryActionTabId }
+        : {}),
+      ...(formState.primaryActionType === "open_help_article" && formState.primaryActionArticleId
+        ? { articleId: formState.primaryActionArticleId as Id<"articles"> }
+        : {}),
+      ...(formState.primaryActionType === "open_new_conversation" &&
+      formState.primaryActionPrefillMessage.trim()
+        ? { prefillMessage: formState.primaryActionPrefillMessage.trim() }
+        : {}),
+    });
+  }
+
+  const trimmedDismissText = formState.dismissButtonText.trim();
+  if (formState.dismissEnabled && trimmedDismissText) {
+    buttons.push({
+      text: trimmedDismissText,
+      action: "dismiss",
+    });
+  }
+
+  return buttons.length > 0 ? buttons : undefined;
+}

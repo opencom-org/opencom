@@ -1,7 +1,11 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { getClient } from "./client";
 import { getVisitorState } from "../state/visitor";
 import type { UserIdentification, DeviceInfo, LocationInfo, VisitorId } from "../types";
+
+function getMutationRef(name: string): import("convex/server").FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as import("convex/server").FunctionReference<"mutation">;
+}
 
 // getOrCreateVisitor has been removed — use bootSession instead.
 
@@ -15,7 +19,7 @@ export async function identifyVisitor(params: {
 }): Promise<void> {
   const client = getClient();
 
-  await client.mutation(api.visitors.identify, {
+  await client.mutation(getMutationRef("visitors:identify"), {
     visitorId: params.visitorId,
     sessionToken: params.sessionToken,
     email: params.user.email,
@@ -34,7 +38,7 @@ export async function identifyVisitor(params: {
 
 export async function heartbeat(visitorId: VisitorId, sessionToken?: string): Promise<void> {
   const client = getClient();
-  await client.mutation(api.visitors.heartbeat, { visitorId, sessionToken });
+  await client.mutation(getMutationRef("visitors:heartbeat"), { visitorId, sessionToken });
 }
 
 export async function updateLocation(
@@ -45,7 +49,7 @@ export async function updateLocation(
   const client = getClient();
   const state = getVisitorState();
   const token = sessionToken ?? state.sessionToken ?? undefined;
-  await client.mutation(api.visitors.updateLocation, {
+  await client.mutation(getMutationRef("visitors:updateLocation"), {
     visitorId,
     sessionToken: token,
     location,

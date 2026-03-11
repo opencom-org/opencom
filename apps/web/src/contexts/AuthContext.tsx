@@ -11,10 +11,10 @@ import {
 } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 
-interface User {
+export interface User {
   _id: Id<"users">;
   email: string;
   name?: string;
@@ -22,7 +22,7 @@ interface User {
   role: "owner" | "admin" | "agent" | "viewer";
 }
 
-interface Workspace {
+export interface Workspace {
   _id: Id<"workspaces">;
   name: string;
   role: "owner" | "admin" | "agent" | "viewer";
@@ -51,6 +51,29 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 const ACTIVE_WORKSPACE_KEY = "opencom_active_workspace";
+const currentUserQuery = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  {
+    user: User | null;
+    workspaces: Workspace[];
+  } | null
+>("auth:currentUser");
+const switchWorkspaceRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  unknown
+>("auth:switchWorkspace");
+const completeSignupProfileRef = makeFunctionReference<
+  "mutation",
+  { name?: string; workspaceName?: string },
+  unknown
+>("auth:completeSignupProfile");
+const hostedOnboardingStateQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  { isWidgetVerified: boolean }
+>("workspaces:getHostedOnboardingState");
 
 export function AuthProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
@@ -60,11 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
 
   // Query current user from Convex Auth session
-  const convexAuthUser = useQuery(api.auth.currentUser);
+  const convexAuthUser = useQuery(currentUserQuery);
 
   // Workspace mutation
-  const switchWorkspaceMutation = useMutation(api.auth.switchWorkspace);
-  const completeSignupProfileMutation = useMutation(api.auth.completeSignupProfile);
+  const switchWorkspaceMutation = useMutation(switchWorkspaceRef);
+  const completeSignupProfileMutation = useMutation(completeSignupProfileRef);
 
   // Derive state from query
   const user = useMemo(() => (convexAuthUser?.user as User | null) ?? null, [convexAuthUser]);
@@ -76,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
   const isAuthenticated = !!user;
   const workspaceIdForHomeRouting = activeWorkspace?._id ?? user?.workspaceId ?? null;
   const hostedOnboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
+    hostedOnboardingStateQuery,
     workspaceIdForHomeRouting ? { workspaceId: workspaceIdForHomeRouting } : "skip"
   );
   const isHomeRouteLoading =

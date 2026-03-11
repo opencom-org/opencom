@@ -1,13 +1,19 @@
 import { v } from "convex/values";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import {
   internalAction,
   internalMutation,
   internalQuery,
   type MutationCtx,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { evaluateRuleWithSegmentSupport, validateAudienceRule } from "./audienceRules";
+import {
+  dispatchPushAttemptsRef,
+  getShallowRunAction,
+  getShallowRunMutation,
+  getShallowRunQuery,
+} from "./notifications/functionRefs";
 import { audienceRulesOrSegmentValidator, pushDataValidator } from "./validators";
 import { authMutation, authQuery } from "./lib/authWrappers";
 
@@ -18,6 +24,63 @@ const MAX_RECIPIENT_BATCH_LIMIT = 5000;
 const DEFAULT_STATS_SAMPLE_LIMIT = 5000;
 const MAX_STATS_SAMPLE_LIMIT = 20000;
 const MAX_CAMPAIGN_VISITOR_SCAN = 5000;
+
+type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "query",
+  "internal",
+  Args,
+  Return
+>;
+
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"mutation", "internal", Args, Return>;
+
+type GetInternalArgs = {
+  id: Id<"pushCampaigns">;
+};
+
+type PendingRecipientsArgs = {
+  campaignId: Id<"pushCampaigns">;
+  limit?: number;
+};
+
+type UpdateRecipientStatusArgs = {
+  recipientId: Id<"pushCampaignRecipients">;
+  status: "pending" | "sent" | "delivered" | "opened" | "failed";
+  error?: string;
+};
+
+type UpdateStatsArgs = {
+  campaignId: Id<"pushCampaigns">;
+  sent: number;
+  failed: number;
+};
+
+const GET_INTERNAL_REF = makeFunctionReference<"query", GetInternalArgs, Doc<"pushCampaigns"> | null>(
+  "pushCampaigns:getInternal"
+) as unknown as InternalQueryRef<GetInternalArgs, Doc<"pushCampaigns"> | null>;
+
+const GET_PENDING_RECIPIENTS_REF = makeFunctionReference<
+  "query",
+  PendingRecipientsArgs,
+  PendingRecipientWithToken[]
+>("pushCampaigns:getPendingRecipients") as unknown as InternalQueryRef<
+  PendingRecipientsArgs,
+  PendingRecipientWithToken[]
+>;
+
+const UPDATE_RECIPIENT_STATUS_REF = makeFunctionReference<
+  "mutation",
+  UpdateRecipientStatusArgs,
+  unknown
+>("pushCampaigns:updateRecipientStatus") as unknown as InternalMutationRef<
+  UpdateRecipientStatusArgs
+>;
+
+const UPDATE_STATS_REF = makeFunctionReference<"mutation", UpdateStatsArgs, unknown>(
+  "pushCampaigns:updateStats"
+) as unknown as InternalMutationRef<UpdateStatsArgs>;
+
 function clampLimit(limit: number | undefined, defaultValue: number, maxValue: number): number {
   const normalized = limit ?? defaultValue;
   if (!Number.isFinite(normalized) || normalized <= 0) {
@@ -242,12 +305,15 @@ export const sendToExpo = internalAction({
     campaignId: v.id("pushCampaigns"),
   },
   handler: async (ctx, args) => {
-    const campaign = await ctx.runQuery(internal.pushCampaigns.getInternal, {
+    const runQuery = getShallowRunQuery(ctx);
+    const runAction = getShallowRunAction(ctx);
+    const runMutation = getShallowRunMutation(ctx);
+    const campaign = await runQuery(GET_INTERNAL_REF, {
       id: args.campaignId,
     });
     if (!campaign) throw new Error("Campaign not found");
 
-    const recipients = await ctx.runQuery(internal.pushCampaigns.getPendingRecipients, {
+    const recipients = await runQuery(GET_PENDING_RECIPIENTS_REF, {
       campaignId: args.campaignId,
     });
 
@@ -255,7 +321,7 @@ export const sendToExpo = internalAction({
       return { sent: 0, failed: 0 };
     }
 
-    const dispatch = await ctx.runAction(internal.notifications.dispatchPushAttempts, {
+    const dispatch = (await runAction(dispatchPushAttemptsRef, {
       workspaceId: campaign.workspaceId,
       eventKey: `push_campaign:${args.campaignId}`,
       title: campaign.title,
@@ -273,7 +339,7 @@ export const sendToExpo = internalAction({
         visitorId: recipient.visitorId,
         tokens: [recipient.token],
       })),
-    });
+    })) as { results?: Array<{ status?: string; error?: string; reason?: string }> };
     const results = dispatch.results ?? [];
     let sent = 0;
     let failed = 0;
@@ -284,7 +350,7 @@ export const sendToExpo = internalAction({
       const result = results[i];
 
       if (result?.status === "delivered") {
-        await ctx.runMutation(internal.pushCampaigns.updateRecipientStatus, {
+        await runMutation(UPDATE_RECIPIENT_STATUS_REF, {
           recipientId: recipient._id,
           status: "sent",
         });
@@ -296,7 +362,7 @@ export const sendToExpo = internalAction({
         error: result?.error,
         message: result?.reason,
       });
-      await ctx.runMutation(internal.pushCampaigns.updateRecipientStatus, {
+      await runMutation(UPDATE_RECIPIENT_STATUS_REF, {
         recipientId: recipient._id,
         status: "failed",
         error: errorMessage,
@@ -305,7 +371,7 @@ export const sendToExpo = internalAction({
     }
 
     // Update campaign stats
-    await ctx.runMutation(internal.pushCampaigns.updateStats, {
+    await runMutation(UPDATE_STATS_REF, {
       campaignId: args.campaignId,
       sent,
       failed,

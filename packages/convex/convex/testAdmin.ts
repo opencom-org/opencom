@@ -12,8 +12,8 @@
  * - The ALLOW_TEST_DATA env var guard inside each mutation still applies
  */
 
+import { makeFunctionReference } from "convex/server";
 import { action } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
 const ALLOWED_MODULE_PREFIXES = ["testData", "testing"];
@@ -25,6 +25,17 @@ function normalizeSecret(secret: string): string {
 
 function toSecretBytes(secret: string): Uint8Array {
   return SECRET_ENCODER.encode(normalizeSecret(secret));
+}
+
+function getInternalRef(name: string): unknown {
+  return makeFunctionReference(name);
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as (
+    mutationRef: unknown,
+    mutationArgs: Record<string, unknown>
+  ) => Promise<unknown>;
 }
 
 export function isAuthorizedAdminSecret(providedSecret: string, expectedSecret: string): boolean {
@@ -71,7 +82,6 @@ export const runTestMutation = action({
       );
     }
     const modulePath = name.slice(0, colonIdx);
-    const funcName = name.slice(colonIdx + 1);
 
     // Security: only allow test-related modules
     const topModule = modulePath.split("/")[0];
@@ -81,19 +91,7 @@ export const runTestMutation = action({
       );
     }
 
-    // Resolve the internal function reference dynamically
-    // e.g. "testData:seedTour" → internal.testData.seedTour
-    // e.g. "testing/helpers:cleanup" → internal.testing.helpers.cleanup
-    const segments = [...modulePath.split("/"), funcName];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let ref: any = internal;
-    for (const seg of segments) {
-      ref = ref[seg];
-      if (!ref) {
-        throw new Error(`Unknown internal function "${name}". Could not resolve segment "${seg}".`);
-      }
-    }
-
-    return await ctx.runMutation(ref, mutationArgs ?? {});
+    const runMutation = getShallowRunMutation(ctx);
+    return await runMutation(getInternalRef(name), (mutationArgs ?? {}) as Record<string, unknown>);
   },
 });

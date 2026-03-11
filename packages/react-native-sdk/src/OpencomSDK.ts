@@ -1,30 +1,10 @@
-import { Platform } from "react-native";
-import { AppState, type AppStateStatus } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
-import { registerForPushNotifications, unregisterPushNotifications } from "./push";
 import {
-  initializeClient,
   isInitialized,
   resetClient,
-  bootSession as bootSessionApi,
-  refreshSession as refreshSessionApi,
-  revokeSession as revokeSessionApi,
-  identifyVisitor as identifyVisitorApi,
   trackEvent as trackEventApi,
   trackAutoEvent as trackAutoEventApi,
-  heartbeat,
-  setStorageAdapter,
-  setVisitorId,
-  setSessionId,
-  setSessionToken,
-  setSessionExpiresAt,
-  clearSessionToken,
-  setUser,
-  clearUser,
   resetVisitorState,
   getVisitorState,
-  generateSessionId,
   emitEvent,
   addEventListener,
   getOrCreateConversation as getOrCreateConversationApi,
@@ -35,38 +15,24 @@ import {
   type SDKConfig,
   type UserIdentification,
   type EventProperties,
-  type DeviceInfo,
-  type VisitorId,
   type SDKEventListener,
   type ConversationId,
 } from "@opencom/sdk-core";
-
-// Storage adapter using AsyncStorage
-const storageAdapter = {
-  getItem: (key: string) => AsyncStorage.getItem(key),
-  setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
-  removeItem: (key: string) => AsyncStorage.removeItem(key),
-};
-
-function getStorage() {
-  return storageAdapter;
-}
-
-let isSDKInitialized = false;
-let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-let appStateSubscription: { remove: () => void } | null = null;
-let sessionStartTracked = false;
-const surveyTriggerListeners = new Set<(eventName: string) => void>();
-
-const HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
-const REFRESH_MARGIN_MS = 60000; // refresh 60s before expiry
-const SESSION_TOKEN_KEY = "opencom_session_token";
-const SESSION_EXPIRES_AT_KEY = "opencom_session_expires_at";
-const REACT_NATIVE_SDK_VERSION = "0.1.0";
+import {
+  registerForPush as registerForPushService,
+  unregisterFromPush as unregisterFromPushService,
+} from "./opencomSdk/pushService";
+import { initializeSession, identifyUser, logoutSession } from "./opencomSdk/sessionService";
+import { cleanupAppStateListener, stopHeartbeat, stopRefreshTimer } from "./opencomSdk/lifecycleService";
+import {
+  clearPersistedSessionId,
+  clearPersistedSessionToken,
+  clearPersistedVisitorId,
+} from "./opencomSdk/storageService";
+import { opencomSDKState, resetOpencomSDKState } from "./opencomSdk/state";
 
 function emitSurveyTriggerEvent(eventName: string): void {
-  for (const listener of surveyTriggerListeners) {
+  for (const listener of opencomSDKState.surveyTriggerListeners) {
     try {
       listener(eventName);
     } catch (error) {
@@ -75,71 +41,12 @@ function emitSurveyTriggerEvent(eventName: string): void {
   }
 }
 
-function getDeviceInfo(): DeviceInfo {
-  return {
-    os: Platform.OS,
-    platform: Platform.OS as "ios" | "android",
-    deviceType: "mobile",
-  };
-}
-
-async function getOrCreateSessionId(): Promise<string> {
-  const storage = await getStorage();
-  const storedSessionId = await storage.getItem("opencom_session_id");
-  if (storedSessionId) {
-    return storedSessionId;
+function warnIfNotInitialized(): boolean {
+  if (!opencomSDKState.isSDKInitialized) {
+    console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    return true;
   }
-  const newSessionId = generateSessionId();
-  await storage.setItem("opencom_session_id", newSessionId);
-  return newSessionId;
-}
-
-async function persistVisitorId(visitorId: string): Promise<void> {
-  const storage = await getStorage();
-  await storage.setItem("opencom_visitor_id", visitorId);
-}
-
-async function clearPersistedVisitorId(): Promise<void> {
-  const storage = await getStorage();
-  await storage.removeItem("opencom_visitor_id");
-}
-
-async function persistSessionToken(token: string, expiresAt: number): Promise<void> {
-  await SecureStore.setItemAsync(SESSION_TOKEN_KEY, token);
-  await SecureStore.setItemAsync(SESSION_EXPIRES_AT_KEY, String(expiresAt));
-}
-
-async function clearPersistedSessionToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(SESSION_TOKEN_KEY);
-  await SecureStore.deleteItemAsync(SESSION_EXPIRES_AT_KEY);
-}
-
-function scheduleRefresh(expiresAt: number): void {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
-  const delay = Math.max(0, expiresAt - Date.now() - REFRESH_MARGIN_MS);
-  refreshTimer = setTimeout(async () => {
-    const state = getVisitorState();
-    if (!state.sessionToken) return;
-    try {
-      const result = await refreshSessionApi({ sessionToken: state.sessionToken });
-      setSessionToken(result.sessionToken);
-      setSessionExpiresAt(result.expiresAt);
-      await persistSessionToken(result.sessionToken, result.expiresAt);
-      scheduleRefresh(result.expiresAt);
-    } catch (error) {
-      console.error("[OpencomSDK] Session refresh failed:", error);
-    }
-  }, delay);
-}
-
-function stopRefreshTimer(): void {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
+  return false;
 }
 
 export const OpencomSDK = {
@@ -154,73 +61,7 @@ export const OpencomSDK = {
     if (!config.convexUrl?.trim()) {
       throw new Error("[OpencomSDK] convexUrl is required.");
     }
-
-    if (isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK already initialized");
-      return;
-    }
-
-    // Set up storage adapter for sdk-core
-    const storage = await getStorage();
-    setStorageAdapter({
-      getItem: (key) => storage.getItem(key),
-      setItem: (key, value) => storage.setItem(key, value),
-      removeItem: (key) => storage.removeItem(key),
-    });
-
-    // Initialize Convex client
-    initializeClient(config);
-
-    // Get or create session
-    const sessionId = await getOrCreateSessionId();
-    setSessionId(sessionId);
-
-    // Boot a signed session
-    const device = getDeviceInfo();
-    const bootResult = await bootSessionApi({
-      sessionId,
-      device,
-      clientType: "mobile_sdk",
-      clientVersion: REACT_NATIVE_SDK_VERSION,
-      clientIdentifier: "@opencom/react-native-sdk",
-    });
-
-    const visitorId = bootResult.visitor._id as VisitorId;
-    setVisitorId(visitorId);
-    setSessionToken(bootResult.sessionToken);
-    setSessionExpiresAt(bootResult.expiresAt);
-    await persistVisitorId(visitorId);
-    await persistSessionToken(bootResult.sessionToken, bootResult.expiresAt);
-    emitEvent("visitor_created", { visitorId });
-
-    // Schedule token refresh
-    scheduleRefresh(bootResult.expiresAt);
-
-    // Start heartbeat
-    startHeartbeat(visitorId);
-
-    // Track session start
-    if (!sessionStartTracked) {
-      sessionStartTracked = true;
-      trackAutoEventApi({
-        visitorId,
-        sessionToken: bootResult.sessionToken,
-        eventType: "session_start",
-        sessionId,
-        properties: {
-          platform: Platform.OS,
-        },
-      }).catch(console.error);
-    }
-
-    // Set up app state listener for session tracking
-    setupAppStateListener(visitorId, sessionId);
-
-    isSDKInitialized = true;
-
-    if (config.debug) {
-      console.log("[OpencomSDK] Initialized successfully");
-    }
+    await initializeSession(config);
   },
 
   /**
@@ -228,8 +69,7 @@ export const OpencomSDK = {
    * Call this when a screen becomes visible.
    */
   async trackScreenView(screenName: string, properties?: EventProperties): Promise<void> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
 
@@ -257,35 +97,14 @@ export const OpencomSDK = {
    * Call this when a user logs in or when you have user information.
    */
   async identify(user: UserIdentification): Promise<void> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
-      return;
-    }
-
-    const state = getVisitorState();
-    if (!state.visitorId) {
-      console.warn("[OpencomSDK] No visitor ID available");
-      return;
-    }
-
-    setUser(user);
-
-    await identifyVisitorApi({
-      visitorId: state.visitorId,
-      sessionToken: state.sessionToken ?? undefined,
-      user,
-      device: getDeviceInfo(),
-    });
-
-    emitEvent("visitor_identified", { user });
+    await identifyUser(user);
   },
 
   /**
    * Track a custom event.
    */
   async trackEvent(name: string, properties?: EventProperties): Promise<void> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
 
@@ -309,9 +128,9 @@ export const OpencomSDK = {
    * Subscribe to survey trigger events emitted by runtime event tracking.
    */
   addSurveyTriggerListener(listener: (eventName: string) => void): () => void {
-    surveyTriggerListeners.add(listener);
+    opencomSDKState.surveyTriggerListeners.add(listener);
     return () => {
-      surveyTriggerListeners.delete(listener);
+      opencomSDKState.surveyTriggerListeners.delete(listener);
     };
   },
 
@@ -319,57 +138,14 @@ export const OpencomSDK = {
    * Log out the current user and reset the session.
    */
   async logout(): Promise<void> {
-    if (!isSDKInitialized) {
-      return;
-    }
-
-    stopHeartbeat();
-    stopRefreshTimer();
-    clearUser();
-
-    // Revoke current session
-    const state = getVisitorState();
-    if (state.sessionToken) {
-      revokeSessionApi({ sessionToken: state.sessionToken }).catch(console.error);
-    }
-    clearSessionToken();
-
-    // Clear stored session and visitor ID
-    const storage = await getStorage();
-    await storage.removeItem("opencom_session_id");
-    await clearPersistedVisitorId();
-    await clearPersistedSessionToken();
-
-    // Generate new session
-    const newSessionId = generateSessionId();
-    await storage.setItem("opencom_session_id", newSessionId);
-    setSessionId(newSessionId);
-
-    // Boot a new signed session
-    const device = getDeviceInfo();
-    const bootResult = await bootSessionApi({
-      sessionId: newSessionId,
-      device,
-      clientType: "mobile_sdk",
-      clientVersion: REACT_NATIVE_SDK_VERSION,
-      clientIdentifier: "@opencom/react-native-sdk",
-    });
-
-    const visitorId = bootResult.visitor._id as VisitorId;
-    setVisitorId(visitorId);
-    setSessionToken(bootResult.sessionToken);
-    setSessionExpiresAt(bootResult.expiresAt);
-    await persistVisitorId(visitorId);
-    await persistSessionToken(bootResult.sessionToken, bootResult.expiresAt);
-    scheduleRefresh(bootResult.expiresAt);
-    startHeartbeat(visitorId);
+    await logoutSession();
   },
 
   /**
    * Check if the SDK is initialized.
    */
   isInitialized(): boolean {
-    return isSDKInitialized && isInitialized();
+    return opencomSDKState.isSDKInitialized && isInitialized();
   },
 
   /**
@@ -393,15 +169,12 @@ export const OpencomSDK = {
     stopHeartbeat();
     stopRefreshTimer();
     cleanupAppStateListener();
-    surveyTriggerListeners.clear();
     resetVisitorState();
     resetClient();
-    const storage = await getStorage();
-    await storage.removeItem("opencom_session_id");
+    await clearPersistedSessionId();
     await clearPersistedVisitorId();
     await clearPersistedSessionToken();
-    isSDKInitialized = false;
-    sessionStartTracked = false;
+    resetOpencomSDKState();
   },
 
   /**
@@ -409,22 +182,14 @@ export const OpencomSDK = {
    * Returns the push token if successful, null otherwise.
    */
   async registerForPush(): Promise<string | null> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
-      return null;
-    }
-    return registerForPushNotifications();
+    return registerForPushService();
   },
 
   /**
    * Unregister the current device from push notifications for this visitor session.
    */
   async unregisterFromPush(): Promise<boolean> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
-      return false;
-    }
-    return unregisterPushNotifications();
+    return unregisterFromPushService();
   },
 
   /**
@@ -433,8 +198,7 @@ export const OpencomSDK = {
    * In practice, the app should use the OpencomMessenger component.
    */
   present(): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("messenger_opened", {});
@@ -444,8 +208,7 @@ export const OpencomSDK = {
    * Present a carousel by ID.
    */
   presentCarousel(carouselId: string): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("carousel_opened", { carouselId });
@@ -455,8 +218,7 @@ export const OpencomSDK = {
    * Present the help center.
    */
   presentHelpCenter(): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("help_center_opened", {});
@@ -467,8 +229,7 @@ export const OpencomSDK = {
    * Returns an existing open conversation if one exists, otherwise creates a new one.
    */
   async getOrCreateConversation(): Promise<{ _id: ConversationId } | null> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return null;
     }
     const state = getVisitorState();
@@ -484,8 +245,7 @@ export const OpencomSDK = {
    * Always creates a new conversation, even if open conversations exist.
    */
   async createConversation(): Promise<{ _id: ConversationId } | null> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return null;
     }
     const state = getVisitorState();
@@ -500,8 +260,7 @@ export const OpencomSDK = {
    * Get messages for a conversation.
    */
   async getMessages(conversationId: ConversationId) {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return [];
     }
     const state = getVisitorState();
@@ -516,8 +275,7 @@ export const OpencomSDK = {
    * Get all conversations for the current visitor.
    */
   async getConversations() {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return [];
     }
     const state = getVisitorState();
@@ -532,8 +290,7 @@ export const OpencomSDK = {
    * Send a message in a conversation.
    */
   async sendMessage(conversationId: ConversationId, content: string): Promise<void> {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     const state = getVisitorState();
@@ -562,20 +319,17 @@ export const OpencomSDK = {
    * Returns the parsed deep link data or null if invalid.
    */
   handleDeepLink(url: string): DeepLinkResult | null {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return null;
     }
 
     try {
-      // Parse the URL
       const parsed = parseDeepLink(url);
       if (!parsed) {
         console.warn("[OpencomSDK] Invalid deep link URL:", url);
         return null;
       }
 
-      // Emit appropriate event based on deep link type
       switch (parsed.type) {
         case "conversation":
           emitEvent("messenger_opened", { conversationId: parsed.id });
@@ -608,8 +362,7 @@ export const OpencomSDK = {
    * Present the tickets view.
    */
   presentTickets(): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("tickets_opened", {});
@@ -619,8 +372,7 @@ export const OpencomSDK = {
    * Present a specific ticket.
    */
   presentTicket(ticketId: string): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("ticket_opened", { ticketId });
@@ -630,8 +382,7 @@ export const OpencomSDK = {
    * Present a specific article.
    */
   presentArticle(articleId: string): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("help_center_opened", { articleId });
@@ -641,8 +392,7 @@ export const OpencomSDK = {
    * Present a specific conversation.
    */
   presentConversation(conversationId: string): void {
-    if (!isSDKInitialized) {
-      console.warn("[OpencomSDK] SDK not initialized. Call initialize() first.");
+    if (warnIfNotInitialized()) {
       return;
     }
     emitEvent("messenger_opened", { conversationId });
@@ -664,7 +414,6 @@ export interface DeepLinkResult {
 }
 
 function parseDeepLink(url: string): DeepLinkResult | null {
-  // Support both opencom:// and https://opencom.app/ schemes
   const opencomScheme = /^opencom:\/\/(.+)$/;
   const httpsScheme = /^https:\/\/opencom\.app\/(.+)$/;
 
@@ -684,7 +433,6 @@ function parseDeepLink(url: string): DeepLinkResult | null {
     return null;
   }
 
-  // Remove query params and hash
   const cleanPath = path.split("?")[0].split("#")[0];
   const segments = cleanPath.split("/").filter(Boolean);
 
@@ -714,79 +462,5 @@ function parseDeepLink(url: string): DeepLinkResult | null {
       return { type: "help-center", url };
     default:
       return null;
-  }
-}
-
-function startHeartbeat(visitorId: VisitorId): void {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval);
-  }
-
-  // Send initial heartbeat
-  const state = getVisitorState();
-  heartbeat(visitorId, state.sessionToken ?? undefined).catch(console.error);
-
-  // Set up interval
-  heartbeatInterval = setInterval(() => {
-    const s = getVisitorState();
-    heartbeat(visitorId, s.sessionToken ?? undefined).catch(console.error);
-  }, HEARTBEAT_INTERVAL_MS);
-}
-
-function stopHeartbeat(): void {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval);
-    heartbeatInterval = null;
-  }
-}
-
-function setupAppStateListener(visitorId: VisitorId, sessionId: string): void {
-  // Remove existing subscription if any
-  if (appStateSubscription) {
-    appStateSubscription.remove();
-  }
-
-  let lastAppState: AppStateStatus = AppState.currentState;
-
-  appStateSubscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
-    // App coming to foreground from background
-    if (lastAppState.match(/inactive|background/) && nextAppState === "active") {
-      // Track session start when app becomes active
-      const s = getVisitorState();
-      trackAutoEventApi({
-        visitorId,
-        sessionToken: s.sessionToken ?? undefined,
-        eventType: "session_start",
-        sessionId,
-        properties: {
-          platform: Platform.OS,
-          resumedFromBackground: true,
-        },
-      }).catch(console.error);
-    }
-
-    // App going to background
-    if (lastAppState === "active" && nextAppState.match(/inactive|background/)) {
-      // Track session end when app goes to background
-      const s = getVisitorState();
-      trackAutoEventApi({
-        visitorId,
-        sessionToken: s.sessionToken ?? undefined,
-        eventType: "session_end",
-        sessionId,
-        properties: {
-          platform: Platform.OS,
-        },
-      }).catch(console.error);
-    }
-
-    lastAppState = nextAppState;
-  });
-}
-
-function cleanupAppStateListener(): void {
-  if (appStateSubscription) {
-    appStateSubscription.remove();
-    appStateSubscription = null;
   }
 }

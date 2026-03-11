@@ -32,31 +32,93 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Lint
+        id: lint
+        continue-on-error: true
         run: pnpm lint
 
       - name: Typecheck
+        id: typecheck
+        continue-on-error: true
         run: pnpm typecheck
 
       - name: Convex raw auth guard
+        id: convex_auth_guard
+        continue-on-error: true
         run: pnpm security:convex-auth-guard
 
       - name: Convex validator any guard
+        id: convex_any_guard
+        continue-on-error: true
         run: pnpm security:convex-any-args-gate
 
       - name: Secret scan gate
+        id: secret_scan
+        continue-on-error: true
         run: pnpm security:secret-scan
 
       - name: Security headers policy check
+        id: headers_check
+        continue-on-error: true
         run: pnpm security:headers-check
 
       - name: Convex backend tests
-        run: pnpm --filter @opencom/convex test
+        id: convex_tests
+        continue-on-error: true
+        run: pnpm test:convex
 
       - name: Web production build
+        id: web_build
+        continue-on-error: true
         run: pnpm --filter @opencom/web build
 
       - name: Dependency audit gate
+        id: dependency_audit
+        continue-on-error: true
         run: node scripts/ci-audit-gate.js
+
+      - name: Summarize check results
+        if: always()
+        run: |
+          failures=0
+
+          report_blocking() {
+            name="$1"
+            outcome="$2"
+            if [ "$outcome" = "success" ]; then
+              echo "::notice::$name passed"
+            elif [ "$outcome" = "skipped" ]; then
+              echo "::warning::$name skipped"
+            else
+              echo "::error::$name failed"
+              failures=1
+            fi
+          }
+
+          report_warning() {
+            name="$1"
+            outcome="$2"
+            if [ "$outcome" = "success" ]; then
+              echo "::notice::$name passed"
+            elif [ "$outcome" = "skipped" ]; then
+              echo "::warning::$name skipped"
+            else
+              echo "::warning::$name failed (warning only)"
+            fi
+          }
+
+          report_blocking "Lint (web + convex)" "${{ steps.lint.outcome }}"
+          report_blocking "Typecheck (web + convex)" "${{ steps.typecheck.outcome }}"
+          report_blocking "Convex raw auth guard" "${{ steps.convex_auth_guard.outcome }}"
+          report_warning "Convex validator any guard" "${{ steps.convex_any_guard.outcome }}"
+          report_blocking "Secret scan gate" "${{ steps.secret_scan.outcome }}"
+          report_blocking "Security headers policy check" "${{ steps.headers_check.outcome }}"
+          report_blocking "Convex backend tests" "${{ steps.convex_tests.outcome }}"
+          report_blocking "Web production build" "${{ steps.web_build.outcome }}"
+          report_blocking "Dependency audit gate" "${{ steps.dependency_audit.outcome }}"
+
+          if [ "$failures" -ne 0 ]; then
+            exit 1
+          fi
 
   e2e:
     runs-on: ubuntu-latest

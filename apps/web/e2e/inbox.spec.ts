@@ -82,6 +82,36 @@ async function sendReply(page: import("@playwright/test").Page, replyText: strin
   await input.press("Enter");
 }
 
+async function convertConversationToTicket(
+  page: import("@playwright/test").Page
+): Promise<void> {
+  const convertButton = page.getByTestId("inbox-convert-ticket-button");
+  const workflowError = page.getByTestId("inbox-workflow-error");
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await expect(convertButton).toBeVisible({ timeout: 10000 });
+    await expect(convertButton).toBeEnabled({ timeout: 10000 });
+    await convertButton.click({ timeout: 10000 });
+
+    const navigated = await page
+      .waitForURL(/\/tickets\/.+/, { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+    if (navigated) {
+      return;
+    }
+
+    const errorVisible = await workflowError.isVisible({ timeout: 1000 }).catch(() => false);
+    if (errorVisible) {
+      throw new Error(await workflowError.innerText());
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error("Create Ticket did not navigate to ticket detail.");
+}
+
 test.describe("Inbox deterministic flow", () => {
   let workspaceId: Id<"workspaces">;
 
@@ -249,12 +279,7 @@ test.describe("Inbox deterministic flow", () => {
     await openInbox(page);
 
     await openFirstConversationThread(page);
-
-    const convertButton = page.getByTestId("inbox-convert-ticket-button");
-    await expect(convertButton).toBeVisible({ timeout: 10000 });
-    await convertButton.click();
-
-    await expect(page).toHaveURL(/\/tickets\/.+/, { timeout: 10000 });
+    await convertConversationToTicket(page);
   });
 
   test("uses visitor id fallback label and restores selected thread when returning from visitor profile", async ({
@@ -376,6 +401,8 @@ test.describe("Inbox deterministic flow", () => {
 
     await openFirstConversationThread(page);
 
+    await expect(page.getByTestId("inbox-open-suggestions")).toBeVisible({ timeout: 10000 });
+    await page.getByTestId("inbox-open-suggestions").click();
     await expect(page.getByTestId("inbox-sidecar-container")).toBeVisible({ timeout: 10000 });
     await expect(page.getByTestId("inbox-suggestions-sidecar")).toBeVisible({ timeout: 10000 });
 

@@ -39,8 +39,9 @@
   "dependencies": {
     "@opencom/convex": "workspace:*",
     "@opencom/sdk-core": "workspace:*",
+    "@opencom/types": "workspace:*",
     "@react-native-async-storage/async-storage": "^1.23.0",
-    "convex": "^1.31.7",
+    "convex": "^1.32.0",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-svg": "^15.0.0"
   },

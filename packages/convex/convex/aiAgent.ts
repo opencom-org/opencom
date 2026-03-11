@@ -7,11 +7,16 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authMutation, authQuery } from "./lib/authWrappers";
+import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
+import {
+  isInternalArticle,
+  isPublicArticle,
+  listUnifiedArticlesWithLegacyFallback,
+} from "./lib/unifiedArticles";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 const knowledgeSourceValidator = v.union(
@@ -29,6 +34,13 @@ type KnowledgeResult = {
   content: string;
   relevanceScore: number;
 };
+
+const aiResponseSourceValidator = v.object({
+  type: v.string(),
+  id: v.string(),
+  title: v.string(),
+  articleId: v.optional(v.string()),
+});
 
 const DEFAULT_AI_SETTINGS = {
   enabled: false,
@@ -134,15 +146,11 @@ async function collectRelevantKnowledge(
   const limit = args.limit ?? 5;
   const sources = args.knowledgeSources ?? ["articles", "internalArticles", "snippets"];
   const results: KnowledgeResult[] = [];
+  const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
 
   if (sources.includes("articles")) {
-    const articles = await ctx.db
-      .query("articles")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
-
     for (const article of articles) {
-      if (article.status !== "published") continue;
+      if (!isPublicArticle(article) || article.status !== "published") continue;
 
       const score = calculateRelevanceScore(article.title, article.content, searchTerm);
       if (score > 0) {
@@ -158,13 +166,8 @@ async function collectRelevantKnowledge(
   }
 
   if (sources.includes("internalArticles")) {
-    const internalArticles = await ctx.db
-      .query("internalArticles")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
-
-    for (const article of internalArticles) {
-      if (article.status === "archived") continue;
+    for (const article of articles) {
+      if (!isInternalArticle(article) || article.status !== "published") continue;
 
       const score = calculateRelevanceScore(article.title, article.content, searchTerm);
       if (score > 0) {
@@ -472,22 +475,10 @@ export const storeResponse = mutation({
     response: v.string(),
     generatedCandidateResponse: v.optional(v.string()),
     generatedCandidateSources: v.optional(
-      v.array(
-        v.object({
-          type: v.string(),
-          id: v.string(),
-          title: v.string(),
-        })
-      )
+      v.array(aiResponseSourceValidator)
     ),
     generatedCandidateConfidence: v.optional(v.number()),
-    sources: v.array(
-      v.object({
-        type: v.string(),
-        id: v.string(),
-        title: v.string(),
-      })
-    ),
+    sources: v.array(aiResponseSourceValidator),
     confidence: v.number(),
     handedOff: v.boolean(),
     handoffReason: v.optional(v.string()),
@@ -669,7 +660,8 @@ export const handoffToHuman = mutation({
       aiLastResponseAt: now,
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.routeEvent, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, routeEventRef, {
       eventType: "chat_message",
       domain: "chat",
       audience: "agent",

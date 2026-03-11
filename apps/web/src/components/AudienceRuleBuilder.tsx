@@ -2,55 +2,23 @@
 
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Trash2, ChevronDown, GripVertical, Users, Layers } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
+import type {
+  AudienceCondition,
+  AudienceGroup,
+  AudienceNestedGroup,
+  AudienceRuleWithSegment as SharedAudienceRule,
+  AudienceSegmentReference,
+  ConditionOperator,
+  PropertyReference,
+} from "@opencom/types";
+import { isAudienceSegmentReference } from "@opencom/types";
 
-export type SegmentReference = {
-  type: "segment";
-  segmentId: Id<"segments">;
-};
-
-export type ConditionOperator =
-  | "equals"
-  | "not_equals"
-  | "contains"
-  | "not_contains"
-  | "starts_with"
-  | "ends_with"
-  | "greater_than"
-  | "less_than"
-  | "greater_than_or_equals"
-  | "less_than_or_equals"
-  | "is_set"
-  | "is_not_set";
-
-export type PropertyReference = {
-  source: "system" | "custom" | "event";
-  key: string;
-  eventFilter?: {
-    name: string;
-    countOperator?: "at_least" | "at_most" | "exactly";
-    count?: number;
-    withinDays?: number;
-  };
-};
-
-export type AudienceCondition = {
-  type: "condition";
-  property: PropertyReference;
-  operator: ConditionOperator;
-  value?: string | number | boolean;
-};
-
-export type AudienceGroup = {
-  type: "group";
-  operator: "and" | "or";
-  conditions: AudienceRule[];
-};
-
-export type AudienceRule = AudienceGroup | AudienceCondition | SegmentReference;
+export type SegmentReference = AudienceSegmentReference<Id<"segments">>;
+export type AudienceRule = SharedAudienceRule<Id<"segments">>;
 
 interface AudienceRuleBuilderProps {
   value: AudienceRule | null;
@@ -105,6 +73,14 @@ function createEmptyCondition(): AudienceCondition {
 }
 
 function createEmptyGroup(): AudienceGroup {
+  return {
+    type: "group",
+    operator: "and",
+    conditions: [createEmptyCondition()],
+  };
+}
+
+function createEmptyNestedGroup(): AudienceNestedGroup {
   return {
     type: "group",
     operator: "and",
@@ -356,8 +332,8 @@ function ConditionEditor({ condition, onChange, onRemove, eventNames = [] }: Con
 }
 
 interface GroupEditorProps {
-  group: AudienceGroup;
-  onChange: (group: AudienceGroup) => void;
+  group: AudienceGroup | AudienceNestedGroup;
+  onChange: (group: AudienceGroup | AudienceNestedGroup) => void;
   onRemove?: () => void;
   depth?: number;
   eventNames?: string[];
@@ -411,7 +387,7 @@ function GroupEditor({ group, onChange, onRemove, depth = 0, eventNames = [] }: 
     });
   };
 
-  const handleConditionChange = (index: number, rule: AudienceRule) => {
+  const handleConditionChange = (index: number, rule: AudienceCondition | AudienceNestedGroup) => {
     const newConditions = [...group.conditions];
     newConditions[index] = rule;
     onChange({ ...group, conditions: newConditions });
@@ -436,7 +412,7 @@ function GroupEditor({ group, onChange, onRemove, depth = 0, eventNames = [] }: 
   const handleAddGroup = () => {
     onChange({
       ...group,
-      conditions: [...group.conditions, createEmptyGroup()],
+      conditions: [...group.conditions, createEmptyNestedGroup()],
     });
   };
 
@@ -488,7 +464,7 @@ function GroupEditor({ group, onChange, onRemove, depth = 0, eventNames = [] }: 
               ) : rule.type === "group" ? (
                 <GroupEditor
                   group={rule}
-                  onChange={(g) => handleConditionChange(index, g)}
+                  onChange={(g) => handleConditionChange(index, g as AudienceNestedGroup)}
                   onRemove={() => handleRemoveCondition(index)}
                   depth={depth + 1}
                   eventNames={eventNames}
@@ -504,7 +480,7 @@ function GroupEditor({ group, onChange, onRemove, depth = 0, eventNames = [] }: 
           <Plus className="h-4 w-4 mr-1" />
           Add Condition
         </Button>
-        {depth < 2 && (
+        {depth < 1 && (
           <Button variant="outline" size="sm" onClick={handleAddGroup}>
             <Plus className="h-4 w-4 mr-1" />
             Add Group
@@ -515,6 +491,13 @@ function GroupEditor({ group, onChange, onRemove, depth = 0, eventNames = [] }: 
   );
 }
 
+interface ConditionEditorProps {
+  condition: AudienceCondition;
+  onChange: (condition: AudienceCondition) => void;
+  onRemove: () => void;
+  eventNames?: string[];
+}
+
 export function AudienceRuleBuilder({
   value,
   onChange,
@@ -522,15 +505,30 @@ export function AudienceRuleBuilder({
   workspaceId,
   showSegmentSelector = true,
 }: AudienceRuleBuilderProps) {
+  const isSegmentRule = (rule: AudienceRule | null): rule is SegmentReference =>
+    isAudienceSegmentReference<Id<"segments">>(rule);
+
   const [isEnabled, setIsEnabled] = useState(value !== null);
   const [targetingMode, setTargetingMode] = useState<"custom" | "segment">(
-    value?.type === "segment" ? "segment" : "custom"
+    isSegmentRule(value) ? "segment" : "custom"
   );
 
-  const segments = useQuery(api.segments.list, workspaceId ? { workspaceId } : "skip");
+  const listSegmentsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    Array<{ _id: Id<"segments">; name: string }>
+  >("segments:list");
+
+  const previewAudienceRulesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces">; audienceRules: AudienceRule },
+    { matching: number; total: number }
+  >("tours:previewAudienceRules");
+
+  const segments = useQuery(listSegmentsQuery, workspaceId ? { workspaceId } : "skip");
 
   const preview = useQuery(
-    api.tours.previewAudienceRules,
+    previewAudienceRulesQuery,
     workspaceId && isEnabled && value ? { workspaceId, audienceRules: value } : "skip"
   );
 
@@ -545,7 +543,7 @@ export function AudienceRuleBuilder({
     }
   };
 
-  const handleChange = (rule: AudienceGroup) => {
+  const handleChange = (rule: AudienceGroup | AudienceNestedGroup) => {
     onChange(rule);
   };
 
@@ -561,7 +559,6 @@ export function AudienceRuleBuilder({
   const handleSegmentSelect = (segmentId: string) => {
     if (segmentId) {
       onChange({
-        type: "segment",
         segmentId: segmentId as Id<"segments">,
       });
     } else {
@@ -610,7 +607,7 @@ export function AudienceRuleBuilder({
       {isEnabled && targetingMode === "segment" && (
         <div className="space-y-3">
           <select
-            value={value?.type === "segment" ? value.segmentId : ""}
+            value={isSegmentRule(value) ? value.segmentId : ""}
             onChange={(e) => handleSegmentSelect(e.target.value)}
             className="w-full px-3 py-2 border rounded-lg text-sm"
           >
@@ -621,7 +618,7 @@ export function AudienceRuleBuilder({
               </option>
             ))}
           </select>
-          {value?.type === "segment" && preview && (
+          {isSegmentRule(value) && preview && (
             <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg text-sm">
               <Layers className="h-4 w-4 text-primary" />
               <span className="text-primary">
@@ -638,25 +635,29 @@ export function AudienceRuleBuilder({
         </div>
       )}
 
-      {isEnabled && targetingMode === "custom" && value && value.type === "group" && (
-        <>
-          <GroupEditor group={value} onChange={handleChange} eventNames={eventNames} />
-          {preview && (
-            <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg text-sm">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="text-primary">
-                <strong>{preview.matching}</strong> of <strong>{preview.total}</strong> visitors
-                match these rules
-              </span>
-              {preview.total > 0 && (
-                <span className="text-primary/80">
-                  ({Math.round((preview.matching / preview.total) * 100)}%)
+      {isEnabled &&
+        targetingMode === "custom" &&
+        value &&
+        "type" in value &&
+        value.type === "group" && (
+          <>
+            <GroupEditor group={value} onChange={handleChange} eventNames={eventNames} />
+            {preview && (
+              <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg text-sm">
+                <Users className="h-4 w-4 text-primary" />
+                <span className="text-primary">
+                  <strong>{preview.matching}</strong> of <strong>{preview.total}</strong> visitors
+                  match these rules
                 </span>
-              )}
-            </div>
-          )}
-        </>
-      )}
+                {preview.total > 0 && (
+                  <span className="text-primary/80">
+                    ({Math.round((preview.matching / preview.total) * 100)}%)
+                  </span>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
       {isEnabled && targetingMode === "custom" && !value && (
         <Button variant="outline" onClick={() => onChange(createEmptyGroup())}>

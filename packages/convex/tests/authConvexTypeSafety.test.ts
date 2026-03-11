@@ -16,7 +16,7 @@ describe("authConvex type safety - typed query helpers", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const result = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const result = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = result.workspaceId;
     testUserId = result.userId;
   });
@@ -24,7 +24,7 @@ describe("authConvex type safety - typed query helpers", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -36,13 +36,13 @@ describe("authConvex type safety - typed query helpers", () => {
 
   describe("typed user lookup by email index", () => {
     it("should find an existing user by email", async () => {
-      const user = await client.mutation(api.testing.helpers.createTestUser, {
+      const user = await client.mutation(api.testing_helpers.createTestUser, {
         workspaceId: testWorkspaceId,
         email: testEmail,
         role: "agent",
       });
 
-      const found = await client.mutation(api.testing.helpers.lookupUserByEmail, {
+      const found = await client.mutation(api.testing_helpers.lookupUserByEmail, {
         email: testEmail,
       });
 
@@ -53,7 +53,7 @@ describe("authConvex type safety - typed query helpers", () => {
     });
 
     it("should return null for non-existent email", async () => {
-      const found = await client.mutation(api.testing.helpers.lookupUserByEmail, {
+      const found = await client.mutation(api.testing_helpers.lookupUserByEmail, {
         email: `nonexistent-${Date.now()}@test.opencom.dev`,
       });
 
@@ -61,7 +61,7 @@ describe("authConvex type safety - typed query helpers", () => {
     });
 
     it("should be case-insensitive", async () => {
-      const found = await client.mutation(api.testing.helpers.lookupUserByEmail, {
+      const found = await client.mutation(api.testing_helpers.lookupUserByEmail, {
         email: testEmail.toUpperCase(),
       });
 
@@ -74,7 +74,7 @@ describe("authConvex type safety - typed query helpers", () => {
     it("should find pending invitations by email", async () => {
       const inviteEmail = `invite-type-test-${Date.now()}@test.opencom.dev`;
 
-      await client.mutation(api.testing.helpers.createTestInvitation, {
+      await client.mutation(api.testing_helpers.createTestInvitation, {
         workspaceId: testWorkspaceId,
         email: inviteEmail,
         role: "agent",
@@ -82,7 +82,7 @@ describe("authConvex type safety - typed query helpers", () => {
       });
 
       const invitations = await client.mutation(
-        api.testing.helpers.lookupPendingInvitationsByEmail,
+        api.testing_helpers.lookupPendingInvitationsByEmail,
         { email: inviteEmail }
       );
 
@@ -95,7 +95,7 @@ describe("authConvex type safety - typed query helpers", () => {
 
     it("should return empty array when no pending invitations exist", async () => {
       const invitations = await client.mutation(
-        api.testing.helpers.lookupPendingInvitationsByEmail,
+        api.testing_helpers.lookupPendingInvitationsByEmail,
         { email: `no-invites-${Date.now()}@test.opencom.dev` }
       );
 
@@ -105,8 +105,8 @@ describe("authConvex type safety - typed query helpers", () => {
 
   describe("workspace and user creation path", () => {
     it("should create workspace with correct schema shape", async () => {
-      const result = await client.mutation(api.testing.helpers.createTestWorkspace, {});
-      const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+      const result = await client.mutation(api.testing_helpers.createTestWorkspace, {});
+      const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
         id: result.workspaceId,
       });
 
@@ -116,21 +116,21 @@ describe("authConvex type safety - typed query helpers", () => {
       expect(typeof workspace!.createdAt).toBe("number");
 
       // Cleanup extra workspace
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: result.workspaceId,
       });
     });
 
     it("should create user with typed workspace reference", async () => {
       const email = `typed-user-${Date.now()}@test.opencom.dev`;
-      const user = await client.mutation(api.testing.helpers.createTestUser, {
+      const user = await client.mutation(api.testing_helpers.createTestUser, {
         workspaceId: testWorkspaceId,
         email,
         name: "Typed User",
         role: "admin",
       });
 
-      const found = await client.mutation(api.testing.helpers.lookupUserByEmail, {
+      const found = await client.mutation(api.testing_helpers.lookupUserByEmail, {
         email,
       });
 
@@ -142,7 +142,7 @@ describe("authConvex type safety - typed query helpers", () => {
     });
 
     it("should create workspace membership alongside user", async () => {
-      const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+      const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
         workspaceId: testWorkspaceId,
       });
 

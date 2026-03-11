@@ -1,8 +1,16 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId, CarouselId, CarouselData, CarouselScreen } from "../types";
 import { getVisitorState } from "../state/visitor";
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
 
 interface CarouselDoc {
   _id: CarouselId;
@@ -13,7 +21,7 @@ interface CarouselDoc {
 export async function getCarousel(carouselId: CarouselId): Promise<CarouselData | null> {
   const client = getClient();
 
-  const carousel = await client.query(api.carousels.get, { id: carouselId });
+  const carousel = await client.query(getQueryRef("carousels:get"), { id: carouselId });
 
   if (!carousel) return null;
 
@@ -34,7 +42,7 @@ export async function recordCarouselImpression(params: {
   const client = getClient();
   const token = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  await client.mutation(api.carousels.recordImpression, {
+  await client.mutation(getMutationRef("carousels:recordImpression"), {
     carouselId: params.carouselId,
     visitorId: params.visitorId,
     sessionToken: token,
@@ -51,7 +59,7 @@ export async function listActiveCarousels(
   const config = getConfig();
   const token = sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const carousels = await client.query(api.carousels.listActive, {
+  const carousels = await client.query(getQueryRef("carousels:listActive"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: token,

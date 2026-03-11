@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { scoreSelectorQuality } from "@opencom/sdk-core";
+import { ErrorFeedbackBanner } from "./components/ErrorFeedbackBanner";
 
 interface TourStep {
   _id: Id<"tourSteps">;
@@ -28,6 +30,51 @@ interface ElementRect {
   width: number;
   height: number;
 }
+
+type AuthoringSessionData =
+  | {
+      valid: true;
+      steps?: TourStep[];
+      tour?: { name?: string; buttonColor?: string | null } | null;
+      session?: { stepId?: Id<"tourSteps"> | null } | null;
+    }
+  | {
+      valid: false;
+      reason?: string;
+      steps?: TourStep[];
+      tour?: null;
+      session?: null;
+    };
+
+const validateAuthoringSessionQueryRef = makeFunctionReference<
+  "query",
+  { token: string },
+  AuthoringSessionData | null
+>("authoringSessions:validate");
+
+const updateAuthoringStepMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    token: string;
+    stepId: Id<"tourSteps">;
+    elementSelector: string;
+    currentUrl: string;
+    selectorQuality: ReturnType<typeof scoreSelectorQuality>;
+  },
+  null
+>("authoringSessions:updateStep");
+
+const setAuthoringCurrentStepMutationRef = makeFunctionReference<
+  "mutation",
+  { token: string; stepId: Id<"tourSteps"> },
+  null
+>("authoringSessions:setCurrentStep");
+
+const endAuthoringSessionMutationRef = makeFunctionReference<
+  "mutation",
+  { token: string },
+  null
+>("authoringSessions:end");
 
 function generateSelector(element: Element): string {
   // Priority 1: data-tour-target or data-opencom-* attributes
@@ -131,15 +178,18 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
   const [selectorWarnings, setSelectorWarnings] = useState<string[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSelecting, setIsSelecting] = useState(true);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
   const [previewPosition, setPreviewPosition] = useState<{ top: number; left: number } | null>(
     null
   );
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const sessionData = useQuery(api.authoringSessions.validate, { token });
-  const updateStepMutation = useMutation(api.authoringSessions.updateStep);
-  const setCurrentStepMutation = useMutation(api.authoringSessions.setCurrentStep);
-  const endSessionMutation = useMutation(api.authoringSessions.end);
+  const sessionData = useQuery(validateAuthoringSessionQueryRef, { token }) as
+    | AuthoringSessionData
+    | undefined;
+  const updateStepMutation = useMutation(updateAuthoringStepMutationRef);
+  const setCurrentStepMutation = useMutation(setAuthoringCurrentStepMutationRef);
+  const endSessionMutation = useMutation(endAuthoringSessionMutationRef);
 
   const steps = useMemo(
     () => (sessionData?.valid ? (sessionData.steps ?? []) : []),
@@ -150,8 +200,9 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
 
   // Set initial step from session
   useEffect(() => {
-    if (sessionData?.valid && sessionData.session && sessionData.session.stepId) {
-      const stepIndex = steps.findIndex((s: TourStep) => s._id === sessionData.session.stepId);
+    const sessionStepId = sessionData?.valid ? sessionData.session?.stepId : null;
+    if (sessionStepId) {
+      const stepIndex = steps.findIndex((s: TourStep) => s._id === sessionStepId);
       if (stepIndex !== -1) {
         setCurrentStepIndex(stepIndex);
       }
@@ -277,6 +328,7 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
 
   const handleConfirmSelector = useCallback(async () => {
     if (!currentStep || !selectedSelector) return;
+    setErrorFeedback(null);
 
     try {
       await updateStepMutation({
@@ -297,7 +349,12 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
       handleCancelSelection();
     } catch (error) {
       console.error("Failed to save selector:", error);
-      alert("Failed to save selector");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save selector.",
+          nextAction: "Try selecting the target element again.",
+        })
+      );
     }
   }, [
     currentStep,
@@ -308,6 +365,7 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
     steps,
     setCurrentStepMutation,
     handleCancelSelection,
+    setErrorFeedback,
   ]);
 
   const handlePreviousStep = useCallback(async () => {
@@ -391,6 +449,11 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
           </button>
         </div>
       </div>
+      {errorFeedback && (
+        <div className="opencom-authoring-feedback">
+          <ErrorFeedbackBanner feedback={errorFeedback} />
+        </div>
+      )}
 
       {/* Step info panel */}
       <div className="opencom-authoring-step-panel">

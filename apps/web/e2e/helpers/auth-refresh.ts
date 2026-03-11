@@ -4,7 +4,7 @@
  * when the Convex auth JWT has expired mid-suite.
  */
 
-import { chromium, type Page } from "@playwright/test";
+import { chromium, type BrowserContext, type Page } from "@playwright/test";
 import * as fs from "fs";
 import {
   getAuthStatePath,
@@ -13,6 +13,7 @@ import {
   type E2ETestState,
 } from "./test-state";
 import { resolveE2EBackendUrl } from "./e2e-env";
+import { sanitizeStorageStateFile } from "./storage-state";
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const BACKEND_URL = resolveE2EBackendUrl();
@@ -26,8 +27,14 @@ const NAV_BACKOFF_MS = readEnvNumber("E2E_NAV_BACKOFF_MS", 500);
 const PROTECTED_LANDING_RE = /\/(inbox|dashboard)(\/|$|\?)/;
 const LATE_AUTH_REDIRECT_TIMEOUT_MS = readEnvNumber("E2E_LATE_AUTH_REDIRECT_TIMEOUT_MS", 5000);
 const PASSWORD_LOGIN_RE =
-  /log in with password|sign in with password|sign in with password instead|log in with password instead/i;
+  /log in with password|sign in with password|sign in with password instead|log in with password instead|^password$/i;
 const ROUTE_RECOVERY_TIMEOUT_MS = readEnvNumber("E2E_ROUTE_RECOVERY_TIMEOUT_MS", 12000);
+
+type StorageStateLike = {
+  origins?: Array<{
+    localStorage?: Array<{ name: string; value: string }>;
+  }>;
+};
 
 function readEnvNumber(name: string, fallback: number): number {
   const raw = process.env[name];
@@ -109,6 +116,44 @@ function decodeJwtExp(token: string): number | null {
   }
 }
 
+function isJwtFresh(token: string | null): boolean {
+  if (!token) {
+    return false;
+  }
+
+  const exp = decodeJwtExp(token);
+  if (!exp) {
+    return false;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  return exp - now >= AUTH_EXPIRY_BUFFER_SECONDS;
+}
+
+function readJwtFromStorageState(storageState: StorageStateLike | null | undefined): string | null {
+  for (const origin of storageState?.origins ?? []) {
+    for (const entry of origin.localStorage ?? []) {
+      if (entry.name.startsWith("__convexAuthJWT_")) {
+        return entry.value;
+      }
+    }
+  }
+
+  return null;
+}
+
+function hasStoredBackend(storageState: StorageStateLike | null | undefined): boolean {
+  for (const origin of storageState?.origins ?? []) {
+    for (const entry of origin.localStorage ?? []) {
+      if (entry.name === "opencom_backends" && entry.value.trim().length > 0) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function isAuthRoute(url: string): boolean {
   return AUTH_ROUTE_RE.test(url);
 }
@@ -171,6 +216,141 @@ async function isAuthUiVisible(page: Page): Promise<boolean> {
 
   const passwordButton = page.getByRole("button", { name: /sign in with password/i }).first();
   return passwordButton.isVisible({ timeout: 1200 }).catch(() => false);
+}
+
+async function isCurrentContextAuthFresh(page: Page): Promise<boolean> {
+  if (page.isClosed()) {
+    return false;
+  }
+
+  try {
+    const storageState = (await page.context().storageState()) as StorageStateLike;
+    return isJwtFresh(readJwtFromStorageState(storageState));
+  } catch {
+    return false;
+  }
+}
+
+async function seedBackendStorage(context: BrowserContext): Promise<void> {
+  await context.addInitScript((backendUrl: string) => {
+    const payload = {
+      backends: [
+        {
+          url: backendUrl,
+          name: "Opencom Hosted",
+          convexUrl: backendUrl,
+          lastUsed: new Date().toISOString(),
+          signupMode: "open",
+          authMethods: ["password", "otp"],
+        },
+      ],
+      activeBackend: backendUrl,
+    };
+    window.localStorage.setItem("opencom_backends", JSON.stringify(payload));
+  }, BACKEND_URL);
+}
+
+async function ensureBackendStorage(context: BrowserContext): Promise<void> {
+  try {
+    const storageState = (await context.storageState()) as StorageStateLike;
+    if (hasStoredBackend(storageState)) {
+      return;
+    }
+  } catch {
+    // Fall through and seed storage.
+  }
+
+  await seedBackendStorage(context);
+}
+
+async function waitForAuthSurface(page: Page, timeout = 15000): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+  const emailInput = page.getByLabel("Email", { exact: true }).first();
+  const passwordInput = page.getByLabel("Password", { exact: true }).first();
+  const sendCodeButton = page.getByRole("button", { name: /send verification code/i }).first();
+  const backendInput = page.getByLabel(/backend url/i).first();
+
+  while (!page.isClosed() && Date.now() < deadline) {
+    if (!isAuthRoute(page.url())) {
+      return true;
+    }
+
+    if (await emailInput.isVisible({ timeout: 250 }).catch(() => false)) {
+      return true;
+    }
+
+    if (await passwordInput.isVisible({ timeout: 250 }).catch(() => false)) {
+      return true;
+    }
+
+    if (await sendCodeButton.isVisible({ timeout: 250 }).catch(() => false)) {
+      return true;
+    }
+
+    const backendVisible = await backendInput.isVisible({ timeout: 250 }).catch(() => false);
+    if (!backendVisible && (await isAuthUiVisible(page))) {
+      return true;
+    }
+
+    await page.waitForTimeout(200).catch(() => {});
+  }
+
+  return !isAuthRoute(page.url()) || (await isAuthUiVisible(page));
+}
+
+async function waitForPasswordLoginForm(page: Page, timeout = 12000): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+  const emailInput = page.getByLabel("Email", { exact: true }).first();
+  const passwordInput = page.getByLabel("Password", { exact: true }).first();
+
+  while (!page.isClosed() && Date.now() < deadline) {
+    if (!isAuthRoute(page.url())) {
+      return true;
+    }
+
+    const emailVisible = await emailInput.isVisible({ timeout: 250 }).catch(() => false);
+    const passwordVisible = await passwordInput.isVisible({ timeout: 250 }).catch(() => false);
+    if (emailVisible && passwordVisible) {
+      return true;
+    }
+
+    await page.waitForTimeout(200).catch(() => {});
+  }
+
+  return !isAuthRoute(page.url());
+}
+
+async function waitForActiveWorkspaceStorage(page: Page, timeout = 10000): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+
+  while (!page.isClosed() && Date.now() < deadline) {
+    const hasWorkspace = await page
+      .evaluate(() => {
+        try {
+          const stored = window.localStorage.getItem("opencom_active_workspace");
+          if (!stored) {
+            return false;
+          }
+          const parsed = JSON.parse(stored) as { _id?: string };
+          return typeof parsed._id === "string" && parsed._id.length > 0;
+        } catch {
+          return false;
+        }
+      })
+      .catch(() => false);
+
+    if (hasWorkspace) {
+      return true;
+    }
+
+    await page.waitForTimeout(200).catch(() => {});
+  }
+
+  return false;
+}
+
+async function safeCloseContext(context: BrowserContext): Promise<void> {
+  await context.close().catch(() => {});
 }
 
 async function safeGoto(
@@ -253,7 +433,7 @@ async function connectBackendIfRequired(page: Page): Promise<boolean> {
     const connectButton = page.getByRole("button", { name: /connect/i }).first();
     await connectButton.click({ timeout: 10000 });
     await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
-    return true;
+    return waitForAuthSurface(page, 15000);
   } catch (error) {
     console.warn(`[auth-refresh] Failed to connect backend in auth flow: ${formatError(error)}`);
     return false;
@@ -261,6 +441,11 @@ async function connectBackendIfRequired(page: Page): Promise<boolean> {
 }
 
 async function switchToPasswordLoginIfNeeded(page: Page): Promise<void> {
+  const passwordField = page.getByLabel("Password", { exact: true }).first();
+  if (await passwordField.isVisible({ timeout: 1000 }).catch(() => false)) {
+    return;
+  }
+
   const passwordLoginButton = page
     .getByRole("button", {
       name: PASSWORD_LOGIN_RE,
@@ -269,6 +454,7 @@ async function switchToPasswordLoginIfNeeded(page: Page): Promise<void> {
   if (await passwordLoginButton.isVisible({ timeout: 2000 }).catch(() => false)) {
     await passwordLoginButton.click({ timeout: 10000 });
     await page.waitForLoadState("domcontentloaded", { timeout: 10000 }).catch(() => {});
+    await waitForPasswordLoginForm(page, 12000).catch(() => {});
   }
 }
 
@@ -399,10 +585,20 @@ async function performPasswordLogin(page: Page, state: E2ETestState): Promise<bo
     return false;
   }
 
+  const authSurfaceReady = await waitForAuthSurface(page, 15000);
+  if (!authSurfaceReady) {
+    return !isAuthRoute(page.url());
+  }
+
   await switchToPasswordLoginIfNeeded(page);
 
+  const passwordFormReady = await waitForPasswordLoginForm(page, 15000);
+  if (!passwordFormReady) {
+    return !isAuthRoute(page.url());
+  }
+
   const emailInput = page.getByLabel("Email", { exact: true });
-  if (!(await emailInput.isVisible({ timeout: 12000 }).catch(() => false))) {
+  if (!(await emailInput.isVisible({ timeout: 2000 }).catch(() => false))) {
     // When an existing session auto-redirects from /login, login inputs might never render.
     return waitForAuthenticatedLanding(page, 8000);
   }
@@ -442,23 +638,7 @@ async function waitForAuthRedirect(
  * and confirming that an authenticated route does not redirect to login.
  */
 function isAuthStale(): boolean {
-  const jwt = readStoredJwt();
-  if (!jwt) {
-    return true;
-  }
-
-  const exp = decodeJwtExp(jwt);
-  if (!exp) {
-    return true;
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  // Refresh slightly before expiry to avoid race conditions during a test.
-  if (exp - now < AUTH_EXPIRY_BUFFER_SECONDS) {
-    return true;
-  }
-
-  return false;
+  return !isJwtFresh(readStoredJwt());
 }
 
 /**
@@ -492,7 +672,11 @@ export async function refreshAuthState(): Promise<boolean> {
 
   const browser = await chromium.launch();
   try {
-    const context = await browser.newContext();
+    const authStatePath = getAuthStatePath();
+    const context = await browser.newContext({
+      storageState: fs.existsSync(authStatePath) ? authStatePath : undefined,
+    });
+    await ensureBackendStorage(context);
     const page = await context.newPage();
 
     const openedLogin = await safeGoto(page, "/login", {
@@ -502,29 +686,36 @@ export async function refreshAuthState(): Promise<boolean> {
     });
     if (!openedLogin) {
       console.warn("[auth-refresh] Could not open /login during refresh");
-      await context.close();
+      await safeCloseContext(context);
       return false;
     }
 
     // Already authenticated in this context.
     if (!isAuthRoute(page.url())) {
-      await context.storageState({ path: getAuthStatePath() });
-      await context.close();
+      await waitForRouteSettled(page, Math.min(NAV_TIMEOUT_MS, 12000)).catch(() => {});
+      await waitForActiveWorkspaceStorage(page, 10000).catch(() => {});
+      await context.storageState({ path: authStatePath });
+      sanitizeStorageStateFile(authStatePath);
+      await safeCloseContext(context);
       return true;
     }
 
     const loggedIn = await performPasswordLogin(page, state);
     if (!loggedIn) {
       console.warn("[auth-refresh] Login did not reach an authenticated route");
-      await context.close();
+      await safeCloseContext(context);
       return false;
     }
 
+    await waitForRouteSettled(page, Math.min(NAV_TIMEOUT_MS, 12000)).catch(() => {});
+    await waitForActiveWorkspaceStorage(page, 10000).catch(() => {});
+
     // Save fresh auth state
-    await context.storageState({ path: getAuthStatePath() });
+    await context.storageState({ path: authStatePath });
+    sanitizeStorageStateFile(authStatePath);
     console.log("[auth-refresh] Auth state refreshed successfully");
 
-    await context.close();
+    await safeCloseContext(context);
     return true;
   } catch (error) {
     console.error("[auth-refresh] Re-authentication failed:", error);
@@ -545,17 +736,19 @@ export async function ensureAuthenticatedInPage(page: Page): Promise<boolean> {
 
   const currentUrl = page.url();
   const authUiVisible = await isAuthUiVisible(page);
+  const currentContextAuthFresh = await isCurrentContextAuthFresh(page);
 
-  // Fast path: worker-auth contexts with fresh tokens do not need auth-route probing
-  // on every test hook. This keeps beforeEach hooks short and avoids unnecessary login UI churn.
-  if (
-    !isInitialPageUrl(currentUrl) &&
-    !isAuthRoute(currentUrl) &&
-    !authUiVisible &&
-    !isAuthStale()
-  ) {
+  // Fast path: when the page is already healthy on a non-auth route, avoid
+  // probing /login just because exported storage state cannot represent every
+  // transient auth detail used by the app runtime.
+  if (!isAuthRoute(currentUrl) && !authUiVisible) {
+    if (isInitialPageUrl(currentUrl)) {
+      return currentContextAuthFresh;
+    }
+
     const settled = await waitForRouteSettled(page, 3000);
-    if (settled) {
+    const hasWorkspace = await waitForActiveWorkspaceStorage(page, 5000);
+    if (settled && hasWorkspace && !(await isRouteErrorBoundaryVisible(page))) {
       return true;
     }
   }
@@ -584,7 +777,8 @@ export async function ensureAuthenticatedInPage(page: Page): Promise<boolean> {
   );
   if (autoRecovered && !isAuthRoute(page.url())) {
     const settled = await waitForRouteSettled(page, Math.min(NAV_TIMEOUT_MS, 12000));
-    if (settled) {
+    const hasWorkspace = await waitForActiveWorkspaceStorage(page, 10000);
+    if (settled && hasWorkspace) {
       return true;
     }
   }
@@ -601,7 +795,13 @@ export async function ensureAuthenticatedInPage(page: Page): Promise<boolean> {
       console.warn("[auth-refresh] In-page login stayed on auth route");
       return false;
     }
+    const hasWorkspace = await waitForActiveWorkspaceStorage(page, 10000);
+    if (!hasWorkspace) {
+      console.warn("[auth-refresh] In-page login completed without active workspace storage");
+      return false;
+    }
     await page.context().storageState({ path: getAuthStatePath() });
+    sanitizeStorageStateFile(getAuthStatePath());
     return true;
   } catch (error) {
     console.error("[auth-refresh] In-page authentication failed:", error);

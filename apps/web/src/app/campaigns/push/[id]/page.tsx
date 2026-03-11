@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -12,21 +10,18 @@ import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
+import { usePushCampaignEditorConvex } from "../../hooks/usePushCampaignEditorConvex";
 
 function PushCampaignEditor() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as Id<"pushCampaigns">;
   const { activeWorkspace } = useAuth();
-
-  const campaign = useQuery(api.pushCampaigns.get, { id: campaignId });
-  const stats = useQuery(api.pushCampaigns.getStats, { id: campaignId });
-  const eventNames = useQuery(
-    api.events.getDistinctNames,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const updateCampaign = useMutation(api.pushCampaigns.update);
-  const sendCampaign = useMutation(api.pushCampaigns.send);
+  const { campaign, eventNames, sendCampaign, stats, updateCampaign } =
+    usePushCampaignEditorConvex({
+      campaignId,
+      workspaceId: activeWorkspace?._id,
+    });
 
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -43,7 +38,7 @@ function PushCampaignEditor() {
       setBody(campaign.body);
       setImageUrl(campaign.imageUrl || "");
       setDeepLink(campaign.deepLink || "");
-      setAudienceRules((campaign.audienceRules ?? campaign.targeting) as AudienceRule | null);
+      setAudienceRules(campaign.audienceRules ?? campaign.targeting ?? null);
     }
   }, [campaign]);
 
@@ -203,19 +198,19 @@ function PushCampaignEditor() {
                 </h3>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.total}</div>
+                    <div className="text-2xl font-bold">{stats.total ?? 0}</div>
                     <div className="text-sm text-gray-500">Recipients</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.deliveryRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.deliveryRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Delivery Rate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.openRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.openRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Open Rate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.failed}</div>
+                    <div className="text-2xl font-bold">{stats.failed ?? 0}</div>
                     <div className="text-sm text-gray-500">Failed</div>
                   </div>
                 </div>

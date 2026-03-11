@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
+import type { Id } from "@opencom/convex/dataModel";
 import { Button, Card } from "@opencom/ui";
 import { AppLayout } from "@/components/AppLayout";
 import { WidgetInstallGuide } from "@/components/WidgetInstallGuide";
@@ -46,18 +47,67 @@ function OnboardingContent(): React.JSX.Element {
   const startRequestedRef = useRef(false);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const hostedOnboardingStateQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    {
+      status?: string;
+      verificationToken?: string | null;
+      isWidgetVerified?: boolean;
+    } | null
+  >("workspaces:getHostedOnboardingState");
+
+  const onboardingIntegrationSignalsQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    {
+      integrations?: Array<{
+        id: string;
+        clientType: string;
+        clientVersion?: string;
+        detectedAt?: number | null;
+        isActiveNow?: boolean;
+        matchesCurrentVerificationWindow?: boolean;
+        origin?: string;
+        currentUrl?: string;
+        clientIdentifier?: string;
+        lastSeenAt?: number | null;
+        activeSessionCount?: number;
+      }>;
+    } | null
+  >("workspaces:getHostedOnboardingIntegrationSignals");
+
+  const startHostedOnboardingRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces"> },
+    unknown
+  >("workspaces:startHostedOnboarding");
+
+  const issueVerificationTokenRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces"> },
+    { token: string }
+  >("workspaces:issueHostedOnboardingVerificationToken");
+
+  const completeWidgetStepRef = makeFunctionReference<
+    "mutation",
+    { workspaceId: Id<"workspaces">; token?: string },
+    { success: boolean }
+  >("workspaces:completeHostedOnboardingWidgetStep");
+
   const onboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const integrationSignals = useQuery(
-    api.workspaces.getHostedOnboardingIntegrationSignals,
+    hostedOnboardingStateQuery,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const startHostedOnboarding = useMutation(api.workspaces.startHostedOnboarding);
-  const issueVerificationToken = useMutation(api.workspaces.issueHostedOnboardingVerificationToken);
-  const completeWidgetStep = useMutation(api.workspaces.completeHostedOnboardingWidgetStep);
+  const integrationSignals = useQuery(
+    onboardingIntegrationSignalsQuery,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  );
+
+  const startHostedOnboarding = useMutation(startHostedOnboardingRef);
+  const issueVerificationToken = useMutation(issueVerificationTokenRef);
+  const completeWidgetStep = useMutation(completeWidgetStepRef);
 
   useEffect(() => {
     if (!onboardingState?.verificationToken) {

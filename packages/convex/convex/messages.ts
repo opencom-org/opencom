@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, type QueryCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { type Doc, type Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
+import { getShallowRunAfter, notifyNewMessageRef } from "./notifications/functionRefs";
 import { hasPermission, requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
@@ -192,7 +192,8 @@ export const send = mutation({
 
     await ctx.db.patch(args.conversationId, updateData);
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, notifyNewMessageRef, {
       conversationId: args.conversationId,
       messageContent: args.content,
       senderType: args.senderType,
@@ -235,7 +236,8 @@ export const internalSendBotMessage = internalMutation({
       unreadByVisitor: (conversation.unreadByVisitor || 0) + 1,
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, notifyNewMessageRef, {
       conversationId: args.conversationId,
       messageContent: args.content,
       senderType: "bot",

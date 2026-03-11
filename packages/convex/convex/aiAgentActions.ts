@@ -1,8 +1,8 @@
 "use node";
 
+import { anyApi } from "convex/server";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
 import { generateText } from "ai";
 import { createAIClient } from "./lib/aiGateway";
 
@@ -245,18 +245,52 @@ export const generateResponse = action({
   ): Promise<{
     response: string;
     confidence: number;
-    sources: Array<{ type: string; id: string; title: string }>;
+    sources: Array<{ type: string; id: string; title: string; articleId?: string }>;
     handoff: boolean;
     handoffReason: string | null;
     messageId: string | null;
   }> => {
     const startTime = Date.now();
 
-    const access = await ctx.runQuery(internal.aiAgent.authorizeConversationAccess, {
+    const runQuery = ctx.runQuery as unknown as (
+      queryRef: unknown,
+      queryArgs: Record<string, unknown>
+    ) => Promise<unknown>;
+    const runMutation = ctx.runMutation as unknown as (
+      mutationRef: unknown,
+      mutationArgs: Record<string, unknown>
+    ) => Promise<unknown>;
+    const unsafeInternalApi = anyApi as unknown as {
+      aiAgent: {
+        authorizeConversationAccess: unknown;
+        getRuntimeSettingsForWorkspace: unknown;
+        recordRuntimeDiagnostic: unknown;
+        clearRuntimeDiagnostic: unknown;
+        getRelevantKnowledgeForRuntime: unknown;
+      };
+      messages: { internalSendBotMessage: unknown };
+    };
+    const unsafeApi = anyApi as unknown as {
+      aiAgent: { handoffToHuman: unknown; storeResponse: unknown };
+    };
+    const authorizeConversationAccessRef = unsafeInternalApi.aiAgent.authorizeConversationAccess;
+    const getRuntimeSettingsForWorkspaceRef = unsafeInternalApi.aiAgent.getRuntimeSettingsForWorkspace;
+    const recordRuntimeDiagnosticRef = unsafeInternalApi.aiAgent.recordRuntimeDiagnostic;
+    const clearRuntimeDiagnosticRef = unsafeInternalApi.aiAgent.clearRuntimeDiagnostic;
+    const getRelevantKnowledgeForRuntimeRef = unsafeInternalApi.aiAgent.getRelevantKnowledgeForRuntime;
+    const internalSendBotMessageRef = unsafeInternalApi.messages.internalSendBotMessage;
+    const handoffToHumanRef = unsafeApi.aiAgent.handoffToHuman;
+    const storeResponseRef = unsafeApi.aiAgent.storeResponse;
+
+    const access = (await runQuery(authorizeConversationAccessRef, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
       sessionToken: args.sessionToken,
-    });
+    })) as {
+      workspaceId: string;
+      aiWorkflowState?: string | null;
+      hasHumanAgentResponse?: boolean;
+    };
     if (access.workspaceId !== args.workspaceId) {
       throw new Error("Conversation does not belong to workspace");
     }
@@ -279,19 +313,28 @@ export const generateResponse = action({
     }
 
     // Get AI settings
-    const settings = await ctx.runQuery(internal.aiAgent.getRuntimeSettingsForWorkspace, {
+    const settings = (await runQuery(getRuntimeSettingsForWorkspaceRef, {
       workspaceId: args.workspaceId,
-    });
+    })) as {
+      enabled: boolean;
+      model: string;
+      knowledgeSources?: Array<"articles" | "internalArticles" | "snippets">;
+      personality?: string | null;
+      confidenceThreshold?: number;
+    };
 
     if (!settings.enabled) {
       const reason = "AI Agent is disabled";
       try {
-        const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+        const handoff = (await runMutation(handoffToHumanRef, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,
           sessionToken: args.sessionToken,
           reason,
-        });
+        })) as {
+          handoffMessage: string;
+          messageId: string | null;
+        };
 
         return {
           response: handoff.handoffMessage,
@@ -305,11 +348,11 @@ export const generateResponse = action({
         console.error("Failed to handoff when AI Agent is disabled:", handoffError);
       }
 
-      const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+      const messageId = (await runMutation(internalSendBotMessageRef, {
         conversationId: args.conversationId,
         senderId: "ai-agent",
         content: GENERATION_FAILURE_FALLBACK_RESPONSE,
-      });
+      })) as string;
 
       return {
         response: GENERATION_FAILURE_FALLBACK_RESPONSE,
@@ -323,7 +366,7 @@ export const generateResponse = action({
 
     const configurationDiagnostic = getAIConfigurationDiagnostic(settings.model);
     if (configurationDiagnostic) {
-      await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
+      await runMutation(recordRuntimeDiagnosticRef, {
         workspaceId: args.workspaceId,
         code: configurationDiagnostic.code,
         message: configurationDiagnostic.message,
@@ -331,12 +374,15 @@ export const generateResponse = action({
         model: configurationDiagnostic.model,
       });
 
-      const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+      const handoff = (await runMutation(handoffToHumanRef, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
         sessionToken: args.sessionToken,
         reason: configurationDiagnostic.message,
-      });
+      })) as {
+        handoffMessage: string;
+        messageId: string | null;
+      };
 
       return {
         response: handoff.handoffMessage,
@@ -348,19 +394,25 @@ export const generateResponse = action({
       };
     }
 
-    await ctx.runMutation(internal.aiAgent.clearRuntimeDiagnostic, {
+    await runMutation(clearRuntimeDiagnosticRef, {
       workspaceId: args.workspaceId,
     });
 
     // Get relevant knowledge
-    const knowledgeResults = await ctx.runQuery(internal.aiAgent.getRelevantKnowledgeForRuntime, {
+    const knowledgeResults = (await runQuery(getRelevantKnowledgeForRuntimeRef, {
       workspaceId: args.workspaceId,
       query: args.query,
       knowledgeSources: settings.knowledgeSources as Array<
         "articles" | "internalArticles" | "snippets"
       >,
       limit: 5,
-    });
+    })) as Array<{
+      type: string;
+      id: string;
+      title: string;
+      content: string;
+      relevanceScore: number;
+    }>;
 
     // Build knowledge context for prompt
     const knowledgeContext = knowledgeResults
@@ -387,7 +439,7 @@ export const generateResponse = action({
       const generationTimeMs = Date.now() - startTime;
 
       try {
-        await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
+        await runMutation(recordRuntimeDiagnosticRef, {
           workspaceId: args.workspaceId,
           code: diagnosticCode,
           message: diagnosticMessage,
@@ -399,15 +451,15 @@ export const generateResponse = action({
       }
 
       try {
-        const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+        const handoff = (await runMutation(handoffToHumanRef, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,
           sessionToken: args.sessionToken,
           reason,
-        });
+        })) as { handoffMessage: string; messageId: string | null };
 
         try {
-          await ctx.runMutation(api.aiAgent.storeResponse, {
+          await runMutation(storeResponseRef, {
             conversationId: args.conversationId,
             visitorId: args.visitorId,
             sessionToken: args.sessionToken,
@@ -442,14 +494,14 @@ export const generateResponse = action({
         console.error("Failed to handoff after AI generation error:", handoffError);
       }
 
-      const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+      const messageId = (await runMutation(internalSendBotMessageRef, {
         conversationId: args.conversationId,
         senderId: "ai-agent",
         content: GENERATION_FAILURE_FALLBACK_RESPONSE,
-      });
+      })) as string;
 
       try {
-        await ctx.runMutation(api.aiAgent.storeResponse, {
+        await runMutation(storeResponseRef, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,
           sessionToken: args.sessionToken,
@@ -621,7 +673,7 @@ export const generateResponse = action({
     const { handoff, reason: handoffReason } = shouldHandoff(
       responseText,
       confidence,
-      settings.confidenceThreshold,
+      settings.confidenceThreshold ?? 0.6,
       args.query
     );
 
@@ -630,18 +682,19 @@ export const generateResponse = action({
       type: r.type,
       id: r.id,
       title: r.title,
+      articleId: r.type === "article" ? r.id : undefined,
     }));
 
     if (handoff) {
       // Preserve both generated and delivered contexts while keeping one visitor-facing handoff message.
-      const handoffResult = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+      const handoffResult = (await runMutation(handoffToHumanRef, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
         sessionToken: args.sessionToken,
         reason: handoffReason ?? undefined,
-      });
+      })) as { handoffMessage: string; messageId: string | null };
 
-      await ctx.runMutation(api.aiAgent.storeResponse, {
+      await runMutation(storeResponseRef, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
         sessionToken: args.sessionToken,
@@ -672,14 +725,14 @@ export const generateResponse = action({
     }
 
     // Create the AI message via the internal bot-only path.
-    const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+    const messageId = (await runMutation(internalSendBotMessageRef, {
       conversationId: args.conversationId,
       senderId: "ai-agent",
       content: responseText,
-    });
+    })) as string;
 
     // Store the AI response for analytics
-    await ctx.runMutation(api.aiAgent.storeResponse, {
+    await runMutation(storeResponseRef, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
       sessionToken: args.sessionToken,

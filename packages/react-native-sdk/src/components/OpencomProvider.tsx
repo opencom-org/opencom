@@ -10,8 +10,12 @@ interface OpencomContextValue {
 
 const OpencomContext = createContext<OpencomContextValue | null>(null);
 
+export function useOptionalOpencomContext(): OpencomContextValue | null {
+  return useContext(OpencomContext);
+}
+
 export function useOpencomContext(): OpencomContextValue {
-  const context = useContext(OpencomContext);
+  const context = useOptionalOpencomContext();
   if (!context) {
     throw new Error("useOpencomContext must be used within OpencomProvider");
   }

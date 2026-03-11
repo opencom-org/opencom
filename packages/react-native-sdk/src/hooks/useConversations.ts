@@ -1,28 +1,59 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
-import { getVisitorState, getConfig } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
+import { sdkMutationRef, sdkQueryRef, useSdkMutation, useSdkQuery } from "../internal/convex";
+import {
+  hasVisitorSessionTransport,
+  hasVisitorWorkspaceTransport,
+} from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
+
+const LIST_CONVERSATIONS_REF = sdkQueryRef("conversations:listByVisitor");
+const TOTAL_UNREAD_REF = sdkQueryRef("conversations:getTotalUnreadForVisitor");
+const LIST_MESSAGES_REF = sdkQueryRef("messages:list");
+const SEND_MESSAGE_REF = sdkMutationRef("messages:send");
+const MARK_AS_READ_REF = sdkMutationRef("conversations:markAsRead");
+const CREATE_CONVERSATION_REF = sdkMutationRef("conversations:createForVisitor");
+
+export interface ConversationSummaryRecord {
+  _id: Id<"conversations">;
+  createdAt: number;
+  updatedAt?: number;
+  lastMessageAt?: number;
+  unreadByVisitor?: number;
+  lastMessage?: {
+    content?: string;
+    senderType?: string;
+  } | null;
+}
+
+export interface ConversationMessageRecord {
+  _id: Id<"messages"> | string;
+  _creationTime: number;
+  senderType: "visitor" | string;
+  content: string;
+}
 
 export function useConversations() {
-  const { visitorId, sessionToken } = getVisitorState();
-  let workspaceId: string | undefined;
-  try {
-    workspaceId = getConfig().workspaceId;
-  } catch {
-    /* not yet initialized */
-  }
+  const transport = useSdkTransportContext();
 
-  const conversations = useQuery(
-    api.conversations.listByVisitor,
-    visitorId && sessionToken && workspaceId
-      ? { visitorId, sessionToken, workspaceId: workspaceId as Id<"workspaces"> }
+  const conversations = useSdkQuery<ConversationSummaryRecord[]>(
+    LIST_CONVERSATIONS_REF,
+    hasVisitorWorkspaceTransport(transport)
+      ? {
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+          workspaceId: transport.workspaceId,
+        }
       : "skip"
   );
 
-  const totalUnread = useQuery(
-    api.conversations.getTotalUnreadForVisitor,
-    visitorId && sessionToken && workspaceId
-      ? { visitorId, sessionToken, workspaceId: workspaceId as Id<"workspaces"> }
+  const totalUnread = useSdkQuery<number>(
+    TOTAL_UNREAD_REF,
+    hasVisitorWorkspaceTransport(transport)
+      ? {
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+          workspaceId: transport.workspaceId,
+        }
       : "skip"
   );
 
@@ -34,39 +65,43 @@ export function useConversations() {
 }
 
 export function useConversation(conversationId: Id<"conversations"> | null) {
-  const { visitorId, sessionToken } = getVisitorState();
+  const transport = useSdkTransportContext();
 
-  const messages = useQuery(
-    api.messages.list,
-    conversationId && visitorId
-      ? { conversationId, visitorId, sessionToken: sessionToken ?? undefined }
+  const messages = useSdkQuery<ConversationMessageRecord[]>(
+    LIST_MESSAGES_REF,
+    conversationId && transport.visitorId
+      ? {
+          conversationId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken ?? undefined,
+        }
       : "skip"
   );
 
-  const sendMessageMutation = useMutation(api.messages.send);
-  const markAsReadMutation = useMutation(api.conversations.markAsRead);
+  const sendMessageMutation = useSdkMutation<Record<string, unknown>, unknown>(SEND_MESSAGE_REF);
+  const markAsReadMutation = useSdkMutation<Record<string, unknown>, unknown>(MARK_AS_READ_REF);
 
   const sendMessage = async (content: string) => {
-    if (!conversationId || !visitorId) return;
+    if (!conversationId || !transport.visitorId) return;
 
     await sendMessageMutation({
       conversationId,
-      senderId: visitorId,
+      senderId: transport.visitorId,
       senderType: "visitor",
       content,
-      visitorId,
-      sessionToken: sessionToken ?? undefined,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken ?? undefined,
     });
   };
 
   const markAsRead = async () => {
-    if (!conversationId || !sessionToken) return;
+    if (!conversationId || !transport.sessionToken) return;
 
     await markAsReadMutation({
       id: conversationId,
       readerType: "visitor",
-      visitorId: visitorId ?? undefined,
-      sessionToken,
+      visitorId: transport.visitorId ?? undefined,
+      sessionToken: transport.sessionToken,
     });
   };
 
@@ -79,16 +114,23 @@ export function useConversation(conversationId: Id<"conversations"> | null) {
 }
 
 export function useCreateConversation() {
-  const createConversationMutation = useMutation(api.conversations.createForVisitor);
+  const transport = useSdkTransportContext();
+  const createConversationMutation = useSdkMutation<
+    {
+      workspaceId: Id<"workspaces">;
+      visitorId: Id<"visitors">;
+      sessionToken: string;
+    },
+    { _id: Id<"conversations"> } | null
+  >(CREATE_CONVERSATION_REF);
 
   const createConversation = async (workspaceId: Id<"workspaces">) => {
-    const { visitorId, sessionToken } = getVisitorState();
-    if (!visitorId || !sessionToken) return null;
+    if (!hasVisitorSessionTransport(transport)) return null;
 
     return await createConversationMutation({
       workspaceId,
-      visitorId,
-      sessionToken,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken,
     });
   };
 

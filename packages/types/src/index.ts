@@ -1,5 +1,10 @@
 export * from "./backend";
+export * from "./audienceRules";
 export * from "./backendValidation";
+export * from "./homeConfig";
+export * from "./messengerSettings";
+export * from "./routeMatching";
+export * from "./visitorReadableId";
 
 export type UserId = string;
 export type ConversationId = string;
@@ -146,17 +151,54 @@ export type OutboundMessageStatus = "draft" | "active" | "paused" | "archived";
 export type MessageFrequency = "once" | "once_per_session" | "always";
 export type TriggerType = "immediate" | "page_visit" | "time_on_page" | "scroll_depth" | "event";
 export type PageUrlMatch = "exact" | "contains" | "regex";
-export type ButtonAction = "url" | "dismiss" | "tour";
 export type BannerStyle = "inline" | "floating";
+export type OutboundClickActionType =
+  | "open_messenger"
+  | "open_new_conversation"
+  | "open_widget_tab"
+  | "open_help_article"
+  | "open_url"
+  | "dismiss";
+export type OutboundButtonAction =
+  | "url"
+  | "dismiss"
+  | "tour"
+  | "reply"
+  | "chat"
+  | "open_new_conversation"
+  | "open_help_article"
+  | "open_widget_tab";
+export type ButtonAction = OutboundButtonAction;
+export type AuthoringOutboundButtonAction = Exclude<OutboundButtonAction, "reply" | "chat">;
+export type AuthoringOutboundPrimaryButtonAction = Extract<
+  AuthoringOutboundButtonAction,
+  "url" | "open_new_conversation" | "open_help_article" | "open_widget_tab"
+>;
 
-export interface MessageButton {
-  text: string;
-  action: ButtonAction;
+export interface OutboundClickAction<ArticleId = string> {
+  type: OutboundClickActionType;
+  tabId?: string;
+  articleId?: ArticleId;
   url?: string;
-  tourId?: string;
+  prefillMessage?: string;
 }
 
-export interface OutboundMessageContent {
+export interface MessageButton<TourId = string, ArticleId = string> {
+  text: string;
+  action: OutboundButtonAction;
+  url?: string;
+  tourId?: TourId;
+  articleId?: ArticleId;
+  tabId?: string;
+  prefillMessage?: string;
+}
+
+export interface AuthoringMessageButton<TourId = string, ArticleId = string>
+  extends Omit<MessageButton<TourId, ArticleId>, "action"> {
+  action: AuthoringOutboundButtonAction;
+}
+
+export interface OutboundMessageContent<UserId = string, TourId = string, ArticleId = string> {
   // Chat message fields
   text?: string;
   senderId?: UserId;
@@ -169,7 +211,16 @@ export interface OutboundMessageContent {
   style?: BannerStyle;
   dismissible?: boolean;
   // Shared fields
-  buttons?: MessageButton[];
+  clickAction?: OutboundClickAction<ArticleId>;
+  buttons?: MessageButton<TourId, ArticleId>[];
+}
+
+export interface AuthoringOutboundMessageContent<
+  UserId = string,
+  TourId = string,
+  ArticleId = string,
+> extends Omit<OutboundMessageContent<UserId, TourId, ArticleId>, "buttons"> {
+  buttons?: AuthoringMessageButton<TourId, ArticleId>[];
 }
 
 export interface MessageTrigger {
@@ -179,6 +230,35 @@ export interface MessageTrigger {
   delaySeconds?: number;
   scrollPercent?: number;
   eventName?: string;
+}
+export type OutboundMessageTrigger = MessageTrigger;
+
+export interface EligibleOutboundMessage<
+  MessageId = string,
+  UserId = string,
+  TourId = string,
+  ArticleId = string,
+> {
+  _id: MessageId;
+  type: OutboundMessageType;
+  name: string;
+  content: OutboundMessageContent<UserId, TourId, ArticleId>;
+  triggers?: MessageTrigger;
+  priority?: number;
+}
+
+export interface PersistedOutboundMessage<
+  MessageId = string,
+  WorkspaceId = string,
+  UserId = string,
+  TourId = string,
+  ArticleId = string,
+> extends EligibleOutboundMessage<MessageId, UserId, TourId, ArticleId> {
+  workspaceId: WorkspaceId;
+  status: OutboundMessageStatus;
+  frequency?: MessageFrequency;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface MessageScheduling {
@@ -532,6 +612,58 @@ export interface CarouselImpression {
   createdAt: number;
 }
 
+export type AudienceRuleCountOperator = "at_least" | "at_most" | "exactly";
+
+export interface AudienceRuleEventFilter {
+  name: string;
+  countOperator?: AudienceRuleCountOperator;
+  count?: number;
+  withinDays?: number;
+}
+
+export type AudienceRulePropertySource = "system" | "custom" | "event";
+
+export interface AudienceRulePropertyReference {
+  source: AudienceRulePropertySource;
+  key: string;
+  eventFilter?: AudienceRuleEventFilter;
+}
+
+export type AudienceRuleOperator =
+  | "equals"
+  | "not_equals"
+  | "contains"
+  | "not_contains"
+  | "starts_with"
+  | "ends_with"
+  | "greater_than"
+  | "less_than"
+  | "greater_than_or_equals"
+  | "less_than_or_equals"
+  | "is_set"
+  | "is_not_set";
+
+export interface AudienceRuleCondition {
+  type: "condition";
+  property: AudienceRulePropertyReference;
+  operator: AudienceRuleOperator;
+  value?: string | number | boolean;
+}
+
+export interface AudienceRuleGroup {
+  type: "group";
+  operator: "and" | "or";
+  conditions: AudienceRule[];
+}
+
+export type AudienceRule = AudienceRuleCondition | AudienceRuleGroup;
+
+export interface SegmentReference {
+  segmentId: string;
+}
+
+export type AudienceRuleOrSegment = AudienceRule | SegmentReference;
+
 // Series Types
 export type SeriesId = string;
 export type SeriesBlockId = string;
@@ -563,9 +695,9 @@ export interface Series {
   workspaceId: WorkspaceId;
   name: string;
   description?: string;
-  entryRules?: unknown;
-  exitRules?: unknown;
-  goalRules?: unknown;
+  entryRules?: AudienceRuleOrSegment;
+  exitRules?: AudienceRuleOrSegment;
+  goalRules?: AudienceRuleOrSegment;
   status: SeriesStatus;
   stats?: SeriesStats;
   createdAt: number;
@@ -578,7 +710,7 @@ export interface SeriesBlockPosition {
 }
 
 export interface SeriesBlockConfig {
-  rules?: unknown;
+  rules?: AudienceRuleOrSegment;
   waitType?: WaitType;
   waitDuration?: number;
   waitUnit?: WaitUnit;

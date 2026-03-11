@@ -1,10 +1,14 @@
 import { Platform } from "react-native";
 import type { Id } from "@opencom/convex/dataModel";
-import { api } from "@opencom/convex";
-import { emitEvent, getClient, getConfig, getVisitorState } from "@opencom/sdk-core";
+import { emitEvent, getClient } from "@opencom/sdk-core";
+import { sdkMutationRef } from "../internal/convex";
+import { getSdkTransportContext, getSdkVisitorTransport } from "../internal/runtime";
 
 let expoPushToken: string | null = null;
 let registeredBackendToken: string | null = null;
+
+const REGISTER_PUSH_TOKEN_REF = sdkMutationRef("visitorPushTokens:register");
+const UNREGISTER_PUSH_TOKEN_REF = sdkMutationRef("visitorPushTokens:unregister");
 
 interface PushNotificationConfig {
   onNotificationReceived?: (notification: PushNotification) => void;
@@ -45,23 +49,17 @@ type PushRegistrationContext = {
 function getPushRegistrationContext(
   action: "register" | "unregister"
 ): PushRegistrationContext | null {
-  const state = getVisitorState();
-  let workspaceId: string | undefined;
-  try {
-    workspaceId = getConfig().workspaceId;
-  } catch {
-    workspaceId = undefined;
-  }
+  const context = getSdkTransportContext();
 
-  if (!state.visitorId || !state.sessionToken || !workspaceId) {
+  if (!context.visitorId || !context.sessionToken || !context.workspaceId) {
     console.warn(`[OpencomSDK] Cannot ${action} push token - missing visitor session context`);
     return null;
   }
 
   return {
-    visitorId: state.visitorId as Id<"visitors">,
-    sessionToken: state.sessionToken,
-    workspaceId: workspaceId as Id<"workspaces">,
+    visitorId: context.visitorId as Id<"visitors">,
+    sessionToken: context.sessionToken,
+    workspaceId: context.workspaceId,
   };
 }
 
@@ -72,7 +70,7 @@ async function registerPushToken(token: string): Promise<boolean> {
   }
 
   const platform = Platform.OS === "ios" ? "ios" : "android";
-  await getClient().mutation(api.visitorPushTokens.register, {
+  await getClient().mutation(REGISTER_PUSH_TOKEN_REF, {
     visitorId: context.visitorId,
     token,
     platform,
@@ -89,7 +87,7 @@ async function unregisterPushToken(token: string): Promise<boolean> {
     return false;
   }
 
-  await getClient().mutation(api.visitorPushTokens.unregister, {
+  await getClient().mutation(UNREGISTER_PUSH_TOKEN_REF, {
     token,
     visitorId: context.visitorId,
     sessionToken: context.sessionToken,
@@ -268,7 +266,7 @@ export async function clearBadgeCount(): Promise<void> {
  */
 export async function refreshUnreadBadge(): Promise<number> {
   try {
-    const state = getVisitorState();
+    const state = getSdkVisitorTransport();
     if (!state.visitorId) {
       return 0;
     }

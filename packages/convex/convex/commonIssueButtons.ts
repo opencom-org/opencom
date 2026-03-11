@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { query } from "./_generated/server";
 import { Doc } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
-import { hasPermission, requirePermission } from "./permissions";
+import { hasPermission } from "./permissions";
+import { authMutation } from "./lib/authWrappers";
 
 export const list = query({
   args: {
@@ -95,7 +96,7 @@ export const get = query({
   },
 });
 
-export const create = mutation({
+export const create = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     label: v.string(),
@@ -104,13 +105,8 @@ export const create = mutation({
     conversationStarter: v.optional(v.string()),
     enabled: v.boolean(),
   },
+  permission: "settings.workspace",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.workspace");
-
     if (args.action === "article" && !args.articleId) {
       throw new Error("Article ID is required for article action");
     }
@@ -142,7 +138,7 @@ export const create = mutation({
   },
 });
 
-export const update = mutation({
+export const update = authMutation({
   args: {
     id: v.id("commonIssueButtons"),
     label: v.optional(v.string()),
@@ -151,18 +147,15 @@ export const update = mutation({
     conversationStarter: v.optional(v.string()),
     enabled: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  permission: "settings.workspace",
+  resolveWorkspaceId: async (ctx, args) => {
     const button = (await ctx.db.get(args.id)) as Doc<"commonIssueButtons"> | null;
     if (!button) {
       throw new Error("Button not found");
     }
-
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, button.workspaceId, "settings.workspace");
-
+    return button.workspaceId;
+  },
+  handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       ...(args.label !== undefined && { label: args.label }),
       ...(args.action !== undefined && { action: args.action }),
@@ -178,38 +171,30 @@ export const update = mutation({
   },
 });
 
-export const remove = mutation({
+export const remove = authMutation({
   args: {
     id: v.id("commonIssueButtons"),
   },
-  handler: async (ctx, args) => {
+  permission: "settings.workspace",
+  resolveWorkspaceId: async (ctx, args) => {
     const button = (await ctx.db.get(args.id)) as Doc<"commonIssueButtons"> | null;
     if (!button) {
       throw new Error("Button not found");
     }
-
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, button.workspaceId, "settings.workspace");
-
+    return button.workspaceId;
+  },
+  handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
   },
 });
 
-export const reorder = mutation({
+export const reorder = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     buttonIds: v.array(v.id("commonIssueButtons")),
   },
+  permission: "settings.workspace",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.workspace");
-
     for (const buttonId of args.buttonIds) {
       const button = (await ctx.db.get(buttonId)) as Doc<"commonIssueButtons"> | null;
       if (!button || button.workspaceId !== args.workspaceId) {

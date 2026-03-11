@@ -16,14 +16,14 @@ describe("visitors", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -34,7 +34,7 @@ describe("visitors", () => {
   });
 
   it("should create a visitor via test helper", async () => {
-    const result = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const result = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "visitor@example.com",
       name: "Test Visitor",
@@ -72,7 +72,7 @@ describe("visitors", () => {
   });
 
   it("should get visitor by id", async () => {
-    const visitor = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: testVisitorId,
     });
 
@@ -81,7 +81,7 @@ describe("visitors", () => {
   });
 
   it("should update visitor heartbeat", async () => {
-    const beforeUpdate = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const beforeUpdate = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: testVisitorId,
     });
 
@@ -89,7 +89,7 @@ describe("visitors", () => {
       visitorId: testVisitorId,
     });
 
-    const afterUpdate = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const afterUpdate = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: testVisitorId,
     });
 

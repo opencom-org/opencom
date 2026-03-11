@@ -9,6 +9,39 @@ vi.mock("convex/react", () => ({
   useMutation: vi.fn(),
 }));
 
+function getFunctionPath(ref: unknown) {
+  if (typeof ref === "string") {
+    return ref;
+  }
+
+  if (ref && typeof ref === "object") {
+    const maybeRef = ref as {
+      functionName?: string;
+      name?: string;
+      reference?: { functionName?: string; name?: string };
+    };
+
+    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+      String(symbol).includes("functionName")
+    );
+
+    const symbolValue = symbolFunctionName
+      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+      : undefined;
+
+    return (
+      (typeof symbolValue === "string" ? symbolValue : undefined) ??
+      maybeRef.functionName ??
+      maybeRef.name ??
+      maybeRef.reference?.functionName ??
+      maybeRef.reference?.name ??
+      ""
+    );
+  }
+
+  return "";
+}
+
 vi.mock("@opencom/sdk-core", () => ({
   selectSurveyForDelivery: vi.fn((surveys: unknown[]) => surveys[0] ?? null),
 }));
@@ -35,11 +68,12 @@ vi.mock("@opencom/convex", () => ({
       markAsRead: "conversations.markAsRead",
     },
     articles: {
+      getForVisitor: "articles.getForVisitor",
       searchForVisitor: "articles.searchForVisitor",
       listForVisitor: "articles.listForVisitor",
     },
     collections: {
-      listHierarchy: "collections.listHierarchy",
+      listHierarchyForVisitor: "collections.listHierarchyForVisitor",
     },
     automationSettings: {
       getOrCreate: "automationSettings.getOrCreate",
@@ -217,15 +251,28 @@ describe("Widget shell orchestration", () => {
 
     const mockedUseQuery = useQuery as unknown as ReturnType<typeof vi.fn>;
     mockedUseQuery.mockImplementation((queryRef: unknown, args: unknown) => {
+      const functionPath = getFunctionPath(queryRef);
+
       if (args === "skip") {
         return undefined;
       }
 
-      if (queryRef === "workspaces.get") return workspaceValidationResult;
-      if (queryRef === "workspaces.validateOrigin") return originValidationResult;
-      if (queryRef === "tourProgress.getAvailableTours") return availableToursResult;
-      if (queryRef === "surveys.getActiveSurveys") return activeSurveysResult;
-      if (queryRef === "tours.listAll") {
+      if (functionPath === "workspaces:get" || functionPath === "workspaces.get") {
+        return workspaceValidationResult;
+      }
+      if (functionPath === "workspaces:validateOrigin" || functionPath === "workspaces.validateOrigin") {
+        return originValidationResult;
+      }
+      if (
+        functionPath === "tourProgress:getAvailableTours" ||
+        functionPath === "tourProgress.getAvailableTours"
+      ) {
+        return availableToursResult;
+      }
+      if (functionPath === "surveys:getActiveSurveys" || functionPath === "surveys.getActiveSurveys") {
+        return activeSurveysResult;
+      }
+      if (functionPath === "tours:listAll" || functionPath === "tours.listAll") {
         return [
           {
             tour: { _id: "tour_1", name: "Demo Tour", description: "Demo" },
@@ -236,16 +283,52 @@ describe("Widget shell orchestration", () => {
         ];
       }
 
-      if (queryRef === "conversations.getTotalUnreadForVisitor") return 0;
-      if (queryRef === "conversations.listByVisitor") return [];
-      if (queryRef === "articles.searchForVisitor") return [];
-      if (queryRef === "articles.listForVisitor") return [];
-      if (queryRef === "collections.listHierarchy") return [];
-      if (queryRef === "checklists.getEligible") return [];
-      if (queryRef === "tooltips.getAvailableTooltips") return [];
-      if (queryRef === "officeHours.isCurrentlyOpen") return { isOpen: true };
-      if (queryRef === "officeHours.getExpectedReplyTime") return null;
-      if (queryRef === "automationSettings.getOrCreate") {
+      if (
+        functionPath === "conversations:getTotalUnreadForVisitor" ||
+        functionPath === "conversations.getTotalUnreadForVisitor"
+      ) {
+        return 0;
+      }
+      if (
+        functionPath === "conversations:listByVisitor" ||
+        functionPath === "conversations.listByVisitor"
+      ) {
+        return [];
+      }
+      if (functionPath === "articles:searchForVisitor" || functionPath === "articles.searchForVisitor") {
+        return [];
+      }
+      if (functionPath === "articles:listForVisitor" || functionPath === "articles.listForVisitor") {
+        return [];
+      }
+      if (
+        functionPath === "collections:listHierarchyForVisitor" ||
+        functionPath === "collections.listHierarchyForVisitor"
+      ) {
+        return [];
+      }
+      if (functionPath === "checklists:getEligible" || functionPath === "checklists.getEligible") {
+        return [];
+      }
+      if (
+        functionPath === "tooltips:getAvailableTooltips" ||
+        functionPath === "tooltips.getAvailableTooltips"
+      ) {
+        return [];
+      }
+      if (functionPath === "officeHours:isCurrentlyOpen" || functionPath === "officeHours.isCurrentlyOpen") {
+        return { isOpen: true };
+      }
+      if (
+        functionPath === "officeHours:getExpectedReplyTime" ||
+        functionPath === "officeHours.getExpectedReplyTime"
+      ) {
+        return null;
+      }
+      if (
+        functionPath === "automationSettings:getOrCreate" ||
+        functionPath === "automationSettings.getOrCreate"
+      ) {
         return {
           suggestArticlesEnabled: false,
           collectEmailEnabled: false,

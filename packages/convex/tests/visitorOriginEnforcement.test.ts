@@ -14,14 +14,14 @@ describe("Visitor origin enforcement", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -36,19 +36,19 @@ describe("Visitor origin enforcement", () => {
 
     beforeAll(async () => {
       // Create a visitor via test helper, then enable allowlist
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
       });
       visitorId = visitor.visitorId;
 
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://allowed.com"],
       });
     });
 
     afterAll(async () => {
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: [],
       });
@@ -78,19 +78,19 @@ describe("Visitor origin enforcement", () => {
     let visitorId: Id<"visitors">;
 
     beforeAll(async () => {
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
       });
       visitorId = visitor.visitorId;
 
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://allowed.com"],
       });
     });
 
     afterAll(async () => {
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: [],
       });

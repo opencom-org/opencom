@@ -14,14 +14,14 @@ describe("workspace settings", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -34,12 +34,12 @@ describe("workspace settings", () => {
   it("should update allowed origins", async () => {
     const origins = ["https://example.com", "https://app.example.com"];
 
-    await client.mutation(api.testing.helpers.updateTestAllowedOrigins, {
+    await client.mutation(api.testing_helpers.updateTestAllowedOrigins, {
       workspaceId: testWorkspaceId,
       allowedOrigins: origins,
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -47,7 +47,7 @@ describe("workspace settings", () => {
   });
 
   it("should validate allowed origin", async () => {
-    await client.mutation(api.testing.helpers.updateTestAllowedOrigins, {
+    await client.mutation(api.testing_helpers.updateTestAllowedOrigins, {
       workspaceId: testWorkspaceId,
       allowedOrigins: ["https://allowed.com"],
     });
@@ -68,7 +68,7 @@ describe("workspace settings", () => {
   });
 
   it("should support wildcard subdomain origins", async () => {
-    await client.mutation(api.testing.helpers.updateTestAllowedOrigins, {
+    await client.mutation(api.testing_helpers.updateTestAllowedOrigins, {
       workspaceId: testWorkspaceId,
       allowedOrigins: ["*.example.com"],
     });
@@ -89,7 +89,7 @@ describe("workspace settings", () => {
   });
 
   it("should allow all origins when none configured", async () => {
-    await client.mutation(api.testing.helpers.updateTestAllowedOrigins, {
+    await client.mutation(api.testing_helpers.updateTestAllowedOrigins, {
       workspaceId: testWorkspaceId,
       allowedOrigins: [],
     });
@@ -103,13 +103,13 @@ describe("workspace settings", () => {
   });
 
   it("should update signup settings to invite-only", async () => {
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
       authMethods: ["password", "otp"],
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -121,14 +121,14 @@ describe("workspace settings", () => {
   it("should update signup settings to domain-allowlist", async () => {
     const allowedDomains = ["company.com", "partner.com"];
 
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains,
       authMethods: ["otp"],
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -139,19 +139,19 @@ describe("workspace settings", () => {
 
   it("should clear allowed domains when switching to invite-only", async () => {
     // First set domain-allowlist
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains: ["test.com"],
     });
 
     // Then switch to invite-only
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 

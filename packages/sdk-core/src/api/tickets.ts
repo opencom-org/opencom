@@ -1,8 +1,16 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
+
+function getMutationRef(name: string): FunctionReference<"mutation"> {
+  return makeFunctionReference(name) as FunctionReference<"mutation">;
+}
+
+function getQueryRef(name: string): FunctionReference<"query"> {
+  return makeFunctionReference(name) as FunctionReference<"query">;
+}
 
 export type TicketId = Id<"tickets">;
 export type TicketCommentId = Id<"ticketComments">;
@@ -16,8 +24,8 @@ export interface TicketData {
   visitorId?: VisitorId;
   subject: string;
   description?: string;
+  priority?: TicketPriority;
   status: TicketStatus;
-  priority: TicketPriority;
   createdAt: number;
   updatedAt: number;
   resolvedAt?: number;
@@ -45,7 +53,7 @@ export async function createTicket(params: CreateTicketParams): Promise<TicketId
   const client = getClient();
   const config = getConfig();
 
-  const ticketId = await client.mutation(api.tickets.create, {
+  const ticketId = await client.mutation(getMutationRef("tickets:create"), {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId: params.visitorId,
     sessionToken: params.sessionToken,
@@ -64,7 +72,7 @@ export async function listTickets(
   const client = getClient();
   const config = getConfig();
 
-  const tickets = await client.query(api.tickets.listByVisitor, {
+  const tickets = await client.query(getQueryRef("tickets:listByVisitor"), {
     visitorId,
     sessionToken,
     workspaceId: config.workspaceId as Id<"workspaces">,
@@ -83,7 +91,7 @@ export async function getTicket(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const ticket = await client.query(api.tickets.get, {
+  const ticket = await client.query(getQueryRef("tickets:get"), {
     id: ticketId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -100,7 +108,7 @@ export async function addTicketComment(params: {
 }): Promise<TicketCommentId> {
   const client = getClient();
 
-  const commentId = await client.mutation(api.tickets.addComment, {
+  const commentId = await client.mutation(getMutationRef("tickets:addComment"), {
     ticketId: params.ticketId,
     content: params.content,
     visitorId: params.visitorId,
@@ -120,7 +128,7 @@ export async function getTicketComments(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const comments = await client.query(api.tickets.getComments, {
+  const comments = await client.query(getQueryRef("tickets:getComments"), {
     ticketId,
     includeInternal: false,
     visitorId: resolvedVisitorId,

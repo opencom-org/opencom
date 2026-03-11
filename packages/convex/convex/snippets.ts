@@ -1,6 +1,32 @@
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery } from "./lib/authWrappers";
+
+type InternalSchedulableRef<Args extends Record<string, unknown>, Return = unknown> =
+  FunctionReference<"action" | "mutation", "internal", Args, Return>;
+
+type GenerateSnippetEmbeddingArgs = {
+  workspaceId: Id<"workspaces">;
+  contentType: "snippet";
+  contentId: Id<"snippets">;
+  title: string;
+  content: string;
+};
+
+const GENERATE_SNIPPET_EMBEDDINGS_REF = makeFunctionReference<
+  "action",
+  GenerateSnippetEmbeddingArgs,
+  unknown
+>("embeddings:generateInternal") as unknown as InternalSchedulableRef<GenerateSnippetEmbeddingArgs>;
+
+function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
+  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+    delayMs: number,
+    functionRef: InternalSchedulableRef<Args, Return>,
+    args: Args
+  ) => Promise<unknown>;
+}
 
 export const create = authMutation({
   args: {
@@ -40,7 +66,8 @@ export const create = authMutation({
       createdBy: args.createdBy,
     });
 
-    await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, GENERATE_SNIPPET_EMBEDDINGS_REF, {
       workspaceId: args.workspaceId,
       contentType: "snippet",
       contentId: snippetId,
@@ -103,13 +130,14 @@ export const update = authMutation({
       updates.shortcut = args.shortcut;
     }
     if (args.folderId !== undefined) {
-      updates.folderId = args.folderId;
+      updates.folderId = undefined;
     }
 
     await ctx.db.patch(args.id, updates);
 
     if (args.name !== undefined || args.content !== undefined) {
-      await ctx.scheduler.runAfter(0, internal.embeddings.generateInternal, {
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, GENERATE_SNIPPET_EMBEDDINGS_REF, {
         workspaceId: snippet.workspaceId,
         contentType: "snippet",
         contentId: args.id,

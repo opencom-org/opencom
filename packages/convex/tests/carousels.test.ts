@@ -35,7 +35,7 @@ describe("carousels", () => {
     client = new ConvexClient(convexUrl);
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorId = visitor.visitorId;
@@ -44,7 +44,7 @@ describe("carousels", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -283,7 +283,7 @@ describe("carousels", () => {
     });
 
     it("keeps analytics stable across shown retries and completion replay", async () => {
-      const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+      const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
         workspaceId: testWorkspaceId,
         email: "carousel-retry-visitor@test.com",
         name: "Carousel Retry Visitor",

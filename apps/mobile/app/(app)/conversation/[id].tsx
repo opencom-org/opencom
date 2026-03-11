@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "../../../src/contexts/AuthContext";
 import type { Id } from "@opencom/convex/dataModel";
 
@@ -22,6 +22,57 @@ interface Message {
   senderType: "user" | "visitor" | "agent" | "bot";
   createdAt: number;
 }
+
+type ConversationRecord = {
+  _id: Id<"conversations">;
+  visitorId?: Id<"visitors">;
+  status: "open" | "closed" | "snoozed";
+};
+
+type VisitorRecord = {
+  _id: Id<"visitors">;
+  name?: string;
+  email?: string;
+  readableId?: string;
+  location?: { city?: string; country?: string };
+  device?: { browser?: string; os?: string };
+};
+
+const conversationGetQueryRef = makeFunctionReference<
+  "query",
+  { id: Id<"conversations"> },
+  ConversationRecord | null
+>("conversations:get");
+
+const visitorGetQueryRef = makeFunctionReference<
+  "query",
+  { id: Id<"visitors"> },
+  VisitorRecord | null
+>("visitors:get");
+
+const messagesListQueryRef = makeFunctionReference<
+  "query",
+  { conversationId: Id<"conversations"> },
+  Message[]
+>("messages:list");
+
+const sendMessageMutationRef = makeFunctionReference<
+  "mutation",
+  { conversationId: Id<"conversations">; senderId: string; senderType: "agent"; content: string },
+  Id<"messages">
+>("messages:send");
+
+const updateConversationStatusMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"conversations">; status: "open" | "closed" | "snoozed" },
+  null
+>("conversations:updateStatus");
+
+const markConversationReadMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"conversations">; readerType: "agent" | "visitor" },
+  null
+>("conversations:markAsRead");
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -37,23 +88,23 @@ export default function ConversationScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const conversation = useQuery(
-    api.conversations.get,
+    conversationGetQueryRef,
     id ? { id: id as Id<"conversations"> } : "skip"
-  );
+  ) as ConversationRecord | null | undefined;
 
   const visitor = useQuery(
-    api.visitors.get,
+    visitorGetQueryRef,
     conversation?.visitorId ? { id: conversation.visitorId } : "skip"
-  );
+  ) as VisitorRecord | null | undefined;
 
   const messages = useQuery(
-    api.messages.list,
+    messagesListQueryRef,
     id ? { conversationId: id as Id<"conversations"> } : "skip"
-  );
+  ) as Message[] | undefined;
 
-  const sendMessage = useMutation(api.messages.send);
-  const updateStatus = useMutation(api.conversations.updateStatus);
-  const markAsRead = useMutation(api.conversations.markAsRead);
+  const sendMessage = useMutation(sendMessageMutationRef);
+  const updateStatus = useMutation(updateConversationStatusMutationRef);
+  const markAsRead = useMutation(markConversationReadMutationRef);
 
   // Mark conversation as read when viewing
   useEffect(() => {

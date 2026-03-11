@@ -1,7 +1,5 @@
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
-import { useOpencomContext } from "../components/OpencomProvider";
-import type { Id } from "@opencom/convex/dataModel";
+import { sdkQueryRef, useSdkQuery } from "../internal/convex";
+import { useSdkResolvedWorkspaceId } from "../internal/opencomContext";
 
 export interface OfficeHoursStatus {
   isOpen: boolean;
@@ -9,17 +7,20 @@ export interface OfficeHoursStatus {
   expectedReplyTimeMinutes: number | null;
 }
 
-export function useOfficeHours() {
-  const { workspaceId } = useOpencomContext();
+const CURRENTLY_OPEN_REF = sdkQueryRef("officeHours:isCurrentlyOpen");
+const EXPECTED_REPLY_TIME_REF = sdkQueryRef("officeHours:getExpectedReplyTime");
 
-  const status = useQuery(
-    api.officeHours.isCurrentlyOpen,
-    workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
+export function useOfficeHours() {
+  const workspaceId = useSdkResolvedWorkspaceId();
+
+  const status = useSdkQuery<OfficeHoursStatus>(
+    CURRENTLY_OPEN_REF,
+    workspaceId ? { workspaceId } : "skip"
   );
 
-  const expectedReplyTime = useQuery(
-    api.officeHours.getExpectedReplyTime,
-    workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
+  const expectedReplyTime = useSdkQuery<number | null>(
+    EXPECTED_REPLY_TIME_REF,
+    workspaceId ? { workspaceId } : "skip"
   );
 
   return {

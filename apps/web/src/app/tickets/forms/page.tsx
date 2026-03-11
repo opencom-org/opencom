@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -35,6 +35,56 @@ interface FormField {
   options?: string[];
 }
 
+type TicketFormRecord = {
+  _id: Id<"ticketForms">;
+  name: string;
+  description?: string;
+  fields: FormField[];
+  isDefault: boolean;
+};
+
+const ticketFormsListQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  TicketFormRecord[]
+>("ticketForms:list");
+
+const ticketFormGetQueryRef = makeFunctionReference<
+  "query",
+  { id: Id<"ticketForms"> },
+  TicketFormRecord | null
+>("ticketForms:get");
+
+const createTicketFormMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    name: string;
+    description?: string;
+    fields: FormField[];
+    isDefault?: boolean;
+  },
+  Id<"ticketForms">
+>("ticketForms:create");
+
+const updateTicketFormMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    id: Id<"ticketForms">;
+    name?: string;
+    description?: string;
+    fields?: FormField[];
+    isDefault?: boolean;
+  },
+  Id<"ticketForms">
+>("ticketForms:update");
+
+const deleteTicketFormMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"ticketForms"> },
+  null
+>("ticketForms:remove");
+
 const fieldTypeConfig: Record<FieldType, { label: string; icon: React.ElementType }> = {
   text: { label: "Short Text", icon: Type },
   textarea: { label: "Long Text", icon: AlignLeft },
@@ -54,12 +104,12 @@ function TicketFormsContent(): React.JSX.Element | null {
   const [isCreating, setIsCreating] = useState(false);
 
   const forms = useQuery(
-    api.ticketForms.list,
+    ticketFormsListQueryRef,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
+  ) as TicketFormRecord[] | undefined;
 
-  const createForm = useMutation(api.ticketForms.create);
-  const deleteForm = useMutation(api.ticketForms.remove);
+  const createForm = useMutation(createTicketFormMutationRef);
+  const deleteForm = useMutation(deleteTicketFormMutationRef);
 
   const handleCreateForm = async () => {
     if (!activeWorkspace?._id) return;
@@ -194,8 +244,8 @@ function FormEditor({
   formId: Id<"ticketForms">;
   onDelete: () => void;
 }): React.JSX.Element | null {
-  const form = useQuery(api.ticketForms.get, { id: formId });
-  const updateForm = useMutation(api.ticketForms.update);
+  const form = useQuery(ticketFormGetQueryRef, { id: formId }) as TicketFormRecord | null | undefined;
+  const updateForm = useMutation(updateTicketFormMutationRef);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

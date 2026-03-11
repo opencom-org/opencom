@@ -7,6 +7,10 @@ import { OpencomChecklist } from "./OpencomChecklist";
 import { OpencomHome, useHomeConfig } from "./OpencomHome";
 import { TabIcon } from "./TabIcon";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
+import type {
+  MessengerConversationId,
+  MessengerNestedView,
+} from "./messengerCompositionTypes";
 
 export type MainTab = "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
 export type MessengerView = "tabs" | "conversation" | "article" | "email-capture";
@@ -16,8 +20,8 @@ export interface MessengerContentProps {
   setActiveTab: (tab: MainTab) => void;
   messengerView: MessengerView;
   setMessengerView: (view: MessengerView) => void;
-  selectedConversationId: string | null;
-  setSelectedConversationId: (id: string | null) => void;
+  selectedConversationId: MessengerConversationId;
+  setSelectedConversationId: (id: MessengerConversationId) => void;
   selectedArticleId: string | null;
   setSelectedArticleId: (id: string | null) => void;
   availableTabs: MainTab[];
@@ -54,9 +58,14 @@ export function MessengerContent({
   const homeConfig = useHomeConfig(workspaceId, isIdentified);
 
   // Track nested view state from child components
-  const [messengerNestedView, setMessengerNestedView] = useState<"list" | "conversation">("list");
-  const [messengerConversationId, setMessengerConversationId] = useState<string | null>(null);
+  const [messengerNestedView, setMessengerNestedView] = useState<MessengerNestedView>("list");
+  const [messengerConversationId, setMessengerConversationId] = useState<MessengerConversationId>(
+    null
+  );
   const [helpCenterNestedView, setHelpCenterNestedView] = useState<"search" | "article">("search");
+  const handleMessengerConversationChange = (conversationId: MessengerConversationId) => {
+    setMessengerConversationId(conversationId);
+  };
 
   // Determine if we're in a nested view (conversation or article detail)
   const isInNestedView =
@@ -147,8 +156,8 @@ export function MessengerContent({
                 style={styles.tabContent}
                 onViewChange={setMessengerNestedView}
                 controlledView={messengerNestedView}
-                activeConversationId={messengerConversationId as any}
-                onConversationChange={setMessengerConversationId as any}
+                activeConversationId={messengerConversationId}
+                onConversationChange={handleMessengerConversationChange}
               />
             )}
             {activeTab === "help" && enableHelpCenter && (
@@ -177,7 +186,13 @@ export function MessengerContent({
         )}
 
         {messengerView === "conversation" && selectedConversationId && (
-          <OpencomMessenger onClose={onClose} style={styles.tabContent} />
+          <OpencomMessenger
+            onClose={onClose}
+            style={styles.tabContent}
+            controlledView="conversation"
+            activeConversationId={selectedConversationId}
+            onConversationChange={setSelectedConversationId}
+          />
         )}
 
         {messengerView === "article" && (

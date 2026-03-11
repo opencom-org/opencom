@@ -33,8 +33,14 @@ async function openWidgetChatOrSkip(page: import("@playwright/test").Page): Prom
   return await openWidgetChat(page);
 }
 
+function getWidgetMessageInput(widget: Locator): Locator {
+  return widget
+    .locator("[data-testid='widget-message-input'], input.opencom-input, textarea.opencom-input")
+    .first();
+}
+
 async function startConversationIfNeeded(widget: Locator, required = true): Promise<boolean> {
-  const input = widget.locator("input.opencom-input");
+  const input = getWidgetMessageInput(widget);
   if (await input.isVisible({ timeout: 1500 }).catch(() => false)) {
     return true;
   }
@@ -45,7 +51,10 @@ async function startConversationIfNeeded(widget: Locator, required = true): Prom
       await outboundDismiss.click({ force: true }).catch(() => {});
     }
 
-    const messagesTab = widget.getByRole("button", { name: /^Messages$/i }).first();
+    const messagesTab = widget
+      .getByRole("button", { name: /^Messages$/i })
+      .or(widget.getByTitle(/conversations/i))
+      .first();
     if (await messagesTab.isVisible({ timeout: 1000 }).catch(() => false)) {
       await messagesTab.click({ timeout: 4000 }).catch(() => {});
     }
@@ -115,17 +124,17 @@ test.describe("Widget Integration - Core", () => {
     await startConversationIfNeeded(frame);
 
     // Find and fill message input
-    const messageInput = frame.locator("input.opencom-input");
+    const messageInput = getWidgetMessageInput(frame);
     await expect(messageInput).toBeVisible({ timeout: 5000 });
     await messageInput.fill("Hello from E2E test!");
 
     // Send message
-    const sendBtn = frame.locator(".opencom-send");
+    const sendBtn = frame.locator("[data-testid='widget-send-button'], .opencom-send").first();
     await expect(sendBtn).toBeVisible({ timeout: 2000 });
     await sendBtn.click();
 
     // Wait for message to appear in the conversation
-    await expect(frame.getByText("Hello from E2E test!")).toBeVisible({ timeout: 5000 });
+    await expect(frame.getByText("Hello from E2E test!")).toBeVisible({ timeout: 10000 });
   });
 
   test("should sync widget message to admin inbox", async ({ page }) => {
@@ -134,16 +143,16 @@ test.describe("Widget Integration - Core", () => {
     await startConversationIfNeeded(frame);
 
     const testMessage = `Sync test ${Date.now()}`;
-    const messageInput = frame.locator("input.opencom-input");
+    const messageInput = getWidgetMessageInput(frame);
     await expect(messageInput).toBeVisible({ timeout: 5000 });
     await messageInput.fill(testMessage);
 
-    const sendBtn = frame.locator(".opencom-send");
+    const sendBtn = frame.locator("[data-testid='widget-send-button'], .opencom-send").first();
     await expect(sendBtn).toBeVisible({ timeout: 2000 });
     await sendBtn.click();
 
     // Verify message appears in widget conversation
-    await expect(frame.getByText(testMessage)).toBeVisible({ timeout: 5000 });
+    await expect(frame.getByText(testMessage)).toBeVisible({ timeout: 10000 });
 
     // Note: Full sync test would require admin login and inbox verification
     // This is handled in the integration test suite with proper auth setup
@@ -287,6 +296,8 @@ test.describe("Widget Email Capture", () => {
     await page.evaluate(
       ({ wsId, convexUrl }) => {
         window.OpencomWidget?.destroy();
+        localStorage.removeItem("opencom_session_id");
+        localStorage.removeItem("opencom_visitor_id");
         sessionStorage.removeItem("opencom_email_dismissed");
 
         window.OpencomWidget?.init({

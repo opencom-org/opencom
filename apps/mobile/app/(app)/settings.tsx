@@ -15,9 +15,92 @@ import { useAuth } from "../../src/contexts/AuthContext";
 import { useBackend } from "../../src/contexts/BackendContext";
 import { useNotifications } from "../../src/contexts/NotificationContext";
 import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useEffect, useState } from "react";
 import type { Id } from "@opencom/convex/dataModel";
+
+type NotificationPreferencesRecord = {
+  muted: boolean;
+} | null;
+
+type WorkspaceRecord = {
+  _id: Id<"workspaces">;
+  allowedOrigins?: string[];
+  signupMode?: "invite-only" | "domain-allowlist";
+  allowedDomains?: string[];
+} | null;
+
+type WorkspaceMemberRecord = {
+  _id: Id<"workspaceMembers">;
+  userId: Id<"users">;
+  name?: string;
+  email?: string;
+  role: "owner" | "admin" | "agent" | "viewer";
+};
+
+const myNotificationPreferencesQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  NotificationPreferencesRecord
+>("notificationSettings:getMyPreferences");
+
+const workspaceGetQueryRef = makeFunctionReference<
+  "query",
+  { id: Id<"workspaces"> },
+  WorkspaceRecord
+>("workspaces:get");
+
+const workspaceMembersListQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  WorkspaceMemberRecord[]
+>("workspaceMembers:listByWorkspace");
+
+const pushTokensByUserQueryRef = makeFunctionReference<
+  "query",
+  { userId: Id<"users"> },
+  Array<{ _id: string }>
+>("pushTokens:getByUser");
+
+const updateAllowedOriginsMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; allowedOrigins: string[] },
+  null
+>("workspaces:updateAllowedOrigins");
+
+const inviteToWorkspaceActionRef = makeFunctionReference<
+  "action",
+  { workspaceId: Id<"workspaces">; email: string; role: "admin" | "agent"; baseUrl: string },
+  { status: "added" | "invited" }
+>("workspaceMembers:inviteToWorkspace");
+
+const updateWorkspaceRoleMutationRef = makeFunctionReference<
+  "mutation",
+  { membershipId: Id<"workspaceMembers">; role: "admin" | "agent" },
+  null
+>("workspaceMembers:updateRole");
+
+const removeWorkspaceMemberMutationRef = makeFunctionReference<
+  "mutation",
+  { membershipId: Id<"workspaceMembers"> },
+  null
+>("workspaceMembers:remove");
+
+const updateSignupSettingsMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    signupMode: "invite-only" | "domain-allowlist";
+    allowedDomains: string[];
+  },
+  null
+>("workspaces:updateSignupSettings");
+
+const updateMyNotificationPreferencesMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; muted: boolean },
+  null
+>("notificationSettings:updateMyPreferences");
 
 export default function SettingsScreen() {
   const { user, logout, workspaces, activeWorkspace, activeWorkspaceId, switchWorkspace } =
@@ -41,30 +124,30 @@ export default function SettingsScreen() {
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<Id<"workspaces"> | null>(null);
   const myNotificationPreferences = useQuery(
-    api.notificationSettings.getMyPreferences,
+    myNotificationPreferencesQueryRef,
     activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip"
-  );
+  ) as NotificationPreferencesRecord | undefined;
 
   const workspace = useQuery(
-    api.workspaces.get,
+    workspaceGetQueryRef,
     activeWorkspaceId ? { id: activeWorkspaceId } : "skip"
-  );
+  ) as WorkspaceRecord | undefined;
 
   const members = useQuery(
-    api.workspaceMembers.listByWorkspace,
+    workspaceMembersListQueryRef,
     activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip"
-  );
+  ) as WorkspaceMemberRecord[] | undefined;
   const pushTokens = useQuery(
-    api.pushTokens.getByUser,
+    pushTokensByUserQueryRef,
     user?._id ? { userId: user._id as Id<"users"> } : "skip"
-  );
+  ) as Array<{ _id: string }> | undefined;
 
-  const updateAllowedOrigins = useMutation(api.workspaces.updateAllowedOrigins);
-  const inviteToWorkspace = useAction(api.workspaceMembers.inviteToWorkspace);
-  const updateRole = useMutation(api.workspaceMembers.updateRole);
-  const removeMember = useMutation(api.workspaceMembers.remove);
-  const updateSignupSettings = useMutation(api.workspaces.updateSignupSettings);
-  const updateMyNotificationPreferences = useMutation(api.notificationSettings.updateMyPreferences);
+  const updateAllowedOrigins = useMutation(updateAllowedOriginsMutationRef);
+  const inviteToWorkspace = useAction(inviteToWorkspaceActionRef);
+  const updateRole = useMutation(updateWorkspaceRoleMutationRef);
+  const removeMember = useMutation(removeWorkspaceMemberMutationRef);
+  const updateSignupSettings = useMutation(updateSignupSettingsMutationRef);
+  const updateMyNotificationPreferences = useMutation(updateMyNotificationPreferencesMutationRef);
 
   const isAdmin = activeWorkspace?.role === "admin" || activeWorkspace?.role === "owner";
 

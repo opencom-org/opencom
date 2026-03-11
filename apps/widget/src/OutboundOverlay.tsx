@@ -1,63 +1,46 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { X } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
+import type {
+  EligibleOutboundMessage,
+  OutboundClickAction,
+} from "@opencom/types";
 import { safeOpenUrl } from "./utils/safeOpenUrl";
 
-type ClickActionType =
-  | "open_messenger"
-  | "open_new_conversation"
-  | "open_widget_tab"
-  | "open_help_article"
-  | "open_url"
-  | "dismiss";
+type ClickAction = OutboundClickAction<Id<"articles">>;
+type OutboundMessage = EligibleOutboundMessage<
+  Id<"outboundMessages">,
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
-interface ClickAction {
-  type: ClickActionType;
-  tabId?: string;
-  articleId?: Id<"articles">;
-  url?: string;
-  prefillMessage?: string;
-}
+const eligibleOutboundMessagesQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    currentUrl: string;
+    sessionId: string;
+  },
+  OutboundMessage[]
+>("outboundMessages:getEligible");
 
-interface OutboundMessage {
-  _id: Id<"outboundMessages">;
-  type: "chat" | "post" | "banner";
-  name: string;
-  content: {
-    text?: string;
-    senderId?: Id<"users">;
-    title?: string;
-    body?: string;
-    imageUrl?: string;
-    videoUrl?: string;
-    style?: "inline" | "floating";
-    dismissible?: boolean;
-    buttons?: Array<{
-      text: string;
-      action:
-        | "url"
-        | "dismiss"
-        | "tour"
-        | "open_new_conversation"
-        | "open_help_article"
-        | "open_widget_tab";
-      url?: string;
-      tourId?: Id<"tours">;
-      articleId?: Id<"articles">;
-      tabId?: string;
-      prefillMessage?: string;
-    }>;
-    clickAction?: ClickAction;
-  };
-  triggers?: {
-    type: "immediate" | "page_visit" | "time_on_page" | "scroll_depth" | "event";
-    delaySeconds?: number;
-    scrollPercent?: number;
-  };
-  priority?: number;
-}
+const trackOutboundImpressionMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    messageId: Id<"outboundMessages">;
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    sessionId: string;
+    action: "shown" | "dismissed" | "clicked";
+    buttonIndex?: number;
+  },
+  null
+>("outboundMessages:trackImpression");
 
 // Track one visible message per type (banner, post, chat) simultaneously
 interface VisibleMessages {
@@ -84,6 +67,12 @@ interface OutboundOverlayProps {
   onOpenArticle?: (articleId: Id<"articles">) => void;
 }
 
+function handleMutationResult(result: unknown) {
+  if (result && typeof result === "object" && "catch" in result && typeof result.catch === "function") {
+    result.catch(console.error);
+  }
+}
+
 export function OutboundOverlay({
   workspaceId,
   visitorId,
@@ -108,15 +97,15 @@ export function OutboundOverlay({
   const [timeOnPage, setTimeOnPage] = useState(0);
   const staggerTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const eligibleMessages = useQuery(api.outboundMessages.getEligible, {
+  const eligibleMessages = useQuery(eligibleOutboundMessagesQueryRef, {
     workspaceId,
     visitorId,
     sessionToken: sessionToken ?? undefined,
     currentUrl,
     sessionId,
-  });
+  }) as OutboundMessage[] | undefined;
 
-  const trackImpression = useMutation(api.outboundMessages.trackImpression);
+  const trackImpression = useMutation(trackOutboundImpressionMutationRef);
 
   // Track scroll depth
   useEffect(() => {
@@ -221,13 +210,15 @@ export function OutboundOverlay({
       const timer = setTimeout(() => {
         setVisibleMessages((prev) => ({ ...prev, [message.type]: message }));
         setShownMessageIds((prev) => new Set(prev).add(message._id));
-        trackImpression({
-          messageId: message._id,
-          visitorId,
-          sessionToken: sessionToken ?? undefined,
-          sessionId,
-          action: "shown",
-        }).catch(console.error);
+        handleMutationResult(
+          trackImpression({
+            messageId: message._id,
+            visitorId,
+            sessionToken: sessionToken ?? undefined,
+            sessionId,
+            action: "shown",
+          })
+        );
       }, msgDelay);
       staggerTimers.current.push(timer);
     });
@@ -248,13 +239,15 @@ export function OutboundOverlay({
 
   const handleDismiss = useCallback(
     (message: OutboundMessage) => {
-      trackImpression({
-        messageId: message._id,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        sessionId,
-        action: "dismissed",
-      }).catch(console.error);
+      handleMutationResult(
+        trackImpression({
+          messageId: message._id,
+          visitorId,
+          sessionToken: sessionToken ?? undefined,
+          sessionId,
+          action: "dismissed",
+        })
+      );
       setVisibleMessages((prev) => ({ ...prev, [message.type]: null }));
     },
     [visitorId, sessionToken, sessionId, trackImpression]
@@ -277,7 +270,7 @@ export function OutboundOverlay({
           break;
         case "open_help_article":
           handleDismiss(message);
-          if (action.articleId) onOpenArticle?.(action.articleId);
+          if (action.articleId) onOpenArticle?.(action.articleId as Id<"articles">);
           break;
         case "open_url":
           if (action.url) safeOpenUrl(action.url);
@@ -293,13 +286,15 @@ export function OutboundOverlay({
 
   const handleClickAction = useCallback(
     (message: OutboundMessage) => {
-      trackImpression({
-        messageId: message._id,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        sessionId,
-        action: "clicked",
-      }).catch(console.error);
+      handleMutationResult(
+        trackImpression({
+          messageId: message._id,
+          visitorId,
+          sessionToken: sessionToken ?? undefined,
+          sessionId,
+          action: "clicked",
+        })
+      );
 
       const action: ClickAction = message.content.clickAction || { type: "open_messenger" };
       executeClickAction(message, action);
@@ -316,24 +311,26 @@ export function OutboundOverlay({
     ) => {
       event.stopPropagation();
 
-      trackImpression({
-        messageId: message._id,
-        visitorId,
-        sessionToken: sessionToken ?? undefined,
-        sessionId,
-        action: "clicked",
-        buttonIndex: index,
-      }).catch(console.error);
+      handleMutationResult(
+        trackImpression({
+          messageId: message._id,
+          visitorId,
+          sessionToken: sessionToken ?? undefined,
+          sessionId,
+          action: "clicked",
+          buttonIndex: index,
+        })
+      );
 
       if (button.action === "url" && button.url) {
         safeOpenUrl(button.url);
       } else if (button.action === "tour" && button.tourId && onStartTour) {
-        onStartTour(button.tourId);
+        onStartTour(button.tourId as Id<"tours">);
       } else if (button.action === "open_new_conversation") {
         onStartConversation?.(button.prefillMessage);
         handleDismiss(message);
       } else if (button.action === "open_help_article" && button.articleId) {
-        onOpenArticle?.(button.articleId);
+        onOpenArticle?.(button.articleId as Id<"articles">);
         handleDismiss(message);
       } else if (button.action === "open_widget_tab" && button.tabId) {
         onNavigateTab?.(button.tabId);

@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppState } from "react-native";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import {
-  getVisitorState,
   selectSurveyForDelivery,
   type SurveyDeliveryCandidate,
 } from "@opencom/sdk-core";
 import type { Survey } from "../components/OpencomSurvey";
-import { useOpencomContext } from "../components/OpencomProvider";
 import { OpencomSDK } from "../OpencomSDK";
+import { sdkQueryRef, useSdkQuery } from "../internal/convex";
+import { hasVisitorWorkspaceTransport } from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
+
+const ACTIVE_SURVEYS_REF = sdkQueryRef("surveys:getActiveSurveys");
 
 type SurveyData = Survey &
   SurveyDeliveryCandidate<Id<"surveys">> & {
@@ -18,11 +19,7 @@ type SurveyData = Survey &
   };
 
 export function useSurveyDelivery(currentUrl: string = "") {
-  const { workspaceId } = useOpencomContext();
-  const state = getVisitorState();
-  const visitorId = state.visitorId;
-  const sessionId = state.sessionId;
-  const sessionToken = state.sessionToken;
+  const transport = useSdkTransportContext();
 
   const [timeOnPageSeconds, setTimeOnPageSeconds] = useState(0);
   const [firedEventName, setFiredEventName] = useState<string | undefined>(undefined);
@@ -31,13 +28,13 @@ export function useSurveyDelivery(currentUrl: string = "") {
   const [eligibilityUnavailable, setEligibilityUnavailable] = useState(false);
   const [displayedSurvey, setDisplayedSurvey] = useState<SurveyData | null>(null);
 
-  const surveys = useQuery(
-    api.surveys.getActiveSurveys,
-    visitorId && workspaceId && sessionToken
+  const surveys = useSdkQuery<SurveyData[]>(
+    ACTIVE_SURVEYS_REF,
+    hasVisitorWorkspaceTransport(transport)
       ? {
-          workspaceId: workspaceId as Id<"workspaces">,
-          visitorId,
-          sessionToken,
+          workspaceId: transport.workspaceId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
         }
       : "skip"
   );
@@ -86,7 +83,7 @@ export function useSurveyDelivery(currentUrl: string = "") {
   }, []);
 
   useEffect(() => {
-    if (!(visitorId && workspaceId && sessionToken)) {
+    if (!hasVisitorWorkspaceTransport(transport)) {
       setEligibilityUnavailable(false);
       return;
     }
@@ -100,7 +97,7 @@ export function useSurveyDelivery(currentUrl: string = "") {
       console.warn("[OpencomSDK] Survey eligibility unavailable, skipping runtime survey delivery");
     }, 5000);
     return () => clearTimeout(timeout);
-  }, [visitorId, workspaceId, sessionToken, surveys]);
+  }, [surveys, transport]);
 
   const candidateSurvey = useMemo(() => {
     if (!surveys || eligibilityUnavailable) {
@@ -150,7 +147,7 @@ export function useSurveyDelivery(currentUrl: string = "") {
     setCompletedSurveyIds(new Set());
     setFiredEventName(undefined);
     setTimeOnPageSeconds(0);
-  }, [sessionId, visitorId, workspaceId]);
+  }, [transport.sessionId, transport.visitorId, transport.workspaceId]);
 
   const dismissSurvey = () => {
     setDisplayedSurvey(null);
@@ -172,9 +169,9 @@ export function useSurveyDelivery(currentUrl: string = "") {
 
   return {
     survey: displayedSurvey,
-    visitorId,
-    sessionId,
-    sessionToken,
+    visitorId: transport.visitorId,
+    sessionId: transport.sessionId,
+    sessionToken: transport.sessionToken,
     isLoading: surveys === undefined && !eligibilityUnavailable,
     dismissSurvey,
     completeSurvey,

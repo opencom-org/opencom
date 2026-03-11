@@ -4,19 +4,62 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { Button, Card, Input } from "@opencom/ui";
 import { AlertTriangle, Bot } from "lucide-react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
+
+const aiSettingsQuery = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  {
+    enabled: boolean;
+    model: string;
+    confidenceThreshold: number;
+    knowledgeSources: string[];
+    personality?: string;
+    handoffMessage?: string;
+    suggestionsEnabled?: boolean;
+    embeddingModel?: string;
+    lastConfigError?: {
+      message: string;
+      code: string;
+      provider?: string;
+      model?: string;
+    } | null;
+  } | null
+>("aiAgent:getSettings");
+
+const availableModelsQuery = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  Array<{ id: string; name: string; provider: string }>
+>("aiAgent:listAvailableModels");
+
+const updateAiSettingsRef = makeFunctionReference<
+  "mutation",
+  {
+    workspaceId: Id<"workspaces">;
+    enabled?: boolean;
+    model?: string;
+    confidenceThreshold?: number;
+    knowledgeSources?: Array<"articles" | "internalArticles" | "snippets">;
+    personality?: string;
+    handoffMessage?: string;
+    suggestionsEnabled?: boolean;
+    embeddingModel?: string;
+  },
+  null
+>("aiAgent:updateSettings");
 
 export function AIAgentSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const aiSettings = useQuery(api.aiAgent.getSettings, workspaceId ? { workspaceId } : "skip");
+  const aiSettings = useQuery(aiSettingsQuery, workspaceId ? { workspaceId } : "skip");
 
-  const availableModels = useQuery(api.aiAgent.listAvailableModels, {});
+  const availableModels = useQuery(availableModelsQuery, {});
 
-  const updateSettings = useMutation(api.aiAgent.updateSettings);
+  const updateSettings = useMutation(updateAiSettingsRef);
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("openai/gpt-5-nano");
@@ -156,8 +199,8 @@ export function AIAgentSection({
               <label className="text-sm font-medium">Knowledge Sources</label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "articles", label: "Help Articles" },
-                  { id: "internalArticles", label: "Internal Docs" },
+                  { id: "articles", label: "Public Articles" },
+                  { id: "internalArticles", label: "Internal Articles" },
                   { id: "snippets", label: "Snippets" },
                 ].map((source) => (
                   <button

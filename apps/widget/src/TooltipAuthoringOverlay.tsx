@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { scoreSelectorQuality, type SelectorQualityMetadata } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
+import { ErrorFeedbackBanner } from "./components/ErrorFeedbackBanner";
 
 interface TooltipAuthoringOverlayProps {
   token: string;
@@ -16,6 +18,44 @@ interface ElementRect {
   width: number;
   height: number;
 }
+
+type TooltipSessionData =
+  | {
+      valid: true;
+      tooltip?: {
+        name?: string;
+        content?: string;
+        elementSelector?: string;
+      } | null;
+    }
+  | {
+      valid: false;
+      reason?: string;
+      tooltip?: null;
+    };
+
+const validateTooltipAuthoringSessionQueryRef = makeFunctionReference<
+  "query",
+  { token: string; workspaceId: Id<"workspaces"> },
+  TooltipSessionData | null
+>("tooltipAuthoringSessions:validate");
+
+const updateTooltipSelectorMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    token: string;
+    workspaceId: Id<"workspaces">;
+    elementSelector: string;
+    selectorQuality?: SelectorQualityMetadata;
+  },
+  null
+>("tooltipAuthoringSessions:updateSelector");
+
+const endTooltipAuthoringSessionMutationRef = makeFunctionReference<
+  "mutation",
+  { token: string; workspaceId: Id<"workspaces"> },
+  null
+>("tooltipAuthoringSessions:end");
 
 function generateSelector(element: Element): string {
   // Priority 1: data-tooltip-target or data-opencom-* attributes
@@ -96,14 +136,17 @@ export function TooltipAuthoringOverlay({
   const [selectedSelector, setSelectedSelector] = useState<string>("");
   const [selectorQuality, setSelectorQuality] = useState<SelectorQualityMetadata | null>(null);
   const [isSelecting, setIsSelecting] = useState(true);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
   const [previewPosition, setPreviewPosition] = useState<{ top: number; left: number } | null>(
     null
   );
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const sessionData = useQuery(api.tooltipAuthoringSessions.validate, { token, workspaceId });
-  const updateSelectorMutation = useMutation(api.tooltipAuthoringSessions.updateSelector);
-  const endSessionMutation = useMutation(api.tooltipAuthoringSessions.end);
+  const sessionData = useQuery(validateTooltipAuthoringSessionQueryRef, { token, workspaceId }) as
+    | TooltipSessionData
+    | undefined;
+  const updateSelectorMutation = useMutation(updateTooltipSelectorMutationRef);
+  const endSessionMutation = useMutation(endTooltipAuthoringSessionMutationRef);
 
   const tooltip = sessionData?.valid ? sessionData.tooltip : null;
 
@@ -218,6 +261,7 @@ export function TooltipAuthoringOverlay({
 
   const handleConfirmSelector = async () => {
     if (!selectedSelector) return;
+    setErrorFeedback(null);
 
     try {
       await updateSelectorMutation({
@@ -231,7 +275,12 @@ export function TooltipAuthoringOverlay({
       onExit();
     } catch (error) {
       console.error("Failed to save selector:", error);
-      alert("Failed to save selector");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save selector.",
+          nextAction: "Try selecting the target element again.",
+        })
+      );
     }
   };
 
@@ -290,6 +339,11 @@ export function TooltipAuthoringOverlay({
           </button>
         </div>
       </div>
+      {errorFeedback && (
+        <div className="opencom-authoring-feedback">
+          <ErrorFeedbackBanner feedback={errorFeedback} />
+        </div>
+      )}
 
       {/* Instructions panel */}
       <div className="opencom-authoring-step-panel">

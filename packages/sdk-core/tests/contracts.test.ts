@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "@opencom/convex";
 
 const clientMocks = vi.hoisted(() => {
   const query = vi.fn();
@@ -23,7 +22,7 @@ import {
 } from "../src/api/conversations";
 import { bootSession } from "../src/api/sessions";
 import { createTicket } from "../src/api/tickets";
-import { getActiveOutboundMessages } from "../src/api/outbound";
+import { getActiveOutboundMessages, markOutboundAsSeen, trackOutboundImpression } from "../src/api/outbound";
 import { getEligibleChecklists } from "../src/api/checklists";
 import {
   resetVisitorState,
@@ -35,6 +34,43 @@ import {
 const WORKSPACE_ID = "workspace_contract";
 const VISITOR_ID = "visitor_contract";
 const SESSION_TOKEN = "wst_contract_token";
+
+function resolveFunctionPath(ref: unknown): string {
+  if (typeof ref === "string") {
+    return ref;
+  }
+
+  if (!ref || typeof ref !== "object") {
+    return "";
+  }
+
+  const maybeRef = ref as {
+    functionName?: string;
+    reference?: { functionName?: string; name?: string };
+    name?: string;
+    referencePath?: string;
+    function?: { name?: string };
+  };
+
+  const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+    String(symbol).includes("functionName")
+  );
+
+  const symbolValue = symbolFunctionName
+    ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+    : undefined;
+
+  return (
+    (typeof symbolValue === "string" ? symbolValue : undefined) ??
+    maybeRef.functionName ??
+    maybeRef.reference?.functionName ??
+    maybeRef.reference?.name ??
+    maybeRef.name ??
+    maybeRef.referencePath ??
+    maybeRef.function?.name ??
+    ""
+  );
+}
 
 describe("sdk-core backend contract conformance", () => {
   beforeEach(() => {
@@ -62,8 +98,9 @@ describe("sdk-core backend contract conformance", () => {
 
     await bootSession({ sessionId: "session_contract" });
 
-    expect(clientMocks.mutation).toHaveBeenCalledWith(
-      api.widgetSessions.boot,
+    const [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("widgetSessions:boot");
+    expect(mutationArgs).toEqual(
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
         sessionId: "session_contract",
@@ -76,21 +113,27 @@ describe("sdk-core backend contract conformance", () => {
     clientMocks.query.mockResolvedValue([]);
 
     await createConversation(VISITOR_ID as never);
-    expect(clientMocks.mutation).toHaveBeenLastCalledWith(api.conversations.createForVisitor, {
+    let [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("conversations:createForVisitor");
+    expect(mutationArgs).toEqual({
       workspaceId: WORKSPACE_ID,
       visitorId: VISITOR_ID,
       sessionToken: SESSION_TOKEN,
     });
 
     await getOrCreateConversation(VISITOR_ID as never);
-    expect(clientMocks.mutation).toHaveBeenLastCalledWith(api.conversations.getOrCreateForVisitor, {
+    [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("conversations:getOrCreateForVisitor");
+    expect(mutationArgs).toEqual({
       workspaceId: WORKSPACE_ID,
       visitorId: VISITOR_ID,
       sessionToken: SESSION_TOKEN,
     });
 
     await getConversations(VISITOR_ID as never);
-    expect(clientMocks.query).toHaveBeenLastCalledWith(api.conversations.listByVisitor, {
+    const [queryRef, queryArgs] = clientMocks.query.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(queryRef)).toBe("conversations:listByVisitor");
+    expect(queryArgs).toEqual({
       workspaceId: WORKSPACE_ID,
       visitorId: VISITOR_ID,
       sessionToken: SESSION_TOKEN,
@@ -113,7 +156,9 @@ describe("sdk-core backend contract conformance", () => {
       visitorId: VISITOR_ID as never,
       content: "Hello from contract test",
     });
-    expect(clientMocks.mutation).toHaveBeenLastCalledWith(api.messages.send, {
+    let [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("messages:send");
+    expect(mutationArgs).toEqual({
       conversationId: "conversation_1",
       senderId: VISITOR_ID,
       senderType: "visitor",
@@ -128,8 +173,9 @@ describe("sdk-core backend contract conformance", () => {
       sessionToken: SESSION_TOKEN,
       priority: "normal",
     });
-    expect(clientMocks.mutation).toHaveBeenLastCalledWith(
-      api.tickets.create,
+    [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("tickets:create");
+    expect(mutationArgs).toEqual(
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
         visitorId: VISITOR_ID,
@@ -143,8 +189,9 @@ describe("sdk-core backend contract conformance", () => {
       currentUrl: "https://app.opencom.dev/account",
       sessionId: "session_contract",
     });
-    expect(clientMocks.query).toHaveBeenLastCalledWith(
-      api.outboundMessages.getEligible,
+    let [queryRef, queryArgs] = clientMocks.query.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(queryRef)).toBe("outboundMessages:getEligible");
+    expect(queryArgs).toEqual(
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
         visitorId: VISITOR_ID,
@@ -154,12 +201,56 @@ describe("sdk-core backend contract conformance", () => {
     );
 
     await getEligibleChecklists(VISITOR_ID as never);
-    expect(clientMocks.query).toHaveBeenLastCalledWith(
-      api.checklists.getEligible,
+    [queryRef, queryArgs] = clientMocks.query.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(queryRef)).toBe("checklists:getEligible");
+    expect(queryArgs).toEqual(
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
         visitorId: VISITOR_ID,
         sessionToken: SESSION_TOKEN,
+      })
+    );
+  });
+
+  it("keeps outbound impression mutation contracts stable", async () => {
+    clientMocks.mutation.mockResolvedValue(undefined);
+
+    await trackOutboundImpression({
+      messageId: "outbound_message_1" as never,
+      visitorId: VISITOR_ID as never,
+      sessionId: "session_contract",
+      action: "clicked",
+      buttonIndex: 2,
+    });
+
+    let [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("outboundMessages:trackImpression");
+    expect(mutationArgs).toEqual(
+      expect.objectContaining({
+        messageId: "outbound_message_1",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        sessionId: "session_contract",
+        action: "clicked",
+        buttonIndex: 2,
+      })
+    );
+
+    await markOutboundAsSeen({
+      messageId: "outbound_message_2" as never,
+      visitorId: VISITOR_ID as never,
+      sessionId: "session_contract",
+    });
+
+    [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+    expect(resolveFunctionPath(mutationRef)).toBe("outboundMessages:trackImpression");
+    expect(mutationArgs).toEqual(
+      expect.objectContaining({
+        messageId: "outbound_message_2",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        sessionId: "session_contract",
+        action: "shown",
       })
     );
   });

@@ -167,6 +167,19 @@ export async function searchHelpCenter(page: Page, query: string): Promise<void>
 }
 
 /**
+ * Waits for a help center article to be visible.
+ */
+export async function waitForHelpArticleVisible(page: Page, timeout = 10000): Promise<Locator> {
+  const frame = getWidgetContainer(page);
+  const articleLink = frame
+    .locator(".opencom-article-item, button:has(.opencom-article-item), button:has-text('articles')")
+    .first();
+
+  await expect(articleLink).toBeVisible({ timeout });
+  return articleLink;
+}
+
+/**
  * Clicks an article in the help center.
  */
 export async function clickHelpArticle(page: Page, articleTitle: string): Promise<void> {
@@ -181,17 +194,12 @@ export async function clickHelpArticle(page: Page, articleTitle: string): Promis
 /**
  * Checks if a tour step is visible.
  */
-export async function isTourStepVisible(page: Page): Promise<boolean> {
-  try {
-    await expect(
-      page.locator("[data-testid='tour-step-card'], [data-testid='tour-overlay']").first()
-    ).toBeVisible({
-      timeout: 6000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+export async function isTourStepVisible(page: Page, timeout = 6000): Promise<boolean> {
+  return page
+    .locator("[data-testid='tour-step-card'], [data-testid='tour-overlay']")
+    .first()
+    .isVisible({ timeout })
+    .catch(() => false);
 }
 
 /**
@@ -219,7 +227,7 @@ export async function dismissTour(page: Page): Promise<void> {
   ];
 
   for (let attempt = 0; attempt < 6; attempt += 1) {
-    const visible = await isTourStepVisible(page);
+    const visible = await isTourStepVisible(page, 500);
     if (!visible) {
       return;
     }
@@ -272,7 +280,11 @@ export async function isSurveyVisible(page: Page): Promise<boolean> {
 
   try {
     await expect(
-      frame.locator(".oc-survey-small, .oc-survey-overlay, .oc-survey-large").first()
+      frame
+        .locator(
+          ".oc-survey-small, .oc-survey-overlay, .oc-survey-large, .oc-survey-question, .oc-survey-intro, .oc-survey-thank-you"
+        )
+        .first()
     ).toBeVisible({
       timeout: 2000,
     });
@@ -280,6 +292,21 @@ export async function isSurveyVisible(page: Page): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Waits for a survey to be visible.
+ */
+export async function waitForSurveyVisible(page: Page, timeout = 10000): Promise<void> {
+  const frame = getWidgetContainer(page);
+
+  await expect(
+    frame
+      .locator(
+        ".oc-survey-small, .oc-survey-overlay, .oc-survey-large, .oc-survey-question, .oc-survey-intro, .oc-survey-thank-you, .oc-survey-nps-button, .oc-survey-numeric-button"
+      )
+      .first()
+  ).toBeVisible({ timeout });
 }
 
 /**
@@ -301,6 +328,20 @@ export async function submitNPSRating(page: Page, rating: number): Promise<void>
 }
 
 /**
+ * Submits the current survey step.
+ */
+export async function submitSurvey(page: Page): Promise<void> {
+  const frame = getWidgetContainer(page);
+
+  await frame
+    .locator(".oc-survey-actions .oc-survey-button-primary, button:has-text('Submit')")
+    .first()
+    .click();
+
+  await page.waitForLoadState("networkidle").catch(() => {});
+}
+
+/**
  * Dismisses a survey.
  */
 export async function dismissSurvey(page: Page): Promise<void> {
@@ -310,6 +351,10 @@ export async function dismissSurvey(page: Page): Promise<void> {
     .locator(".oc-survey-dismiss, [data-testid='survey-dismiss'], .survey-dismiss")
     .first()
     .click();
+
+  await expect(
+    frame.locator(".oc-survey-small, .oc-survey-overlay, .oc-survey-large").first()
+  ).not.toBeVisible({ timeout: 5000 });
 }
 
 /**
@@ -355,6 +400,32 @@ export async function waitForAIResponse(page: Page, timeout = 15000): Promise<vo
   await expect(
     frame.locator("[data-testid='ai-badge'], .ai-response-badge, :text('AI')")
   ).toBeVisible({ timeout });
+}
+
+/**
+ * Waits for the AI handoff button to be visible.
+ */
+export async function waitForAIHandoffButton(page: Page, timeout = 15000): Promise<Locator> {
+  const frame = getWidgetContainer(page);
+  const handoffButton = frame.locator(
+    "[data-testid='handoff-button'], button:has-text('Talk to human'), button:has-text('Talk to a human'), button:has-text('human'), button:has-text('agent')"
+  );
+
+  await expect(handoffButton.first()).toBeVisible({ timeout });
+  return handoffButton.first();
+}
+
+/**
+ * Waits for the AI feedback buttons to be visible.
+ */
+export async function waitForAIFeedbackButtons(page: Page, timeout = 15000): Promise<Locator> {
+  const frame = getWidgetContainer(page);
+  const feedbackButtons = frame.locator(
+    "[data-testid='feedback-helpful'], [data-testid='feedback-not-helpful'], .feedback-button, button[aria-label*='helpful'], button[aria-label*='not helpful']"
+  );
+
+  await expect(feedbackButtons.first()).toBeVisible({ timeout });
+  return feedbackButtons;
 }
 
 /**

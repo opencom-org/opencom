@@ -2,7 +2,7 @@ import { ConvexClient } from "convex/browser";
 import { getFunctionName } from "convex/server";
 
 const MISSING_PUBLIC_FUNCTION_TEXT = "Could not find public function";
-const TESTING_HELPERS_PREFIX = "testing/helpers:";
+const TESTING_HELPERS_PREFIXES = ["testing/helpers:", "testing_helpers:"] as const;
 
 async function callInternalTestMutation(name: string, mutationArgs: Record<string, unknown>) {
   const convexUrl = process.env.CONVEX_URL?.trim();
@@ -48,6 +48,13 @@ function maybeGetFunctionName(functionReference: unknown): string | null {
   }
 }
 
+function normalizeTestingHelperFunctionName(functionName: string): string {
+  if (functionName.startsWith("testing_helpers:")) {
+    return `testing/helpers:${functionName.slice("testing_helpers:".length)}`;
+  }
+  return functionName;
+}
+
 function installMutationFallback() {
   const marker = "__opencomConvexTestAdminFallbackInstalled";
   if ((globalThis as Record<string, unknown>)[marker]) {
@@ -66,7 +73,7 @@ function installMutationFallback() {
     ...args: unknown[]
   ) {
     const functionName = maybeGetFunctionName(mutation);
-    if (!functionName?.startsWith(TESTING_HELPERS_PREFIX)) {
+    if (!functionName || !TESTING_HELPERS_PREFIXES.some((prefix) => functionName.startsWith(prefix))) {
       return originalMutation.call(this, mutation, ...args);
     }
 
@@ -78,7 +85,7 @@ function installMutationFallback() {
         throw error;
       }
       const mutationArgs = (args[0] as Record<string, unknown> | undefined) ?? {};
-      return callInternalTestMutation(functionName, mutationArgs);
+      return callInternalTestMutation(normalizeTestingHelperFunctionName(functionName), mutationArgs);
     }
   };
 }

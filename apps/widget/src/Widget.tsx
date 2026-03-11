@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
-import { MessageCircle, X, Plus, Search, Map, CheckSquare, Ticket, Home } from "./icons";
+import { useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
+import { MessageCircle, Plus } from "./icons";
 import { Home as HomeComponent, useHomeConfig } from "./components/Home";
 import { ConversationList } from "./components/ConversationList";
 import { ConversationView } from "./components/ConversationView";
@@ -27,58 +27,286 @@ import { useBlockingExperienceArbitration } from "./hooks/useBlockingExperienceA
 import { useWidgetTabVisibility, type MainTab, type TabConfig } from "./hooks/useWidgetTabVisibility";
 import { useWidgetUnreadCues } from "./hooks/useWidgetUnreadCues";
 import { useWidgetTourBridge } from "./hooks/useWidgetTourBridge";
+import { useWidgetConversationFlow } from "./hooks/useWidgetConversationFlow";
+import { useWidgetArticleNavigation } from "./hooks/useWidgetArticleNavigation";
+import { useWidgetTicketFlow } from "./hooks/useWidgetTicketFlow";
 import { checkElementsAvailable } from "./utils/dom";
 import { selectSurveyForDelivery, type SurveyDeliveryCandidate } from "@opencom/sdk-core";
+import {
+  getWidgetTabHeader,
+  resolveWidgetActiveTab,
+} from "./widgetShell/helpers";
+import type { WidgetProps, WidgetView } from "./widgetShell/types";
+import { WidgetMainShell } from "./widgetShell/WidgetMainShell";
 
-type WidgetView =
-  | "launcher"
-  | "conversation-list"
-  | "conversation"
-  | "article-search"
-  | "article-detail"
-  | "tour-picker"
-  | "checklist"
-  | "tickets"
-  | "ticket-detail"
-  | "ticket-create";
+type ConversationListItem = {
+  _id: Id<"conversations">;
+  status: "open" | "closed" | "snoozed";
+  createdAt: number;
+  updatedAt: number;
+  lastMessageAt?: number;
+  unreadByVisitor?: number;
+  lastMessage?: {
+    content: string;
+    senderType: string;
+  } | null;
+};
 
+type ArticleListItem = {
+  _id: Id<"articles">;
+  title: string;
+  content: string;
+  slug: string;
+  collectionId?: Id<"collections">;
+  order?: number;
+  renderedContent?: string;
+};
 
-interface WidgetProps {
-  workspaceId?: string;
-  initialUser?: UserIdentification;
-  convexUrl?: string;
-  trackPageViews?: boolean;
-  onboardingVerificationToken?: string;
-  verificationToken?: string; // Deprecated alias
-  clientVersion?: string;
-  clientIdentifier?: string;
-}
+type CollectionHierarchyItem = {
+  _id: Id<"collections">;
+  name: string;
+  parentId?: Id<"collections">;
+  description?: string;
+};
 
-type TicketFormValue = string | number | boolean | string[] | null;
-type TicketFormData = Record<string, TicketFormValue>;
+type OfficeHoursStatusRecord = {
+  isOpen: boolean;
+  offlineMessage?: string | null;
+};
 
-function normalizeTicketFormData(formData: Record<string, unknown>): TicketFormData {
-  const normalized: TicketFormData = {};
-  for (const [key, value] of Object.entries(formData)) {
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      value === null
-    ) {
-      normalized[key] = value;
-      continue;
-    }
+type TourListItem = {
+  tour: {
+    _id: Id<"tours">;
+    name: string;
+    description?: string;
+    displayMode?: "first_time_only" | "until_dismissed";
+    buttonColor?: string;
+    showConfetti?: boolean;
+    allowSnooze?: boolean;
+    allowRestart?: boolean;
+  };
+  steps: Array<{
+    _id: Id<"tourSteps">;
+    tourId: Id<"tours">;
+    type: "pointer" | "post" | "video";
+    order: number;
+    title?: string;
+    content: string;
+    elementSelector?: string;
+    routePath?: string;
+    position?: "auto" | "left" | "right" | "above" | "below";
+    size?: "small" | "large";
+    advanceOn?: "click" | "elementClick" | "fieldFill";
+    customButtonText?: string;
+    mediaUrl?: string;
+    mediaType?: "image" | "video";
+  }>;
+  elementSelectors: string[];
+  tourStatus: string;
+  progress?: {
+    currentStep: number;
+    status: string;
+    checkpointRoute?: string;
+    checkpointSelector?: string;
+  };
+};
 
-    if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
-      normalized[key] = value;
-      continue;
-    }
+type EligibleChecklistItem = {
+  checklist: {
+    _id: Id<"checklists">;
+    name: string;
+    description?: string;
+    tasks: Array<{
+      id: string;
+      title: string;
+      description?: string;
+      action?: {
+        type: "tour" | "url" | "event";
+        tourId?: Id<"tours">;
+        url?: string;
+        eventName?: string;
+      };
+      completionType: "manual" | "auto_event" | "auto_attribute";
+    }>;
+  };
+  progress: { completedTaskIds: string[] } | null;
+};
 
-    normalized[key] = null;
-  }
-  return normalized;
-}
+type ActiveSurveyRecord = SurveyDeliveryCandidate<Id<"surveys">> & {
+  _id: Id<"surveys">;
+  name: string;
+  format: "small" | "large";
+  questions: Array<{
+    id: string;
+    type:
+      | "nps"
+      | "numeric_scale"
+      | "star_rating"
+      | "emoji_rating"
+      | "dropdown"
+      | "short_text"
+      | "long_text"
+      | "multiple_choice";
+    title: string;
+    description?: string;
+    required: boolean;
+    storeAsAttribute?: string;
+    options?: {
+      scaleStart?: number;
+      scaleEnd?: number;
+      startLabel?: string;
+      endLabel?: string;
+      starLabels?: { low?: string; high?: string };
+      emojiCount?: 3 | 5;
+      emojiLabels?: { low?: string; high?: string };
+      choices?: string[];
+      allowMultiple?: boolean;
+    };
+  }>;
+  introStep?: { title: string; description?: string; buttonText?: string };
+  thankYouStep?: { title: string; description?: string; buttonText?: string };
+  showProgressBar?: boolean;
+  showDismissButton?: boolean;
+};
+
+type TooltipRecord = {
+  _id: Id<"tooltips">;
+  name: string;
+  elementSelector: string;
+  content: string;
+  triggerType: "hover" | "click" | "auto";
+};
+
+type AutomationSettingsRecord = {
+  suggestArticlesEnabled?: boolean;
+  collectEmailEnabled?: boolean;
+  showReplyTimeEnabled?: boolean;
+  askForRatingEnabled?: boolean;
+};
+
+type CommonIssueButtonRecord = {
+  _id: string;
+  label: string;
+  action: string;
+  articleId?: Id<"articles">;
+  conversationStarter?: string;
+};
+
+const visitorConversationsQueryRef = makeFunctionReference<
+  "query",
+  { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
+  ConversationListItem[]
+>("conversations:listByVisitor");
+
+const totalUnreadForVisitorQueryRef = makeFunctionReference<
+  "query",
+  { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
+  number
+>("conversations:getTotalUnreadForVisitor");
+
+const articleSearchForVisitorQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+    query: string;
+  },
+  ArticleListItem[]
+>("articles:searchForVisitor");
+
+const articleListForVisitorQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  ArticleListItem[]
+>("articles:listForVisitor");
+
+const collectionHierarchyForVisitorQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  CollectionHierarchyItem[]
+>("collections:listHierarchyForVisitor");
+
+const articleGetForVisitorQueryRef = makeFunctionReference<
+  "query",
+  {
+    id: Id<"articles">;
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+  },
+  ArticleListItem | null
+>("articles:getForVisitor");
+
+const automationSettingsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  AutomationSettingsRecord
+>("automationSettings:getOrCreate");
+
+const commonIssueButtonsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  CommonIssueButtonRecord[]
+>("commonIssueButtons:list");
+
+const officeHoursOpenQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  OfficeHoursStatusRecord
+>("officeHours:isCurrentlyOpen");
+
+const expectedReplyTimeQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  string
+>("officeHours:getExpectedReplyTime");
+
+const availableToursQueryRef = makeFunctionReference<
+  "query",
+  {
+    visitorId: Id<"visitors">;
+    workspaceId: Id<"workspaces">;
+    sessionToken: string;
+    currentUrl: string;
+  },
+  TourListItem[]
+>("tourProgress:getAvailableTours");
+
+const allToursQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  TourListItem[]
+>("tours:listAll");
+
+const eligibleChecklistsQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  EligibleChecklistItem[]
+>("checklists:getEligible");
+
+const activeSurveysQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  ActiveSurveyRecord[]
+>("surveys:getActiveSurveys");
+
+const availableTooltipsQueryRef = makeFunctionReference<
+  "query",
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+    triggerContext: {
+      currentUrl?: string;
+      timeOnPageSeconds?: number;
+      scrollPercent?: number;
+      firedEventName?: string;
+      isExitIntent?: boolean;
+    };
+  },
+  TooltipRecord[]
+>("tooltips:getAvailableTooltips");
 
 export function Widget({
   workspaceId: _workspaceId,
@@ -97,16 +325,7 @@ export function Widget({
   const [showDebug, setShowDebug] = useState(false);
   const [debugWorkspaceId, setDebugWorkspaceId] = useState(_workspaceId || "");
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(_workspaceId);
-  const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
-  const [articleSearchQuery, setArticleSearchQuery] = useState("");
-  const [selectedArticleId, setSelectedArticleId] = useState<Id<"articles"> | null>(null);
-  const [selectedHelpCollectionKey, setSelectedHelpCollectionKey] = useState<string | null>(null);
-  const [isArticleLargeMode, setIsArticleLargeMode] = useState(false);
-  const [isCollapsingLargeArticle, setIsCollapsingLargeArticle] = useState(false);
-  const [, setPreviousView] = useState<WidgetView>("conversation-list");
   const [forcedTourId, setForcedTourId] = useState<Id<"tours"> | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
-  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
   const [sessionShownSurveyIds, setSessionShownSurveyIds] = useState<Set<string>>(new Set());
   const [completedSurveyIds, setCompletedSurveyIds] = useState<Set<string>>(new Set());
   const [surveyEligibilityUnavailable, setSurveyEligibilityUnavailable] = useState(false);
@@ -119,9 +338,6 @@ export function Widget({
     hasActivePost: false,
   });
   const locationFetchedRef = useRef(false);
-  const createConversationRequestRef = useRef<Promise<Id<"conversations"> | null> | null>(null);
-  const latestDraftConversationIdRef = useRef<Id<"conversations"> | null>(null);
-  const largeArticleCollapseTimeoutRef = useRef<number | null>(null);
 
   // ── Tooltip trigger context ────────────────────────────────────────
   const [tooltipTriggerContext, setTooltipTriggerContext] = useState<{
@@ -188,48 +404,80 @@ export function Widget({
   });
 
   // ── Mutations still used directly ──────────────────────────────────
-  const createConversation = useMutation(api.conversations.createForVisitor);
-  const markAsReadMutation = useMutation(api.conversations.markAsRead);
-  const addTicketComment = useMutation(api.tickets.addComment);
-  const createTicket = useMutation(api.tickets.create);
+  const {
+    articleSearchQuery,
+    setArticleSearchQuery,
+    selectedArticleId,
+    clearSelectedArticle,
+    selectedHelpCollectionKey,
+    setSelectedHelpCollectionKey,
+    isCollapsingLargeArticle,
+    isLargeArticleView,
+    clearArticlePresentation,
+    openArticleDetail,
+    handleBackFromArticle,
+    handleToggleArticleLargeScreen,
+  } = useWidgetArticleNavigation({
+    view,
+    onViewChange: setView,
+    onTabChange: setActiveTab,
+  });
 
   // ── Queries ────────────────────────────────────────────────────────
-  const visitorTickets = useQuery(
-    api.tickets.listByVisitor,
-    isValidIdFormat && visitorId && sessionToken
-      ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
-      : "skip"
-  );
-
-  const selectedTicket = useQuery(
-    api.tickets.get,
-    selectedTicketId
-      ? {
-          id: selectedTicketId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  );
-
-  const ticketForm = useQuery(
-    api.ticketForms.getDefaultForVisitor,
-    isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
-
   const visitorConversations = useQuery(
-    api.conversations.listByVisitor,
+    visitorConversationsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
       : "skip"
-  );
+  ) as ConversationListItem[] | undefined;
+
+  const {
+    conversationId,
+    selectedConversation,
+    openConversation,
+    clearConversationSelection,
+    resetDraftConversationState,
+    openFreshConversation,
+    handleNewConversation,
+    handleSelectConversation,
+    handleBackToList,
+    syncConversationReadState,
+  } = useWidgetConversationFlow({
+    activeWorkspaceId,
+    visitorId,
+    visitorIdRef,
+    sessionTokenRef,
+    visitorConversations,
+    onViewChange: setView,
+  });
+
+  const {
+    visitorTickets,
+    selectedTicket,
+    ticketForm,
+    isSubmittingTicket,
+    ticketErrorFeedback,
+    handleBackFromTickets,
+    openTicketCreate,
+    handleSelectTicket,
+    handleSubmitTicket,
+    handleAddTicketComment,
+  } = useWidgetTicketFlow({
+    activeWorkspaceId,
+    isValidIdFormat,
+    visitorId,
+    sessionToken,
+    sessionTokenRef,
+    onViewChange: setView,
+    onTabChange: setActiveTab,
+  });
 
   const totalUnread = useQuery(
-    api.conversations.getTotalUnreadForVisitor,
+    totalUnreadForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
       : "skip"
-  );
+  ) as number | undefined;
 
   const normalizedUnreadCount = useMemo(() => {
     if (typeof totalUnread === "number") {
@@ -240,7 +488,7 @@ export function Widget({
   }, [totalUnread]);
 
   const articleSearchResults = useQuery(
-    api.articles.searchForVisitor,
+    articleSearchForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken && articleSearchQuery.length >= 2
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -249,21 +497,27 @@ export function Widget({
           query: articleSearchQuery,
         }
       : "skip"
-  );
+  ) as ArticleListItem[] | undefined;
 
   // List published articles for browsing (when not searching), filtered by visitor audience
   const publishedArticles = useQuery(
-    api.articles.listForVisitor,
+    articleListForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
-  );
+  ) as ArticleListItem[] | undefined;
   const publishedCollections = useQuery(
-    api.collections.listHierarchy,
-    isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+    collectionHierarchyForVisitorQueryRef,
+    isValidIdFormat && visitorId && sessionToken
+      ? {
+          workspaceId: activeWorkspaceId as Id<"workspaces">,
+          visitorId,
+          sessionToken,
+        }
+      : "skip"
+  ) as CollectionHierarchyItem[] | undefined;
 
-  const selectedArticle = useMemo(() => {
+  const selectedArticleFromBrowseResults = useMemo(() => {
     if (!selectedArticleId) return undefined;
 
     const fromSearch = articleSearchResults?.find((article) => article._id === selectedArticleId);
@@ -271,119 +525,54 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
-  const isLargeArticleView =
-    view === "article-detail" && (isArticleLargeMode || isCollapsingLargeArticle);
-  const clearLargeArticleCollapseTimeout = useCallback(() => {
-    if (largeArticleCollapseTimeoutRef.current !== null) {
-      window.clearTimeout(largeArticleCollapseTimeoutRef.current);
-      largeArticleCollapseTimeoutRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearLargeArticleCollapseTimeout();
-    };
-  }, [clearLargeArticleCollapseTimeout]);
-
-  const openArticleDetail = useCallback(
-    (articleId: Id<"articles">) => {
-      clearLargeArticleCollapseTimeout();
-      setIsArticleLargeMode(false);
-      setIsCollapsingLargeArticle(false);
-      setSelectedArticleId(articleId);
-      setPreviousView(view);
-      setView("article-detail");
-    },
-    [clearLargeArticleCollapseTimeout, view]
-  );
-
-  const selectedConversation = useMemo(() => {
-    if (!conversationId) {
-      return null;
-    }
-    return (
-      visitorConversations?.find((conversation) => conversation._id === conversationId) ?? null
-    );
-  }, [visitorConversations, conversationId]);
-
-  const reusableDraftConversationId = useMemo(() => {
-    if (!visitorConversations || visitorConversations.length === 0) {
-      return null;
-    }
-
-    const draftConversation = visitorConversations.find((conversation) => {
-      if (conversation.status !== "open") {
-        return false;
-      }
-      const lastMessageAt = conversation.lastMessageAt ?? conversation.createdAt;
-      return lastMessageAt === conversation.createdAt;
-    });
-
-    return draftConversation?._id ?? null;
-  }, [visitorConversations]);
-
-  useEffect(() => {
-    if (!visitorConversations) {
-      return;
-    }
-
-    if (reusableDraftConversationId) {
-      latestDraftConversationIdRef.current = reusableDraftConversationId;
-      return;
-    }
-
-    const latestDraftConversationId = latestDraftConversationIdRef.current;
-    if (!latestDraftConversationId) {
-      return;
-    }
-
-    const latestConversation = visitorConversations.find(
-      (conversation) => conversation._id === latestDraftConversationId
-    );
-
-    if (!latestConversation) {
-      latestDraftConversationIdRef.current = null;
-      return;
-    }
-
-    const latestConversationLastMessageAt =
-      latestConversation.lastMessageAt ?? latestConversation.createdAt;
-    const isLatestConversationStillDraft =
-      latestConversation.status === "open" &&
-      latestConversationLastMessageAt === latestConversation.createdAt;
-
-    if (!isLatestConversationStillDraft) {
-      latestDraftConversationIdRef.current = null;
-    }
-  }, [visitorConversations, reusableDraftConversationId]);
+  const selectedArticleQuery = useQuery(
+    articleGetForVisitorQueryRef,
+    isValidIdFormat &&
+      selectedArticleId &&
+      !selectedArticleFromBrowseResults &&
+      activeWorkspaceId &&
+      visitorId &&
+      sessionToken
+      ? {
+          id: selectedArticleId,
+          workspaceId: activeWorkspaceId as Id<"workspaces">,
+          visitorId,
+          sessionToken,
+        }
+      : "skip"
+  ) as ArticleListItem | null | undefined;
+  const selectedArticle = selectedArticleFromBrowseResults ?? selectedArticleQuery ?? null;
+  const isSelectedArticleLoading =
+    Boolean(selectedArticleId) &&
+    !selectedArticleFromBrowseResults &&
+    selectedArticleQuery === undefined;
 
   // Automation settings for self-serve features (getOrCreate returns defaults for new workspaces)
   const automationSettings = useQuery(
-    api.automationSettings.getOrCreate,
+    automationSettingsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as AutomationSettingsRecord | undefined;
 
   // Common issue buttons for quick actions
   const commonIssueButtons = useQuery(
-    api.commonIssueButtons.list,
+    commonIssueButtonsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as CommonIssueButtonRecord[] | undefined;
 
   // Office hours for reply time expectations
   const officeHoursStatus = useQuery(
-    api.officeHours.isCurrentlyOpen,
+    officeHoursOpenQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as OfficeHoursStatusRecord | undefined;
 
   const expectedReplyTime = useQuery(
-    api.officeHours.getExpectedReplyTime,
+    expectedReplyTimeQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as string | undefined;
 
   // Tour queries
   const availableTours = useQuery(
-    api.tourProgress.getAvailableTours,
+    availableToursQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           visitorId,
@@ -392,25 +581,25 @@ export function Widget({
           currentUrl: window.location.href,
         }
       : "skip"
-  );
+  ) as TourListItem[] | undefined;
 
   const allTours = useQuery(
-    api.tours.listAll,
+    allToursQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
-  );
+  ) as TourListItem[] | undefined;
 
   // Checklist query for showing empty state
   const eligibleChecklists = useQuery(
-    api.checklists.getEligible,
+    eligibleChecklistsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
-  );
+  ) as EligibleChecklistItem[] | undefined;
 
   const activeSurveys = useQuery(
-    api.surveys.getActiveSurveys,
+    activeSurveysQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -418,13 +607,13 @@ export function Widget({
           sessionToken,
         }
       : "skip"
-  );
-  type ActiveSurvey = NonNullable<typeof activeSurveys>[number];
+  ) as ActiveSurveyRecord[] | undefined;
+  type ActiveSurvey = ActiveSurveyRecord;
   const [displayedSurvey, setDisplayedSurvey] = useState<ActiveSurvey | null>(null);
 
   // Available tooltips based on audience rules and triggers
   const availableTooltips = useQuery(
-    api.tooltips.getAvailableTooltips,
+    availableTooltipsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,
@@ -433,7 +622,7 @@ export function Widget({
           triggerContext: tooltipTriggerContext,
         }
       : "skip"
-  );
+  ) as TooltipRecord[] | undefined;
 
   const candidateSurvey = useMemo(() => {
     if (!activeSurveys || surveyEligibilityUnavailable) {
@@ -508,6 +697,38 @@ export function Widget({
   });
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!window.location.href.includes("/widget-demo")) {
+      return;
+    }
+    console.log("[Opencom Widget][survey-debug]", {
+      activeWorkspaceId,
+      visitorId,
+      hasSessionToken: Boolean(sessionToken),
+      activeSurveysCount: activeSurveys?.length,
+      candidateSurveyId: candidateSurvey?._id ?? null,
+      candidateSurveyFormat: candidateSurvey?.format ?? null,
+      displayedSurveyId: displayedSurvey?._id ?? null,
+      displayedSurveyFormat: displayedSurvey?.format ?? null,
+      surveyEligibilityUnavailable,
+      activeBlockingExperience,
+      hasAnyPendingBlockingCandidate,
+    });
+  }, [
+    activeWorkspaceId,
+    visitorId,
+    sessionToken,
+    activeSurveys,
+    candidateSurvey,
+    displayedSurvey,
+    surveyEligibilityUnavailable,
+    activeBlockingExperience,
+    hasAnyPendingBlockingCandidate,
+  ]);
+
+  useEffect(() => {
     if (!(isValidIdFormat && visitorId && sessionToken && activeWorkspaceId)) {
       setSurveyEligibilityUnavailable(false);
       return;
@@ -526,11 +747,6 @@ export function Widget({
 
     return () => clearTimeout(timeout);
   }, [isValidIdFormat, visitorId, sessionToken, activeWorkspaceId, activeSurveys]);
-
-  const openConversation = useCallback((id: Id<"conversations">) => {
-    setConversationId(id);
-    setView("conversation");
-  }, []);
 
   const handleOpenConversationFromCue = useCallback(
     (id: Id<"conversations">) => {
@@ -556,7 +772,7 @@ export function Widget({
       if (!allowLargeSurveyBlocking) {
         return;
       }
-    } else if (activeBlockingExperience !== null || hasAnyPendingBlockingCandidate) {
+    } else if (activeBlockingExperience !== null) {
       return;
     }
 
@@ -586,109 +802,20 @@ export function Widget({
     setTourBlockingActive(false);
     setOutboundBlockingState({ hasPendingPost: false, hasActivePost: false });
     setSelectedHelpCollectionKey(null);
-    clearLargeArticleCollapseTimeout();
-    setIsArticleLargeMode(false);
-    setIsCollapsingLargeArticle(false);
-  }, [sessionId, visitorId, activeWorkspaceId, clearLargeArticleCollapseTimeout, setActiveBlockingExperience]);
+    clearArticlePresentation();
+  }, [sessionId, visitorId, activeWorkspaceId, clearArticlePresentation, setActiveBlockingExperience, setSelectedHelpCollectionKey]);
 
   useEffect(() => {
     resetUnreadSnapshot();
-    latestDraftConversationIdRef.current = null;
-    createConversationRequestRef.current = null;
-  }, [sessionId, visitorId, activeWorkspaceId, resetUnreadSnapshot]);
+    resetDraftConversationState();
+  }, [sessionId, visitorId, activeWorkspaceId, resetDraftConversationState, resetUnreadSnapshot]);
 
   // Handle debug workspace ID update
   const handleDebugWorkspaceUpdate = () => {
     setActiveWorkspaceId(debugWorkspaceId);
     // Reset conversation state when workspace changes
-    setConversationId(null);
+    clearConversationSelection();
     setVisitorId(null);
-  };
-
-  const handleNewConversation = async () => {
-    const existingDraftConversationId =
-      reusableDraftConversationId ?? latestDraftConversationIdRef.current;
-    if (existingDraftConversationId) {
-      openConversation(existingDraftConversationId);
-      return;
-    }
-
-    if (createConversationRequestRef.current) {
-      const inFlightConversationId = await createConversationRequestRef.current;
-      if (inFlightConversationId) {
-        latestDraftConversationIdRef.current = inFlightConversationId;
-        openConversation(inFlightConversationId);
-      }
-      return;
-    }
-
-    const createConversationRequest = (async () => {
-      // Wait briefly for visitor initialization if it hasn't completed yet
-      let vid = visitorIdRef.current;
-      if (!vid) {
-        for (let i = 0; i < 30 && !visitorIdRef.current; i++) {
-          await new Promise((r) => setTimeout(r, 100));
-        }
-        vid = visitorIdRef.current;
-      }
-      if (!vid || !activeWorkspaceId) {
-        console.warn("[Opencom Widget] Cannot create conversation - visitor not initialized", {
-          visitorId: vid,
-          activeWorkspaceId,
-        });
-        return null;
-      }
-      try {
-        const newConv = await createConversation({
-          workspaceId: activeWorkspaceId as Id<"workspaces">,
-          visitorId: vid,
-          sessionToken: sessionTokenRef.current ?? "",
-        });
-        return newConv?._id ?? null;
-      } catch (error) {
-        console.error("Failed to create conversation:", error);
-        return null;
-      }
-    })();
-
-    createConversationRequestRef.current = createConversationRequest;
-
-    try {
-      const createdConversationId = await createConversationRequest;
-      if (createdConversationId) {
-        latestDraftConversationIdRef.current = createdConversationId;
-        openConversation(createdConversationId);
-      }
-    } finally {
-      if (createConversationRequestRef.current === createConversationRequest) {
-        createConversationRequestRef.current = null;
-      }
-    }
-  };
-
-  const syncConversationReadState = useCallback(
-    (convId: Id<"conversations">) => {
-      markAsReadMutation({
-        id: convId,
-        readerType: "visitor",
-        visitorId: visitorId ?? undefined,
-        sessionToken: sessionTokenRef.current ?? undefined,
-      }).catch(console.error);
-    },
-    [markAsReadMutation, sessionTokenRef, visitorId]
-  );
-
-  const handleSelectConversation = (convId: Id<"conversations">) => {
-    setConversationId(convId);
-    setView("conversation");
-    syncConversationReadState(convId);
-  };
-
-  const handleBackToList = () => {
-    if (conversationId) {
-      syncConversationReadState(conversationId);
-    }
-    setView("conversation-list");
   };
 
   // (identify, trackEvent, and navigation tracking are now in extracted hooks)
@@ -849,163 +976,24 @@ export function Widget({
     if (view === "conversation" && conversationId) {
       syncConversationReadState(conversationId);
     }
-    clearLargeArticleCollapseTimeout();
-    setIsArticleLargeMode(false);
-    setIsCollapsingLargeArticle(false);
+    clearArticlePresentation();
     setView("launcher");
   };
 
-  // ── Navigation handlers ───────────────────────────────────────────
-  const navigateBackFromArticle = () => {
-    clearLargeArticleCollapseTimeout();
-    setIsArticleLargeMode(false);
-    setIsCollapsingLargeArticle(false);
-    setSelectedArticleId(null);
-    setActiveTab("help");
-    setView("conversation-list");
-  };
-
-  const collapseLargeArticle = useCallback(
-    (onCollapsed?: () => void) => {
-      if (isCollapsingLargeArticle) {
-        return;
-      }
-      if (!isArticleLargeMode) {
-        onCollapsed?.();
-        return;
-      }
-      setIsCollapsingLargeArticle(true);
-      clearLargeArticleCollapseTimeout();
-      largeArticleCollapseTimeoutRef.current = window.setTimeout(() => {
-        largeArticleCollapseTimeoutRef.current = null;
-        setIsArticleLargeMode(false);
-        setIsCollapsingLargeArticle(false);
-        onCollapsed?.();
-      }, 280);
-    },
-    [clearLargeArticleCollapseTimeout, isArticleLargeMode, isCollapsingLargeArticle]
-  );
-
-  const handleBackFromArticle = () => {
-    collapseLargeArticle(navigateBackFromArticle);
-  };
-
-  const handleToggleArticleLargeScreen = () => {
-    if (isCollapsingLargeArticle) {
-      return;
-    }
-    if (isArticleLargeMode) {
-      collapseLargeArticle();
-      return;
-    }
-    clearLargeArticleCollapseTimeout();
-    setIsCollapsingLargeArticle(false);
-    setIsArticleLargeMode(true);
-  };
-
   const handleStartConversationFromArticle = async () => {
-    let vid = visitorIdRef.current;
-    if (!vid) {
-      for (let i = 0; i < 30 && !visitorIdRef.current; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      vid = visitorIdRef.current;
+    if (!selectedArticle) {
+      return;
     }
-    if (!vid || !activeWorkspaceId || !selectedArticle) return;
-    try {
-      const newConv = await createConversation({
-        workspaceId: activeWorkspaceId as Id<"workspaces">,
-        visitorId: vid,
-        sessionToken: sessionTokenRef.current ?? "",
-      });
-      if (newConv) {
-        setConversationId(newConv._id);
-        setView("conversation");
-        setSelectedArticleId(null);
-        clearLargeArticleCollapseTimeout();
-        setIsArticleLargeMode(false);
-        setIsCollapsingLargeArticle(false);
-      }
-    } catch (error) {
-      console.error("Failed to start conversation:", error);
+
+    const createdConversationId = await openFreshConversation();
+    if (createdConversationId) {
+      clearSelectedArticle();
+      clearArticlePresentation();
     }
   };
 
   const handleSelectTour = (tourId: Id<"tours">) => {
     handleStartTour(tourId);
-  };
-
-  const handleBackFromTickets = () => {
-    if (view === "ticket-detail") {
-      setSelectedTicketId(null);
-    }
-    setActiveTab("tickets");
-    setView("conversation-list");
-  };
-
-  const handleSubmitTicket = async (formData: Record<string, unknown>) => {
-    if (!visitorId || !activeWorkspaceId || isSubmittingTicket) return;
-
-    const ticketFields = (ticketForm?.fields ?? []) as Array<{ id: string; label?: string }>;
-    const getFieldValueByHint = (hints: string[]): string | undefined => {
-      const matchingField = ticketFields.find((field) => {
-        const fieldKey = `${field.label ?? ""} ${field.id}`.toLowerCase();
-        return hints.some((hint) => fieldKey.includes(hint));
-      });
-      if (!matchingField) return undefined;
-
-      const value = formData[matchingField.id];
-      return typeof value === "string" ? value : undefined;
-    };
-
-    const subject =
-      (formData.subject as string) ||
-      (formData.Subject as string) ||
-      getFieldValueByHint(["subject", "title"]) ||
-      "Support Request";
-    const description =
-      (formData.description as string) ||
-      (formData.Description as string) ||
-      getFieldValueByHint(["description", "details", "message"]);
-
-    if (!subject.trim()) {
-      alert("Please provide a subject for your ticket");
-      return;
-    }
-
-    setIsSubmittingTicket(true);
-    try {
-      const ticketId = await createTicket({
-        workspaceId: activeWorkspaceId as Id<"workspaces">,
-        visitorId,
-        sessionToken: sessionTokenRef.current ?? undefined,
-        subject: subject.trim(),
-        description: description?.trim(),
-        formId: ticketForm?._id,
-        formData: normalizeTicketFormData(formData),
-      });
-      setSelectedTicketId(ticketId);
-      setView("ticket-detail");
-    } catch (error) {
-      console.error("Failed to create ticket:", error);
-      alert("Failed to submit ticket. Please try again.");
-    } finally {
-      setIsSubmittingTicket(false);
-    }
-  };
-
-  const handleAddTicketComment = async (content: string) => {
-    if (!selectedTicketId || !visitorId) return;
-    try {
-      await addTicketComment({
-        ticketId: selectedTicketId,
-        visitorId,
-        content,
-        sessionToken: sessionTokenRef.current ?? undefined,
-      });
-    } catch (error) {
-      console.error("Failed to add comment:", error);
-    }
   };
 
   const handleSurveyComplete = () => {
@@ -1026,208 +1014,100 @@ export function Widget({
     setTooltipTriggerContext((prev) => ({ ...prev, firedEventName: undefined }));
   };
 
-  // Get header title and actions based on active tab
-  const getTabHeader = () => {
-    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
-    switch (resolvedActiveTab) {
-      case "home":
-        return { title: "Home", showNew: false };
-      case "messages":
-        return { title: "Conversations", showNew: true };
-      case "help":
-        return { title: "Help Center", showNew: false };
-      case "tours":
-        return { title: "Product Tours", showNew: false };
-      case "tasks":
-        return { title: "Tasks", showNew: false };
-      case "tickets":
-        return { title: "My Tickets", showNew: false };
-      default:
-        return { title: "Home", showNew: false };
-    }
-  };
+  const availableTourCount = useMemo(
+    () =>
+      allTours?.filter((tour: { elementSelectors: string[] }) =>
+        checkElementsAvailable(tour.elementSelectors)
+      ).length || 0,
+    [allTours]
+  );
 
   // ── Main tabbed shell ──────────────────────────────────────────────
   const renderMainShell = () => {
-    const resolvedActiveTab = isTabVisible(activeTab) ? activeTab : fallbackTab;
-    const header = getTabHeader();
+    const resolvedActiveTab = resolveWidgetActiveTab(activeTab, fallbackTab, isTabVisible);
+    const header = getWidgetTabHeader(resolvedActiveTab);
+
     return (
-      <div className="opencom-chat">
-        <div className="opencom-header">
-          <span>{header.title}</span>
-          <div className="opencom-header-actions">
-            {header.showNew && (
+      <WidgetMainShell
+        title={header.title}
+        showNewConversationAction={header.showNew}
+        resolvedActiveTab={resolvedActiveTab}
+        isTabVisible={isTabVisible}
+        onNewConversation={handleNewConversation}
+        onCloseWidget={handleCloseWidget}
+        onTabChange={setActiveTab}
+        normalizedUnreadCount={normalizedUnreadCount}
+        availableTourCount={availableTourCount}
+      >
+        {resolvedActiveTab === "home" && homeConfig?.enabled && (
+          <HomeComponent
+            workspaceId={activeWorkspaceId as Id<"workspaces">}
+            visitorId={visitorId}
+            sessionToken={sessionToken}
+            isIdentified={isIdentifiedVisitor}
+            settings={{
+              primaryColor: messengerSettings.primaryColor,
+              backgroundColor: messengerSettings.backgroundColor,
+              logo: messengerSettings.logo,
+              welcomeMessage: messengerSettings.welcomeMessage,
+              teamIntroduction: messengerSettings.teamIntroduction,
+            }}
+            conversations={visitorConversations}
+            onStartConversation={handleNewConversation}
+            onSelectConversation={handleSelectConversation}
+            onSelectArticle={openArticleDetail}
+            onSearch={(query) => {
+              setArticleSearchQuery(query);
+              setActiveTab("help");
+            }}
+          />
+        )}
+        {resolvedActiveTab === "messages" && (
+          <ConversationList
+            conversations={visitorConversations}
+            onSelectConversation={handleSelectConversation}
+            onNewConversation={handleNewConversation}
+          />
+        )}
+        {resolvedActiveTab === "help" && (
+          <HelpCenter
+            articleSearchQuery={articleSearchQuery}
+            onSearchChange={setArticleSearchQuery}
+            articleSearchResults={articleSearchResults}
+            publishedArticles={publishedArticles}
+            collections={publishedCollections}
+            selectedCollectionKey={selectedHelpCollectionKey}
+            onSelectedCollectionKeyChange={setSelectedHelpCollectionKey}
+            onSelectArticle={openArticleDetail}
+          />
+        )}
+        {resolvedActiveTab === "tours" && <TourPicker allTours={allTours} onSelectTour={handleSelectTour} />}
+        {resolvedActiveTab === "tasks" && (
+          <TasksList
+            visitorId={visitorId}
+            activeWorkspaceId={activeWorkspaceId}
+            sessionToken={sessionToken}
+            isValidIdFormat={isValidIdFormat}
+            eligibleChecklists={eligibleChecklists}
+            onStartTour={handleStartTour}
+          />
+        )}
+        {resolvedActiveTab === "tickets" && (
+          <div className="opencom-tickets-view">
+            <TicketsList tickets={visitorTickets} onSelectTicket={handleSelectTicket} />
+            <div className="opencom-ticket-create-btn-container">
               <button
-                onClick={handleNewConversation}
-                className="opencom-new-conv"
-                title="New conversation"
+                className="opencom-ticket-create-btn"
+                onClick={openTicketCreate}
+                type="button"
               >
                 <Plus />
+                <span>New Ticket</span>
               </button>
-            )}
-            <button onClick={handleCloseWidget} className="opencom-close">
-              <X />
-            </button>
-          </div>
-        </div>
-        <div className="opencom-tab-content">
-          {resolvedActiveTab === "home" && homeConfig?.enabled && (
-            <HomeComponent
-              workspaceId={activeWorkspaceId as Id<"workspaces">}
-              visitorId={visitorId}
-              sessionToken={sessionToken}
-              isIdentified={isIdentifiedVisitor}
-              settings={{
-                primaryColor: messengerSettings.primaryColor,
-                backgroundColor: messengerSettings.backgroundColor,
-                logo: messengerSettings.logo,
-                welcomeMessage: messengerSettings.welcomeMessage,
-                teamIntroduction: messengerSettings.teamIntroduction,
-              }}
-              conversations={visitorConversations}
-              onStartConversation={handleNewConversation}
-              onSelectConversation={handleSelectConversation}
-              onSelectArticle={openArticleDetail}
-              onSearch={(query) => {
-                setArticleSearchQuery(query);
-                setActiveTab("help");
-              }}
-            />
-          )}
-          {resolvedActiveTab === "messages" && (
-            <ConversationList
-              conversations={visitorConversations}
-              onSelectConversation={handleSelectConversation}
-              onNewConversation={handleNewConversation}
-            />
-          )}
-          {resolvedActiveTab === "help" && (
-            <HelpCenter
-              articleSearchQuery={articleSearchQuery}
-              onSearchChange={setArticleSearchQuery}
-              articleSearchResults={articleSearchResults}
-              publishedArticles={publishedArticles}
-              collections={publishedCollections}
-              selectedCollectionKey={selectedHelpCollectionKey}
-              onSelectedCollectionKeyChange={setSelectedHelpCollectionKey}
-              onSelectArticle={openArticleDetail}
-            />
-          )}
-          {resolvedActiveTab === "tours" && (
-            <TourPicker allTours={allTours} onSelectTour={handleSelectTour} />
-          )}
-          {resolvedActiveTab === "tasks" && (
-            <TasksList
-              visitorId={visitorId}
-              activeWorkspaceId={activeWorkspaceId}
-              sessionToken={sessionToken}
-              isValidIdFormat={isValidIdFormat}
-              eligibleChecklists={eligibleChecklists}
-              onStartTour={handleStartTour}
-            />
-          )}
-          {resolvedActiveTab === "tickets" && (
-            <div className="opencom-tickets-view">
-              <TicketsList
-                tickets={visitorTickets}
-                onSelectTicket={(id) => {
-                  setSelectedTicketId(id);
-                  setView("ticket-detail");
-                }}
-              />
-              <div className="opencom-ticket-create-btn-container">
-                <button
-                  className="opencom-ticket-create-btn"
-                  onClick={() => {
-                    setSelectedTicketId(null);
-                    setView("ticket-create");
-                  }}
-                  type="button"
-                >
-                  <Plus />
-                  <span>New Ticket</span>
-                </button>
-              </div>
             </div>
-          )}
-        </div>
-        <div className="opencom-bottom-nav">
-          {isTabVisible("home") && (
-            <button
-              onClick={() => setActiveTab("home")}
-              className={`opencom-nav-item ${resolvedActiveTab === "home" ? "opencom-nav-item-active" : ""}`}
-              title="Home"
-            >
-              <Home />
-              <span>Home</span>
-            </button>
-          )}
-          {isTabVisible("messages") && (
-            <button
-              onClick={() => setActiveTab("messages")}
-              className={`opencom-nav-item ${resolvedActiveTab === "messages" ? "opencom-nav-item-active" : ""}`}
-              title="Conversations"
-            >
-              <MessageCircle />
-              <span>Messages</span>
-              {normalizedUnreadCount > 0 && (
-                <span className="opencom-nav-badge opencom-nav-badge-alert">
-                  {normalizedUnreadCount > 99 ? "99+" : normalizedUnreadCount}
-                </span>
-              )}
-            </button>
-          )}
-          {isTabVisible("help") && (
-            <button
-              onClick={() => setActiveTab("help")}
-              className={`opencom-nav-item ${resolvedActiveTab === "help" ? "opencom-nav-item-active" : ""}`}
-              title="Help Center"
-            >
-              <Search />
-              <span>Help</span>
-            </button>
-          )}
-          {isTabVisible("tours") && (
-            <button
-              onClick={() => setActiveTab("tours")}
-              className={`opencom-nav-item ${resolvedActiveTab === "tours" ? "opencom-nav-item-active" : ""}`}
-              title="Product Tours"
-            >
-              <Map />
-              <span>Tours</span>
-              {(() => {
-                const availableCount =
-                  allTours?.filter((t: { elementSelectors: string[] }) =>
-                    checkElementsAvailable(t.elementSelectors)
-                  ).length || 0;
-                return availableCount > 0 ? (
-                  <span className="opencom-nav-badge">{availableCount}</span>
-                ) : null;
-              })()}
-            </button>
-          )}
-          {isTabVisible("tasks") && (
-            <button
-              onClick={() => setActiveTab("tasks")}
-              className={`opencom-nav-item ${resolvedActiveTab === "tasks" ? "opencom-nav-item-active" : ""}`}
-              title="Tasks"
-            >
-              <CheckSquare />
-              <span>Tasks</span>
-            </button>
-          )}
-          {isTabVisible("tickets") && (
-            <button
-              onClick={() => setActiveTab("tickets")}
-              className={`opencom-nav-item ${resolvedActiveTab === "tickets" ? "opencom-nav-item-active" : ""}`}
-              title="My Tickets"
-            >
-              <Ticket />
-              <span>Tickets</span>
-            </button>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </WidgetMainShell>
     );
   };
 
@@ -1310,7 +1190,8 @@ export function Widget({
       )}
       {view === "article-detail" && (
         <ArticleDetail
-          article={selectedArticle ?? undefined}
+          article={selectedArticle}
+          isLoading={isSelectedArticleLoading}
           isLargeScreen={isLargeArticleView}
           isCollapsingLargeScreen={isCollapsingLargeArticle}
           onToggleLargeScreen={handleToggleArticleLargeScreen}
@@ -1326,6 +1207,7 @@ export function Widget({
           onClose={handleCloseWidget}
           onSubmit={handleSubmitTicket}
           isSubmitting={isSubmittingTicket}
+          errorFeedback={ticketErrorFeedback}
         />
       )}
       {view === "ticket-detail" && (

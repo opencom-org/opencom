@@ -20,20 +20,20 @@ describe("tickets", () => {
     client = new ConvexClient(convexUrl);
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "ticket-visitor@test.com",
       name: "Ticket Test Visitor",
     });
     testVisitorId = visitor.visitorId;
 
-    const visitorSession = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const visitorSession = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: testVisitorId,
       workspaceId: testWorkspaceId,
     });
     testVisitorSessionToken = visitorSession.sessionToken;
 
-    const user = await client.mutation(api.testing.helpers.createTestUser, {
+    const user = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: "ticket-agent@test.opencom.dev",
       name: "Ticket Test Agent",
@@ -45,7 +45,7 @@ describe("tickets", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -229,12 +229,12 @@ describe("tickets", () => {
 
   it("should reject mismatched visitor identity on comment", async () => {
     const visitorClient = new ConvexClient(process.env.CONVEX_URL!);
-    const otherVisitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const otherVisitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "other-ticket-visitor@test.com",
       name: "Other Ticket Visitor",
     });
-    const otherSession = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const otherSession = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: otherVisitor.visitorId,
       workspaceId: testWorkspaceId,
     });
@@ -280,7 +280,7 @@ describe("tickets", () => {
   });
 
   it("should convert conversation to ticket", async () => {
-    const newConversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const newConversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
       status: "open",
@@ -305,7 +305,7 @@ describe("tickets", () => {
 
   it("should not allow duplicate conversion of same conversation", async () => {
     // First create a ticket from the conversation
-    const anotherConversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const anotherConversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
       status: "open",

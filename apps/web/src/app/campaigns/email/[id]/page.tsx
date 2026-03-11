@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -14,20 +14,92 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
 
+type EmailCampaignRecord = {
+  _id: Id<"emailCampaigns">;
+  name: string;
+  subject: string;
+  previewText?: string;
+  content: string;
+  status: string;
+  audienceRules?: AudienceRule | null;
+  targeting?: AudienceRule | null;
+};
+
+type EmailCampaignStats = {
+  total: number;
+  pending: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  unsubscribed: number;
+  openRate: number;
+  clickRate: number;
+  bounceRate: number;
+};
+
+type UpdateCampaignArgs = {
+  id: Id<"emailCampaigns">;
+  name?: string;
+  subject?: string;
+  previewText?: string;
+  content?: string;
+  templateId?: Id<"emailTemplates">;
+  senderId?: Id<"users">;
+  targeting?: AudienceRule;
+  schedule?: {
+    type: "immediate" | "scheduled";
+    scheduledAt?: number;
+    timezone?: string;
+  };
+};
+
+type SendCampaignArgs = {
+  id: Id<"emailCampaigns">;
+};
+
+type SendCampaignResult = {
+  recipientCount: number;
+};
+
 function EmailCampaignEditor() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as Id<"emailCampaigns">;
   const { activeWorkspace } = useAuth();
 
-  const campaign = useQuery(api.emailCampaigns.get, { id: campaignId });
-  const stats = useQuery(api.emailCampaigns.getStats, { id: campaignId });
-  const eventNames = useQuery(
-    api.events.getDistinctNames,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
+  const campaignQuery = makeFunctionReference<
+    "query",
+    { id: Id<"emailCampaigns"> },
+    EmailCampaignRecord | null
+  >("emailCampaigns:get");
+
+  const campaignStatsQuery = makeFunctionReference<
+    "query",
+    { id: Id<"emailCampaigns"> },
+    EmailCampaignStats
+  >("emailCampaigns:getStats");
+
+  const eventNamesQuery = makeFunctionReference<
+    "query",
+    { workspaceId: Id<"workspaces"> },
+    string[]
+  >("events:getDistinctNames");
+
+  const updateCampaignRef = makeFunctionReference<"mutation", UpdateCampaignArgs, Id<"emailCampaigns">>(
+    "emailCampaigns:update"
   );
-  const updateCampaign = useMutation(api.emailCampaigns.update);
-  const sendCampaign = useMutation(api.emailCampaigns.send);
+
+  const sendCampaignRef = makeFunctionReference<"mutation", SendCampaignArgs, SendCampaignResult>(
+    "emailCampaigns:send"
+  );
+
+  const campaign = useQuery(campaignQuery, { id: campaignId });
+  const stats = useQuery(campaignStatsQuery, { id: campaignId });
+  const eventNames = useQuery(eventNamesQuery, activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip");
+  const updateCampaign = useMutation(updateCampaignRef);
+  const sendCampaign = useMutation(sendCampaignRef);
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -221,19 +293,19 @@ function EmailCampaignEditor() {
                 </h3>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.total}</div>
+                    <div className="text-2xl font-bold">{stats.total ?? 0}</div>
                     <div className="text-sm text-gray-500">Recipients</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.openRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.openRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Open Rate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.clickRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.clickRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Click Rate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.bounceRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.bounceRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Bounce Rate</div>
                   </div>
                 </div>

@@ -19,7 +19,7 @@ describe("auth - workspace and user creation via test helpers", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -30,7 +30,7 @@ describe("auth - workspace and user creation via test helpers", () => {
   });
 
   it("should create a test workspace with admin user", async () => {
-    const result = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const result = await client.mutation(api.testing_helpers.createTestWorkspace, {});
 
     expect(result.workspaceId).toBeDefined();
     expect(result.userId).toBeDefined();
@@ -40,7 +40,7 @@ describe("auth - workspace and user creation via test helpers", () => {
   });
 
   it("should retrieve workspace details", async () => {
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -50,7 +50,7 @@ describe("auth - workspace and user creation via test helpers", () => {
 
   it("should create additional users in workspace", async () => {
     const email = `additional-user-${Date.now()}@test.opencom.dev`;
-    const user = await client.mutation(api.testing.helpers.createTestUser, {
+    const user = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email,
       role: "agent",
@@ -60,7 +60,7 @@ describe("auth - workspace and user creation via test helpers", () => {
   });
 
   it("should list workspace members", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -72,7 +72,7 @@ describe("auth - workspace and user creation via test helpers", () => {
 
   it("should clean up test data", async () => {
     await expect(
-      client.mutation(api.testing.helpers.cleanupTestData, {
+      client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: testWorkspaceId,
       })
     ).resolves.not.toThrow();

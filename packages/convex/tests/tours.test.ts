@@ -15,14 +15,14 @@ describe("tours", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -33,7 +33,7 @@ describe("tours", () => {
   });
 
   it("should create a tour", async () => {
-    testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    testTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Welcome Tour",
       description: "A tour to welcome new users",
@@ -43,7 +43,7 @@ describe("tours", () => {
   });
 
   it("should get a tour by id", async () => {
-    const tour = await client.mutation(api.testing.helpers.getTestTour, { id: testTourId });
+    const tour = await client.mutation(api.testing_helpers.getTestTour, { id: testTourId });
 
     expect(tour).toBeDefined();
     expect(tour?.name).toBe("Welcome Tour");
@@ -51,7 +51,7 @@ describe("tours", () => {
   });
 
   it("should list tours for workspace", async () => {
-    const tours = await client.mutation(api.testing.helpers.listTestTours, {
+    const tours = await client.mutation(api.testing_helpers.listTestTours, {
       workspaceId: testWorkspaceId,
     });
 
@@ -61,14 +61,14 @@ describe("tours", () => {
   });
 
   it("should update a tour", async () => {
-    await client.mutation(api.testing.helpers.updateTestTour, {
+    await client.mutation(api.testing_helpers.updateTestTour, {
       id: testTourId,
       name: "Updated Welcome Tour",
       showConfetti: true,
       allowSnooze: false,
     });
 
-    const tour = await client.mutation(api.testing.helpers.getTestTour, { id: testTourId });
+    const tour = await client.mutation(api.testing_helpers.getTestTour, { id: testTourId });
 
     expect(tour?.name).toBe("Updated Welcome Tour");
     expect(tour?.showConfetti).toBe(true);
@@ -76,39 +76,39 @@ describe("tours", () => {
   });
 
   it("should activate a tour", async () => {
-    await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+    await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
-    const tour = await client.mutation(api.testing.helpers.getTestTour, { id: testTourId });
+    const tour = await client.mutation(api.testing_helpers.getTestTour, { id: testTourId });
 
     expect(tour?.status).toBe("active");
   });
 
   it("should deactivate a tour", async () => {
-    await client.mutation(api.testing.helpers.deactivateTestTour, { id: testTourId });
+    await client.mutation(api.testing_helpers.deactivateTestTour, { id: testTourId });
 
-    const tour = await client.mutation(api.testing.helpers.getTestTour, { id: testTourId });
+    const tour = await client.mutation(api.testing_helpers.getTestTour, { id: testTourId });
 
     expect(tour?.status).toBe("draft");
   });
 
   it("should duplicate a tour", async () => {
-    const duplicatedId = await client.mutation(api.testing.helpers.duplicateTestTour, {
+    const duplicatedId = await client.mutation(api.testing_helpers.duplicateTestTour, {
       id: testTourId,
     });
 
     expect(duplicatedId).toBeDefined();
     expect(duplicatedId).not.toBe(testTourId);
 
-    const duplicated = await client.mutation(api.testing.helpers.getTestTour, { id: duplicatedId });
+    const duplicated = await client.mutation(api.testing_helpers.getTestTour, { id: duplicatedId });
 
     expect(duplicated?.name).toBe("Updated Welcome Tour (Copy)");
     expect(duplicated?.status).toBe("draft");
   });
 
   it("should filter tours by status", async () => {
-    await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+    await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
-    const allTours = await client.mutation(api.testing.helpers.listTestTours, {
+    const allTours = await client.mutation(api.testing_helpers.listTestTours, {
       workspaceId: testWorkspaceId,
     });
 
@@ -120,11 +120,11 @@ describe("tours", () => {
   });
 
   it("should delete a tour", async () => {
-    const result = await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+    const result = await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
 
     expect(result.success).toBe(true);
 
-    const tour = await client.mutation(api.testing.helpers.getTestTour, { id: testTourId });
+    const tour = await client.mutation(api.testing_helpers.getTestTour, { id: testTourId });
 
     expect(tour).toBeNull();
   });

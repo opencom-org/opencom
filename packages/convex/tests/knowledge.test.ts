@@ -24,33 +24,33 @@ describe("knowledge", () => {
     testUserId = authContext.userId;
 
     // Create test folder
-    testFolderId = await client.mutation(api.testing.helpers.createTestContentFolder, {
+    testFolderId = await client.mutation(api.testing_helpers.createTestContentFolder, {
       workspaceId: testWorkspaceId,
       name: "Knowledge Test Folder",
     });
 
     // Create test article
-    testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+    testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
       workspaceId: testWorkspaceId,
       title: "Test Public Article",
       content: "This is a public article about customer support.",
     });
-    await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+    await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
     // Create test internal article
-    testInternalArticleId = await client.mutation(api.testing.helpers.createTestInternalArticle, {
+    testInternalArticleId = await client.mutation(api.testing_helpers.createTestInternalArticle, {
       workspaceId: testWorkspaceId,
       title: "Test Internal Documentation",
       content: "This is internal documentation for agents only.",
       tags: ["internal", "docs"],
       folderId: testFolderId,
     });
-    await client.mutation(api.testing.helpers.publishTestInternalArticle, {
+    await client.mutation(api.testing_helpers.publishTestInternalArticle, {
       id: testInternalArticleId,
     });
 
     // Create test snippet
-    testSnippetId = await client.mutation(api.testing.helpers.createTestSnippet, {
+    testSnippetId = await client.mutation(api.testing_helpers.createTestSnippet, {
       workspaceId: testWorkspaceId,
       name: "Test Snippet",
       content: "Hello! How can I help you today?",
@@ -61,7 +61,7 @@ describe("knowledge", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -94,6 +94,12 @@ describe("knowledge", () => {
       });
 
       expect(results.some((r: { id: string }) => r.id === testArticleId)).toBe(true);
+      expect(
+        results.some(
+          (r: { id: string; slug?: string }) =>
+            r.id === testArticleId && (r.slug?.startsWith("test-public-article") ?? false)
+        )
+      ).toBe(true);
     });
 
     it("should search internal articles", async () => {
@@ -104,6 +110,12 @@ describe("knowledge", () => {
       });
 
       expect(results.some((r: { id: string }) => r.id === testInternalArticleId)).toBe(true);
+      expect(
+        results.some(
+          (r: { id: string; tags?: string[] }) =>
+            r.id === testInternalArticleId && (r.tags ?? []).includes("internal")
+        )
+      ).toBe(true);
     });
 
     it("should search snippets", async () => {

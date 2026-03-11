@@ -13,6 +13,8 @@ describe("help center policy enforcement", () => {
   let publishedSlug: string;
   let draftArticleId: Id<"articles">;
   let draftSlug: string;
+  let visitorId: Id<"visitors">;
+  let sessionToken: string;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -26,13 +28,13 @@ describe("help center policy enforcement", () => {
     const authContext = await authenticateClientForWorkspace(authedClient);
     workspaceId = authContext.workspaceId;
 
-    collectionId = await authedClient.mutation(api.testing.helpers.createTestCollection, {
+    collectionId = await authedClient.mutation(api.testing_helpers.createTestCollection, {
       workspaceId,
       name: "Public Docs",
       description: "Public-facing docs",
     });
 
-    publishedArticleId = await authedClient.mutation(api.testing.helpers.createTestArticle, {
+    publishedArticleId = await authedClient.mutation(api.testing_helpers.createTestArticle, {
       workspaceId,
       collectionId,
       title: "Published Help Article",
@@ -40,12 +42,25 @@ describe("help center policy enforcement", () => {
       status: "published",
     });
 
-    draftArticleId = await authedClient.mutation(api.testing.helpers.createTestArticle, {
+    draftArticleId = await authedClient.mutation(api.testing_helpers.createTestArticle, {
       workspaceId,
       title: "Draft Help Article",
       content: "Draft-only guidance",
       status: "draft",
     });
+
+    const visitor = await authedClient.mutation(api.testing_helpers.createTestVisitor, {
+      workspaceId,
+      email: "help-center-visitor@example.com",
+      name: "Help Center Visitor",
+    });
+    visitorId = visitor.visitorId;
+
+    const session = await authedClient.mutation(api.testing_helpers.createTestSessionToken, {
+      visitorId,
+      workspaceId,
+    });
+    sessionToken = session.sessionToken;
 
     const publishedArticle = await authedClient.query(api.articles.get, {
       id: publishedArticleId,
@@ -66,7 +81,7 @@ describe("help center policy enforcement", () => {
 
   afterAll(async () => {
     if (workspaceId) {
-      await authedClient.mutation(api.testing.helpers.cleanupTestData, {
+      await authedClient.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId,
       });
     }
@@ -76,7 +91,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("allows unauthenticated published reads when policy is public", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "public",
     });
@@ -105,7 +120,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("blocks unauthenticated reads when policy is restricted", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "restricted",
     });
@@ -134,7 +149,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("preserves authenticated member access when policy is restricted", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "restricted",
     });
@@ -157,7 +172,7 @@ describe("help center policy enforcement", () => {
   });
 
   it("never exposes unpublished articles to unauthenticated callers", async () => {
-    await authedClient.mutation(api.testing.helpers.updateTestHelpCenterAccessPolicy, {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
       workspaceId,
       policy: "public",
     });
@@ -178,5 +193,42 @@ describe("help center policy enforcement", () => {
       query: "draft-only guidance",
     });
     expect(searchResults.some((article) => article._id === draftArticleId)).toBe(false);
+  });
+
+  it("keeps widget visitor article flows available when standalone public help access is restricted", async () => {
+    await authedClient.mutation(api.testing_helpers.updateTestHelpCenterAccessPolicy, {
+      workspaceId,
+      policy: "restricted",
+    });
+
+    const visitorBrowse = await unauthClient.query(api.articles.listForVisitor, {
+      workspaceId,
+      visitorId,
+      sessionToken,
+    });
+    expect(visitorBrowse.some((article) => article._id === publishedArticleId)).toBe(true);
+
+    const visitorSearch = await unauthClient.query(api.articles.searchForVisitor, {
+      workspaceId,
+      visitorId,
+      sessionToken,
+      query: "published guidance",
+    });
+    expect(visitorSearch.some((article) => article._id === publishedArticleId)).toBe(true);
+
+    const visitorArticle = await unauthClient.query(api.articles.getForVisitor, {
+      id: publishedArticleId,
+      workspaceId,
+      visitorId,
+      sessionToken,
+    });
+    expect(visitorArticle?._id).toBe(publishedArticleId);
+
+    const visitorCollections = await unauthClient.query(api.collections.listHierarchyForVisitor, {
+      workspaceId,
+      visitorId,
+      sessionToken,
+    });
+    expect(visitorCollections.some((collection) => collection._id === collectionId)).toBe(true);
   });
 });

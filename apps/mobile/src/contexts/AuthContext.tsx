@@ -2,7 +2,7 @@ import React, { createContext, useContext, useCallback, useEffect, useMemo, useS
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { useBackend } from "./BackendContext";
 import { parseStoredWorkspaceId, resolveActiveWorkspaceId } from "../utils/workspaceSelection";
@@ -22,6 +22,44 @@ interface Workspace {
   role: "owner" | "admin" | "agent" | "viewer";
   allowedOrigins?: string[];
 }
+
+type CurrentUserQueryResult = {
+  user: User | null;
+  workspaces: Workspace[];
+} | null;
+
+type HostedOnboardingState = {
+  isWidgetVerified: boolean;
+  verificationToken?: string | null;
+} | null;
+
+const currentUserQueryRef = makeFunctionReference<"query", Record<string, never>, CurrentUserQueryResult>(
+  "auth:currentUser"
+);
+
+const switchWorkspaceMutationRef = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  null
+>("auth:switchWorkspace");
+
+const completeSignupProfileMutationRef = makeFunctionReference<
+  "mutation",
+  { name?: string; workspaceName?: string },
+  null
+>("auth:completeSignupProfile");
+
+const unregisterAllPushTokensMutationRef = makeFunctionReference<
+  "mutation",
+  Record<string, never>,
+  null
+>("pushTokens:unregisterAllForCurrentUser");
+
+const hostedOnboardingStateQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  HostedOnboardingState
+>("workspaces:getHostedOnboardingState");
 
 type HomePath = "/workspace" | "/onboarding" | "/inbox";
 
@@ -58,10 +96,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
 
   // Query current user from Convex Auth session
-  const convexAuthUser = useQuery(api.auth.currentUser);
-  const switchWorkspaceMutation = useMutation(api.auth.switchWorkspace);
-  const completeSignupProfileMutation = useMutation(api.auth.completeSignupProfile);
-  const unregisterAllPushTokensMutation = useMutation(api.pushTokens.unregisterAllForCurrentUser);
+  const convexAuthUser = useQuery(currentUserQueryRef, {}) as CurrentUserQueryResult | undefined;
+  const switchWorkspaceMutation = useMutation(switchWorkspaceMutationRef);
+  const completeSignupProfileMutation = useMutation(completeSignupProfileMutationRef);
+  const unregisterAllPushTokensMutation = useMutation(unregisterAllPushTokensMutationRef);
 
   // Derive state from query
   const user = useMemo(() => (convexAuthUser?.user as User | null) ?? null, [convexAuthUser]);
@@ -157,11 +195,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const shouldResolveHostedOnboarding =
     isAuthenticated && !!workspaceIdForHomeRouting && !shouldRequireWorkspaceSelection;
   const hostedOnboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
+    hostedOnboardingStateQueryRef,
     shouldResolveHostedOnboarding && workspaceIdForHomeRouting
       ? { workspaceId: workspaceIdForHomeRouting }
       : "skip"
-  );
+  ) as HostedOnboardingState | undefined;
   const isHomeRouteLoading = shouldResolveHostedOnboarding && hostedOnboardingState === undefined;
   const defaultHomePath: HomePath = shouldRequireWorkspaceSelection
     ? "/workspace"

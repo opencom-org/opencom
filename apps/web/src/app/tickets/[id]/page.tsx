@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   ArrowLeft,
@@ -24,6 +24,88 @@ import { useParams } from "next/navigation";
 
 type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
 type TicketPriority = "low" | "normal" | "high" | "urgent";
+
+type TicketCommentRecord = {
+  _id: Id<"ticketComments">;
+  authorType: "agent" | "visitor" | "system";
+  content: string;
+  isInternal: boolean;
+  createdAt: number;
+};
+
+type TicketDetailRecord = {
+  _id: Id<"tickets">;
+  visitorId?: Id<"visitors">;
+  assigneeId?: Id<"users">;
+  conversationId?: Id<"conversations">;
+  subject: string;
+  description?: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  createdAt: number;
+  updatedAt: number;
+  resolvedAt?: number;
+  resolutionSummary?: string;
+  visitor?: { _id: Id<"visitors">; readableId?: string; name?: string; email?: string } | null;
+  assignee?: { _id: Id<"users">; name?: string; email?: string } | null;
+  conversation?: { _id: Id<"conversations"> } | null;
+  comments?: TicketCommentRecord[];
+};
+
+type TicketDetailResult =
+  | { status: "ok"; ticket: TicketDetailRecord }
+  | { status: "not_found" | "unauthenticated" | "forbidden"; ticket: null };
+
+type WorkspaceUserRecord = {
+  _id: Id<"workspaceMembers">;
+  userId: Id<"users">;
+  name?: string;
+  email?: string;
+};
+
+const ticketDetailQueryRef = makeFunctionReference<
+  "query",
+  { id: Id<"tickets"> },
+  TicketDetailResult
+>("tickets:getForAdminView");
+
+const workspaceUsersQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  WorkspaceUserRecord[]
+>("workspaceMembers:listByWorkspace");
+
+const updateTicketMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    id: Id<"tickets">;
+    status?: TicketStatus;
+    priority?: TicketPriority;
+    assigneeId?: Id<"users">;
+    teamId?: string;
+  },
+  Id<"tickets">
+>("tickets:update");
+
+const addCommentMutationRef = makeFunctionReference<
+  "mutation",
+  {
+    ticketId: Id<"tickets">;
+    visitorId?: Id<"visitors">;
+    content: string;
+    isInternal?: boolean;
+    authorId?: string;
+    authorType?: "agent" | "visitor" | "system";
+    sessionToken?: string;
+  },
+  Id<"ticketComments">
+>("tickets:addComment");
+
+const resolveTicketMutationRef = makeFunctionReference<
+  "mutation",
+  { id: Id<"tickets">; resolutionSummary?: string },
+  Id<"tickets">
+>("tickets:resolve");
 
 const statusConfig: Record<
   TicketStatus,
@@ -56,16 +138,18 @@ function TicketDetailContent(): React.JSX.Element | null {
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolutionSummary, setResolutionSummary] = useState("");
 
-  const ticketResult = useQuery(api.tickets.getForAdminView, ticketId ? { id: ticketId } : "skip");
+  const ticketResult = useQuery(ticketDetailQueryRef, ticketId ? { id: ticketId } : "skip") as
+    | TicketDetailResult
+    | undefined;
 
   const workspaceUsers = useQuery(
-    api.workspaceMembers.listByWorkspace,
+    workspaceUsersQueryRef,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
+  ) as WorkspaceUserRecord[] | undefined;
 
-  const updateTicket = useMutation(api.tickets.update);
-  const addComment = useMutation(api.tickets.addComment);
-  const resolveTicket = useMutation(api.tickets.resolve);
+  const updateTicket = useMutation(updateTicketMutationRef);
+  const addComment = useMutation(addCommentMutationRef);
+  const resolveTicket = useMutation(resolveTicketMutationRef);
 
   const handleStatusChange = async (newStatus: TicketStatus) => {
     if (!ticketId) return;
@@ -236,8 +320,7 @@ function TicketDetailContent(): React.JSX.Element | null {
 
             {/* Comments */}
             <div className="space-y-4 mb-6">
-              {ticket.comments?.map(
-                (comment: NonNullable<NonNullable<typeof ticket>["comments"]>[number]) => (
+              {ticket.comments?.map((comment) => (
                   <div
                     key={comment._id}
                     className={`p-3 rounded-lg ${
@@ -266,8 +349,7 @@ function TicketDetailContent(): React.JSX.Element | null {
                     </div>
                     <p className="text-sm">{comment.content}</p>
                   </div>
-                )
-              )}
+                ))}
 
               {(!ticket.comments || ticket.comments.length === 0) && !ticket.description && (
                 <p className="text-muted-foreground text-center py-4">No activity yet</p>
@@ -390,7 +472,7 @@ function TicketDetailContent(): React.JSX.Element | null {
                   className="w-full border rounded-md px-2 py-1 text-sm mt-1"
                 >
                   <option value="">Unassigned</option>
-                  {workspaceUsers?.map((member: NonNullable<typeof workspaceUsers>[number]) => (
+                  {workspaceUsers?.map((member) => (
                     <option key={member._id} value={member.userId}>
                       {member.name || member.email}
                     </option>

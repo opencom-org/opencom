@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -22,6 +20,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
+import { useCampaignsPageConvex } from "./hooks/useCampaignsPageConvex";
 
 type CampaignTab = "email" | "push" | "carousels" | "series";
 
@@ -31,45 +30,27 @@ function CampaignsContent() {
   const [activeTab, setActiveTab] = useState<CampaignTab>("email");
   const [searchQuery, setSearchQuery] = useState("");
   const [carouselActionError, setCarouselActionError] = useState<string | null>(null);
-
-  const emailCampaigns = useQuery(
-    api.emailCampaigns.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const pushCampaigns = useQuery(
-    api.pushCampaigns.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const carousels = useQuery(
-    api.carousels.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const seriesList = useQuery(
-    api.series.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createEmailCampaign = useMutation(api.emailCampaigns.create);
-  const createPushCampaign = useMutation(api.pushCampaigns.create);
-  const createCarousel = useMutation(api.carousels.create);
-  const createSeries = useMutation(api.series.create);
-  const duplicateCarousel = useMutation(api.carousels.duplicate);
-
-  const deleteEmailCampaign = useMutation(api.emailCampaigns.remove);
-  const deletePushCampaign = useMutation(api.pushCampaigns.remove);
-  const deleteCarousel = useMutation(api.carousels.remove);
-  const deleteSeries = useMutation(api.series.remove);
-
-  const pauseEmailCampaign = useMutation(api.emailCampaigns.pause);
-  const pausePushCampaign = useMutation(api.pushCampaigns.pause);
-  const pauseCarousel = useMutation(api.carousels.pause);
-  const pauseSeries = useMutation(api.series.pause);
-
-  const activateCarousel = useMutation(api.carousels.activate);
-  const activateSeries = useMutation(api.series.activate);
+  const {
+    activateCarousel,
+    activateSeries,
+    carousels,
+    createCarousel,
+    createEmailCampaign,
+    createPushCampaign,
+    createSeries,
+    deleteCarousel,
+    deleteEmailCampaign,
+    deletePushCampaign,
+    deleteSeries,
+    duplicateCarousel,
+    emailCampaigns,
+    pauseCarousel,
+    pauseEmailCampaign,
+    pausePushCampaign,
+    pauseSeries,
+    pushCampaigns,
+    seriesList,
+  } = useCampaignsPageConvex(activeWorkspace?._id);
 
   const handleDeleteCarousel = async (id: Id<"carousels">) => {
     setCarouselActionError(null);

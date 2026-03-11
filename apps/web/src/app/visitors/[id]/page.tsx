@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, Button } from "@opencom/ui";
@@ -10,6 +10,59 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
+
+type VisitorDetailRecord = {
+  _id: Id<"visitors">;
+  readableId?: string;
+  name?: string;
+  email?: string;
+  externalUserId?: string;
+  sessionId?: string;
+  lastActiveAt?: number;
+  isOnline: boolean;
+  referrer?: string;
+  currentUrl?: string;
+  customAttributes?: Record<string, unknown>;
+  location?: { city?: string; region?: string; country?: string };
+  device?: { deviceType?: string; os?: string; browser?: string };
+};
+
+type VisitorLinkedConversationRecord = {
+  _id: Id<"conversations">;
+  subject?: string;
+  status?: string;
+  channel?: string;
+  lastMessagePreview?: string;
+};
+
+type VisitorLinkedTicketRecord = {
+  _id: Id<"tickets">;
+  subject: string;
+  status: string;
+  priority: string;
+};
+
+type VisitorDirectoryDetailResult =
+  | {
+      status: "ok";
+      visitor: VisitorDetailRecord;
+      resourceAccess: { conversations: boolean; tickets: boolean };
+      linkedConversations: VisitorLinkedConversationRecord[];
+      linkedTickets: VisitorLinkedTicketRecord[];
+    }
+  | {
+      status: "not_found" | "unauthenticated" | "forbidden";
+      visitor: null;
+      resourceAccess: { conversations: boolean; tickets: boolean };
+      linkedConversations: [];
+      linkedTickets: [];
+    };
+
+const visitorDetailQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors"> },
+  VisitorDirectoryDetailResult
+>("visitors:getDirectoryDetail");
 
 function unknown(value?: string): string {
   const normalized = value?.trim();
@@ -25,9 +78,9 @@ function VisitorDetailContent(): React.JSX.Element | null {
   const visitorId = params.id as Id<"visitors">;
 
   const detail = useQuery(
-    api.visitors.getDirectoryDetail,
+    visitorDetailQueryRef,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id, visitorId } : "skip"
-  );
+  ) as VisitorDirectoryDetailResult | undefined;
 
   if (!user || !activeWorkspace) {
     return null;

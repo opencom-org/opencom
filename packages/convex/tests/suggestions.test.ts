@@ -21,16 +21,16 @@ describe("suggestions", () => {
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
     // Create test article
-    testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+    testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
       workspaceId: testWorkspaceId,
       title: "How to reset your password",
       content:
         "To reset your password, go to Settings > Security > Reset Password. Click the reset button and follow the instructions sent to your email.",
     });
-    await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+    await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
     // Create test snippet
-    testSnippetId = await client.mutation(api.testing.helpers.createTestSnippet, {
+    testSnippetId = await client.mutation(api.testing_helpers.createTestSnippet, {
       workspaceId: testWorkspaceId,
       name: "Password Reset Response",
       content:
@@ -38,14 +38,14 @@ describe("suggestions", () => {
     });
 
     // Create test visitor
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorId = visitor.visitorId;
 
     // Create test conversation
     const conversation = await client.mutation(
-      api.testing.helpers.createTestConversationForVisitor,
+      api.testing_helpers.createTestConversationForVisitor,
       {
         workspaceId: testWorkspaceId,
         visitorId: testVisitorId,
@@ -54,7 +54,7 @@ describe("suggestions", () => {
     testConversationId = conversation!._id;
 
     // Add a message to the conversation
-    await client.mutation(api.testing.helpers.sendTestMessageDirect, {
+    await client.mutation(api.testing_helpers.sendTestMessageDirect, {
       conversationId: testConversationId,
       senderId: testVisitorId,
       senderType: "visitor",
@@ -62,7 +62,7 @@ describe("suggestions", () => {
     });
 
     // Enable suggestions in settings
-    await client.mutation(api.testing.helpers.updateTestAISettings, {
+    await client.mutation(api.testing_helpers.updateTestAISettings, {
       workspaceId: testWorkspaceId,
       enabled: true,
       suggestionsEnabled: true,
@@ -72,7 +72,7 @@ describe("suggestions", () => {
 
   afterAll(async () => {
     if (client) {
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: testWorkspaceId,
       });
       await client.close();
@@ -132,13 +132,13 @@ describe("aiAgent settings with suggestions", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (client) {
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: testWorkspaceId,
       });
       await client.close();
@@ -146,7 +146,7 @@ describe("aiAgent settings with suggestions", () => {
   });
 
   it("should return default suggestionsEnabled as false", async () => {
-    const settings = await client.mutation(api.testing.helpers.getTestAISettings, {
+    const settings = await client.mutation(api.testing_helpers.getTestAISettings, {
       workspaceId: testWorkspaceId,
     });
 
@@ -155,12 +155,12 @@ describe("aiAgent settings with suggestions", () => {
   });
 
   it("should update suggestionsEnabled setting", async () => {
-    await client.mutation(api.testing.helpers.updateTestAISettings, {
+    await client.mutation(api.testing_helpers.updateTestAISettings, {
       workspaceId: testWorkspaceId,
       suggestionsEnabled: true,
     });
 
-    const settings = await client.mutation(api.testing.helpers.getTestAISettings, {
+    const settings = await client.mutation(api.testing_helpers.getTestAISettings, {
       workspaceId: testWorkspaceId,
     });
 

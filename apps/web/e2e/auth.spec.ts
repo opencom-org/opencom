@@ -280,7 +280,9 @@ test.describe("Authentication - Signup Flows", () => {
     }
 
     // Check if we need to switch to password signup mode
-    const passwordSignupButton = page.getByRole("button", { name: /sign up with password/i });
+    const passwordSignupButton = page
+      .getByRole("button", { name: /sign up with password/i })
+      .or(page.getByRole("button", { name: /^password$/i }));
     if (await passwordSignupButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await passwordSignupButton.click();
       await page.waitForTimeout(1000);
@@ -302,8 +304,8 @@ test.describe("Authentication - Signup Flows", () => {
       await workspaceField.fill(`Auth Test Workspace ${Date.now()}`);
     }
 
-    // Submit signup - look for sign up button
-    await page.getByRole("button", { name: /sign up$/i }).click();
+    // Submit signup - current UI uses "Create Account" for password signup.
+    await page.getByRole("button", { name: /create account|sign up$/i }).click();
 
     // After signup, user should land in an authenticated area (inbox/dashboard/onboarding)
     // or on login if email verification/sign-in is still required.

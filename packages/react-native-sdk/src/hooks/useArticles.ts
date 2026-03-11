@@ -1,21 +1,25 @@
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
-import { getVisitorState } from "@opencom/sdk-core";
-import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id, Doc } from "@opencom/convex/dataModel";
+import { sdkQueryRef, useSdkQuery } from "../internal/convex";
+import { hasVisitorWorkspaceTransport } from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
 
 type Article = Doc<"articles">;
 
-export function useArticles() {
-  const { workspaceId } = useOpencomContext();
-  const state = getVisitorState();
-  const visitorId = state.visitorId;
-  const sessionToken = state.sessionToken;
+const LIST_ARTICLES_REF = sdkQueryRef("articles:listForVisitor");
+const SEARCH_ARTICLES_REF = sdkQueryRef("articles:searchForVisitor");
+const GET_ARTICLE_REF = sdkQueryRef("articles:get");
 
-  const articles = useQuery(
-    api.articles.listForVisitor,
-    visitorId && sessionToken && workspaceId
-      ? { workspaceId: workspaceId as Id<"workspaces">, visitorId, sessionToken }
+export function useArticles() {
+  const transport = useSdkTransportContext();
+
+  const articles = useSdkQuery<Article[]>(
+    LIST_ARTICLES_REF,
+    hasVisitorWorkspaceTransport(transport)
+      ? {
+          workspaceId: transport.workspaceId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+        }
       : "skip"
   );
 
@@ -26,15 +30,17 @@ export function useArticles() {
 }
 
 export function useArticleSearch(query: string) {
-  const { workspaceId } = useOpencomContext();
-  const state = getVisitorState();
-  const visitorId = state.visitorId;
-  const sessionToken = state.sessionToken;
+  const transport = useSdkTransportContext();
 
-  const results = useQuery(
-    api.articles.searchForVisitor,
-    visitorId && sessionToken && query.length >= 2 && workspaceId
-      ? { workspaceId: workspaceId as Id<"workspaces">, visitorId, sessionToken, query }
+  const results = useSdkQuery<Article[]>(
+    SEARCH_ARTICLES_REF,
+    query.length >= 2 && hasVisitorWorkspaceTransport(transport)
+      ? {
+          workspaceId: transport.workspaceId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+          query,
+        }
       : "skip"
   );
 
@@ -45,7 +51,10 @@ export function useArticleSearch(query: string) {
 }
 
 export function useArticle(articleId: Id<"articles"> | null) {
-  const article = useQuery(api.articles.get, articleId ? { id: articleId } : "skip");
+  const article = useSdkQuery<Article | null>(
+    GET_ARTICLE_REF,
+    articleId ? { id: articleId } : "skip"
+  );
 
   return {
     article: article ?? null,

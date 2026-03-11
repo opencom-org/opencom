@@ -1,121 +1,80 @@
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
-import { getVisitorState } from "@opencom/sdk-core";
-import { useOpencomContext } from "../components/OpencomProvider";
+import type {
+  EligibleOutboundMessage,
+  OutboundClickAction,
+} from "@opencom/types";
 import type { Id } from "@opencom/convex/dataModel";
+import { sdkMutationRef, sdkQueryRef, useSdkMutation, useSdkQuery } from "../internal/convex";
+import { hasVisitorWorkspaceTransport } from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
+
+const ELIGIBLE_MESSAGES_REF = sdkQueryRef("outboundMessages:getEligible");
+const TRACK_IMPRESSION_REF = sdkMutationRef("outboundMessages:trackImpression");
 
 export type OutboundMessageId = Id<"outboundMessages">;
 
-export type ClickActionType =
-  | "open_messenger"
-  | "open_new_conversation"
-  | "open_widget_tab"
-  | "open_help_article"
-  | "open_url"
-  | "dismiss";
+export type ClickActionType = OutboundClickAction<Id<"articles">>["type"];
+export type ClickAction = OutboundClickAction<Id<"articles">>;
 
-export interface ClickAction {
-  type: ClickActionType;
-  tabId?: string;
-  articleId?: Id<"articles">;
-  url?: string;
-  prefillMessage?: string;
-}
-
-export interface OutboundMessageContent {
-  text?: string;
-  title?: string;
-  body?: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  style?: "inline" | "floating";
-  dismissible?: boolean;
-  buttons?: Array<{
-    text: string;
-    action:
-      | "url"
-      | "dismiss"
-      | "tour"
-      | "reply"
-      | "chat"
-      | "open_new_conversation"
-      | "open_help_article"
-      | "open_widget_tab";
-    url?: string;
-    articleId?: Id<"articles">;
-    tabId?: string;
-    prefillMessage?: string;
-  }>;
-  clickAction?: ClickAction;
-}
-
-export interface OutboundMessageData {
-  _id: OutboundMessageId;
-  type: "chat" | "post" | "banner";
-  name: string;
-  content: OutboundMessageContent;
-  triggers?: {
-    type: "immediate" | "page_visit" | "time_on_page" | "scroll_depth" | "event";
-    delaySeconds?: number;
-  };
-  priority?: number;
-}
+export type OutboundMessageData = EligibleOutboundMessage<
+  OutboundMessageId,
+  Id<"users">,
+  Id<"tours">,
+  Id<"articles">
+>;
 
 export function useOutboundMessages(currentUrl: string = "") {
-  const { workspaceId } = useOpencomContext();
-  const state = getVisitorState();
-  const visitorId = state.visitorId;
-  const sessionId = state.sessionId;
-  const sessionToken = state.sessionToken;
+  const transport = useSdkTransportContext();
 
-  const messages = useQuery(
-    api.outboundMessages.getEligible,
-    visitorId && workspaceId && sessionToken
+  const messages = useSdkQuery<OutboundMessageData[]>(
+    ELIGIBLE_MESSAGES_REF,
+    hasVisitorWorkspaceTransport(transport)
       ? {
-          workspaceId: workspaceId as Id<"workspaces">,
-          visitorId,
-          sessionToken,
+          workspaceId: transport.workspaceId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
           currentUrl,
-          sessionId,
+          sessionId: transport.sessionId,
         }
       : "skip"
   );
 
-  const trackImpressionMutation = useMutation(api.outboundMessages.trackImpression);
+  const trackImpressionMutation = useSdkMutation<Record<string, unknown>, unknown>(
+    TRACK_IMPRESSION_REF
+  );
 
   const markAsSeen = async (messageId: OutboundMessageId): Promise<void> => {
-    if (!visitorId || !sessionToken) return;
+    if (!transport.visitorId || !transport.sessionToken) return;
 
     await trackImpressionMutation({
       messageId,
-      visitorId,
-      sessionToken,
-      sessionId,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken,
+      sessionId: transport.sessionId,
       action: "shown",
     });
   };
 
   const trackClick = async (messageId: OutboundMessageId, buttonIndex?: number): Promise<void> => {
-    if (!visitorId || !sessionToken) return;
+    if (!transport.visitorId || !transport.sessionToken) return;
 
     await trackImpressionMutation({
       messageId,
-      visitorId,
-      sessionToken,
-      sessionId,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken,
+      sessionId: transport.sessionId,
       action: "clicked",
       buttonIndex,
     });
   };
 
   const trackDismiss = async (messageId: OutboundMessageId): Promise<void> => {
-    if (!visitorId || !sessionToken) return;
+    if (!transport.visitorId || !transport.sessionToken) return;
 
     await trackImpressionMutation({
       messageId,
-      visitorId,
-      sessionToken,
-      sessionId,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken,
+      sessionId: transport.sessionId,
       action: "dismissed",
     });
   };

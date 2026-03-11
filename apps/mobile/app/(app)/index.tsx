@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native";
 import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
+import { makeFunctionReference } from "convex/server";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { router } from "expo-router";
 import { useState, useCallback } from "react";
@@ -25,8 +25,26 @@ interface ConversationItem {
   } | null;
 }
 
+type InboxPageResult =
+  | ConversationItem[]
+  | {
+      conversations: ConversationItem[];
+    };
+
+const visitorIsOnlineQueryRef = makeFunctionReference<
+  "query",
+  { visitorId: Id<"visitors"> },
+  boolean
+>("visitors:isOnline");
+
+const inboxListQueryRef = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces">; status?: "open" | "closed" | "snoozed" },
+  InboxPageResult
+>("conversations:listForInbox");
+
 function PresenceIndicator({ visitorId }: { visitorId: string }) {
-  const isOnline = useQuery(api.visitors.isOnline, { visitorId: visitorId as Id<"visitors"> });
+  const isOnline = useQuery(visitorIsOnlineQueryRef, { visitorId: visitorId as Id<"visitors"> });
   return (
     <View
       style={[styles.presenceIndicator, isOnline ? styles.presenceOnline : styles.presenceOffline]}
@@ -97,9 +115,9 @@ export default function InboxScreen() {
   );
 
   const inboxPage = useQuery(
-    api.conversations.listForInbox,
+    inboxListQueryRef,
     activeWorkspaceId ? { workspaceId: activeWorkspaceId, status: statusFilter } : "skip"
-  );
+  ) as InboxPageResult | undefined;
   const conversations = (Array.isArray(inboxPage) ? inboxPage : inboxPage?.conversations) as
     | ConversationItem[]
     | undefined;
