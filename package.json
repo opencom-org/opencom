@@ -88,7 +88,7 @@
       "glob@13.0.0>minimatch": "10.2.3",
       "glob@10.5.0>minimatch": "10.2.3",
       "rollup": "4.59.0",
-      "tar": "7.5.10",
+      "tar": "7.5.11",
       "@react-native-community/cli": "17.0.1",
       "@react-native-community/cli-server-api": "17.0.1",
       "@react-native-community/cli-tools": "17.0.1",
