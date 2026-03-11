@@ -1,9 +1,10 @@
-import { anyApi, makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id, Doc } from "./_generated/dataModel";
 import { evaluateRuleWithSegmentSupport, validateAudienceRule } from "./audienceRules";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
+import { routeEventRef } from "./notifications/functionRefs";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
@@ -17,6 +18,71 @@ import {
   outboundMessageTriggerValidator,
   outboundMessageTypeValidator,
 } from "./outboundContracts";
+
+type ConvexRef<
+  Type extends "query" | "mutation",
+  Visibility extends "internal" | "public",
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<Type, Visibility, Args, Return>;
+
+type GetOutboundMessageArgs = {
+  id: Id<"outboundMessages">;
+};
+
+type GetEligibleVisitorsForPushArgs = {
+  workspaceId: Id<"workspaces">;
+  targeting?: Doc<"outboundMessages">["targeting"];
+};
+
+type EligibleVisitorForPush = {
+  visitorId: Id<"visitors">;
+  token: string;
+};
+
+const GET_OUTBOUND_MESSAGE_REF = makeFunctionReference<
+  "query",
+  GetOutboundMessageArgs,
+  Doc<"outboundMessages"> | null
+>("outboundMessages:get") as unknown as ConvexRef<
+  "query",
+  "public",
+  GetOutboundMessageArgs,
+  Doc<"outboundMessages"> | null
+>;
+
+const GET_ELIGIBLE_VISITORS_FOR_PUSH_REF = makeFunctionReference<
+  "query",
+  GetEligibleVisitorsForPushArgs,
+  EligibleVisitorForPush[]
+>("outboundMessages:getEligibleVisitorsForPush") as unknown as ConvexRef<
+  "query",
+  "public",
+  GetEligibleVisitorsForPushArgs,
+  EligibleVisitorForPush[]
+>;
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    queryRef: ConvexRef<"query", Visibility, Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return = unknown,
+  >(
+    mutationRef: ConvexRef<"mutation", Visibility, Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
+}
 
 // Task 2.1: Create outbound message
 export const create = authMutation({
@@ -407,25 +473,12 @@ export const sendPushForCampaign = authAction({
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
     // Keep call signatures shallow to avoid downstream deep type instantiation in app typechecks.
-    const runQuery = ctx.runQuery as unknown as (
-      queryRef: unknown,
-      queryArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const runMutation = ctx.runMutation as unknown as (
-      mutationRef: unknown,
-      mutationArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const unsafeApi = anyApi as unknown as {
-      outboundMessages: { getEligibleVisitorsForPush: unknown };
-    };
-    const unsafeInternal = anyApi as unknown as {
-      notifications: { routeEvent: unknown };
-    };
+    const runQuery = getShallowRunQuery(ctx);
+    const runMutation = getShallowRunMutation(ctx);
 
-    const getOutboundMessageRef = makeFunctionReference("outboundMessages:get");
-    const message = (await runQuery(getOutboundMessageRef, {
+    const message = await runQuery(GET_OUTBOUND_MESSAGE_REF, {
       id: args.messageId,
-    })) as Doc<"outboundMessages"> | null;
+    });
     if (!message) throw new Error("Message not found");
     if (message.status !== "active") throw new Error("Message must be active to send push");
 
@@ -442,19 +495,19 @@ export const sendPushForCampaign = authAction({
     }
 
     // Get eligible visitors based on targeting
-    const eligibleVisitors = (await runQuery(unsafeApi.outboundMessages.getEligibleVisitorsForPush, {
+    const eligibleVisitors = await runQuery(GET_ELIGIBLE_VISITORS_FOR_PUSH_REF, {
       workspaceId: message.workspaceId,
       targeting: message.targeting,
-    })) as Array<{ visitorId: Id<"visitors"> }>;
+    });
 
     if (eligibleVisitors.length === 0) {
       return { success: true, sent: 0, message: "No eligible visitors with push tokens" };
     }
 
     const visitorIds = Array.from(
-      new Set(eligibleVisitors.map((visitor: { visitorId: Id<"visitors"> }) => visitor.visitorId))
+      new Set(eligibleVisitors.map((visitor) => visitor.visitorId))
     ) as Id<"visitors">[];
-    const routed = (await runMutation(unsafeInternal.notifications.routeEvent, {
+    const routed = (await runMutation(routeEventRef, {
       eventType: "outbound_message",
       domain: "outbound",
       audience: "visitor",
