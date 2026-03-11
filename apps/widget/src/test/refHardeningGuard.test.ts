@@ -32,7 +32,7 @@ const APPROVED_DIRECT_CONVEX_BOUNDARY_FILES = [
 ];
 
 const DIRECT_CONVEX_IMPORT_PATTERN = /from "convex\/react"/;
-const DIRECT_REF_FACTORY_PATTERN = /makeFunctionReference\(/;
+const DIRECT_REF_FACTORY_PATTERN = /\bmakeFunctionReference(?:\s*<[\s\S]*?>)?\s*\(/;
 
 function collectSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -77,6 +77,19 @@ function findUnexpectedWidgetDirectConvexBoundaries(): string[] {
 }
 
 describe("widget ref hardening guards", () => {
+  it("flags direct makeFunctionReference calls with or without generic arguments", () => {
+    const bareCallSource = 'const ref = ' + 'makeFunctionReference' + '("foo:bar");';
+    const genericCallSource =
+      "const ref = " +
+      "makeFunctionReference" +
+      '<"query", { nested: FunctionReference<"query"> }, Result>("foo:bar");';
+
+    expect(DIRECT_REF_FACTORY_PATTERN.test(bareCallSource)).toBe(true);
+    expect(
+      DIRECT_REF_FACTORY_PATTERN.test(genericCallSource)
+    ).toBe(true);
+  });
+
   it("uses Convex supported function-name extraction in the shared helper", () => {
     const source = readFileSync(HELPER_PATH, "utf8");
 
