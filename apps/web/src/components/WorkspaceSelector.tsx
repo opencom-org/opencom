@@ -8,6 +8,12 @@ import { ChevronDown, Plus, Check, Building2 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 
+const CREATE_WORKSPACE_REF = makeFunctionReference<
+  "mutation",
+  { name: string },
+  Id<"workspaces">
+>("workspaces:create");
+
 export function WorkspaceSelector(): React.JSX.Element | null {
   const { workspaces, activeWorkspace, switchWorkspace } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -15,12 +21,7 @@ export function WorkspaceSelector(): React.JSX.Element | null {
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  const createWorkspaceRef = makeFunctionReference<
-    "mutation",
-    { name: string },
-    Id<"workspaces">
-  >("workspaces:create");
-  const createWorkspace = useMutation(createWorkspaceRef);
+  const createWorkspace = useMutation(CREATE_WORKSPACE_REF);
   const handleSelect = async (workspaceId: Id<"workspaces">) => {
     if (workspaceId !== activeWorkspace?._id) {
       await switchWorkspace(workspaceId);

@@ -73,6 +73,18 @@ const CORE_NAV_ITEMS: SidebarNavItem[] = [
   { href: "/audit-logs", label: "Audit Logs", icon: Shield },
 ];
 
+const INTEGRATION_SIGNALS_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  { integrations: Array<{ isActiveNow: boolean }> }
+>("workspaces:getHostedOnboardingIntegrationSignals");
+
+const SIDEBAR_CONVERSATIONS_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Array<{ _id: string; unreadByAgent?: number }>
+>("conversations:list");
+
 interface AppSidebarProps {
   className?: string;
   onNavigate?: () => void;
@@ -89,22 +101,12 @@ export function AppSidebar({
   const pathname = usePathname();
   const { activeWorkspace, logout, user } = useAuth();
   const isAdmin = activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin";
-  const integrationSignalsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { integrations: Array<{ isActiveNow: boolean }> }
-  >("workspaces:getHostedOnboardingIntegrationSignals");
-  const sidebarConversationsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{ _id: string; unreadByAgent?: number }>
-  >("conversations:list");
   const integrationSignals = useQuery(
-    integrationSignalsQuery,
+    INTEGRATION_SIGNALS_QUERY,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
   const sidebarConversations = useQuery(
-    sidebarConversationsQuery,
+    SIDEBAR_CONVERSATIONS_QUERY,
     activeWorkspace?._id && isAdmin ? { workspaceId: activeWorkspace._id } : "skip"
   );
   const inboxCuePreferencesRef = useRef<{

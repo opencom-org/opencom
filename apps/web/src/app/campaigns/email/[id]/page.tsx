@@ -63,43 +63,48 @@ type SendCampaignResult = {
   recipientCount: number;
 };
 
+const CAMPAIGN_QUERY = makeFunctionReference<
+  "query",
+  { id: Id<"emailCampaigns"> },
+  EmailCampaignRecord | null
+>("emailCampaigns:get");
+
+const CAMPAIGN_STATS_QUERY = makeFunctionReference<
+  "query",
+  { id: Id<"emailCampaigns"> },
+  EmailCampaignStats
+>("emailCampaigns:getStats");
+
+const EVENT_NAMES_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  string[]
+>("events:getDistinctNames");
+
+const UPDATE_CAMPAIGN_REF = makeFunctionReference<
+  "mutation",
+  UpdateCampaignArgs,
+  Id<"emailCampaigns">
+>("emailCampaigns:update");
+
+const SEND_CAMPAIGN_REF = makeFunctionReference<"mutation", SendCampaignArgs, SendCampaignResult>(
+  "emailCampaigns:send"
+);
+
 function EmailCampaignEditor() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as Id<"emailCampaigns">;
   const { activeWorkspace } = useAuth();
 
-  const campaignQuery = makeFunctionReference<
-    "query",
-    { id: Id<"emailCampaigns"> },
-    EmailCampaignRecord | null
-  >("emailCampaigns:get");
-
-  const campaignStatsQuery = makeFunctionReference<
-    "query",
-    { id: Id<"emailCampaigns"> },
-    EmailCampaignStats
-  >("emailCampaigns:getStats");
-
-  const eventNamesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    string[]
-  >("events:getDistinctNames");
-
-  const updateCampaignRef = makeFunctionReference<"mutation", UpdateCampaignArgs, Id<"emailCampaigns">>(
-    "emailCampaigns:update"
+  const campaign = useQuery(CAMPAIGN_QUERY, { id: campaignId });
+  const stats = useQuery(CAMPAIGN_STATS_QUERY, { id: campaignId });
+  const eventNames = useQuery(
+    EVENT_NAMES_QUERY,
+    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
-
-  const sendCampaignRef = makeFunctionReference<"mutation", SendCampaignArgs, SendCampaignResult>(
-    "emailCampaigns:send"
-  );
-
-  const campaign = useQuery(campaignQuery, { id: campaignId });
-  const stats = useQuery(campaignStatsQuery, { id: campaignId });
-  const eventNames = useQuery(eventNamesQuery, activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip");
-  const updateCampaign = useMutation(updateCampaignRef);
-  const sendCampaign = useMutation(sendCampaignRef);
+  const updateCampaign = useMutation(UPDATE_CAMPAIGN_REF);
+  const sendCampaign = useMutation(SEND_CAMPAIGN_REF);
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");

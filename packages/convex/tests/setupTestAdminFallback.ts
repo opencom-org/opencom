@@ -1,5 +1,10 @@
-import { ConvexClient } from "convex/browser";
-import { getFunctionName } from "convex/server";
+import { ConvexClient, type MutationOptions } from "convex/browser";
+import {
+  getFunctionName,
+  type FunctionArgs,
+  type FunctionReference,
+  type FunctionReturnType,
+} from "convex/server";
 
 const MISSING_PUBLIC_FUNCTION_TEXT = "Could not find public function";
 const TESTING_HELPERS_PREFIXES = ["testing/helpers:", "testing_helpers:"] as const;
@@ -62,30 +67,39 @@ function installMutationFallback() {
   }
   (globalThis as Record<string, unknown>)[marker] = true;
 
-  const originalMutation = ConvexClient.prototype.mutation as unknown as (
+  type ConvexMutationMethod = <Mutation extends FunctionReference<"mutation">>(
     this: ConvexClient,
-    mutation: unknown,
-    ...args: unknown[]
-  ) => Promise<unknown>;
-  ConvexClient.prototype.mutation = async function patchedMutation(
+    mutation: Mutation,
+    args: FunctionArgs<Mutation>,
+    options?: MutationOptions
+  ) => Promise<Awaited<FunctionReturnType<Mutation>>>;
+
+  const originalMutation = ConvexClient.prototype.mutation as ConvexMutationMethod;
+  ConvexClient.prototype.mutation = async function patchedMutation<
+    Mutation extends FunctionReference<"mutation">,
+  >(
     this: ConvexClient,
-    mutation: unknown,
-    ...args: unknown[]
-  ) {
+    mutation: Mutation,
+    args: FunctionArgs<Mutation>,
+    options?: MutationOptions
+  ): Promise<Awaited<FunctionReturnType<Mutation>>> {
     const functionName = maybeGetFunctionName(mutation);
     if (!functionName || !TESTING_HELPERS_PREFIXES.some((prefix) => functionName.startsWith(prefix))) {
-      return originalMutation.call(this, mutation, ...args);
+      return originalMutation.call(this, mutation, args, options);
     }
 
     try {
-      return await originalMutation.call(this, mutation, ...args);
+      return await originalMutation.call(this, mutation, args, options);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!message.includes(MISSING_PUBLIC_FUNCTION_TEXT)) {
         throw error;
       }
-      const mutationArgs = (args[0] as Record<string, unknown> | undefined) ?? {};
-      return callInternalTestMutation(normalizeTestingHelperFunctionName(functionName), mutationArgs);
+      const mutationArgs = (args as Record<string, unknown> | undefined) ?? {};
+      return (await callInternalTestMutation(
+        normalizeTestingHelperFunctionName(functionName),
+        mutationArgs
+      )) as Awaited<FunctionReturnType<Mutation>>;
     }
   };
 }

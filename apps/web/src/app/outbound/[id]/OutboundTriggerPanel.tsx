@@ -9,6 +9,11 @@ interface OutboundTriggerPanelProps {
   onChange: (value: MessageTrigger) => void;
 }
 
+function parseOptionalInteger(value: string): number | undefined {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 export function OutboundTriggerPanel({ value, onChange }: OutboundTriggerPanelProps) {
   return (
     <div className="bg-white border rounded-lg p-6">
@@ -59,9 +64,9 @@ export function OutboundTriggerPanel({ value, onChange }: OutboundTriggerPanelPr
             <OutboundFieldLabel>Delay (seconds)</OutboundFieldLabel>
             <Input
               type="number"
-              value={value.delaySeconds || 5}
+              value={value.delaySeconds ?? 5}
               onChange={(e) =>
-                onChange({ ...value, delaySeconds: Number.parseInt(e.target.value, 10) })
+                onChange({ ...value, delaySeconds: parseOptionalInteger(e.target.value) })
               }
               min={1}
             />
@@ -73,9 +78,9 @@ export function OutboundTriggerPanel({ value, onChange }: OutboundTriggerPanelPr
             <OutboundFieldLabel>Scroll percentage</OutboundFieldLabel>
             <Input
               type="number"
-              value={value.scrollPercent || 50}
+              value={value.scrollPercent ?? 50}
               onChange={(e) =>
-                onChange({ ...value, scrollPercent: Number.parseInt(e.target.value, 10) })
+                onChange({ ...value, scrollPercent: parseOptionalInteger(e.target.value) })
               }
               min={1}
               max={100}

@@ -94,7 +94,13 @@ function renderPreview(
         >
           <p className="text-sm font-medium">{content.text || "Your banner text..."}</p>
           {content.dismissible !== false && (
-            <button className="text-white/80 hover:text-white">x</button>
+            <button
+              type="button"
+              className="text-white/80 hover:text-white"
+              aria-label="Dismiss banner"
+            >
+              x
+            </button>
           )}
         </div>
       );

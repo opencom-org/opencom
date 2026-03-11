@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const APP_DIR = dirname(fileURLToPath(import.meta.url));
+const WEB_SRC_DIR = resolve(APP_DIR, "..");
 
 const TEAM_MEMBERS_SETTINGS_PATH = resolve(APP_DIR, "settings/useTeamMembersSettings.ts");
 const WEB_CONVEX_ADAPTER_PATH = resolve(APP_DIR, "../lib/convex/hooks.ts");
@@ -63,7 +64,48 @@ const OUTBOUND_CONVEX_PATH = resolve(
 );
 const EMAIL_CAMPAIGN_PAGE_PATH = resolve(APP_DIR, "campaigns/email/[id]/page.tsx");
 
+const COMPONENT_SCOPED_CONVEX_REF_PATTERNS = [
+  /^\s{2,}(const|let)\s+\w+\s*=\s*(makeFunctionReference|web(?:Query|Mutation|Action)Ref|widget(?:Query|Mutation|Action)Ref)(?:<|\()/,
+  /use(?:Query|Mutation|Action)\(\s*(makeFunctionReference|web(?:Query|Mutation|Action)Ref|widget(?:Query|Mutation|Action)Ref)(?:<|\()/,
+];
+
+function collectSourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = resolve(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      return collectSourceFiles(entryPath);
+    }
+
+    if (!entry.isFile()) {
+      return [];
+    }
+
+    if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) {
+      return [];
+    }
+
+    const extension = extname(entry.name);
+    return extension === ".ts" || extension === ".tsx" ? [entryPath] : [];
+  });
+}
+
+function findComponentScopedConvexRefs(dir: string): string[] {
+  return collectSourceFiles(dir).flatMap((filePath) => {
+    const source = readFileSync(filePath, "utf8");
+    return source.split("\n").flatMap((line, index) =>
+      COMPONENT_SCOPED_CONVEX_REF_PATTERNS.some((pattern) => pattern.test(line))
+        ? [`${relative(WEB_SRC_DIR, filePath)}:${index + 1}`]
+        : []
+    );
+  });
+}
+
 describe("convex ref hardening guards", () => {
+  it("keeps web React files free of component-scoped convex ref factories", () => {
+    expect(findComponentScopedConvexRefs(WEB_SRC_DIR)).toEqual([]);
+  });
+
   it("keeps settings team-members on fixed refs without generic name helpers", () => {
     const source = readFileSync(TEAM_MEMBERS_SETTINGS_PATH, "utf8");
 
