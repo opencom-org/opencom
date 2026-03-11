@@ -68,7 +68,7 @@ export function ArticlesImportSection({
   onExportSourceChange,
   onExportMarkdown,
   onRestoreRun,
-}: ArticlesImportSectionProps) {
+}: ArticlesImportSectionProps): React.JSX.Element {
   return (
     <div className="mb-6 border rounded-lg bg-white p-4 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
