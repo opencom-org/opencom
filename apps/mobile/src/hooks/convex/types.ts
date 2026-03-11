@@ -90,6 +90,18 @@ export type HostedOnboardingIntegrationSignals = {
 } | null;
 
 export type MobileNotificationPreferencesRecord = {
+  defaults: {
+    newVisitorMessageEmail: boolean;
+    newVisitorMessagePush: boolean;
+  };
+  overrides: {
+    newVisitorMessageEmail: boolean | null;
+    newVisitorMessagePush: boolean | null;
+  };
+  effective: {
+    newVisitorMessageEmail: boolean;
+    newVisitorMessagePush: boolean;
+  };
   muted: boolean;
 } | null;
 
@@ -135,11 +147,10 @@ export interface MobileConversationItem {
   } | null;
 }
 
-export type MobileInboxPageResult =
-  | MobileConversationItem[]
-  | {
-      conversations: MobileConversationItem[];
-    };
+export type MobileInboxPageResult = {
+  conversations: MobileConversationItem[];
+  nextCursor: string | null;
+};
 
 export type MobileConversationRecord = {
   _id: Id<"conversations">;

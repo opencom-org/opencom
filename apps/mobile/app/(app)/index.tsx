@@ -77,9 +77,7 @@ export default function InboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<MobileConversationStatus | undefined>(undefined);
   const { inboxPage } = useInboxConvex({ workspaceId: activeWorkspaceId, status: statusFilter });
-  const conversations = (Array.isArray(inboxPage) ? inboxPage : inboxPage?.conversations) as
-    | ConversationItem[]
-    | undefined;
+  const conversations = inboxPage?.conversations as ConversationItem[] | undefined;
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
