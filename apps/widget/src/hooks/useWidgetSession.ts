@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { generateSessionId } from "../utils/session";
 import { detectDevice } from "../utils/device";
 import type { UserIdentification } from "../main";
+import { useWidgetMutation, widgetMutationRef } from "../lib/convex/hooks";
 
 interface UseWidgetSessionOptions {
   activeWorkspaceId: string | undefined;
@@ -32,26 +31,22 @@ type HostedOnboardingVerificationResult = {
   accepted: boolean;
 };
 
-const bootWidgetSessionMutationRef = makeFunctionReference<
-  "mutation",
+const bootWidgetSessionMutationRef = widgetMutationRef<
   Record<string, unknown>,
   BootSessionResult
 >("widgetSessions:boot");
 
-const refreshWidgetSessionMutationRef = makeFunctionReference<
-  "mutation",
+const refreshWidgetSessionMutationRef = widgetMutationRef<
   { sessionToken: string },
   RefreshSessionResult
 >("widgetSessions:refresh");
 
-const visitorHeartbeatMutationRef = makeFunctionReference<
-  "mutation",
+const visitorHeartbeatMutationRef = widgetMutationRef<
   { visitorId: Id<"visitors">; sessionToken?: string; origin: string },
   null
 >("visitors:heartbeat");
 
-const recordHostedOnboardingVerificationEventMutationRef = makeFunctionReference<
-  "mutation",
+const recordHostedOnboardingVerificationEventMutationRef = widgetMutationRef<
   { workspaceId: Id<"workspaces">; token: string; origin: string; currentUrl: string },
   HostedOnboardingVerificationResult
 >("workspaces:recordHostedOnboardingVerificationEvent");
@@ -76,10 +71,10 @@ export function useWidgetSession({
   const visitorIdRef = useRef<Id<"visitors"> | null>(null);
   visitorIdRef.current = visitorId;
 
-  const bootSession = useMutation(bootWidgetSessionMutationRef);
-  const refreshSession = useMutation(refreshWidgetSessionMutationRef);
-  const heartbeatMutation = useMutation(visitorHeartbeatMutationRef);
-  const recordHostedOnboardingVerificationEvent = useMutation(
+  const bootSession = useWidgetMutation(bootWidgetSessionMutationRef);
+  const refreshSession = useWidgetMutation(refreshWidgetSessionMutationRef);
+  const heartbeatMutation = useWidgetMutation(visitorHeartbeatMutationRef);
+  const recordHostedOnboardingVerificationEvent = useWidgetMutation(
     recordHostedOnboardingVerificationEventMutationRef
   );
   const lastRecordedVerificationTokenRef = useRef<string | null>(null);

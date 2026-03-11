@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { MessageCircle, Plus } from "./icons";
 import { Home as HomeComponent, useHomeConfig } from "./components/Home";
 import { ConversationList } from "./components/ConversationList";
@@ -38,6 +36,7 @@ import {
 } from "./widgetShell/helpers";
 import type { WidgetProps, WidgetView } from "./widgetShell/types";
 import { WidgetMainShell } from "./widgetShell/WidgetMainShell";
+import { useWidgetQuery, widgetQueryRef } from "./lib/convex/hooks";
 
 type ConversationListItem = {
   _id: Id<"conversations">;
@@ -192,20 +191,17 @@ type CommonIssueButtonRecord = {
   conversationStarter?: string;
 };
 
-const visitorConversationsQueryRef = makeFunctionReference<
-  "query",
+const visitorConversationsQueryRef = widgetQueryRef<
   { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
   ConversationListItem[]
 >("conversations:listByVisitor");
 
-const totalUnreadForVisitorQueryRef = makeFunctionReference<
-  "query",
+const totalUnreadForVisitorQueryRef = widgetQueryRef<
   { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
   number
 >("conversations:getTotalUnreadForVisitor");
 
-const articleSearchForVisitorQueryRef = makeFunctionReference<
-  "query",
+const articleSearchForVisitorQueryRef = widgetQueryRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -215,20 +211,17 @@ const articleSearchForVisitorQueryRef = makeFunctionReference<
   ArticleListItem[]
 >("articles:searchForVisitor");
 
-const articleListForVisitorQueryRef = makeFunctionReference<
-  "query",
+const articleListForVisitorQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
   ArticleListItem[]
 >("articles:listForVisitor");
 
-const collectionHierarchyForVisitorQueryRef = makeFunctionReference<
-  "query",
+const collectionHierarchyForVisitorQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
   CollectionHierarchyItem[]
 >("collections:listHierarchyForVisitor");
 
-const articleGetForVisitorQueryRef = makeFunctionReference<
-  "query",
+const articleGetForVisitorQueryRef = widgetQueryRef<
   {
     id: Id<"articles">;
     workspaceId: Id<"workspaces">;
@@ -238,32 +231,27 @@ const articleGetForVisitorQueryRef = makeFunctionReference<
   ArticleListItem | null
 >("articles:getForVisitor");
 
-const automationSettingsQueryRef = makeFunctionReference<
-  "query",
+const automationSettingsQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces"> },
   AutomationSettingsRecord
 >("automationSettings:getOrCreate");
 
-const commonIssueButtonsQueryRef = makeFunctionReference<
-  "query",
+const commonIssueButtonsQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces"> },
   CommonIssueButtonRecord[]
 >("commonIssueButtons:list");
 
-const officeHoursOpenQueryRef = makeFunctionReference<
-  "query",
+const officeHoursOpenQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces"> },
   OfficeHoursStatusRecord
 >("officeHours:isCurrentlyOpen");
 
-const expectedReplyTimeQueryRef = makeFunctionReference<
-  "query",
+const expectedReplyTimeQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces"> },
   string
 >("officeHours:getExpectedReplyTime");
 
-const availableToursQueryRef = makeFunctionReference<
-  "query",
+const availableToursQueryRef = widgetQueryRef<
   {
     visitorId: Id<"visitors">;
     workspaceId: Id<"workspaces">;
@@ -273,26 +261,22 @@ const availableToursQueryRef = makeFunctionReference<
   TourListItem[]
 >("tourProgress:getAvailableTours");
 
-const allToursQueryRef = makeFunctionReference<
-  "query",
+const allToursQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
   TourListItem[]
 >("tours:listAll");
 
-const eligibleChecklistsQueryRef = makeFunctionReference<
-  "query",
+const eligibleChecklistsQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
   EligibleChecklistItem[]
 >("checklists:getEligible");
 
-const activeSurveysQueryRef = makeFunctionReference<
-  "query",
+const activeSurveysQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
   ActiveSurveyRecord[]
 >("surveys:getActiveSurveys");
 
-const availableTooltipsQueryRef = makeFunctionReference<
-  "query",
+const availableTooltipsQueryRef = widgetQueryRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -424,7 +408,7 @@ export function Widget({
   });
 
   // ── Queries ────────────────────────────────────────────────────────
-  const visitorConversations = useQuery(
+  const visitorConversations = useWidgetQuery(
     visitorConversationsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
@@ -472,7 +456,7 @@ export function Widget({
     onTabChange: setActiveTab,
   });
 
-  const totalUnread = useQuery(
+  const totalUnread = useWidgetQuery(
     totalUnreadForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
@@ -487,7 +471,7 @@ export function Widget({
     return Number.isFinite(parsedCount) && parsedCount > 0 ? Math.floor(parsedCount) : 0;
   }, [totalUnread]);
 
-  const articleSearchResults = useQuery(
+  const articleSearchResults = useWidgetQuery(
     articleSearchForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken && articleSearchQuery.length >= 2
       ? {
@@ -500,13 +484,13 @@ export function Widget({
   ) as ArticleListItem[] | undefined;
 
   // List published articles for browsing (when not searching), filtered by visitor audience
-  const publishedArticles = useQuery(
+  const publishedArticles = useWidgetQuery(
     articleListForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
   ) as ArticleListItem[] | undefined;
-  const publishedCollections = useQuery(
+  const publishedCollections = useWidgetQuery(
     collectionHierarchyForVisitorQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
@@ -525,7 +509,7 @@ export function Widget({
 
     return publishedArticles?.find((article) => article._id === selectedArticleId);
   }, [selectedArticleId, articleSearchResults, publishedArticles]);
-  const selectedArticleQuery = useQuery(
+  const selectedArticleQuery = useWidgetQuery(
     articleGetForVisitorQueryRef,
     isValidIdFormat &&
       selectedArticleId &&
@@ -548,30 +532,30 @@ export function Widget({
     selectedArticleQuery === undefined;
 
   // Automation settings for self-serve features (getOrCreate returns defaults for new workspaces)
-  const automationSettings = useQuery(
+  const automationSettings = useWidgetQuery(
     automationSettingsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
   ) as AutomationSettingsRecord | undefined;
 
   // Common issue buttons for quick actions
-  const commonIssueButtons = useQuery(
+  const commonIssueButtons = useWidgetQuery(
     commonIssueButtonsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
   ) as CommonIssueButtonRecord[] | undefined;
 
   // Office hours for reply time expectations
-  const officeHoursStatus = useQuery(
+  const officeHoursStatus = useWidgetQuery(
     officeHoursOpenQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
   ) as OfficeHoursStatusRecord | undefined;
 
-  const expectedReplyTime = useQuery(
+  const expectedReplyTime = useWidgetQuery(
     expectedReplyTimeQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
   ) as string | undefined;
 
   // Tour queries
-  const availableTours = useQuery(
+  const availableTours = useWidgetQuery(
     availableToursQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
@@ -583,7 +567,7 @@ export function Widget({
       : "skip"
   ) as TourListItem[] | undefined;
 
-  const allTours = useQuery(
+  const allTours = useWidgetQuery(
     allToursQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
@@ -591,14 +575,14 @@ export function Widget({
   ) as TourListItem[] | undefined;
 
   // Checklist query for showing empty state
-  const eligibleChecklists = useQuery(
+  const eligibleChecklists = useWidgetQuery(
     eligibleChecklistsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { workspaceId: activeWorkspaceId as Id<"workspaces">, visitorId, sessionToken }
       : "skip"
   ) as EligibleChecklistItem[] | undefined;
 
-  const activeSurveys = useQuery(
+  const activeSurveys = useWidgetQuery(
     activeSurveysQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {
@@ -612,7 +596,7 @@ export function Widget({
   const [displayedSurvey, setDisplayedSurvey] = useState<ActiveSurvey | null>(null);
 
   // Available tooltips based on audience rules and triggers
-  const availableTooltips = useQuery(
+  const availableTooltips = useWidgetQuery(
     availableTooltipsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? {

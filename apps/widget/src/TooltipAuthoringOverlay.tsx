@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { scoreSelectorQuality, type SelectorQualityMetadata } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { ErrorFeedbackBanner } from "./components/ErrorFeedbackBanner";
+import {
+  useWidgetMutation,
+  useWidgetQuery,
+  widgetMutationRef,
+  widgetQueryRef,
+} from "./lib/convex/hooks";
 
 interface TooltipAuthoringOverlayProps {
   token: string;
@@ -34,14 +38,12 @@ type TooltipSessionData =
       tooltip?: null;
     };
 
-const validateTooltipAuthoringSessionQueryRef = makeFunctionReference<
-  "query",
+const validateTooltipAuthoringSessionQueryRef = widgetQueryRef<
   { token: string; workspaceId: Id<"workspaces"> },
   TooltipSessionData | null
 >("tooltipAuthoringSessions:validate");
 
-const updateTooltipSelectorMutationRef = makeFunctionReference<
-  "mutation",
+const updateTooltipSelectorMutationRef = widgetMutationRef<
   {
     token: string;
     workspaceId: Id<"workspaces">;
@@ -51,8 +53,7 @@ const updateTooltipSelectorMutationRef = makeFunctionReference<
   null
 >("tooltipAuthoringSessions:updateSelector");
 
-const endTooltipAuthoringSessionMutationRef = makeFunctionReference<
-  "mutation",
+const endTooltipAuthoringSessionMutationRef = widgetMutationRef<
   { token: string; workspaceId: Id<"workspaces"> },
   null
 >("tooltipAuthoringSessions:end");
@@ -142,11 +143,14 @@ export function TooltipAuthoringOverlay({
   );
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const sessionData = useQuery(validateTooltipAuthoringSessionQueryRef, { token, workspaceId }) as
+  const sessionData = useWidgetQuery(validateTooltipAuthoringSessionQueryRef, {
+    token,
+    workspaceId,
+  }) as
     | TooltipSessionData
     | undefined;
-  const updateSelectorMutation = useMutation(updateTooltipSelectorMutationRef);
-  const endSessionMutation = useMutation(endTooltipAuthoringSessionMutationRef);
+  const updateSelectorMutation = useWidgetMutation(updateTooltipSelectorMutationRef);
+  const endSessionMutation = useWidgetMutation(endTooltipAuthoringSessionMutationRef);
 
   const tooltip = sessionData?.valid ? sessionData.tooltip : null;
 

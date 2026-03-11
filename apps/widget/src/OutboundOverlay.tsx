@@ -1,6 +1,4 @@
 import { useState, useEffect, useCallback, useRef, useMemo, type MouseEvent } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { X } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
 import type {
@@ -8,6 +6,12 @@ import type {
   OutboundClickAction,
 } from "@opencom/types";
 import { safeOpenUrl } from "./utils/safeOpenUrl";
+import {
+  useWidgetMutation,
+  useWidgetQuery,
+  widgetMutationRef,
+  widgetQueryRef,
+} from "./lib/convex/hooks";
 
 type ClickAction = OutboundClickAction<Id<"articles">>;
 type OutboundMessage = EligibleOutboundMessage<
@@ -17,8 +21,7 @@ type OutboundMessage = EligibleOutboundMessage<
   Id<"articles">
 >;
 
-const eligibleOutboundMessagesQueryRef = makeFunctionReference<
-  "query",
+const eligibleOutboundMessagesQueryRef = widgetQueryRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -29,8 +32,7 @@ const eligibleOutboundMessagesQueryRef = makeFunctionReference<
   OutboundMessage[]
 >("outboundMessages:getEligible");
 
-const trackOutboundImpressionMutationRef = makeFunctionReference<
-  "mutation",
+const trackOutboundImpressionMutationRef = widgetMutationRef<
   {
     messageId: Id<"outboundMessages">;
     visitorId: Id<"visitors">;
@@ -97,7 +99,7 @@ export function OutboundOverlay({
   const [timeOnPage, setTimeOnPage] = useState(0);
   const staggerTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const eligibleMessages = useQuery(eligibleOutboundMessagesQueryRef, {
+  const eligibleMessages = useWidgetQuery(eligibleOutboundMessagesQueryRef, {
     workspaceId,
     visitorId,
     sessionToken: sessionToken ?? undefined,
@@ -105,7 +107,7 @@ export function OutboundOverlay({
     sessionId,
   }) as OutboundMessage[] | undefined;
 
-  const trackImpression = useMutation(trackOutboundImpressionMutationRef);
+  const trackImpression = useWidgetMutation(trackOutboundImpressionMutationRef);
 
   // Track scroll depth
   useEffect(() => {

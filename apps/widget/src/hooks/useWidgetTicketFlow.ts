@@ -1,10 +1,14 @@
 import { useCallback, useState, type MutableRefObject } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { normalizeTicketFormData } from "../widgetShell/helpers";
 import type { TicketFormData, WidgetView } from "../widgetShell/types";
+import {
+  useWidgetMutation,
+  useWidgetQuery,
+  widgetMutationRef,
+  widgetQueryRef,
+} from "../lib/convex/hooks";
 
 interface UseWidgetTicketFlowOptions {
   activeWorkspaceId?: string;
@@ -53,32 +57,27 @@ type TicketFormRecord = {
   fields: TicketField[];
 } | null;
 
-const visitorTicketsQueryRef = makeFunctionReference<
-  "query",
+const visitorTicketsQueryRef = widgetQueryRef<
   { visitorId: Id<"visitors">; sessionToken: string; workspaceId: Id<"workspaces"> },
   VisitorTicketRecord[]
 >("tickets:listByVisitor");
 
-const ticketGetQueryRef = makeFunctionReference<
-  "query",
+const ticketGetQueryRef = widgetQueryRef<
   { id: Id<"tickets">; visitorId?: Id<"visitors">; sessionToken?: string },
   TicketDetailRecord | null
 >("tickets:get");
 
-const defaultTicketFormQueryRef = makeFunctionReference<
-  "query",
+const defaultTicketFormQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces"> },
   TicketFormRecord
 >("ticketForms:getDefaultForVisitor");
 
-const addTicketCommentMutationRef = makeFunctionReference<
-  "mutation",
+const addTicketCommentMutationRef = widgetMutationRef<
   { ticketId: Id<"tickets">; visitorId: Id<"visitors">; content: string; sessionToken?: string },
   null
 >("tickets:addComment");
 
-const createTicketMutationRef = makeFunctionReference<
-  "mutation",
+const createTicketMutationRef = widgetMutationRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -104,14 +103,14 @@ export function useWidgetTicketFlow({
   const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
   const [ticketErrorFeedback, setTicketErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
 
-  const visitorTickets = useQuery(
+  const visitorTickets = useWidgetQuery(
     visitorTicketsQueryRef,
     isValidIdFormat && visitorId && sessionToken
       ? { visitorId, sessionToken, workspaceId: activeWorkspaceId as Id<"workspaces"> }
       : "skip"
   ) as VisitorTicketRecord[] | undefined;
 
-  const selectedTicket = useQuery(
+  const selectedTicket = useWidgetQuery(
     ticketGetQueryRef,
     selectedTicketId
       ? {
@@ -122,13 +121,13 @@ export function useWidgetTicketFlow({
       : "skip"
   ) as TicketDetailRecord | null | undefined;
 
-  const ticketForm = useQuery(
+  const ticketForm = useWidgetQuery(
     defaultTicketFormQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
   ) as TicketFormRecord | undefined;
 
-  const addTicketComment = useMutation(addTicketCommentMutationRef);
-  const createTicket = useMutation(createTicketMutationRef);
+  const addTicketComment = useWidgetMutation(addTicketCommentMutationRef);
+  const createTicket = useWidgetMutation(createTicketMutationRef);
 
   const handleBackFromTickets = useCallback(() => {
     setTicketErrorFeedback(null);

@@ -1,6 +1,4 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { normalizeSurveyAnswerValue } from "./surveyOverlay/answers";
 import {
   LargeFormatContainer,
@@ -8,9 +6,9 @@ import {
   SurveyQuestionRenderer,
 } from "./surveyOverlay/components";
 import type { SurveyOverlayProps } from "./surveyOverlay/types";
+import { useWidgetMutation, widgetMutationRef } from "./lib/convex/hooks";
 
-const submitSurveyResponseMutationRef = makeFunctionReference<
-  "mutation",
+const submitSurveyResponseMutationRef = widgetMutationRef<
   {
     surveyId: string;
     visitorId: string;
@@ -22,8 +20,7 @@ const submitSurveyResponseMutationRef = makeFunctionReference<
   null
 >("surveys:submitResponse");
 
-const recordSurveyImpressionMutationRef = makeFunctionReference<
-  "mutation",
+const recordSurveyImpressionMutationRef = widgetMutationRef<
   {
     surveyId: string;
     visitorId: string;
@@ -48,8 +45,8 @@ export function SurveyOverlay({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showThankYou, setShowThankYou] = useState(false);
 
-  const submitResponse = useMutation(submitSurveyResponseMutationRef);
-  const recordImpression = useMutation(recordSurveyImpressionMutationRef);
+  const submitResponse = useWidgetMutation(submitSurveyResponseMutationRef);
+  const recordImpression = useWidgetMutation(recordSurveyImpressionMutationRef);
 
   const totalSteps = survey.questions.length;
   const isIntroStep = currentStep === -1;

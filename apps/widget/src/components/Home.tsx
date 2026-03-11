@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   getDefaultHomeConfig,
@@ -9,6 +7,7 @@ import {
   type PublicMessengerSettings,
 } from "@opencom/types";
 import { Search, MessageCircle, ChevronRight, FileText, Bell, Send } from "../icons";
+import { useWidgetQuery, widgetQueryRef } from "../lib/convex/hooks";
 
 interface Conversation {
   _id: Id<"conversations">;
@@ -27,20 +26,17 @@ interface Article {
   slug: string;
 }
 
-const publicHomeConfigQueryRef = makeFunctionReference<
-  "query",
+const publicHomeConfigQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; isIdentified: boolean },
   NormalizedHomeConfig
 >("messengerSettings:getPublicHomeConfig");
 
-const visitorArticlesListQueryRef = makeFunctionReference<
-  "query",
+const visitorArticlesListQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
   Article[]
 >("articles:listForVisitor");
 
-const visitorArticlesSearchQueryRef = makeFunctionReference<
-  "query",
+const visitorArticlesSearchQueryRef = widgetQueryRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -80,17 +76,17 @@ export function Home({
 }: HomeProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const homeConfig = useQuery(publicHomeConfigQueryRef, {
+  const homeConfig = useWidgetQuery(publicHomeConfigQueryRef, {
     workspaceId,
     isIdentified,
   }) as NormalizedHomeConfig | undefined;
 
-  const featuredArticles = useQuery(
+  const featuredArticles = useWidgetQuery(
     visitorArticlesListQueryRef,
     visitorId && sessionToken ? { workspaceId, visitorId, sessionToken } : "skip"
   ) as Article[] | undefined;
 
-  const searchResults = useQuery(
+  const searchResults = useWidgetQuery(
     visitorArticlesSearchQueryRef,
     visitorId && sessionToken && searchQuery.length >= 2
       ? { workspaceId, visitorId, sessionToken, query: searchQuery }
@@ -268,7 +264,7 @@ export function Home({
 }
 
 export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdentified: boolean) {
-  const homeConfig = useQuery(
+  const homeConfig = useWidgetQuery(
     publicHomeConfigQueryRef,
     workspaceId ? { workspaceId, isIdentified } : "skip"
   ) as NormalizedHomeConfig | undefined;
