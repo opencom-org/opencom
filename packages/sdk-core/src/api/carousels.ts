@@ -4,13 +4,11 @@ import { getClient, getConfig } from "./client";
 import type { VisitorId, CarouselId, CarouselData, CarouselScreen } from "../types";
 import { getVisitorState } from "../state/visitor";
 
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
-
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const GET_CAROUSEL_REF = makeFunctionReference("carousels:get") as FunctionReference<"query">;
+const RECORD_CAROUSEL_IMPRESSION_REF =
+  makeFunctionReference("carousels:recordImpression") as FunctionReference<"mutation">;
+const LIST_ACTIVE_CAROUSELS_REF =
+  makeFunctionReference("carousels:listActive") as FunctionReference<"query">;
 
 interface CarouselDoc {
   _id: CarouselId;
@@ -21,7 +19,7 @@ interface CarouselDoc {
 export async function getCarousel(carouselId: CarouselId): Promise<CarouselData | null> {
   const client = getClient();
 
-  const carousel = await client.query(getQueryRef("carousels:get"), { id: carouselId });
+  const carousel = await client.query(GET_CAROUSEL_REF, { id: carouselId });
 
   if (!carousel) return null;
 
@@ -42,7 +40,7 @@ export async function recordCarouselImpression(params: {
   const client = getClient();
   const token = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  await client.mutation(getMutationRef("carousels:recordImpression"), {
+  await client.mutation(RECORD_CAROUSEL_IMPRESSION_REF, {
     carouselId: params.carouselId,
     visitorId: params.visitorId,
     sessionToken: token,
@@ -59,7 +57,7 @@ export async function listActiveCarousels(
   const config = getConfig();
   const token = sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const carousels = await client.query(getQueryRef("carousels:listActive"), {
+  const carousels = await client.query(LIST_ACTIVE_CAROUSELS_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: token,

@@ -8,13 +8,10 @@ import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
-
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
+const GET_ELIGIBLE_OUTBOUND_MESSAGES_REF =
+  makeFunctionReference("outboundMessages:getEligible") as FunctionReference<"query">;
+const TRACK_OUTBOUND_IMPRESSION_REF =
+  makeFunctionReference("outboundMessages:trackImpression") as FunctionReference<"mutation">;
 
 export type OutboundMessageId = Id<"outboundMessages">;
 
@@ -36,7 +33,7 @@ export async function getActiveOutboundMessages(params: {
   const config = getConfig();
   const token = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const messages = await client.query(getQueryRef("outboundMessages:getEligible"), {
+  const messages = await client.query(GET_ELIGIBLE_OUTBOUND_MESSAGES_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId: params.visitorId,
     sessionToken: token,
@@ -58,7 +55,7 @@ export async function trackOutboundImpression(params: {
   const client = getClient();
   const token = params.sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  await client.mutation(getMutationRef("outboundMessages:trackImpression"), {
+  await client.mutation(TRACK_OUTBOUND_IMPRESSION_REF, {
     messageId: params.messageId,
     visitorId: params.visitorId,
     sessionToken: token,
