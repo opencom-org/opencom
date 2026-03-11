@@ -10,7 +10,7 @@ Use it when you are:
 - hitting `TS2589` (`Type instantiation is excessively deep and possibly infinite`)
 - deciding where a cast or `makeFunctionReference(...)` is acceptable
 
-Historical hardening notes still exist in `docs/refactor-*` and `docs/runtime-type-hardening-2026-03-05.md`, but this file is the current source of truth for new code.
+Historical hardening notes still exist in `openspec/archive/refactor-*` and `runtime-type-hardening-2026-03-05.md`, but this file is the current source of truth for new code.
 
 ## Goals
 
