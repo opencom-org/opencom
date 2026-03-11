@@ -32,19 +32,22 @@ Goal: ship a professional open-source customer messaging platform with strong de
 - [ ] improved inbox management (sorting, filtering etc.)
 - [ ] dont allow requesting human support multiple times in a row on same chat
 - [ ] "resolve visitor from expression - session expired" - are we handling refresh properly?
-- [ ] maintain message state in mobile app when switching apps
+- [p] maintain message state in mobile app when switching apps
 - [ ] Fix CI e2e
-- [ ] telegram fixes
-  - [ ] chat attachments
-  - [ ] if skipped, dont re-ask for their email each time - give them a subtle affordance where they can add their email if they change their mind
+- [ ] telegram feedback
+  - [p] chat attachments
+  - [p] can we make the email collection component shown after sending a message less obtrusive - Maybe it can descend from the top bar, rather than from the bottom where it covers the latest message. then maybe we can leave it there until filled in without a skip button, but just have it take up less space so its not in the way? 
+    - [ ] in the current set up, if skipped, dont re-ask for their email each time - give them a subtle affordance where they can add their email if they change their mind
   - [ ] showcase the dashboard on the landing app?
-  - [ ] API for headless management
-- [ ] publish to npm
+  - [p] API for headless management
+- [ ] publish RN-SDK to npm (anything else need publishing? or web etc is fine since users just use JS snippet for install)
 - [ ] paid plan
+  - [ ] what pricing model - one off fee? Limited free tier? PAYG for AI & email credits? + options for BYOKs? Start simple and add complexity - $49/month (with generous fair usage limits - if people approach limits, I will set up PAYG for powerusers to cover edge cases)? 
 - [ ] AI updates
   - [ ] BYOK for AI in hosted / paid plan
   - [ ] pull available models from provider API and display them in the settings UI to control which model is used
   - [ ] allow customising the agent's system prompt? 
+- [p] a CI AI agent to check for any doc drift and update docs based on the latest code
 
   apps/web/src/app/outbound/[id]/OutboundTriggerPanel.tsx
 Comment on lines +67 to 71
@@ -59,11 +62,11 @@ Switching from || to ?? means a value of 0 will now be treated as valid and show
 
 
 
-- [ ] Check AI chat / article suggestions setup is working
-  - [ ] Add links to relevant help center articles in the widget AI responses, and maybe in chat (suggested articles)
-- [ ] deploy necessary packages to NPM or Github and fix instructions for Mobile SDK install (npm package + release pipeline)
-- [ ] AI Autotranslate for speaking to people in any language
-- [ ] make mobile app match inbox functionality (understand AI review, which messages were sent by AI, visitors list and details/navigation flows)
+- [p] Check AI chat / article suggestions setup is working
+  - [p] Add links to relevant help center articles in the widget AI responses, and maybe in chat (suggested articles)
+- [p] deploy necessary packages to NPM or Github and fix instructions for Mobile SDK install (npm package + release pipeline)
+- [p] AI Autotranslate for speaking to people in any language
+- [p] make mobile app match inbox functionality (understand AI review, which messages were sent by AI, visitors list and details/navigation flows)
 <!-- - [ ] make sure AI responses that result in a handoff are still stored and tracked so they can be seen in AI review to understand what the full response was from the AI that resulted in the handoff -->
 <!-- - [ ] expandable size widget like intercom - make it big for reading articles etc. -->
 <!-- - [ ] Import feature for docs / help center, so you can keep a folder of markdown anywhere outside of Opencom that you edit and maintain, and upload it to opencom to sync latest changes while keeping folder structure (as collections), etc. Test it by uploading a folder of markdown files to opencom (e.g. our docs folder) and then opening the help center to see if it works. Consider how to handle reuploading the folder - should overwrite duplicates, add new files, etc. We should maintain a history also in case they accidentally delete a folder. We should have allow uploading subfolders of a folder, so where you upload the folder will matter (e.g. root folder vs subfolder) -->
