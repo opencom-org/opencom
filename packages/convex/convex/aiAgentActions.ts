@@ -86,6 +86,15 @@ type AIResponseSource = {
   articleId?: string;
 };
 
+type GenerateResponseResult = {
+  response: string;
+  confidence: number;
+  sources: AIResponseSource[];
+  handoff: boolean;
+  handoffReason: string | null;
+  messageId: HandoffToHumanResult["messageId"] | null;
+};
+
 type StoreResponseArgs = {
   conversationId: Id<"conversations">;
   visitorId?: Id<"visitors">;
@@ -447,14 +456,7 @@ export const generateResponse = action({
   handler: async (
     ctx,
     args
-  ): Promise<{
-    response: string;
-    confidence: number;
-    sources: Array<{ type: string; id: string; title: string; articleId?: string }>;
-    handoff: boolean;
-    handoffReason: string | null;
-    messageId: string | null;
-  }> => {
+  ): Promise<GenerateResponseResult> => {
     const startTime = Date.now();
 
     const runQuery = getShallowRunQuery(ctx);

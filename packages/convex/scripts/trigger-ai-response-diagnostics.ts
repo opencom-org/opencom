@@ -1,5 +1,6 @@
 import { ConvexClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { authenticateClientForWorkspace } from "../tests/helpers/authSession";
 
 type TriggerSummary = {
@@ -12,7 +13,7 @@ type TriggerSummary = {
     confidence: number;
     handoff: boolean;
     handoffReason: string | null;
-    messageId: string | null;
+    messageId: Id<"messages"> | null;
     lastConfigError: unknown;
   }>;
   responseCount: number;

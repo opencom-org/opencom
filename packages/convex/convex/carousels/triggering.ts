@@ -24,6 +24,7 @@ type TriggerableCarousel = {
 
 type EligibleVisitorForPush = {
   visitorId: Id<"visitors">;
+  token: string;
 };
 
 const GET_CAROUSEL_REF = makeFunctionReference<
@@ -254,7 +255,7 @@ export const getEligibleVisitorsWithPushTokens = authQuery({
     const carousel = (await ctx.db.get(args.carouselId)) as Doc<"carousels"> | null;
     return carousel?.workspaceId ?? null;
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<EligibleVisitorForPush[]> => {
     const carousel = (await ctx.db.get(args.carouselId)) as Doc<"carousels"> | null;
     if (!carousel) {
       return [];
@@ -270,7 +271,7 @@ export const getEligibleVisitorsWithPushTokens = authQuery({
     }
 
     const visitorIds = [...new Set(pushTokens.map((token) => token.visitorId))];
-    const eligibleVisitors: Array<{ visitorId: Id<"visitors">; token: string }> = [];
+    const eligibleVisitors: EligibleVisitorForPush[] = [];
 
     for (const visitorId of visitorIds) {
       const visitor = (await ctx.db.get(visitorId)) as Doc<"visitors"> | null;
