@@ -5,13 +5,13 @@ TBD - created by archiving change tighten-runtime-types-without-any. Update Purp
 ## Requirements
 ### Requirement: Runtime-critical modules MUST use explicit typed contracts at dynamic boundaries
 
-Covered runtime-critical modules SHALL route dynamic internal calls through typed adapters or constrained interfaces instead of repeated broad inline casts.
+Covered residual backend runtime-critical modules SHALL route dynamic internal calls through typed adapters or constrained function-reference interfaces instead of repeated broad inline casts or generic string-based ref factories.
 
-#### Scenario: Runtime schedules internal workflow function
+#### Scenario: Residual backend runtime boundary schedules or invokes an internal function
 
-- **WHEN** a runtime-critical module schedules or invokes an internal workflow handler
-- **THEN** the invocation SHALL use a typed adapter contract
-- **AND** repeated broad inline cast patterns SHALL not expand in covered files
+- **WHEN** a covered residual backend runtime boundary schedules or invokes another Convex function dynamically
+- **THEN** the invocation SHALL use a typed adapter contract or fixed typed function reference
+- **AND** repeated broad inline cast patterns or arbitrary `name: string` ref helper selection SHALL not expand in the covered backend files
 
 ### Requirement: Shared types consumed by runtime-critical paths MUST avoid broad unknown payloads when structure is known
 
@@ -24,10 +24,11 @@ Shared type definitions used by runtime-critical logic MUST model known payload 
 
 ### Requirement: Type safety hardening MUST preserve existing runtime behavior
 
-Type tightening changes MUST preserve functional behavior for covered auth, event, and series runtime paths.
+Type tightening changes across covered residual backend runtime paths MUST preserve functional behavior for existing auth, event, series, messaging, notification, and related execution flows.
 
-#### Scenario: Covered runtime path executes after hardening
+#### Scenario: Residual backend runtime path executes after hardening
 
-- **WHEN** covered auth/event/series flows run after type hardening
-- **THEN** runtime outcomes SHALL remain behaviorally equivalent to pre-change behavior
+- **WHEN** a covered residual backend runtime flow runs after type hardening cleanup
+- **THEN** runtime outcomes SHALL remain behaviorally equivalent to pre-hardening behavior
+- **AND** only contract-safety boundary enforcement changes, not domain behavior semantics
 
