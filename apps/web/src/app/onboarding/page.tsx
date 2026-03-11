@@ -15,6 +15,58 @@ type VerificationStatus = "idle" | "checking" | "success" | "error";
 
 const VERIFY_TIMEOUT_MS = 15000;
 
+type HostedOnboardingState = {
+  status?: string;
+  verificationToken?: string | null;
+  isWidgetVerified?: boolean;
+} | null;
+
+type HostedOnboardingIntegrationSignals = {
+  integrations?: Array<{
+    id: string;
+    clientType: string;
+    clientVersion?: string;
+    detectedAt?: number | null;
+    isActiveNow?: boolean;
+    matchesCurrentVerificationWindow?: boolean;
+    origin?: string;
+    currentUrl?: string;
+    clientIdentifier?: string;
+    lastSeenAt?: number | null;
+    activeSessionCount?: number;
+  }>;
+} | null;
+
+const HOSTED_ONBOARDING_STATE_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  HostedOnboardingState
+>("workspaces:getHostedOnboardingState");
+
+const ONBOARDING_INTEGRATION_SIGNALS_QUERY = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  HostedOnboardingIntegrationSignals
+>("workspaces:getHostedOnboardingIntegrationSignals");
+
+const START_HOSTED_ONBOARDING_REF = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  unknown
+>("workspaces:startHostedOnboarding");
+
+const ISSUE_VERIFICATION_TOKEN_REF = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces"> },
+  { token: string }
+>("workspaces:issueHostedOnboardingVerificationToken");
+
+const COMPLETE_WIDGET_STEP_REF = makeFunctionReference<
+  "mutation",
+  { workspaceId: Id<"workspaces">; token?: string },
+  { success: boolean }
+>("workspaces:completeHostedOnboardingWidgetStep");
+
 function formatTimestamp(value: number | null | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return "unknown";
@@ -47,67 +99,19 @@ function OnboardingContent(): React.JSX.Element {
   const startRequestedRef = useRef(false);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const hostedOnboardingStateQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    {
-      status?: string;
-      verificationToken?: string | null;
-      isWidgetVerified?: boolean;
-    } | null
-  >("workspaces:getHostedOnboardingState");
-
-  const onboardingIntegrationSignalsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    {
-      integrations?: Array<{
-        id: string;
-        clientType: string;
-        clientVersion?: string;
-        detectedAt?: number | null;
-        isActiveNow?: boolean;
-        matchesCurrentVerificationWindow?: boolean;
-        origin?: string;
-        currentUrl?: string;
-        clientIdentifier?: string;
-        lastSeenAt?: number | null;
-        activeSessionCount?: number;
-      }>;
-    } | null
-  >("workspaces:getHostedOnboardingIntegrationSignals");
-
-  const startHostedOnboardingRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces"> },
-    unknown
-  >("workspaces:startHostedOnboarding");
-
-  const issueVerificationTokenRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces"> },
-    { token: string }
-  >("workspaces:issueHostedOnboardingVerificationToken");
-
-  const completeWidgetStepRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces">; token?: string },
-    { success: boolean }
-  >("workspaces:completeHostedOnboardingWidgetStep");
-
   const onboardingState = useQuery(
-    hostedOnboardingStateQuery,
+    HOSTED_ONBOARDING_STATE_QUERY,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
   const integrationSignals = useQuery(
-    onboardingIntegrationSignalsQuery,
+    ONBOARDING_INTEGRATION_SIGNALS_QUERY,
     activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
   );
 
-  const startHostedOnboarding = useMutation(startHostedOnboardingRef);
-  const issueVerificationToken = useMutation(issueVerificationTokenRef);
-  const completeWidgetStep = useMutation(completeWidgetStepRef);
+  const startHostedOnboarding = useMutation(START_HOSTED_ONBOARDING_REF);
+  const issueVerificationToken = useMutation(ISSUE_VERIFICATION_TOKEN_REF);
+  const completeWidgetStep = useMutation(COMPLETE_WIDGET_STEP_REF);
 
   useEffect(() => {
     if (!onboardingState?.verificationToken) {

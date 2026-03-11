@@ -14,6 +14,10 @@ export const OUTBOUND_MESSAGE_STATUS_OPTIONS = [
   { value: "archived", label: "Archived" },
 ] as const satisfies ReadonlyArray<{ value: OutboundMessageStatus; label: string }>;
 
+function assertNever(value: never, context: string): never {
+  throw new Error(`Unhandled ${context}: ${String(value)}`);
+}
+
 export function getOutboundMessageStatusBadgeClass(status: OutboundMessageStatus): string {
   switch (status) {
     case "active":
@@ -25,6 +29,8 @@ export function getOutboundMessageStatusBadgeClass(status: OutboundMessageStatus
     case "archived":
       return "bg-red-100 text-red-800";
   }
+
+  return assertNever(status, "outbound message status");
 }
 
 interface OutboundMessageTypeIconProps {
@@ -44,4 +50,6 @@ export function OutboundMessageTypeIcon({
     case "banner":
       return <Flag className={className} />;
   }
+
+  return assertNever(type, "outbound message type");
 }
