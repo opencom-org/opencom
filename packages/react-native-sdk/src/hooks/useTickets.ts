@@ -1,16 +1,16 @@
-import { useQuery, useMutation } from "convex/react";
-import { getVisitorState } from "@opencom/sdk-core";
-import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkMutationRef, sdkQueryRef, useSdkMutation, useSdkQuery } from "../internal/convex";
+import {
+  hasVisitorSessionTransport,
+  hasVisitorWorkspaceTransport,
+} from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
 
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
-
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const LIST_TICKETS_REF = sdkQueryRef("tickets:listByVisitor");
+const CREATE_TICKET_REF = sdkMutationRef("tickets:create");
+const ADD_TICKET_COMMENT_REF = sdkMutationRef("tickets:addComment");
+const GET_TICKET_REF = sdkQueryRef("tickets:get");
+const GET_TICKET_COMMENTS_REF = sdkQueryRef("tickets:getComments");
 
 export type TicketId = Id<"tickets">;
 export type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
@@ -27,34 +27,43 @@ export interface TicketData {
   resolvedAt?: number;
 }
 
+type TicketCommentRecord = {
+  _id: string;
+  authorType: "visitor" | "agent";
+  createdAt: number;
+  content: string;
+};
+
 export function useTickets() {
-  const { workspaceId } = useOpencomContext();
-  const state = getVisitorState();
-  const visitorId = state.visitorId;
+  const transport = useSdkTransportContext();
 
-  const { sessionToken } = state;
-
-  const tickets = useQuery(
-    getQueryRef("tickets:listByVisitor"),
-    visitorId && sessionToken && workspaceId
-      ? { visitorId, sessionToken, workspaceId: workspaceId as Id<"workspaces"> }
+  const tickets = useSdkQuery<TicketData[]>(
+    LIST_TICKETS_REF,
+    hasVisitorWorkspaceTransport(transport)
+      ? {
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+          workspaceId: transport.workspaceId,
+        }
       : "skip"
   );
 
-  const createTicketMutation = useMutation(getMutationRef("tickets:create"));
-  const addCommentMutation = useMutation(getMutationRef("tickets:addComment"));
+  const createTicketMutation = useSdkMutation<Record<string, unknown>, TicketId | null>(
+    CREATE_TICKET_REF
+  );
+  const addCommentMutation = useSdkMutation<Record<string, unknown>, unknown>(ADD_TICKET_COMMENT_REF);
 
   const createTicket = async (params: {
     subject: string;
     description?: string;
     priority?: TicketPriority;
   }): Promise<TicketId | null> => {
-    if (!visitorId || !sessionToken) return null;
+    if (!hasVisitorWorkspaceTransport(transport)) return null;
 
     const ticketId = await createTicketMutation({
-      workspaceId: workspaceId as Id<"workspaces">,
-      visitorId,
-      sessionToken,
+      workspaceId: transport.workspaceId,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken,
       subject: params.subject,
       description: params.description,
       priority: params.priority,
@@ -64,13 +73,13 @@ export function useTickets() {
   };
 
   const addComment = async (ticketId: TicketId, content: string): Promise<void> => {
-    if (!visitorId || !sessionToken) return;
+    if (!hasVisitorSessionTransport(transport)) return;
 
     await addCommentMutation({
       ticketId,
-      visitorId,
+      visitorId: transport.visitorId,
       content,
-      sessionToken,
+      sessionToken: transport.sessionToken,
     });
   };
 
@@ -83,42 +92,42 @@ export function useTickets() {
 }
 
 export function useTicket(ticketId: TicketId | null) {
-  const state = getVisitorState();
+  const transport = useSdkTransportContext();
 
-  const ticket = useQuery(
-    getQueryRef("tickets:get"),
-    ticketId && state.visitorId && state.sessionToken
-      ? { id: ticketId, visitorId: state.visitorId, sessionToken: state.sessionToken }
+  const ticket = useSdkQuery<TicketData | null>(
+    GET_TICKET_REF,
+    ticketId && hasVisitorSessionTransport(transport)
+      ? { id: ticketId, visitorId: transport.visitorId, sessionToken: transport.sessionToken }
       : "skip"
   );
 
-  const comments = useQuery(
-    getQueryRef("tickets:getComments"),
-    ticketId && state.visitorId && state.sessionToken
+  const comments = useSdkQuery<TicketCommentRecord[]>(
+    GET_TICKET_COMMENTS_REF,
+    ticketId && hasVisitorSessionTransport(transport)
       ? {
           ticketId,
           includeInternal: false,
-          visitorId: state.visitorId,
-          sessionToken: state.sessionToken,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
         }
       : "skip"
   );
 
-  const addCommentMutation = useMutation(getMutationRef("tickets:addComment"));
+  const addCommentMutation = useSdkMutation<Record<string, unknown>, unknown>(ADD_TICKET_COMMENT_REF);
 
   const addComment = async (content: string): Promise<void> => {
-    if (!ticketId || !state.visitorId || !state.sessionToken) return;
+    if (!ticketId || !hasVisitorSessionTransport(transport)) return;
 
     await addCommentMutation({
       ticketId,
-      visitorId: state.visitorId,
+      visitorId: transport.visitorId,
       content,
-      sessionToken: state.sessionToken,
+      sessionToken: transport.sessionToken,
     });
   };
 
   return {
-    ticket: ticket as TicketData | null | undefined,
+    ticket,
     comments: comments ?? [],
     isLoading: ticket === undefined,
     addComment,

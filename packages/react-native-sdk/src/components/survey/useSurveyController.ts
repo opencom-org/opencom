@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation } from "convex/react";
-import { OpencomSDK } from "../../OpencomSDK";
 import type { OpencomSurveyProps } from "./types";
 import {
   beginSubmission,
@@ -14,11 +12,11 @@ import {
   normalizeSurveyAnswerValue,
   type SurveySubmissionState,
 } from "./surveyFlow";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkMutationRef, useSdkMutation } from "../../internal/convex";
+import { getSdkVisitorTransport } from "../../internal/runtime";
 
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const SUBMIT_SURVEY_RESPONSE_REF = sdkMutationRef("surveys:submitResponse");
+const RECORD_SURVEY_IMPRESSION_REF = sdkMutationRef("surveys:recordImpression");
 
 export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSurveyProps) {
   const [currentIndex, setCurrentIndex] = useState(() => getInitialSurveyIndex(survey));
@@ -29,14 +27,18 @@ export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSu
     showThankYou: false,
   });
 
-  const submitResponse = useMutation(getMutationRef("surveys:submitResponse"));
-  const recordImpression = useMutation(getMutationRef("surveys:recordImpression"));
+  const submitResponse = useSdkMutation<Record<string, unknown>, unknown>(
+    SUBMIT_SURVEY_RESPONSE_REF
+  );
+  const recordImpression = useSdkMutation<Record<string, unknown>, unknown>(
+    RECORD_SURVEY_IMPRESSION_REF
+  );
 
   const flowState = useMemo(() => getSurveyFlowState(survey, currentIndex), [survey, currentIndex]);
   const canProceed = canProceedFromQuestion(flowState.currentQuestion, answers);
 
   useEffect(() => {
-    const state = OpencomSDK.getVisitorState();
+    const state = getSdkVisitorTransport();
     if (state.visitorId && state.sessionToken) {
       recordImpression({
         surveyId: survey._id,
@@ -58,7 +60,7 @@ export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSu
 
   const submitSurvey = async () => {
     setSubmissionState((currentState) => beginSubmission(currentState));
-    const state = OpencomSDK.getVisitorState();
+    const state = getSdkVisitorTransport();
 
     if (!state.visitorId || !state.sessionToken) {
       setSubmissionState((currentState) => ({
@@ -103,7 +105,7 @@ export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSu
   };
 
   const handleNext = async () => {
-    const state = OpencomSDK.getVisitorState();
+    const state = getSdkVisitorTransport();
     const nextAction = getNextSurveyAction(flowState, answers);
 
     if (nextAction.type === "noop") {
@@ -137,7 +139,7 @@ export function useSurveyController({ survey, onDismiss, onComplete }: OpencomSu
   };
 
   const handleDismiss = async () => {
-    const state = OpencomSDK.getVisitorState();
+    const state = getSdkVisitorTransport();
     if (state.visitorId && state.sessionToken) {
       await recordImpression({
         surveyId: survey._id,

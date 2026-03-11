@@ -9,20 +9,17 @@ import {
   Image,
 } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
-import { useQuery } from "convex/react";
-import type { Id } from "@opencom/convex/dataModel";
-import { getVisitorState, getConfig } from "@opencom/sdk-core";
 import {
   getDefaultHomeConfig,
   type HomeCard,
   type NormalizedHomeConfig,
 } from "@opencom/types";
+import type { Id } from "@opencom/convex/dataModel";
+import { useArticleSearch, useArticles } from "../hooks/useArticles";
+import { useConversations } from "../hooks/useConversations";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
-
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
+import { sdkQueryRef, useSdkQuery } from "../internal/convex";
+import { useSdkResolvedWorkspaceId } from "../internal/opencomContext";
 
 interface Conversation {
   _id: Id<"conversations">;
@@ -33,12 +30,6 @@ interface Conversation {
     content: string;
     senderType: string;
   };
-}
-
-interface Article {
-  _id: Id<"articles">;
-  title: string;
-  slug: string;
 }
 
 interface OpencomHomeProps {
@@ -111,10 +102,13 @@ function ChevronRightIcon({ color = "#6b7280", size = 16 }) {
   );
 }
 
+const HOME_CONFIG_REF = sdkQueryRef("messengerSettings:getPublicHomeConfig");
+
 export function useHomeConfig(workspaceId: string | undefined, isIdentified: boolean) {
-  const homeConfig = useQuery(
-    getQueryRef("messengerSettings:getPublicHomeConfig"),
-    workspaceId ? { workspaceId: workspaceId as Id<"workspaces">, isIdentified } : "skip"
+  const resolvedWorkspaceId = useSdkResolvedWorkspaceId(workspaceId);
+  const homeConfig = useSdkQuery<NormalizedHomeConfig>(
+    HOME_CONFIG_REF,
+    resolvedWorkspaceId ? { workspaceId: resolvedWorkspaceId, isIdentified } : "skip"
   ) as NormalizedHomeConfig | undefined;
 
   return homeConfig ?? getDefaultHomeConfig();
@@ -126,7 +120,7 @@ export function useHomeConfig(workspaceId: string | undefined, isIdentified: boo
 
 export function OpencomHome({
   workspaceId,
-  visitorId,
+  visitorId: _visitorId,
   isIdentified,
   onStartConversation,
   onSelectConversation,
@@ -136,46 +130,16 @@ export function OpencomHome({
 }: OpencomHomeProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const { theme, settings } = useMessengerSettings();
-
-  // Read visitor state from sdk-core (the visitorId prop may be null)
-  const { visitorId: resolvedVisitorId, sessionToken } = getVisitorState();
-  const vid = (visitorId || resolvedVisitorId) as Id<"visitors"> | null;
-  let configWorkspaceId: string | undefined;
-  try {
-    configWorkspaceId = getConfig().workspaceId;
-  } catch {
-    /* not yet initialized */
-  }
-  const wsId = (workspaceId || configWorkspaceId) as Id<"workspaces"> | undefined;
-
-  const fetchedHomeConfig = useQuery(
-    getQueryRef("messengerSettings:getPublicHomeConfig"),
-    wsId ? { workspaceId: wsId, isIdentified } : "skip"
-  ) as NormalizedHomeConfig | undefined;
-  const homeConfig = fetchedHomeConfig ?? getDefaultHomeConfig();
-
-  const conversations = useQuery(
-    getQueryRef("conversations:listByVisitor"),
-    vid && sessionToken && wsId ? { visitorId: vid, sessionToken, workspaceId: wsId } : "skip"
-  ) as Conversation[] | undefined;
-
-  const featuredArticles = useQuery(
-    getQueryRef("articles:listForVisitor"),
-    vid && sessionToken && wsId ? { workspaceId: wsId, visitorId: vid, sessionToken } : "skip"
-  ) as Article[] | undefined;
-
-  const searchResults = useQuery(
-    getQueryRef("articles:searchForVisitor"),
-    vid && sessionToken && wsId && searchQuery.length >= 2
-      ? { workspaceId: wsId, visitorId: vid, sessionToken, query: searchQuery }
-      : "skip"
-  ) as Article[] | undefined;
+  const homeConfig = useHomeConfig(workspaceId, isIdentified);
+  const { conversations } = useConversations();
+  const { articles: featuredArticles } = useArticles();
+  const { results: searchResults } = useArticleSearch(searchQuery);
 
   if (!homeConfig?.enabled) {
     return null;
   }
 
-  const recentConversations = conversations
+  const recentConversations = (conversations as Conversation[] | undefined)
     ?.filter((c) => {
       const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
       return (c.lastMessageAt || c.updatedAt) > threeDaysAgo;

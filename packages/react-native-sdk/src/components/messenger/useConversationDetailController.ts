@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { FlatList } from "react-native";
-import { useMutation } from "convex/react";
 import type { Id } from "@opencom/convex/dataModel";
 import { OpencomSDK } from "../../OpencomSDK";
 import { useConversation } from "../../hooks/useConversations";
 import { useAutomationSettings } from "../../hooks/useAutomationSettings";
 import { evaluateEmailCaptureDecision, normalizeOutgoingMessage } from "./messengerFlow";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkMutationRef, useSdkMutation } from "../../internal/convex";
 
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const IDENTIFY_VISITOR_REF = sdkMutationRef("visitors:identify");
 
 interface UseConversationDetailControllerInput {
   conversationId: Id<"conversations"> | null;
@@ -21,7 +18,7 @@ export function useConversationDetailController({ conversationId }: UseConversat
   const state = OpencomSDK.getVisitorState();
   const visitorId = state.visitorId;
   const automationSettings = useAutomationSettings();
-  const identifyVisitor = useMutation(getMutationRef("visitors:identify"));
+  const identifyVisitor = useSdkMutation<Record<string, unknown>, unknown>(IDENTIFY_VISITOR_REF);
   const messageItems = messages as Array<{ senderType: string }>;
 
   const [inputValue, setInputValue] = useState("");

@@ -1,15 +1,10 @@
-import { useQuery, useMutation } from "convex/react";
 import type { Id } from "@opencom/convex/dataModel";
-import { getVisitorState } from "@opencom/sdk-core";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkMutationRef, sdkQueryRef, useSdkMutation, useSdkQuery } from "../internal/convex";
+import { useSdkTransportContext } from "../internal/opencomContext";
 
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
-
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const CONVERSATION_RESPONSES_REF = sdkQueryRef("aiAgent:getConversationResponses");
+const SUBMIT_FEEDBACK_REF = sdkMutationRef("aiAgent:submitFeedback");
+const HANDOFF_TO_HUMAN_REF = sdkMutationRef("aiAgent:handoffToHuman");
 
 export type AIResponseId = Id<"aiResponses">;
 export type ConversationId = Id<"conversations">;
@@ -33,28 +28,40 @@ export interface AIResponseData {
 }
 
 export function useAIAgent(conversationId: ConversationId | null) {
-  const { visitorId, sessionToken } = getVisitorState();
+  const transport = useSdkTransportContext();
 
-  const aiResponses = useQuery(
-    getQueryRef("aiAgent:getConversationResponses"),
-    conversationId && visitorId && sessionToken
-      ? { conversationId, visitorId, sessionToken }
+  const aiResponses = useSdkQuery<AIResponseData[]>(
+    CONVERSATION_RESPONSES_REF,
+    conversationId && transport.visitorId && transport.sessionToken
+      ? {
+          conversationId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+        }
       : "skip"
   );
 
-  const submitFeedbackMutation = useMutation(getMutationRef("aiAgent:submitFeedback"));
-  const handoffMutation = useMutation(getMutationRef("aiAgent:handoffToHuman"));
+  const submitFeedbackMutation = useSdkMutation<Record<string, unknown>, unknown>(
+    SUBMIT_FEEDBACK_REF
+  );
+  const handoffMutation = useSdkMutation<
+    Record<string, unknown>,
+    {
+      messageId: Id<"messages">;
+      handoffMessage: string;
+    } | null
+  >(HANDOFF_TO_HUMAN_REF);
 
   const submitFeedback = async (
     responseId: AIResponseId,
     feedback: "helpful" | "not_helpful"
   ): Promise<void> => {
-    if (!visitorId || !sessionToken) return;
+    if (!transport.visitorId || !transport.sessionToken) return;
     await submitFeedbackMutation({
       responseId,
       feedback,
-      visitorId,
-      sessionToken,
+      visitorId: transport.visitorId,
+      sessionToken: transport.sessionToken,
     });
   };
 
@@ -68,8 +75,8 @@ export function useAIAgent(conversationId: ConversationId | null) {
 
     const result = await handoffMutation({
       conversationId,
-      visitorId: visitorId ?? undefined,
-      sessionToken: sessionToken ?? undefined,
+      visitorId: transport.visitorId ?? undefined,
+      sessionToken: transport.sessionToken ?? undefined,
       reason,
     });
 

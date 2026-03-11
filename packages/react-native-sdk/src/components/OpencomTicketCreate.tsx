@@ -10,17 +10,14 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { useMutation } from "convex/react";
-import { getVisitorState } from "@opencom/sdk-core";
-import { useOpencomContext } from "./OpencomProvider";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
 import type { Id } from "@opencom/convex/dataModel";
 import type { TicketPriority } from "../hooks/useTickets";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkMutationRef, useSdkMutation } from "../internal/convex";
+import { hasVisitorWorkspaceTransport } from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
 
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const CREATE_TICKET_REF = sdkMutationRef("tickets:create");
 
 interface OpencomTicketCreateProps {
   onSuccess?: (ticketId: Id<"tickets">) => void;
@@ -36,15 +33,17 @@ const PRIORITIES: { value: TicketPriority; label: string }[] = [
 ];
 
 export function OpencomTicketCreate({ onSuccess, onCancel, style }: OpencomTicketCreateProps) {
-  const { workspaceId } = useOpencomContext();
   const { theme } = useMessengerSettings();
+  const transport = useSdkTransportContext();
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<TicketPriority>("normal");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createTicketMutation = useMutation(getMutationRef("tickets:create"));
+  const createTicketMutation = useSdkMutation<Record<string, unknown>, Id<"tickets">>(
+    CREATE_TICKET_REF
+  );
 
   const handleSubmit = async () => {
     if (!subject.trim()) {
@@ -52,8 +51,7 @@ export function OpencomTicketCreate({ onSuccess, onCancel, style }: OpencomTicke
       return;
     }
 
-    const state = getVisitorState();
-    if (!state.visitorId || !state.sessionToken) {
+    if (!hasVisitorWorkspaceTransport(transport)) {
       setError("Not authenticated");
       return;
     }
@@ -63,9 +61,9 @@ export function OpencomTicketCreate({ onSuccess, onCancel, style }: OpencomTicke
 
     try {
       const ticketId = await createTicketMutation({
-        workspaceId: workspaceId as Id<"workspaces">,
-        visitorId: state.visitorId,
-        sessionToken: state.sessionToken,
+        workspaceId: transport.workspaceId,
+        visitorId: transport.visitorId,
+        sessionToken: transport.sessionToken,
         subject: subject.trim(),
         description: description.trim() || undefined,
         priority,

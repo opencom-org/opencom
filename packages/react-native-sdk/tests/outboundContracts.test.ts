@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "@opencom/convex";
 
 const mocks = vi.hoisted(() => {
   const useQueryMock = vi.fn();
@@ -23,6 +22,7 @@ vi.mock("convex/react", () => ({
 
 vi.mock("../src/components/OpencomProvider", () => ({
   useOpencomContext: () => mocks.useOpencomContextMock(),
+  useOptionalOpencomContext: () => mocks.useOpencomContextMock(),
 }));
 
 vi.mock("@opencom/sdk-core", () => ({
@@ -32,6 +32,47 @@ vi.mock("@opencom/sdk-core", () => ({
 import { useOutboundMessages } from "../src/hooks/useOutboundMessages";
 
 describe("react-native-sdk outbound contracts", () => {
+  const resolveFunctionPath = (ref: unknown): string => {
+    if (typeof ref === "string") {
+      return ref;
+    }
+
+    if (!ref || typeof ref !== "object") {
+      return "";
+    }
+
+    const maybeRef = ref as {
+      functionName?: string;
+      reference?: { functionName?: string };
+      name?: string;
+      referencePath?: string;
+      function?: { name?: string };
+      [key: string]: unknown;
+    };
+
+    const symbolFunctionName = Object.getOwnPropertySymbols(ref).find((symbol) =>
+      String(symbol).includes("functionName")
+    );
+    const symbolValue = symbolFunctionName
+      ? (ref as Record<symbol, unknown>)[symbolFunctionName]
+      : undefined;
+
+    return (
+      (typeof symbolValue === "string" ? symbolValue : undefined) ??
+      maybeRef.functionName ??
+      maybeRef.reference?.functionName ??
+      maybeRef.name ??
+      maybeRef.referencePath ??
+      maybeRef.function?.name ??
+      ""
+    );
+  };
+
+  const expectFunctionPath = (ref: unknown, expectedPath: string) => {
+    const actualPath = resolveFunctionPath(ref);
+    expect([expectedPath, expectedPath.replace(":", ".")]).toContain(actualPath);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.useOpencomContextMock.mockReturnValue({ workspaceId: "workspace_contract" });
@@ -48,7 +89,8 @@ describe("react-native-sdk outbound contracts", () => {
   it("queries eligible outbound messages with stable visitor/session args", () => {
     const result = useOutboundMessages("https://app.opencom.dev/path");
 
-    expect(mocks.useQueryMock).toHaveBeenCalledWith(api.outboundMessages.getEligible, {
+    expectFunctionPath(mocks.useQueryMock.mock.calls[0][0], "outboundMessages:getEligible");
+    expect(mocks.useQueryMock.mock.calls[0][1]).toEqual({
       workspaceId: "workspace_contract",
       visitorId: "visitor_contract",
       sessionToken: "wst_contract_token",
@@ -99,7 +141,8 @@ describe("react-native-sdk outbound contracts", () => {
 
     const result = useOutboundMessages("https://app.opencom.dev/path");
 
-    expect(mocks.useQueryMock).toHaveBeenCalledWith(api.outboundMessages.getEligible, "skip");
+    expectFunctionPath(mocks.useQueryMock.mock.calls[0][0], "outboundMessages:getEligible");
+    expect(mocks.useQueryMock.mock.calls[0][1]).toBe("skip");
 
     await result.markAsSeen("outbound_2" as never);
     await result.trackClick("outbound_2" as never, 0);

@@ -1,16 +1,10 @@
-import { useQuery, useMutation } from "convex/react";
-import { getVisitorState } from "@opencom/sdk-core";
-import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkMutationRef, sdkQueryRef, useSdkMutation, useSdkQuery } from "../internal/convex";
+import { hasVisitorWorkspaceTransport } from "../internal/runtime";
+import { useSdkTransportContext } from "../internal/opencomContext";
 
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
-
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+const ELIGIBLE_CHECKLISTS_REF = sdkQueryRef("checklists:getEligible");
+const COMPLETE_TASK_REF = sdkMutationRef("checklists:completeTask");
 
 export type ChecklistId = Id<"checklists">;
 
@@ -44,29 +38,30 @@ export interface EligibleChecklist {
 }
 
 export function useChecklists() {
-  const { workspaceId } = useOpencomContext();
-  const state = getVisitorState();
-  const visitorId = state.visitorId;
-  const sessionToken = state.sessionToken;
+  const transport = useSdkTransportContext();
 
-  const eligibleChecklists = useQuery(
-    getQueryRef("checklists:getEligible"),
-    visitorId && workspaceId && sessionToken
-      ? { workspaceId: workspaceId as Id<"workspaces">, visitorId, sessionToken }
+  const eligibleChecklists = useSdkQuery<EligibleChecklist[]>(
+    ELIGIBLE_CHECKLISTS_REF,
+    hasVisitorWorkspaceTransport(transport)
+      ? {
+          workspaceId: transport.workspaceId,
+          visitorId: transport.visitorId,
+          sessionToken: transport.sessionToken,
+        }
       : "skip"
   );
 
-  const completeTaskMutation = useMutation(getMutationRef("checklists:completeTask"));
+  const completeTaskMutation = useSdkMutation<Record<string, unknown>, unknown>(COMPLETE_TASK_REF);
 
   const completeTask = async (checklistId: ChecklistId, taskId: string): Promise<void> => {
-    if (!visitorId || !workspaceId || !sessionToken) return;
+    if (!hasVisitorWorkspaceTransport(transport)) return;
 
     await completeTaskMutation({
-      visitorId,
+      visitorId: transport.visitorId,
       checklistId,
       taskId,
-      workspaceId: workspaceId as Id<"workspaces">,
-      sessionToken,
+      workspaceId: transport.workspaceId,
+      sessionToken: transport.sessionToken,
     });
   };
 

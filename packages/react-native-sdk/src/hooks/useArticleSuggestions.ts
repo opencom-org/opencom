@@ -1,13 +1,9 @@
 import { useState, useCallback, useRef } from "react";
-import { useAction } from "convex/react";
-import { getVisitorState } from "@opencom/sdk-core";
-import { useOpencomContext } from "../components/OpencomProvider";
 import type { Id } from "@opencom/convex/dataModel";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { sdkActionRef, useSdkAction } from "../internal/convex";
+import { useSdkTransportContext } from "../internal/opencomContext";
 
-function getActionRef(name: string): FunctionReference<"action"> {
-  return makeFunctionReference(name) as FunctionReference<"action">;
-}
+const SEARCH_ARTICLE_SUGGESTIONS_REF = sdkActionRef("suggestions:searchForWidget");
 
 export interface ArticleSuggestion {
   id: string;
@@ -17,15 +13,17 @@ export interface ArticleSuggestion {
 }
 
 export function useArticleSuggestions() {
-  const { workspaceId } = useOpencomContext();
   const [suggestions, setSuggestions] = useState<ArticleSuggestion[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const searchAction = useAction(getActionRef("suggestions:searchForWidget"));
+  const { workspaceId, visitorId, sessionToken } = useSdkTransportContext();
+  const searchAction = useSdkAction<
+    Record<string, unknown>,
+    ArticleSuggestion[]
+  >(SEARCH_ARTICLE_SUGGESTIONS_REF);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const search = useCallback(
     async (query: string, debounceMs: number = 300): Promise<void> => {
-      const { visitorId, sessionToken } = getVisitorState();
       if (!workspaceId || !visitorId || !sessionToken) return;
 
       // Clear existing timer
@@ -45,12 +43,12 @@ export function useArticleSuggestions() {
         try {
           const results = await searchAction({
             workspaceId: workspaceId as Id<"workspaces">,
-            visitorId: visitorId as Id<"visitors">,
+            visitorId,
             sessionToken,
             query,
             limit: 3,
           });
-          setSuggestions(results as ArticleSuggestion[]);
+          setSuggestions(results);
         } catch (error) {
           console.error("[useArticleSuggestions] Search failed:", error);
           setSuggestions([]);
@@ -59,7 +57,7 @@ export function useArticleSuggestions() {
         }
       }, debounceMs);
     },
-    [workspaceId, searchAction]
+    [searchAction, sessionToken, visitorId, workspaceId]
   );
 
   const clearSuggestions = useCallback(() => {
