@@ -4,13 +4,20 @@ import { getClient, getConfig } from "./client";
 import type { ConversationId, VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
 
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
-
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
-}
+// Generated api.aiAgent.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit AI agent refs only.
+const GET_PUBLIC_AI_SETTINGS_REF =
+  makeFunctionReference("aiAgent:getPublicSettings") as FunctionReference<"query">;
+const GET_RELEVANT_KNOWLEDGE_REF =
+  makeFunctionReference("aiAgent:getRelevantKnowledge") as FunctionReference<"query">;
+const GET_CONVERSATION_AI_RESPONSES_REF =
+  makeFunctionReference("aiAgent:getConversationResponses") as FunctionReference<"query">;
+const SUBMIT_AI_FEEDBACK_REF =
+  makeFunctionReference("aiAgent:submitFeedback") as FunctionReference<"mutation">;
+const HANDOFF_TO_HUMAN_REF =
+  makeFunctionReference("aiAgent:handoffToHuman") as FunctionReference<"mutation">;
+const SHOULD_AI_RESPOND_REF =
+  makeFunctionReference("aiAgent:shouldRespond") as FunctionReference<"query">;
 
 export type AIResponseId = Id<"aiResponses">;
 
@@ -59,7 +66,7 @@ export async function getAISettings(): Promise<AIAgentSettings> {
   const client = getClient();
   const config = getConfig();
 
-  const settings = await client.query(getQueryRef("aiAgent:getPublicSettings"), {
+  const settings = await client.query(GET_PUBLIC_AI_SETTINGS_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 
@@ -73,7 +80,7 @@ export async function getRelevantKnowledge(
   const client = getClient();
   const config = getConfig();
 
-  const results = await client.query(getQueryRef("aiAgent:getRelevantKnowledge"), {
+  const results = await client.query(GET_RELEVANT_KNOWLEDGE_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     query,
     limit,
@@ -92,7 +99,7 @@ export async function getConversationAIResponses(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const responses = await client.query(getQueryRef("aiAgent:getConversationResponses"), {
+  const responses = await client.query(GET_CONVERSATION_AI_RESPONSES_REF, {
     conversationId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -112,7 +119,7 @@ export async function submitAIFeedback(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  await client.mutation(getMutationRef("aiAgent:submitFeedback"), {
+  await client.mutation(SUBMIT_AI_FEEDBACK_REF, {
     responseId,
     feedback,
     visitorId: resolvedVisitorId,
@@ -131,7 +138,7 @@ export async function handoffToHuman(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const result = await client.mutation(getMutationRef("aiAgent:handoffToHuman"), {
+  const result = await client.mutation(HANDOFF_TO_HUMAN_REF, {
     conversationId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -148,7 +155,7 @@ export async function shouldAIRespond(): Promise<{
   const client = getClient();
   const config = getConfig();
 
-  const result = await client.query(getQueryRef("aiAgent:shouldRespond"), {
+  const result = await client.query(SHOULD_AI_RESPOND_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 

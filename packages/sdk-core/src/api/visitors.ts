@@ -1,11 +1,16 @@
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { getClient } from "./client";
 import { getVisitorState } from "../state/visitor";
 import type { UserIdentification, DeviceInfo, LocationInfo, VisitorId } from "../types";
 
-function getMutationRef(name: string): import("convex/server").FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as import("convex/server").FunctionReference<"mutation">;
-}
+// Generated api.visitors.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit visitor refs only.
+const IDENTIFY_VISITOR_REF =
+  makeFunctionReference("visitors:identify") as FunctionReference<"mutation">;
+const HEARTBEAT_VISITOR_REF =
+  makeFunctionReference("visitors:heartbeat") as FunctionReference<"mutation">;
+const UPDATE_VISITOR_LOCATION_REF =
+  makeFunctionReference("visitors:updateLocation") as FunctionReference<"mutation">;
 
 // getOrCreateVisitor has been removed — use bootSession instead.
 
@@ -19,7 +24,7 @@ export async function identifyVisitor(params: {
 }): Promise<void> {
   const client = getClient();
 
-  await client.mutation(getMutationRef("visitors:identify"), {
+  await client.mutation(IDENTIFY_VISITOR_REF, {
     visitorId: params.visitorId,
     sessionToken: params.sessionToken,
     email: params.user.email,
@@ -38,7 +43,7 @@ export async function identifyVisitor(params: {
 
 export async function heartbeat(visitorId: VisitorId, sessionToken?: string): Promise<void> {
   const client = getClient();
-  await client.mutation(getMutationRef("visitors:heartbeat"), { visitorId, sessionToken });
+  await client.mutation(HEARTBEAT_VISITOR_REF, { visitorId, sessionToken });
 }
 
 export async function updateLocation(
@@ -49,7 +54,7 @@ export async function updateLocation(
   const client = getClient();
   const state = getVisitorState();
   const token = sessionToken ?? state.sessionToken ?? undefined;
-  await client.mutation(getMutationRef("visitors:updateLocation"), {
+  await client.mutation(UPDATE_VISITOR_LOCATION_REF, {
     visitorId,
     sessionToken: token,
     location,

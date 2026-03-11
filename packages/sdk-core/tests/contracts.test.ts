@@ -15,15 +15,43 @@ vi.mock("convex/react", () => ({
 
 import { initializeClient, resetClient } from "../src/api/client";
 import {
+  getAISettings,
+  getConversationAIResponses,
+  getRelevantKnowledge,
+  handoffToHuman,
+  shouldAIRespond,
+  submitAIFeedback,
+} from "../src/api/aiAgent";
+import { getArticle, listArticles, searchArticles } from "../src/api/articles";
+import {
+  getCarousel,
+  listActiveCarousels,
+  recordCarouselImpression,
+} from "../src/api/carousels";
+import { completeChecklistItem, getChecklistProgress, getEligibleChecklists } from "../src/api/checklists";
+import { getCommonIssueButtons } from "../src/api/commonIssues";
+import {
   createConversation,
   getConversations,
   getOrCreateConversation,
   sendMessage,
 } from "../src/api/conversations";
-import { bootSession } from "../src/api/sessions";
-import { createTicket } from "../src/api/tickets";
-import { getActiveOutboundMessages, markOutboundAsSeen, trackOutboundImpression } from "../src/api/outbound";
-import { getEligibleChecklists } from "../src/api/checklists";
+import { trackAutoEvent, trackEvent } from "../src/api/events";
+import { getExpectedReplyTime, getOfficeHours, getOfficeHoursStatus } from "../src/api/officeHours";
+import {
+  getActiveOutboundMessages,
+  markOutboundAsSeen,
+  trackOutboundImpression,
+} from "../src/api/outbound";
+import { bootSession, refreshSession, revokeSession } from "../src/api/sessions";
+import {
+  addTicketComment,
+  createTicket,
+  getTicket,
+  getTicketComments,
+  listTickets,
+} from "../src/api/tickets";
+import { heartbeat, identifyVisitor, updateLocation } from "../src/api/visitors";
 import {
   resetVisitorState,
   setSessionId,
@@ -72,6 +100,34 @@ function resolveFunctionPath(ref: unknown): string {
   );
 }
 
+async function expectLatestMutationCall(
+  expectedPath: string,
+  invoke: () => Promise<unknown>,
+  expectedArgs: unknown,
+  resolvedValue?: unknown
+): Promise<void> {
+  clientMocks.mutation.mockResolvedValueOnce(resolvedValue);
+  await invoke();
+
+  const [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
+  expect(resolveFunctionPath(mutationRef)).toBe(expectedPath);
+  expect(mutationArgs).toEqual(expectedArgs);
+}
+
+async function expectLatestQueryCall(
+  expectedPath: string,
+  invoke: () => Promise<unknown>,
+  expectedArgs: unknown,
+  resolvedValue: unknown
+): Promise<void> {
+  clientMocks.query.mockResolvedValueOnce(resolvedValue);
+  await invoke();
+
+  const [queryRef, queryArgs] = clientMocks.query.mock.calls.at(-1) ?? [];
+  expect(resolveFunctionPath(queryRef)).toBe(expectedPath);
+  expect(queryArgs).toEqual(expectedArgs);
+}
+
 describe("sdk-core backend contract conformance", () => {
   beforeEach(() => {
     clientMocks.mutation.mockReset();
@@ -89,22 +145,35 @@ describe("sdk-core backend contract conformance", () => {
     setSessionToken(SESSION_TOKEN);
   });
 
-  it("uses existing Convex function references for session bootstrap", async () => {
-    clientMocks.mutation.mockResolvedValueOnce({
-      visitor: { _id: VISITOR_ID },
-      sessionToken: SESSION_TOKEN,
-      expiresAt: Date.now() + 60_000,
-    });
-
-    await bootSession({ sessionId: "session_contract" });
-
-    const [mutationRef, mutationArgs] = clientMocks.mutation.mock.calls.at(-1) ?? [];
-    expect(resolveFunctionPath(mutationRef)).toBe("widgetSessions:boot");
-    expect(mutationArgs).toEqual(
+  it("uses existing Convex function references for the session lifecycle", async () => {
+    await expectLatestMutationCall(
+      "widgetSessions:boot",
+      () => bootSession({ sessionId: "session_contract" }),
       expect.objectContaining({
         workspaceId: WORKSPACE_ID,
         sessionId: "session_contract",
-      })
+      }),
+      {
+        visitor: { _id: VISITOR_ID },
+        sessionToken: SESSION_TOKEN,
+        expiresAt: Date.now() + 60_000,
+      }
+    );
+
+    await expectLatestMutationCall(
+      "widgetSessions:refresh",
+      () => refreshSession({ sessionToken: SESSION_TOKEN }),
+      { sessionToken: SESSION_TOKEN },
+      {
+        sessionToken: SESSION_TOKEN,
+        expiresAt: Date.now() + 60_000,
+      }
+    );
+
+    await expectLatestMutationCall(
+      "widgetSessions:revoke",
+      () => revokeSession({ sessionToken: SESSION_TOKEN }),
+      { sessionToken: SESSION_TOKEN }
     );
   });
 
@@ -252,6 +321,373 @@ describe("sdk-core backend contract conformance", () => {
         sessionId: "session_contract",
         action: "shown",
       })
+    );
+  });
+
+  it("keeps visitor, ticket, and checklist contracts stable", async () => {
+    await expectLatestMutationCall(
+      "visitors:identify",
+      () =>
+        identifyVisitor({
+          visitorId: VISITOR_ID as never,
+          user: {
+            email: "visitor@example.com",
+            name: "Visitor Contract",
+          },
+        }),
+      {
+        visitorId: VISITOR_ID,
+        sessionToken: undefined,
+        email: "visitor@example.com",
+        name: "Visitor Contract",
+        externalUserId: undefined,
+        userHash: undefined,
+        location: undefined,
+        device: undefined,
+        currentUrl: undefined,
+        customAttributes: {},
+      }
+    );
+
+    await expectLatestMutationCall(
+      "visitors:heartbeat",
+      () => heartbeat(VISITOR_ID as never),
+      { visitorId: VISITOR_ID, sessionToken: undefined }
+    );
+
+    await expectLatestMutationCall(
+      "visitors:updateLocation",
+      () =>
+        updateLocation(
+          VISITOR_ID as never,
+          {
+            country: "GB",
+            city: "London",
+          },
+          undefined
+        ),
+      {
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        location: {
+          country: "GB",
+          city: "London",
+        },
+      }
+    );
+
+    await expectLatestQueryCall(
+      "tickets:listByVisitor",
+      () => listTickets(VISITOR_ID as never),
+      {
+        visitorId: VISITOR_ID,
+        sessionToken: undefined,
+        workspaceId: WORKSPACE_ID,
+      },
+      []
+    );
+
+    await expectLatestQueryCall(
+      "tickets:get",
+      () => getTicket("ticket_1" as never),
+      {
+        id: "ticket_1",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+      },
+      null
+    );
+
+    await expectLatestMutationCall(
+      "tickets:addComment",
+      () =>
+        addTicketComment({
+          ticketId: "ticket_1" as never,
+          visitorId: VISITOR_ID as never,
+          content: "Need another update",
+        }),
+      {
+        ticketId: "ticket_1",
+        content: "Need another update",
+        visitorId: VISITOR_ID,
+        sessionToken: undefined,
+      },
+      "comment_1"
+    );
+
+    await expectLatestQueryCall(
+      "tickets:getComments",
+      () => getTicketComments("ticket_1" as never),
+      {
+        ticketId: "ticket_1",
+        includeInternal: false,
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+      },
+      []
+    );
+
+    await expectLatestQueryCall(
+      "checklists:getProgress",
+      () => getChecklistProgress(VISITOR_ID as never, "checklist_1" as never),
+      {
+        visitorId: VISITOR_ID,
+        checklistId: "checklist_1",
+        workspaceId: WORKSPACE_ID,
+        sessionToken: SESSION_TOKEN,
+      },
+      {
+        completedTaskIds: ["task_1"],
+        startedAt: 123,
+        completedAt: null,
+      }
+    );
+
+    await expectLatestMutationCall(
+      "checklists:completeTask",
+      () => completeChecklistItem(VISITOR_ID as never, "checklist_1" as never, "task_2"),
+      {
+        visitorId: VISITOR_ID,
+        checklistId: "checklist_1",
+        taskId: "task_2",
+        workspaceId: WORKSPACE_ID,
+        sessionToken: SESSION_TOKEN,
+      }
+    );
+  });
+
+  it("keeps AI, article, and carousel contracts stable", async () => {
+    await expectLatestQueryCall(
+      "aiAgent:getPublicSettings",
+      () => getAISettings(),
+      { workspaceId: WORKSPACE_ID },
+      {
+        enabled: true,
+        knowledgeSources: ["articles"],
+        confidenceThreshold: 0.8,
+        personality: null,
+        handoffMessage: "Escalating",
+        workingHours: null,
+        model: "gpt-4.1",
+        suggestionsEnabled: true,
+      }
+    );
+
+    await expectLatestQueryCall(
+      "aiAgent:getRelevantKnowledge",
+      () => getRelevantKnowledge("refund policy", 5),
+      {
+        workspaceId: WORKSPACE_ID,
+        query: "refund policy",
+        limit: 5,
+      },
+      []
+    );
+
+    await expectLatestQueryCall(
+      "aiAgent:getConversationResponses",
+      () => getConversationAIResponses("conversation_1" as never),
+      {
+        conversationId: "conversation_1",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+      },
+      []
+    );
+
+    await expectLatestMutationCall(
+      "aiAgent:submitFeedback",
+      () => submitAIFeedback("response_1" as never, "helpful"),
+      {
+        responseId: "response_1",
+        feedback: "helpful",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+      }
+    );
+
+    await expectLatestMutationCall(
+      "aiAgent:handoffToHuman",
+      () => handoffToHuman("conversation_1" as never, "Need an agent"),
+      {
+        conversationId: "conversation_1",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        reason: "Need an agent",
+      },
+      {
+        messageId: "message_1",
+        handoffMessage: "Connecting you to a human",
+      }
+    );
+
+    await expectLatestQueryCall(
+      "aiAgent:shouldRespond",
+      () => shouldAIRespond(),
+      { workspaceId: WORKSPACE_ID },
+      { shouldRespond: true, reason: null }
+    );
+
+    await expectLatestQueryCall(
+      "articles:searchForVisitor",
+      () =>
+        searchArticles({
+          visitorId: VISITOR_ID as never,
+          query: "billing",
+        }),
+      {
+        workspaceId: WORKSPACE_ID,
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        query: "billing",
+      },
+      []
+    );
+
+    await expectLatestQueryCall(
+      "articles:listForVisitor",
+      () => listArticles(VISITOR_ID as never),
+      {
+        workspaceId: WORKSPACE_ID,
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+      },
+      []
+    );
+
+    await expectLatestQueryCall(
+      "articles:get",
+      () => getArticle("article_1" as never),
+      { id: "article_1" },
+      null
+    );
+
+    await expectLatestQueryCall(
+      "carousels:get",
+      () => getCarousel("carousel_1" as never),
+      { id: "carousel_1" },
+      null
+    );
+
+    await expectLatestMutationCall(
+      "carousels:recordImpression",
+      () =>
+        recordCarouselImpression({
+          carouselId: "carousel_1" as never,
+          visitorId: VISITOR_ID as never,
+          action: "shown",
+        }),
+      {
+        carouselId: "carousel_1",
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+        action: "shown",
+        screenIndex: undefined,
+      }
+    );
+
+    await expectLatestQueryCall(
+      "carousels:listActive",
+      () => listActiveCarousels(VISITOR_ID as never),
+      {
+        workspaceId: WORKSPACE_ID,
+        visitorId: VISITOR_ID,
+        sessionToken: SESSION_TOKEN,
+      },
+      []
+    );
+  });
+
+  it("keeps event, common issue, and office hour contracts stable", async () => {
+    await expectLatestMutationCall(
+      "events:track",
+      () =>
+        trackEvent({
+          visitorId: VISITOR_ID as never,
+          name: "plan_viewed",
+          properties: {
+            seats: 3,
+            source: "pricing",
+            nested: { ignored: true },
+          },
+          url: "https://app.opencom.dev/pricing",
+          sessionId: "session_contract",
+        }),
+      {
+        workspaceId: WORKSPACE_ID,
+        visitorId: VISITOR_ID,
+        sessionToken: undefined,
+        name: "plan_viewed",
+        properties: {
+          seats: 3,
+          source: "pricing",
+        },
+        url: "https://app.opencom.dev/pricing",
+        sessionId: "session_contract",
+      }
+    );
+
+    await expectLatestMutationCall(
+      "events:trackAutoEvent",
+      () =>
+        trackAutoEvent({
+          visitorId: VISITOR_ID as never,
+          eventType: "page_view",
+          properties: {
+            path: "/pricing",
+            count: 1,
+          },
+        }),
+      {
+        workspaceId: WORKSPACE_ID,
+        visitorId: VISITOR_ID,
+        sessionToken: undefined,
+        eventType: "page_view",
+        properties: {
+          path: "/pricing",
+          count: 1,
+        },
+        url: undefined,
+        sessionId: undefined,
+      },
+      "event_1"
+    );
+
+    await expectLatestQueryCall(
+      "commonIssueButtons:list",
+      () => getCommonIssueButtons(),
+      { workspaceId: WORKSPACE_ID },
+      []
+    );
+
+    await expectLatestQueryCall(
+      "officeHours:isCurrentlyOpen",
+      () => getOfficeHoursStatus(),
+      { workspaceId: WORKSPACE_ID },
+      {
+        isOpen: true,
+        offlineMessage: null,
+        expectedReplyTimeMinutes: 5,
+      }
+    );
+
+    await expectLatestQueryCall(
+      "officeHours:getExpectedReplyTime",
+      () => getExpectedReplyTime(),
+      { workspaceId: WORKSPACE_ID },
+      "within the hour"
+    );
+
+    await expectLatestQueryCall(
+      "officeHours:getOrDefault",
+      () => getOfficeHours(),
+      { workspaceId: WORKSPACE_ID },
+      {
+        workspaceId: WORKSPACE_ID,
+        timezone: "Europe/London",
+        schedule: [],
+        expectedReplyTimeMinutes: 30,
+      }
     );
   });
 });
