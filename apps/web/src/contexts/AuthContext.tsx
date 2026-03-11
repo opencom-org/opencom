@@ -14,7 +14,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 
-interface User {
+export interface User {
   _id: Id<"users">;
   email: string;
   name?: string;
@@ -22,7 +22,7 @@ interface User {
   role: "owner" | "admin" | "agent" | "viewer";
 }
 
-interface Workspace {
+export interface Workspace {
   _id: Id<"workspaces">;
   name: string;
   role: "owner" | "admin" | "agent" | "viewer";

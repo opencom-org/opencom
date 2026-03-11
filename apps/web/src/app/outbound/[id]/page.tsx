@@ -1,20 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
-import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Input } from "@opencom/ui";
-import { useParams } from "next/navigation";
-import type { Id } from "@opencom/convex/dataModel";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
-import {
-  toInlineAudienceRule,
-  toInlineAudienceRuleFromBuilder,
-  type InlineAudienceRule,
-} from "@/lib/audienceRules";
-import type { MessageFrequency, MessageTrigger, OutboundMessageType, OutboundMessageStatus } from "@opencom/types";
 import { OutboundClickActionPanel } from "./OutboundClickActionPanel";
 import { OutboundContentEditor } from "./OutboundContentEditor";
 import { OutboundEditorHeader } from "./OutboundEditorHeader";
@@ -23,172 +11,37 @@ import { OutboundFrequencyPanel } from "./OutboundFrequencyPanel";
 import { OutboundPreviewPanel } from "./OutboundPreviewPanel";
 import { OutboundStatisticsPanel } from "./OutboundStatisticsPanel";
 import { OutboundTriggerPanel } from "./OutboundTriggerPanel";
-import {
-  createDefaultClickActionFormState,
-  createDefaultPostButtonFormState,
-  MessageContent,
-  getClickActionSummary,
-  toClickActionFormState,
-  toMessageClickAction,
-  toPostButtonFormState,
-  toPostButtons,
-  type ClickActionFormState,
-  type MessageButton,
-  type PostButtonFormState,
-} from "./editorState";
+import { useOutboundMessageEditorController } from "../hooks/useOutboundMessageEditorController";
 
 function MessageBuilderContent() {
-  const params = useParams();
-  const messageId = params.id as Id<"outboundMessages">;
-  const { activeWorkspace } = useAuth();
-
-  const outboundMessageQuery = makeFunctionReference<
-    "query",
-    { id: Id<"outboundMessages"> },
-    {
-      _id: Id<"outboundMessages">;
-      name: string;
-      type: OutboundMessageType;
-      status: OutboundMessageStatus;
-      content: MessageContent;
-      triggers?: MessageTrigger;
-      frequency?: MessageFrequency;
-      audienceRules?: InlineAudienceRule | null;
-      targeting?: InlineAudienceRule | null;
-    } | null
-  >("outboundMessages:get");
-
-  const outboundMessageStatsQuery = makeFunctionReference<
-    "query",
-    { id: Id<"outboundMessages"> },
-    { shown: number; clicked: number; dismissed: number; clickRate: number } | null
-  >("outboundMessages:getStats");
-
-  const workspaceMembersQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{ userId: Id<"users">; name?: string | null; email?: string | null }>
-  >("workspaceMembers:listByWorkspace");
-
-  const eventNamesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    string[]
-  >("events:getDistinctNames");
-
-  const updateOutboundMessageRef = makeFunctionReference<"mutation", any, null>(
-    "outboundMessages:update"
-  );
-
-  const activateOutboundMessageRef = makeFunctionReference<
-    "mutation",
-    { id: Id<"outboundMessages"> },
-    null
-  >("outboundMessages:activate");
-
-  const pauseOutboundMessageRef = makeFunctionReference<
-    "mutation",
-    { id: Id<"outboundMessages"> },
-    null
-  >("outboundMessages:pause");
-
-  const publicArticlesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces">; status: "published"; visibility: "public" },
-    Array<{ _id: Id<"articles">; title: string }>
-  >("articles:list");
-
-  const message = useQuery(outboundMessageQuery, { id: messageId });
-  const stats = useQuery(outboundMessageStatsQuery, { id: messageId });
-  const members = useQuery(
-    workspaceMembersQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const eventNames = useQuery(
-    eventNamesQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const updateMessage = useMutation(updateOutboundMessageRef);
-  const activateMessage = useMutation(activateOutboundMessageRef);
-  const pauseMessage = useMutation(pauseOutboundMessageRef);
-
-  const [name, setName] = useState("");
-  const [content, setContent] = useState<MessageContent>({});
-  const [triggers, setTriggers] = useState<MessageTrigger>({ type: "immediate" });
-  const [frequency, setFrequency] = useState<MessageFrequency>("once");
-  const [showPreview, setShowPreview] = useState(false);
-  const [audienceRules, setAudienceRules] = useState<InlineAudienceRule | null>(null);
-  const [clickActionForm, setClickActionForm] = useState<ClickActionFormState>(
-    createDefaultClickActionFormState()
-  );
-  const [postButtonForm, setPostButtonForm] = useState<PostButtonFormState>(
-    createDefaultPostButtonFormState()
-  );
-
-  const articles = useQuery(
-    publicArticlesQuery,
-    activeWorkspace?._id
-      ? { workspaceId: activeWorkspace._id, status: "published" as const, visibility: "public" }
-      : "skip"
-  );
-  const publicArticleOptions = articles?.map((article) => ({
-    _id: article._id as Id<"articles">,
-    title: article.title,
-  }));
-
-  useEffect(() => {
-    if (message) {
-      setName(message.name);
-      setContent(message.content);
-      setTriggers(message.triggers || { type: "immediate" });
-      setFrequency(message.frequency || "once");
-      setAudienceRules(toInlineAudienceRule(message.audienceRules ?? message.targeting));
-      setClickActionForm(
-        toClickActionFormState(message.content.clickAction as MessageContent["clickAction"])
-      );
-
-      if (message.type === "post") {
-        setPostButtonForm(toPostButtonFormState((message.content.buttons ?? []) as MessageButton[]));
-      } else {
-        setPostButtonForm(createDefaultPostButtonFormState());
-      }
-    }
-  }, [message]);
-
-  const handleSave = async () => {
-    if (!message) {
-      return;
-    }
-
-    const clickAction = toMessageClickAction(clickActionForm);
-
-    const nextContent: MessageContent = {
-      ...content,
-      clickAction,
-    };
-
-    if (message.type === "post") {
-      nextContent.buttons = toPostButtons(postButtonForm);
-    }
-
-    await updateMessage({
-      id: messageId,
-      name,
-      content: nextContent,
-      triggers,
-      frequency,
-      targeting: audienceRules ?? undefined,
-    });
-  };
-
-  const handleToggleStatus = async () => {
-    if (message?.status === "active") {
-      await pauseMessage({ id: messageId });
-    } else {
-      await activateMessage({ id: messageId });
-    }
-  };
+  const {
+    activeWorkspace,
+    audienceRules,
+    clickActionForm,
+    clickActionSummary,
+    content,
+    eventNames,
+    frequency,
+    handleSave,
+    handleToggleStatus,
+    members,
+    message,
+    name,
+    postButtonForm,
+    publicArticleOptions,
+    setAudienceRules,
+    setClickActionForm,
+    setContent,
+    setFrequency,
+    setName,
+    setPostButtonForm,
+    setShowPreview,
+    setTriggers,
+    showPreview,
+    stats,
+    toInlineAudienceRuleFromBuilder,
+    triggers,
+  } = useOutboundMessageEditorController();
 
   if (!message) {
     return <div className="p-8">Loading...</div>;
@@ -270,7 +123,7 @@ function MessageBuilderContent() {
               messageType={message.type}
               content={content}
               postButtonForm={postButtonForm}
-              clickActionSummary={getClickActionSummary(clickActionForm)}
+              clickActionSummary={clickActionSummary}
             />
           )}
 

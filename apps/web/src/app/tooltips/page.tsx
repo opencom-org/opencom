@@ -1,8 +1,6 @@
 "use client";
 
-import { makeFunctionReference, type FunctionReference } from "convex/server";
-import React, { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useEffect, useState, type FormEvent } from "react";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -10,85 +8,17 @@ import { Button, Input } from "@opencom/ui";
 import { scoreSelectorQuality, type SelectorQualityMetadata } from "@opencom/web-shared";
 import { Plus, Pencil, Trash2, Search, Info, MousePointer2, ExternalLink } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
-
-type TriggerType = "hover" | "click" | "auto";
+import {
+  type TooltipListItem,
+  type TriggerType,
+  useTooltipsConvex,
+} from "./hooks/useTooltipsConvex";
 
 interface TooltipFormData {
   name: string;
   elementSelector: string;
   content: string;
   triggerType: TriggerType;
-}
-
-interface TooltipListItem {
-  _id: Id<"tooltips">;
-  name: string;
-  elementSelector: string;
-  content: string;
-  triggerType: TriggerType;
-  selectorQuality?: SelectorQualityMetadata;
-}
-
-type ListTooltipsFn = FunctionReference<
-  "query",
-  "public",
-  { workspaceId: Id<"workspaces">; limit?: number },
-  TooltipListItem[]
->;
-
-type GetTooltipAuthoringSessionByTokenFn = FunctionReference<
-  "query",
-  "public",
-  {
-    token: string;
-    workspaceId: Id<"workspaces">;
-  }
->;
-
-type CreateTooltipFn = FunctionReference<
-  "mutation",
-  "public",
-  {
-    workspaceId: Id<"workspaces">;
-    name: string;
-    elementSelector: string;
-    selectorQuality?: SelectorQualityMetadata;
-    content: string;
-    triggerType: TriggerType;
-  }
->;
-
-type UpdateTooltipFn = FunctionReference<
-  "mutation",
-  "public",
-  {
-    id: Id<"tooltips">;
-    name: string;
-    elementSelector: string;
-    selectorQuality?: SelectorQualityMetadata;
-    content: string;
-    triggerType: TriggerType;
-  }
->;
-
-type DeleteTooltipFn = FunctionReference<"mutation", "public", { id: Id<"tooltips"> }>;
-
-type CreateTooltipAuthoringSessionFn = FunctionReference<
-  "mutation",
-  "public",
-  {
-    workspaceId: Id<"workspaces">;
-    tooltipId?: Id<"tooltips">;
-  },
-  { token: string }
->;
-
-function getQueryRef(name: string): FunctionReference<"query"> {
-  return makeFunctionReference(name) as FunctionReference<"query">;
-}
-
-function getMutationRef(name: string): FunctionReference<"mutation"> {
-  return makeFunctionReference(name) as FunctionReference<"mutation">;
 }
 
 function TooltipsContent() {
@@ -108,34 +38,17 @@ function TooltipsContent() {
   const [activeSessionToken, setActiveSessionToken] = useState<string | null>(null);
   const [pendingSelectorQuality, setPendingSelectorQuality] =
     useState<SelectorQualityMetadata | null>(null);
-
-  const listTooltips = getQueryRef("tooltips:list") as ListTooltipsFn;
-  const getAuthoringSessionByTokenRef = getQueryRef(
-    "tooltipAuthoringSessions:getByToken"
-  ) as GetTooltipAuthoringSessionByTokenFn;
-  const createTooltipRef = getMutationRef("tooltips:create") as CreateTooltipFn;
-  const updateTooltipRef = getMutationRef("tooltips:update") as UpdateTooltipFn;
-  const deleteTooltipRef = getMutationRef("tooltips:remove") as DeleteTooltipFn;
-  const createAuthoringSessionRef = getMutationRef(
-    "tooltipAuthoringSessions:create"
-  ) as CreateTooltipAuthoringSessionFn;
-
-  const tooltips = useQuery(
-    listTooltips,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createTooltip = useMutation(createTooltipRef);
-  const updateTooltip = useMutation(updateTooltipRef);
-  const deleteTooltip = useMutation(deleteTooltipRef);
-  const createAuthoringSession = useMutation(createAuthoringSessionRef);
-
-  const authoringSession = useQuery(
-    getAuthoringSessionByTokenRef,
-    activeSessionToken && activeWorkspace?._id
-      ? { token: activeSessionToken, workspaceId: activeWorkspace._id }
-      : "skip"
-  );
+  const {
+    authoringSession,
+    createAuthoringSession,
+    createTooltip,
+    deleteTooltip,
+    tooltips,
+    updateTooltip,
+  } = useTooltipsConvex({
+    workspaceId: activeWorkspace?._id,
+    activeSessionToken,
+  });
 
   const handleOpenModal = (tooltip?: TooltipListItem) => {
     if (tooltip) {
@@ -146,9 +59,7 @@ function TooltipsContent() {
         content: tooltip.content,
         triggerType: tooltip.triggerType,
       });
-      setPendingSelectorQuality(
-        (tooltip.selectorQuality ?? null) as SelectorQualityMetadata | null
-      );
+      setPendingSelectorQuality(tooltip.selectorQuality ?? null);
     } else {
       setEditingId(null);
       setFormData({
@@ -174,7 +85,7 @@ function TooltipsContent() {
     setPendingSelectorQuality(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!activeWorkspace?._id) return;
 
@@ -242,7 +153,7 @@ function TooltipsContent() {
   };
 
   // Poll for session completion
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isPollingSession || !authoringSession) return;
 
     if (authoringSession.status === "completed" && authoringSession.selectedSelector) {
@@ -250,9 +161,7 @@ function TooltipsContent() {
         ...prev,
         elementSelector: authoringSession.selectedSelector || "",
       }));
-      setPendingSelectorQuality(
-        (authoringSession.selectedSelectorQuality ?? null) as SelectorQualityMetadata | null
-      );
+      setPendingSelectorQuality(authoringSession.selectedSelectorQuality ?? null);
       setIsPollingSession(false);
       setActiveSessionToken(null);
     }

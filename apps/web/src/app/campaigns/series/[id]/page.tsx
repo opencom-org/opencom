@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -22,70 +20,26 @@ import {
   type ConnectionCondition,
   type ReadinessIssue,
   type ReadinessResult,
-  type SeriesBlock,
   type SeriesConnection,
-  type SeriesStats,
 } from "./seriesEditorTypes";
+import { useSeriesEditorConvex } from "../../hooks/useSeriesEditorConvex";
 
 function SeriesEditor() {
   const params = useParams();
   const seriesId = params.id as Id<"series">;
-
-  const seriesDataQuery = makeFunctionReference<
-    "query",
-    { id: Id<"series"> },
-    {
-      _id: Id<"series">;
-      name: string;
-      description?: string;
-      status?: string;
-      blocks?: unknown[];
-      connections?: unknown[];
-      entryRules?: unknown;
-      exitRules?: unknown;
-      goalRules?: unknown;
-    } | null
-  >("series:getWithBlocks");
-  const readinessQuery = makeFunctionReference<
-    "query",
-    { id: Id<"series"> },
-    ReadinessResult | null
-  >("series:getReadiness");
-  const statsQuery = makeFunctionReference<
-    "query",
-    { id: Id<"series"> },
-    SeriesStats | null
-  >("series:getStats");
-  const updateSeriesRef = makeFunctionReference<"mutation", any, unknown>("series:update");
-  const activateSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, unknown>(
-    "series:activate"
-  );
-  const pauseSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, unknown>(
-    "series:pause"
-  );
-  const addBlockRef = makeFunctionReference<"mutation", any, unknown>("series:addBlock");
-  const updateBlockRef = makeFunctionReference<"mutation", any, unknown>("series:updateBlock");
-  const removeBlockRef = makeFunctionReference<"mutation", { id: Id<"seriesBlocks"> }, unknown>(
-    "series:removeBlock"
-  );
-  const addConnectionRef = makeFunctionReference<"mutation", any, unknown>("series:addConnection");
-  const removeConnectionRef = makeFunctionReference<
-    "mutation",
-    { id: Id<"seriesConnections"> },
-    unknown
-  >("series:removeConnection");
-
-  const seriesData = useQuery(seriesDataQuery, { id: seriesId });
-  const readiness = useQuery(readinessQuery, { id: seriesId });
-  const stats = useQuery(statsQuery, { id: seriesId });
-  const updateSeries = useMutation(updateSeriesRef);
-  const activateSeries = useMutation(activateSeriesRef);
-  const pauseSeries = useMutation(pauseSeriesRef);
-  const addBlock = useMutation(addBlockRef);
-  const updateBlock = useMutation(updateBlockRef);
-  const removeBlock = useMutation(removeBlockRef);
-  const addConnection = useMutation(addConnectionRef);
-  const removeConnection = useMutation(removeConnectionRef);
+  const {
+    activateSeries,
+    addBlock,
+    addConnection,
+    pauseSeries,
+    readiness,
+    removeBlock,
+    removeConnection,
+    seriesData,
+    stats,
+    updateBlock,
+    updateSeries,
+  } = useSeriesEditorConvex({ seriesId });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -104,14 +58,8 @@ function SeriesEditor() {
   const [activationIssues, setActivationIssues] = useState<ReadinessResult | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
-  const blocks = useMemo(
-    () => (seriesData?.blocks || []) as unknown as SeriesBlock[],
-    [seriesData]
-  );
-  const connections = useMemo(
-    () => (seriesData?.connections || []) as unknown as SeriesConnection[],
-    [seriesData]
-  );
+  const blocks = useMemo(() => seriesData?.blocks ?? [], [seriesData]);
+  const connections = useMemo(() => seriesData?.connections ?? [], [seriesData]);
   const blockMap = useMemo(
     () => new Map(blocks.map((block) => [block._id, block] as const)),
     [blocks]
@@ -128,21 +76,15 @@ function SeriesEditor() {
     if (!selectedBlock) return [];
     return connections.filter((connection) => connection.fromBlockId === selectedBlock._id);
   }, [connections, selectedBlock]);
-  const readinessResult = (activationIssues ?? readiness ?? null) as ReadinessResult | null;
+  const readinessResult = activationIssues ?? readiness ?? null;
 
   useEffect(() => {
     if (seriesData) {
       setName(seriesData.name);
       setDescription(seriesData.description || "");
-      setEntryRulesText(
-        formatRuleText((seriesData as unknown as { entryRules?: unknown }).entryRules)
-      );
-      setExitRulesText(
-        formatRuleText((seriesData as unknown as { exitRules?: unknown }).exitRules)
-      );
-      setGoalRulesText(
-        formatRuleText((seriesData as unknown as { goalRules?: unknown }).goalRules)
-      );
+      setEntryRulesText(formatRuleText(seriesData.entryRules));
+      setExitRulesText(formatRuleText(seriesData.exitRules));
+      setGoalRulesText(formatRuleText(seriesData.goalRules));
     }
   }, [seriesData]);
 
@@ -209,9 +151,9 @@ function SeriesEditor() {
         id: seriesId,
         name,
         description: description || undefined,
-        entryRules: entryRulesResult.value as never,
-        exitRules: exitRulesResult.value as never,
-        goalRules: goalRulesResult.value as never,
+        entryRules: entryRulesResult.value,
+        exitRules: exitRulesResult.value,
+        goalRules: goalRulesResult.value,
       });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to save series");
@@ -301,10 +243,7 @@ function SeriesEditor() {
 
   const handleAddBlock = async (type: BlockType) => {
     const blocks = seriesData?.blocks || [];
-    const maxY = blocks.reduce(
-      (max: number, b: unknown) => Math.max(max, (b as SeriesBlock).position.y),
-      0
-    );
+    const maxY = blocks.reduce((max: number, block) => Math.max(max, block.position.y), 0);
 
     await addBlock({
       seriesId,
@@ -434,7 +373,7 @@ function SeriesEditor() {
           readinessResult={readinessResult}
           readinessBlockers={readinessBlockers}
           readinessWarnings={readinessWarnings}
-          stats={stats as SeriesStats | undefined}
+          stats={stats ?? undefined}
           onAddBlock={(type) => {
             void handleAddBlock(type);
           }}

@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
 import { Archive, ArrowLeft, Eye, EyeOff, Save, Users } from "lucide-react";
@@ -16,6 +14,7 @@ import {
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
 import type { ArticleEditorId } from "../articlesAdminTypes";
+import { useArticleEditorConvex } from "../hooks/useArticleEditorConvex";
 
 export default function ArticleEditorPage() {
   const params = useParams();
@@ -35,75 +34,21 @@ export default function ArticleEditorPage() {
   const [removingAssetId, setRemovingAssetId] = useState<Id<"articleAssets"> | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const hydratedArticleIdRef = useRef<ArticleEditorId | null>(null);
-
-  const articleQuery = makeFunctionReference<
-    "query",
-    { id: ArticleEditorId },
-    {
-      slug?: string;
-      title: string;
-      content: string;
-      collectionId?: Id<"collections">;
-      visibility?: "public" | "internal";
-      tags?: string[];
-      audienceRules?: unknown;
-      status?: string;
-    } | null
-  >("articles:get");
-
-  const articleAssetsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces">; articleId: ArticleEditorId },
-    Array<{ _id: Id<"articleAssets">; reference: string; fileName?: string }>
-  >("articles:listAssets");
-
-  const collectionsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{ _id: Id<"collections">; name: string }>
-  >("collections:listHierarchy");
-
-  const updateArticleRef = makeFunctionReference<"mutation", any, unknown>("articles:update");
-  const publishArticleRef = makeFunctionReference<"mutation", { id: ArticleEditorId }, unknown>(
-    "articles:publish"
-  );
-  const unpublishArticleRef = makeFunctionReference<"mutation", { id: ArticleEditorId }, unknown>(
-    "articles:unpublish"
-  );
-  const archiveArticleRef = makeFunctionReference<"mutation", { id: ArticleEditorId }, unknown>(
-    "articles:archive"
-  );
-  const generateAssetUploadUrlRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces"> },
-    string
-  >("articles:generateAssetUploadUrl");
-  const saveAssetRef = makeFunctionReference<"mutation", any, { reference: string; fileName?: string }>(
-    "articles:saveAsset"
-  );
-  const deleteAssetRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces">; assetId: Id<"articleAssets"> },
-    unknown
-  >("articles:deleteAsset");
-
-  const article = useQuery(articleQuery, { id: articleId });
-  const articleAssets = useQuery(
-    articleAssetsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, articleId } : "skip"
-  );
-  const collections = useQuery(
-    collectionsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const updateArticle = useMutation(updateArticleRef);
-  const publishArticle = useMutation(publishArticleRef);
-  const unpublishArticle = useMutation(unpublishArticleRef);
-  const archiveArticle = useMutation(archiveArticleRef);
-  const generateAssetUploadUrl = useMutation(generateAssetUploadUrlRef);
-  const saveAsset = useMutation(saveAssetRef);
-  const deleteAsset = useMutation(deleteAssetRef);
+  const {
+    archiveArticle,
+    article,
+    articleAssets,
+    collections,
+    deleteAsset,
+    generateAssetUploadUrl,
+    publishArticle,
+    saveAsset,
+    unpublishArticle,
+    updateArticle,
+  } = useArticleEditorConvex({
+    articleId,
+    workspaceId: activeWorkspace?._id,
+  });
 
   useEffect(() => {
     if (!article || articleId == null) {
@@ -126,9 +71,6 @@ export default function ArticleEditorPage() {
   const handleSave = async () => {
     if (!articleId) return;
     setIsSaving(true);
-    const mutationAudienceRules = audienceRules
-      ? (audienceRules as Parameters<typeof updateArticle>[0]["audienceRules"])
-      : undefined;
     try {
       await updateArticle({
         id: articleId,
@@ -143,7 +85,7 @@ export default function ArticleEditorPage() {
                 .map((tag) => tag.trim())
                 .filter(Boolean)
             : [],
-        ...(mutationAudienceRules ? { audienceRules: mutationAudienceRules } : {}),
+        ...(audienceRules ? { audienceRules } : {}),
       });
       setHasChanges(false);
     } catch (error) {

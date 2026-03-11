@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -21,19 +19,12 @@ import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
+import {
+  type CarouselScreenRecord,
+  useCarouselEditorConvex,
+} from "../../hooks/useCarouselEditorConvex";
 
-interface CarouselScreen {
-  id: string;
-  title?: string;
-  body?: string;
-  imageUrl?: string;
-  buttons?: Array<{
-    text: string;
-    action: "url" | "dismiss" | "next" | "deeplink";
-    url?: string;
-    deepLink?: string;
-  }>;
-}
+type CarouselScreen = CarouselScreenRecord;
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -52,63 +43,11 @@ function CarouselEditor() {
   const params = useParams();
   const carouselId = params.id as Id<"carousels">;
   const { activeWorkspace } = useAuth();
-
-  const carouselQuery = makeFunctionReference<
-    "query",
-    { id: Id<"carousels"> },
-    {
-      _id: Id<"carousels">;
-      name: string;
-      status: string;
-      screens: CarouselScreen[];
-      audienceRules?: AudienceRule | null;
-      targeting?: AudienceRule | null;
-    } | null
-  >("carousels:get");
-  const carouselStatsQuery = makeFunctionReference<
-    "query",
-    { id: Id<"carousels"> },
-    {
-      shown?: number;
-      impressions?: number;
-      completions?: number;
-      completed?: number;
-      completionRate?: number;
-      dismissals?: number;
-    } | null
-  >("carousels:getStats");
-  const eventNamesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    string[]
-  >("events:getDistinctNames");
-  const updateCarouselRef = makeFunctionReference<
-    "mutation",
-    {
-      id: Id<"carousels">;
-      name?: string;
-      screens?: CarouselScreen[];
-      targeting?: AudienceRule | null;
-      priority?: number;
-    },
-    unknown
-  >("carousels:update");
-  const activateCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, unknown>(
-    "carousels:activate"
-  );
-  const pauseCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, unknown>(
-    "carousels:pause"
-  );
-
-  const carousel = useQuery(carouselQuery, { id: carouselId });
-  const stats = useQuery(carouselStatsQuery, { id: carouselId });
-  const eventNames = useQuery(
-    eventNamesQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const updateCarousel = useMutation(updateCarouselRef);
-  const activateCarousel = useMutation(activateCarouselRef);
-  const pauseCarousel = useMutation(pauseCarouselRef);
+  const { activateCarousel, carousel, eventNames, pauseCarousel, stats, updateCarousel } =
+    useCarouselEditorConvex({
+      carouselId,
+      workspaceId: activeWorkspace?._id,
+    });
 
   const [name, setName] = useState("");
   const [screens, setScreens] = useState<CarouselScreen[]>([]);
@@ -121,8 +60,8 @@ function CarouselEditor() {
   useEffect(() => {
     if (carousel) {
       setName(carousel.name);
-      setScreens(carousel.screens as CarouselScreen[]);
-      setAudienceRules((carousel.audienceRules ?? carousel.targeting) as AudienceRule | null);
+      setScreens(carousel.screens);
+      setAudienceRules(carousel.audienceRules ?? carousel.targeting ?? null);
       setValidationErrors([]);
       setFormError(null);
     }

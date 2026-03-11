@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -22,6 +20,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
+import { useCampaignsPageConvex } from "./hooks/useCampaignsPageConvex";
 
 type CampaignTab = "email" | "push" | "carousels" | "series";
 
@@ -31,155 +30,27 @@ function CampaignsContent() {
   const [activeTab, setActiveTab] = useState<CampaignTab>("email");
   const [searchQuery, setSearchQuery] = useState("");
   const [carouselActionError, setCarouselActionError] = useState<string | null>(null);
-
-  const emailCampaignsListQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{
-      _id: Id<"emailCampaigns">;
-      name: string;
-      status: string;
-      subject: string;
-      createdAt: number;
-    }>
-  >("emailCampaigns:list");
-
-  const pushCampaignsListQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{
-      _id: Id<"pushCampaigns">;
-      name: string;
-      status: string;
-      title: string;
-      createdAt: number;
-    }>
-  >("pushCampaigns:list");
-
-  const carouselsListQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{
-      _id: Id<"carousels">;
-      name: string;
-      status: string;
-      screens: unknown[];
-      createdAt: number;
-    }>
-  >("carousels:list");
-
-  const seriesListQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{
-      _id: Id<"series">;
-      name: string;
-      description?: string;
-      status: string;
-      createdAt: number;
-    }>
-  >("series:list");
-
-  const createEmailCampaignRef = makeFunctionReference<"mutation", any, Id<"emailCampaigns">>(
-    "emailCampaigns:create"
-  );
-
-  const createPushCampaignRef = makeFunctionReference<"mutation", any, Id<"pushCampaigns">>(
-    "pushCampaigns:create"
-  );
-
-  const createCarouselRef = makeFunctionReference<"mutation", any, Id<"carousels">>(
-    "carousels:create"
-  );
-
-  const createSeriesRef = makeFunctionReference<"mutation", any, Id<"series">>(
-    "series:create"
-  );
-
-  const duplicateCarouselRef = makeFunctionReference<
-    "mutation",
-    { id: Id<"carousels"> },
-    Id<"carousels">
-  >("carousels:duplicate");
-
-  const deleteEmailCampaignRef = makeFunctionReference<"mutation", { id: Id<"emailCampaigns"> }, null>(
-    "emailCampaigns:remove"
-  );
-
-  const deletePushCampaignRef = makeFunctionReference<"mutation", { id: Id<"pushCampaigns"> }, null>(
-    "pushCampaigns:remove"
-  );
-
-  const deleteCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, null>(
-    "carousels:remove"
-  );
-
-  const deleteSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, null>(
-    "series:remove"
-  );
-
-  const pauseEmailCampaignRef = makeFunctionReference<"mutation", { id: Id<"emailCampaigns"> }, null>(
-    "emailCampaigns:pause"
-  );
-
-  const pausePushCampaignRef = makeFunctionReference<"mutation", { id: Id<"pushCampaigns"> }, null>(
-    "pushCampaigns:pause"
-  );
-
-  const pauseCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, null>(
-    "carousels:pause"
-  );
-
-  const pauseSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, null>(
-    "series:pause"
-  );
-
-  const activateCarouselRef = makeFunctionReference<"mutation", { id: Id<"carousels"> }, null>(
-    "carousels:activate"
-  );
-
-  const activateSeriesRef = makeFunctionReference<"mutation", { id: Id<"series"> }, null>(
-    "series:activate"
-  );
-
-  const emailCampaigns = useQuery(
-    emailCampaignsListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const pushCampaigns = useQuery(
-    pushCampaignsListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const carousels = useQuery(
-    carouselsListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const seriesList = useQuery(
-    seriesListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createEmailCampaign = useMutation(createEmailCampaignRef);
-  const createPushCampaign = useMutation(createPushCampaignRef);
-  const createCarousel = useMutation(createCarouselRef);
-  const createSeries = useMutation(createSeriesRef);
-  const duplicateCarousel = useMutation(duplicateCarouselRef);
-
-  const deleteEmailCampaign = useMutation(deleteEmailCampaignRef);
-  const deletePushCampaign = useMutation(deletePushCampaignRef);
-  const deleteCarousel = useMutation(deleteCarouselRef);
-  const deleteSeries = useMutation(deleteSeriesRef);
-
-  const pauseEmailCampaign = useMutation(pauseEmailCampaignRef);
-  const pausePushCampaign = useMutation(pausePushCampaignRef);
-  const pauseCarousel = useMutation(pauseCarouselRef);
-  const pauseSeries = useMutation(pauseSeriesRef);
-
-  const activateCarousel = useMutation(activateCarouselRef);
-  const activateSeries = useMutation(activateSeriesRef);
+  const {
+    activateCarousel,
+    activateSeries,
+    carousels,
+    createCarousel,
+    createEmailCampaign,
+    createPushCampaign,
+    createSeries,
+    deleteCarousel,
+    deleteEmailCampaign,
+    deletePushCampaign,
+    deleteSeries,
+    duplicateCarousel,
+    emailCampaigns,
+    pauseCarousel,
+    pauseEmailCampaign,
+    pausePushCampaign,
+    pauseSeries,
+    pushCampaigns,
+    seriesList,
+  } = useCampaignsPageConvex(activeWorkspace?._id);
 
   const handleDeleteCarousel = async (id: Id<"carousels">) => {
     setCarouselActionError(null);

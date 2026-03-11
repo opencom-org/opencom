@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,6 +17,7 @@ import { useInboxSelectionSync } from "./hooks/useInboxSelectionSync";
 import { useInboxCompactPanels } from "./hooks/useInboxCompactPanels";
 import { useInboxSuggestionsCount } from "./hooks/useInboxSuggestionsCount";
 import { useInboxAttentionCues } from "./hooks/useInboxAttentionCues";
+import { useInboxConvex } from "./hooks/useInboxConvex";
 import {
   useInboxMessageActions,
   type ConversationUiPatch,
@@ -99,126 +98,30 @@ function InboxContent(): React.JSX.Element | null {
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<"messages"> | null>(null);
   const messageHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyInputRef = useRef<HTMLInputElement | null>(null);
-
-  const inboxConversationsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces">; aiWorkflowState?: "ai_handled" | "handoff" },
-    { conversations: InboxConversation[] }
-  >("conversations:listForInbox");
-  const aiSettingsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { suggestionsEnabled?: boolean } | null
-  >("aiAgent:getSettings");
-  const messagesListQuery = makeFunctionReference<
-    "query",
-    { conversationId: Id<"conversations"> },
-    InboxMessage[]
-  >("messages:list");
-  const aiConversationResponsesQuery = makeFunctionReference<
-    "query",
-    { conversationId: Id<"conversations"> },
-    InboxAiResponse[]
-  >("aiAgent:getConversationResponses");
-  const sendMessageRef = makeFunctionReference<"mutation", any, unknown>("messages:send");
-  const markConversationReadRef = makeFunctionReference<
-    "mutation",
-    { id: Id<"conversations">; readerType: "agent" },
-    unknown
-  >("conversations:markAsRead");
-  const updateConversationStatusRef = makeFunctionReference<"mutation", any, unknown>(
-    "conversations:updateStatus"
-  );
-  const convertConversationToTicketRef = makeFunctionReference<
-    "mutation",
-    { conversationId: Id<"conversations"> },
-    Id<"tickets">
-  >("tickets:convertFromConversation");
-  const getSuggestionsForConversationAction = makeFunctionReference<
-    "action",
-    { conversationId: Id<"conversations">; limit: number },
-    Array<{ id: string }>
-  >("suggestions:getForConversation");
-  const createSnippetRef = makeFunctionReference<
-    "mutation",
-    {
-      workspaceId: Id<"workspaces">;
-      name: string;
-      content: string;
-      shortcut?: string;
-    },
-    Id<"snippets">
-  >("snippets:create");
-  const updateSnippetRef = makeFunctionReference<"mutation", any, unknown>("snippets:update");
-  const snippetsListQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    InboxSnippet[]
-  >("snippets:list");
-  const knowledgeSearchQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces">; query: string; limit: number },
-    InboxKnowledgeItem[]
-  >("knowledge:search");
-  const recentlyUsedKnowledgeQuery = makeFunctionReference<
-    "query",
-    { userId: Id<"users">; workspaceId: Id<"workspaces">; limit: number },
-    InboxKnowledgeItem[]
-  >("knowledge:getRecentlyUsed");
-  const trackKnowledgeAccessRef = makeFunctionReference<"mutation", any, null>(
-    "knowledge:trackAccess"
-  );
-
-  const inboxQueryArgs = activeWorkspace?._id
-    ? {
-        workspaceId: activeWorkspace._id,
-        ...(aiWorkflowFilter === "all" ? {} : { aiWorkflowState: aiWorkflowFilter }),
-      }
-    : "skip";
-  const conversationsData = useQuery(inboxConversationsQuery, inboxQueryArgs);
+  const {
+    aiResponses,
+    aiSettings,
+    allSnippets,
+    conversationsData,
+    createSnippet,
+    convertToTicket,
+    getSuggestionsForConversation,
+    knowledgeResults,
+    markAsRead,
+    messages,
+    recentContent,
+    sendMessage,
+    trackAccess,
+    updateSnippet,
+    updateStatus,
+  } = useInboxConvex({
+    workspaceId: activeWorkspace?._id,
+    userId: user?._id,
+    selectedConversationId,
+    aiWorkflowFilter,
+    knowledgeSearch,
+  });
   const rawConversations = conversationsData?.conversations;
-  const aiSettings = useQuery(
-    aiSettingsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const messages = useQuery(
-    messagesListQuery,
-    selectedConversationId ? { conversationId: selectedConversationId } : "skip"
-  );
-  const aiResponses = useQuery(
-    aiConversationResponsesQuery,
-    selectedConversationId ? { conversationId: selectedConversationId } : "skip"
-  );
-
-  const sendMessage = useMutation(sendMessageRef);
-  const markAsRead = useMutation(markConversationReadRef);
-  const updateStatus = useMutation(updateConversationStatusRef);
-  const convertToTicket = useMutation(convertConversationToTicketRef);
-  const getSuggestionsForConversation = useAction(getSuggestionsForConversationAction);
-  const createSnippet = useMutation(createSnippetRef);
-  const updateSnippet = useMutation(updateSnippetRef);
-
-  const allSnippets = useQuery(
-    snippetsListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const knowledgeResults = useQuery(
-    knowledgeSearchQuery,
-    activeWorkspace?._id && knowledgeSearch.trim().length >= 1
-      ? { workspaceId: activeWorkspace._id, query: knowledgeSearch, limit: 20 }
-      : "skip"
-  );
-
-  const recentContent = useQuery(
-    recentlyUsedKnowledgeQuery,
-    activeWorkspace?._id && user?._id
-      ? { userId: user._id, workspaceId: activeWorkspace._id, limit: 5 }
-      : "skip"
-  );
-
-  const trackAccess = useMutation(trackKnowledgeAccessRef);
 
   const conversations = useMemo(() => {
     if (!rawConversations) {

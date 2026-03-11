@@ -1,19 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { Button, Card, Input } from "@opencom/ui";
-import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { Copy, Check, Globe, Server, Search } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useBackend } from "@/contexts/BackendContext";
 import { AppLayout } from "@/components/AppLayout";
 import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
-import type { Id } from "@opencom/convex/dataModel";
-import { appConfirm } from "@/lib/appConfirm";
 import { MessengerSettingsSection } from "./MessengerSettingsSection";
 import { HomeSettingsSection } from "./HomeSettingsSection";
 import { AutomationSettingsSection } from "./AutomationSettingsSection";
@@ -22,493 +13,62 @@ import { SecuritySettingsSection } from "./SecuritySettingsSection";
 import { MobileDevicesSection } from "./MobileDevicesSection";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
 import { SettingsSectionContainer } from "./SettingsSectionContainer";
-import { SETTINGS_SECTION_CONFIG, type SettingsSectionId } from "./settingsSections";
 import {
   TeamMembersSection,
-  type PendingInvitationRecord,
-  type TeamMemberRecord,
 } from "./TeamMembersSection";
-import { useTeamMembersSettings } from "./useTeamMembersSettings";
 import { SignupAuthSection } from "./SignupAuthSection";
 import { HelpCenterAccessSection } from "./HelpCenterAccessSection";
 import { EmailChannelSection } from "./EmailChannelSection";
-
-type EmailConfigRecord = {
-  enabled: boolean;
-  forwardingAddress?: string;
-  fromName?: string;
-  fromEmail?: string;
-  signature?: string;
-};
+import { useSettingsPageController } from "./hooks/useSettingsPageController";
 
 function SettingsContent(): React.JSX.Element | null {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const { user, activeWorkspace, logout } = useAuth();
-  const { activeBackend, clearBackend } = useBackend();
-  const [copied, setCopied] = useState(false);
-  const [newOrigin, setNewOrigin] = useState("");
-  const [signupMode, setSignupMode] = useState<"invite-only" | "domain-allowlist">("invite-only");
-  const [allowedDomains, setAllowedDomains] = useState<string>("");
-  const [isSavingSignup, setIsSavingSignup] = useState(false);
-  const [helpCenterAccessPolicy, setHelpCenterAccessPolicy] = useState<"public" | "restricted">(
-    "public"
-  );
-  const [isSavingHelpCenterPolicy, setIsSavingHelpCenterPolicy] = useState(false);
-  const [authMethodPassword, setAuthMethodPassword] = useState(true);
-  const [authMethodOtp, setAuthMethodOtp] = useState(true);
-
-  // Email channel settings
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [emailFromName, setEmailFromName] = useState("");
-  const [emailFromEmail, setEmailFromEmail] = useState("");
-  const [emailSignature, setEmailSignature] = useState("");
-  const [isSavingEmail, setIsSavingEmail] = useState(false);
-
-  const workspaceQuery = makeFunctionReference<
-    "query",
-    { id: Id<"workspaces"> },
-    {
-      _id: Id<"workspaces">;
-      allowedOrigins?: string[];
-      signupMode?: "invite-only" | "domain-allowlist";
-      allowedDomains?: string[];
-      helpCenterAccessPolicy?: "public" | "restricted";
-      authMethods?: Array<"password" | "otp">;
-    } | null
-  >("workspaces:get");
-
-  const workspaceMembersQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    TeamMemberRecord[]
-  >("workspaceMembers:listByWorkspace");
-
-  const pendingInvitationsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    PendingInvitationRecord[]
-  >("workspaceMembers:getWorkspacePendingInvitations");
-
-  const emailConfigQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    EmailConfigRecord | null
-  >("emailChannel:getEmailConfig");
-
-  const aiSettingsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { enabled?: boolean } | null
-  >("aiAgent:getSettings");
-
-  const automationSettingsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    {
-      suggestArticlesEnabled?: boolean;
-      showReplyTimeEnabled?: boolean;
-      collectEmailEnabled?: boolean;
-      askForRatingEnabled?: boolean;
-    } | null
-  >("automationSettings:get");
-
-  const auditAccessQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { status: "unauthenticated" | "forbidden" | "ok"; canManageSecurity?: boolean } | null
-  >("auditLogs:getAccess");
-
-  const mobileDeviceStatsQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    { total: number } | null
-  >("visitorPushTokens:getStats");
-
-  const updateAllowedOriginsRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces">; allowedOrigins: string[] },
-    null
-  >("workspaces:updateAllowedOrigins");
-
-  const upsertEmailConfigRef = makeFunctionReference<"mutation", any, null>(
-    "emailChannel:upsertEmailConfig"
-  );
-
-  const updateSignupSettingsRef = makeFunctionReference<
-    "mutation",
-    {
-      workspaceId: Id<"workspaces">;
-      signupMode: "invite-only" | "domain-allowlist";
-      allowedDomains: string[];
-      authMethods: Array<"password" | "otp">;
-    },
-    null
-  >("workspaces:updateSignupSettings");
-
-  const updateHelpCenterAccessPolicyRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces">; policy: "public" | "restricted" },
-    null
-  >("workspaces:updateHelpCenterAccessPolicy");
-
-  const workspace = useQuery(
-    workspaceQuery,
-    activeWorkspace?._id ? { id: activeWorkspace._id } : "skip"
-  );
-
-  const members = useQuery(
-    workspaceMembersQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const pendingInvitations = useQuery(
-    pendingInvitationsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const emailConfig = useQuery(
-    emailConfigQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  ) as EmailConfigRecord | null | undefined;
-
-  const aiSettings = useQuery(
-    aiSettingsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const automationSettings = useQuery(
-    automationSettingsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const securityAccess = useQuery(
-    auditAccessQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const mobileDeviceStats = useQuery(
-    mobileDeviceStatsQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const updateAllowedOrigins = useMutation(updateAllowedOriginsRef);
-  const upsertEmailConfig = useMutation(upsertEmailConfigRef);
-  const updateSignupSettings = useMutation(updateSignupSettingsRef);
-  const updateHelpCenterAccessPolicy = useMutation(updateHelpCenterAccessPolicyRef);
-
-  const isOwner = activeWorkspace?.role === "owner";
-  const isAdmin = activeWorkspace?.role === "admin" || isOwner;
-
-  const [pageErrorFeedback, setPageErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
-
-  const setSettingsErrorFeedback = (
-    error: unknown,
-    fallbackMessage: string,
-    nextAction: string
-  ): void => {
-    setPageErrorFeedback(
-      normalizeUnknownError(error, {
-        fallbackMessage,
-        nextAction,
-      })
-    );
-  };
-
-  const teamSettings = useTeamMembersSettings({
-    workspaceId: activeWorkspace?._id,
-    onError: setSettingsErrorFeedback,
-  });
-
-  useEffect(() => {
-    if (workspace) {
-      setSignupMode(workspace.signupMode ?? "invite-only");
-      setAllowedDomains((workspace.allowedDomains ?? []).join(", "));
-      setHelpCenterAccessPolicy(workspace.helpCenterAccessPolicy ?? "public");
-      const methods = workspace.authMethods ?? ["password", "otp"];
-      setAuthMethodPassword(methods.includes("password"));
-      setAuthMethodOtp(methods.includes("otp"));
-    }
-  }, [workspace]);
-
-  useEffect(() => {
-    if (emailConfig) {
-      setEmailEnabled(emailConfig.enabled);
-      setEmailFromName(emailConfig.fromName ?? "");
-      setEmailFromEmail(emailConfig.fromEmail ?? "");
-      setEmailSignature(emailConfig.signature ?? "");
-    }
-  }, [emailConfig]);
-
-  const handleSaveSignupSettings = async () => {
-    if (!activeWorkspace?._id) return;
-    setPageErrorFeedback(null);
-
-    // Ensure at least one auth method is enabled
-    if (!authMethodPassword && !authMethodOtp) {
-      setPageErrorFeedback({
-        message: "At least one authentication method must be enabled.",
-        nextAction: "Enable Password or OTP, then save again.",
-      });
-      return;
-    }
-
-    setIsSavingSignup(true);
-    try {
-      const domains = allowedDomains
-        .split(",")
-        .map((d) => d.trim().toLowerCase())
-        .filter((d) => d.length > 0);
-
-      const authMethods: ("password" | "otp")[] = [];
-      if (authMethodPassword) authMethods.push("password");
-      if (authMethodOtp) authMethods.push("otp");
-
-      await updateSignupSettings({
-        workspaceId: activeWorkspace._id,
-        signupMode,
-        allowedDomains: signupMode === "domain-allowlist" ? domains : [],
-        authMethods,
-      });
-    } catch (err) {
-      setSettingsErrorFeedback(
-        err,
-        "Failed to save signup settings",
-        "Review signup settings and try again."
-      );
-    } finally {
-      setIsSavingSignup(false);
-    }
-  };
-
-  const handleSaveHelpCenterAccessPolicy = async () => {
-    if (!activeWorkspace?._id) return;
-    setPageErrorFeedback(null);
-
-    setIsSavingHelpCenterPolicy(true);
-    try {
-      await updateHelpCenterAccessPolicy({
-        workspaceId: activeWorkspace._id,
-        policy: helpCenterAccessPolicy,
-      });
-    } catch (err) {
-      setSettingsErrorFeedback(
-        err,
-        "Failed to save help center access policy",
-        "Confirm access policy values and try again."
-      );
-    } finally {
-      setIsSavingHelpCenterPolicy(false);
-    }
-  };
-
-  const copyWorkspaceId = () => {
-    if (activeWorkspace?._id) {
-      navigator.clipboard.writeText(activeWorkspace._id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const handleAddOrigin = async () => {
-    if (!newOrigin.trim() || !activeWorkspace?._id) return;
-
-    const currentOrigins = workspace?.allowedOrigins || [];
-    await updateAllowedOrigins({
-      workspaceId: activeWorkspace._id,
-      allowedOrigins: [...currentOrigins, newOrigin.trim()],
-    });
-    setNewOrigin("");
-  };
-
-  const handleRemoveOrigin = async (origin: string) => {
-    if (!activeWorkspace?._id) return;
-
-    const currentOrigins = workspace?.allowedOrigins || [];
-    await updateAllowedOrigins({
-      workspaceId: activeWorkspace._id,
-      allowedOrigins: currentOrigins.filter((o: string) => o !== origin),
-    });
-  };
-
-  const handleChangeBackend = async () => {
-    if (
-      await appConfirm(
-        "This will log you out and return to the backend selection screen. Continue?"
-      )
-    ) {
-      await logout();
-      clearBackend();
-      router.push("/login");
-    }
-  };
-
-  const handleSaveEmailSettings = async () => {
-    if (!activeWorkspace?._id) return;
-    setPageErrorFeedback(null);
-
-    setIsSavingEmail(true);
-    try {
-      await upsertEmailConfig({
-        workspaceId: activeWorkspace._id,
-        fromName: emailFromName || undefined,
-        fromEmail: emailFromEmail || undefined,
-        signature: emailSignature || undefined,
-        enabled: emailEnabled,
-      });
-    } catch (err) {
-      setSettingsErrorFeedback(err, "Failed to save email settings", "Review email fields and try again.");
-    } finally {
-      setIsSavingEmail(false);
-    }
-  };
-
-  const visibleSectionIds = useMemo(() => {
-    const allSectionIds = SETTINGS_SECTION_CONFIG.map((section) => section.id);
-    return allSectionIds.filter((sectionId) => {
-      if (sectionId === "signup-auth" || sectionId === "help-center-access") {
-        return isAdmin;
-      }
-      if (sectionId === "email-channel") {
-        return isAdmin;
-      }
-      return true;
-    });
-  }, [isAdmin]);
-
-  const visibleSections = useMemo(() => {
-    return SETTINGS_SECTION_CONFIG.filter((section) => visibleSectionIds.includes(section.id));
-  }, [visibleSectionIds]);
-
-  const defaultExpandedSectionId = useMemo(() => {
-    return (
-      visibleSections.find((section) => section.defaultExpanded)?.id ??
-      visibleSections[0]?.id ??
-      null
-    );
-  }, [visibleSections]);
-
-  const [expandedSectionId, setExpandedSectionId] = useState<SettingsSectionId | null>(
-    defaultExpandedSectionId
-  );
-
-  useEffect(() => {
-    if (expandedSectionId && !visibleSectionIds.includes(expandedSectionId)) {
-      setExpandedSectionId(defaultExpandedSectionId);
-    }
-  }, [defaultExpandedSectionId, expandedSectionId, visibleSectionIds]);
-
-  useEffect(() => {
-    const deepLinkedSection = searchParams.get("section");
-    if (!deepLinkedSection) {
-      return;
-    }
-
-    const sectionId = deepLinkedSection as SettingsSectionId;
-    if (!visibleSectionIds.includes(sectionId)) {
-      return;
-    }
-
-    setExpandedSectionId(sectionId);
-
-    window.requestAnimationFrame(() => {
-      const sectionElement = document.getElementById(sectionId);
-      if (!sectionElement) {
-        return;
-      }
-
-      sectionElement.scrollIntoView({ behavior: "auto", block: "start" });
-      sectionElement.focus({ preventScroll: true });
-    });
-  }, [searchParams, visibleSectionIds]);
-
-  const statusBySection = useMemo(() => {
-    const originCount = workspace?.allowedOrigins?.length ?? 0;
-    const automationEnabledCount = [
-      automationSettings?.suggestArticlesEnabled,
-      automationSettings?.showReplyTimeEnabled,
-      automationSettings?.collectEmailEnabled,
-      automationSettings?.askForRatingEnabled,
-    ].filter(Boolean).length;
-    const securityDenied =
-      securityAccess?.status === "ok" ? !securityAccess.canManageSecurity : false;
-
-    return {
-      workspace: { label: "Active", tone: "success" as const },
-      "team-members": {
-        label: `${members?.length ?? 0} member${members?.length === 1 ? "" : "s"}`,
-        tone: "neutral" as const,
-      },
-      "signup-auth": {
-        label: signupMode === "invite-only" ? "Invite only" : "Domain allowlist",
-        tone: "neutral" as const,
-      },
-      "allowed-origins":
-        originCount > 0
-          ? { label: `${originCount} configured`, tone: "success" as const }
-          : { label: "Needs attention", tone: "warning" as const },
-      "help-center-access": {
-        label: helpCenterAccessPolicy === "public" ? "Public" : "Restricted",
-        tone: "neutral" as const,
-      },
-      security:
-        securityDenied || securityAccess?.status === "unauthenticated"
-          ? { label: "Permission required", tone: "warning" as const }
-          : { label: "Managed", tone: "success" as const },
-      "messenger-customization": { label: "Managed", tone: "neutral" as const },
-      "messenger-home": { label: "Managed", tone: "neutral" as const },
-      automation:
-        automationEnabledCount > 0
-          ? { label: `${automationEnabledCount} enabled`, tone: "success" as const }
-          : { label: "All disabled", tone: "warning" as const },
-      "ai-agent":
-        aiSettings?.enabled === true
-          ? { label: "Enabled", tone: "success" as const }
-          : { label: "Disabled", tone: "warning" as const },
-      notifications: { label: "Managed", tone: "neutral" as const },
-      "email-channel": emailEnabled
-        ? { label: "Enabled", tone: "success" as const }
-        : { label: "Disabled", tone: "warning" as const },
-      "mobile-devices": {
-        label: mobileDeviceStats ? `${mobileDeviceStats.total} devices` : "No devices",
-        tone:
-          mobileDeviceStats && mobileDeviceStats.total > 0
-            ? ("success" as const)
-            : ("neutral" as const),
-      },
-      installations: { label: "In onboarding", tone: "neutral" as const },
-      "backend-connection": {
-        label: activeBackend?.name ? "Connected" : "Unknown",
-        tone: activeBackend?.name ? ("success" as const) : ("warning" as const),
-      },
-    } satisfies Partial<
-      Record<
-        SettingsSectionId,
-        { label: string; tone: "neutral" | "success" | "warning" | "danger" }
-      >
-    >;
-  }, [
-    activeBackend?.name,
-    aiSettings?.enabled,
-    automationSettings?.askForRatingEnabled,
-    automationSettings?.collectEmailEnabled,
-    automationSettings?.showReplyTimeEnabled,
-    automationSettings?.suggestArticlesEnabled,
+  const {
+    activeBackend,
+    activeWorkspace,
+    allowedDomains,
+    authMethodOtp,
+    authMethodPassword,
+    copied,
+    copyWorkspaceId,
+    emailConfig,
     emailEnabled,
+    emailFromEmail,
+    emailFromName,
+    emailSignature,
+    handleAddOrigin,
+    handleChangeBackend,
+    handleRemoveOrigin,
+    handleSaveEmailSettings,
+    handleSaveHelpCenterAccessPolicy,
+    handleSaveSignupSettings,
     helpCenterAccessPolicy,
-    members?.length,
-    mobileDeviceStats,
-    securityAccess?.canManageSecurity,
-    securityAccess?.status,
+    isAdmin,
+    isOwner,
+    isSavingEmail,
+    isSavingHelpCenterPolicy,
+    isSavingSignup,
+    isSectionExpanded,
+    members,
+    newOrigin,
+    pageErrorFeedback,
+    pendingInvitations,
+    setAllowedDomains,
+    setAuthMethodOtp,
+    setAuthMethodPassword,
+    setEmailEnabled,
+    setEmailFromEmail,
+    setEmailFromName,
+    setEmailSignature,
+    setHelpCenterAccessPolicy,
+    setNewOrigin,
+    setSignupMode,
     signupMode,
-    workspace?.allowedOrigins?.length,
-  ]);
-
-  const isSectionExpanded = (sectionId: SettingsSectionId) => expandedSectionId === sectionId;
-
-  const toggleSection = (sectionId: SettingsSectionId) => {
-    setExpandedSectionId((currentSectionId) => (currentSectionId === sectionId ? null : sectionId));
-  };
+    statusBySection,
+    teamSettings,
+    toggleSection,
+    user,
+    workspace,
+  } = useSettingsPageController();
 
   if (!user || !activeWorkspace) {
     return null;

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
@@ -19,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useArticleCollectionsConvex } from "../hooks/useArticleCollectionsConvex";
 
 interface CollectionFormData {
   name: string;
@@ -73,38 +72,8 @@ export default function CollectionsPage() {
     icon: "",
     parentId: "",
   });
-
-  const listHierarchyQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    Array<{
-      _id: Id<"collections">;
-      name: string;
-      description?: string;
-      icon?: string;
-      parentId?: Id<"collections">;
-      articleCount?: number;
-      order: number;
-    }>
-  >("collections:listHierarchy");
-  const createCollectionRef = makeFunctionReference<"mutation", any, Id<"collections">>(
-    "collections:create"
-  );
-  const updateCollectionRef = makeFunctionReference<"mutation", any, unknown>(
-    "collections:update"
-  );
-  const deleteCollectionRef = makeFunctionReference<"mutation", { id: Id<"collections"> }, unknown>(
-    "collections:remove"
-  );
-
-  const collections = useQuery(
-    listHierarchyQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createCollection = useMutation(createCollectionRef);
-  const updateCollection = useMutation(updateCollectionRef);
-  const deleteCollection = useMutation(deleteCollectionRef);
+  const { collections, createCollection, deleteCollection, updateCollection } =
+    useArticleCollectionsConvex(activeWorkspace?._id);
 
   type CollectionItem = NonNullable<typeof collections>[number];
   type FlattenedCollectionRow = {

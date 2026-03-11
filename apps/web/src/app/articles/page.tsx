@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@opencom/ui";
@@ -17,17 +15,13 @@ import { DeleteArticleDialog } from "./DeleteArticleDialog";
 import {
   ALL_COLLECTION_FILTER,
   type ArticleEditorId,
-  type ArticleListItem,
   type CollectionFilter,
-  type CollectionListItem,
   type DeleteArticleTarget,
   type ImportAssetPayload,
-  type ImportHistoryListItem,
   type ImportSelectionItem,
-  type ImportSourceListItem,
-  type MarkdownExportPayload,
   type MarkdownImportPreview,
 } from "./articlesAdminTypes";
+import { useArticlesAdminConvex } from "./hooks/useArticlesAdminConvex";
 import {
   ALL_STATUS_FILTER,
   buildCollectionFilterItems,
@@ -76,131 +70,25 @@ function ArticlesContent() {
   const [isDeletingArticle, setIsDeletingArticle] = useState(false);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const createQueryHandledRef = useRef(false);
-
-  const articlesListQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    ArticleListItem[]
-  >("articles:list");
-  const collectionsListHierarchyQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    CollectionListItem[]
-  >("collections:listHierarchy");
-  const importSourcesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    ImportSourceListItem[]
-  >("helpCenterImports:listSources");
-  const importHistoryQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces">; limit: number },
-    ImportHistoryListItem[]
-  >("helpCenterImports:listHistory");
-  const exportMarkdownQuery = makeFunctionReference<
-    "query",
-    {
-      workspaceId: Id<"workspaces">;
-      sourceId: Id<"helpCenterImportSources"> | undefined;
-      includeDrafts: boolean;
-    },
-    MarkdownExportPayload
-  >("helpCenterImports:exportMarkdown");
-  const createArticleRef = makeFunctionReference<
-    "mutation",
-    {
-      workspaceId: Id<"workspaces">;
-      title: string;
-      content: string;
-      visibility: "public" | "internal";
-    },
-    Id<"articles">
-  >("articles:create");
-  const deleteArticleRef = makeFunctionReference<
-    "mutation",
-    { id: ArticleEditorId },
-    unknown
-  >("articles:remove");
-  const publishArticleRef = makeFunctionReference<
-    "mutation",
-    { id: ArticleEditorId },
-    unknown
-  >("articles:publish");
-  const unpublishArticleRef = makeFunctionReference<
-    "mutation",
-    { id: ArticleEditorId },
-    unknown
-  >("articles:unpublish");
-  const syncMarkdownFolderRef = makeFunctionReference<
-    "mutation",
-    any,
-    {
-      strippedRootFolder?: string;
-      unresolvedImageReferences?: string[];
-      createdArticles: number;
-      createdCollections: number;
-      updatedArticles: number;
-      updatedCollections: number;
-      deletedArticles: number;
-      deletedCollections: number;
-      totalFiles?: number;
-      totalAssets?: number;
-      sourceId?: Id<"helpCenterImportSources">;
-      importRunId?: string;
-    }
-  >("helpCenterImports:syncMarkdownFolder");
-  const restoreImportRunRef = makeFunctionReference<
-    "mutation",
-    any,
-    {
-      restoredArticles: number;
-      restoredCollections: number;
-      sourceName?: string;
-    }
-  >("helpCenterImports:restoreRun");
-  const generateAssetUploadUrlRef = makeFunctionReference<
-    "mutation",
-    { workspaceId: Id<"workspaces"> },
-    string
-  >("articles:generateAssetUploadUrl");
-  const logExportRef = makeFunctionReference<"mutation", any, unknown>("auditLogs:logExport");
-
-  const articles = useQuery(
-    articlesListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  ) as ArticleListItem[] | undefined;
-
-  const collections = useQuery(
-    collectionsListHierarchyQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  ) as CollectionListItem[] | undefined;
-  const importSources = useQuery(
-    importSourcesQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  ) as ImportSourceListItem[] | undefined;
-  const importHistory = useQuery(
-    importHistoryQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, limit: 10 } : "skip"
-  ) as ImportHistoryListItem[] | undefined;
-  const markdownExport = useQuery(
-    exportMarkdownQuery,
-    isExporting && activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          sourceId: exportSourceId,
-          includeDrafts: true,
-        }
-      : "skip"
-  ) as MarkdownExportPayload | undefined;
-
-  const createArticle = useMutation(createArticleRef);
-  const deleteArticle = useMutation(deleteArticleRef);
-  const publishArticle = useMutation(publishArticleRef);
-  const unpublishArticle = useMutation(unpublishArticleRef);
-  const syncMarkdownFolder = useMutation(syncMarkdownFolderRef);
-  const restoreImportRun = useMutation(restoreImportRunRef);
-  const generateAssetUploadUrl = useMutation(generateAssetUploadUrlRef);
-  const logExport = useMutation(logExportRef);
+  const {
+    articles,
+    collections,
+    createArticle,
+    deleteArticle,
+    generateAssetUploadUrl,
+    importHistory,
+    importSources,
+    logExport,
+    markdownExport,
+    publishArticle,
+    restoreImportRun,
+    syncMarkdownFolder,
+    unpublishArticle,
+  } = useArticlesAdminConvex({
+    workspaceId: activeWorkspace?._id,
+    isExporting,
+    exportSourceId,
+  });
 
   const handleCreateArticle = useCallback(
     async (visibility: "public" | "internal" = "public") => {
@@ -407,7 +295,7 @@ function ArticlesContent() {
         dryRun: true,
       });
 
-      setImportPreview(result as MarkdownImportPreview);
+      setImportPreview(result);
       setPreviewSignature(signatureAtPreview);
       const rootStripSuffix = result.strippedRootFolder
         ? ` Upload root "${result.strippedRootFolder}" will be ignored.`

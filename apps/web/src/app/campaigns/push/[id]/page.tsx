@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -12,60 +10,18 @@ import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
+import { usePushCampaignEditorConvex } from "../../hooks/usePushCampaignEditorConvex";
 
 function PushCampaignEditor() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as Id<"pushCampaigns">;
   const { activeWorkspace } = useAuth();
-
-  const campaignQuery = makeFunctionReference<
-    "query",
-    { id: Id<"pushCampaigns"> },
-    {
-      _id: Id<"pushCampaigns">;
-      name: string;
-      title: string;
-      body: string;
-      imageUrl?: string;
-      deepLink?: string;
-      status: string;
-      audienceRules?: AudienceRule | null;
-      targeting?: AudienceRule | null;
-    } | null
-  >("pushCampaigns:get");
-
-  const campaignStatsQuery = makeFunctionReference<
-    "query",
-    { id: Id<"pushCampaigns"> },
-    {
-      total?: number;
-      deliveryRate?: number;
-      openRate?: number;
-      failed?: number;
-    } | null
-  >("pushCampaigns:getStats");
-
-  const eventNamesQuery = makeFunctionReference<
-    "query",
-    { workspaceId: Id<"workspaces"> },
-    string[]
-  >("events:getDistinctNames");
-
-  const updateCampaignRef = makeFunctionReference<"mutation", any, unknown>("pushCampaigns:update");
-
-  const sendCampaignRef = makeFunctionReference<"mutation", { id: Id<"pushCampaigns"> }, unknown>(
-    "pushCampaigns:send"
-  );
-
-  const campaign = useQuery(campaignQuery, { id: campaignId });
-  const stats = useQuery(campaignStatsQuery, { id: campaignId });
-  const eventNames = useQuery(
-    eventNamesQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const updateCampaign = useMutation(updateCampaignRef);
-  const sendCampaign = useMutation(sendCampaignRef);
+  const { campaign, eventNames, sendCampaign, stats, updateCampaign } =
+    usePushCampaignEditorConvex({
+      campaignId,
+      workspaceId: activeWorkspace?._id,
+    });
 
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -82,7 +38,7 @@ function PushCampaignEditor() {
       setBody(campaign.body);
       setImageUrl(campaign.imageUrl || "");
       setDeepLink(campaign.deepLink || "");
-      setAudienceRules((campaign.audienceRules ?? campaign.targeting) as AudienceRule | null);
+      setAudienceRules(campaign.audienceRules ?? campaign.targeting ?? null);
     }
   }, [campaign]);
 
