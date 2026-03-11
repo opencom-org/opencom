@@ -1,44 +1,17 @@
 "use client";
 
-import { useQuery } from "convex/react";
 import { Card } from "@opencom/ui";
 import { Smartphone } from "lucide-react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
-
-const visitorPushTokenStatsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { total: number; ios: number; android: number; uniqueVisitors: number } | null
->("visitorPushTokens:getStats");
-
-const visitorPushTokensWithInfoQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  Array<{
-    _id: string;
-    platform: "ios" | "android";
-    visitorId?: Id<"visitors">;
-    visitorReadableId?: string;
-    visitorName?: string;
-    visitorEmail?: string;
-    updatedAt: number;
-    token: string;
-  }>
->("visitorPushTokens:listWithVisitorInfo");
+import { useMobileDevicesSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function MobileDevicesSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const stats = useQuery(visitorPushTokenStatsQuery, workspaceId ? { workspaceId } : "skip");
-
-  const devices = useQuery(
-    visitorPushTokensWithInfoQuery,
-    workspaceId ? { workspaceId } : "skip"
-  );
+  const { devices, stats } = useMobileDevicesSectionConvex(workspaceId);
 
   if (!workspaceId) return null;
 

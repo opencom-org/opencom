@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -24,9 +22,9 @@ import { SurveyBuilderTab } from "./SurveyBuilderTab";
 import { SurveyTargetingTab } from "./SurveyTargetingTab";
 import { SurveySettingsTab } from "./SurveySettingsTab";
 import { SurveyAnalyticsTab } from "./SurveyAnalyticsTab";
+import { useSurveyBuilderConvex } from "../hooks/useSurveysConvex";
 import {
   type Question,
-  type QuestionAnalytics,
   type SurveyEditorTab,
   type SurveyFrequency,
   type SurveyScheduling,
@@ -34,86 +32,12 @@ import {
 } from "./surveyEditorTypes";
 import { useSurveyQuestionEditor } from "./useSurveyQuestionEditor";
 
-type SurveyRecord = {
-  _id: Id<"surveys">;
-  name: string;
-  description?: string;
-  format: "small" | "large";
-  questions: Question[];
-  introStep?: { title: string; description?: string; buttonText?: string } | null;
-  thankYouStep?: { title: string; description?: string; buttonText?: string } | null;
-  showProgressBar?: boolean;
-  showDismissButton?: boolean;
-  audienceRules?: unknown;
-  triggers?: SurveyTriggers;
-  frequency?: SurveyFrequency;
-  scheduling?: SurveyScheduling;
-  status: "draft" | "active" | "paused" | "archived";
-};
-
-type SurveyAnalyticsRecord = {
-  impressions: { shown: number; started: number };
-  totalResponses: number;
-  responseRate: number;
-  questionAnalytics: Record<string, QuestionAnalytics>;
-};
-
-type UpdateSurveyArgs = {
-  id: Id<"surveys">;
-  name?: string;
-  description?: string;
-  format?: "small" | "large";
-  questions?: Question[];
-  introStep?: { title: string; description?: string; buttonText?: string };
-  thankYouStep?: { title: string; description?: string; buttonText?: string };
-  showProgressBar?: boolean;
-  showDismissButton?: boolean;
-  audienceRules?: unknown;
-  triggers?: SurveyTriggers;
-  frequency?: SurveyFrequency;
-  scheduling?: SurveyScheduling;
-};
-
-const surveyQuery = makeFunctionReference<
-  "query",
-  { id: Id<"surveys"> },
-  SurveyRecord | null
->("surveys:get");
-
-const surveyAnalyticsQuery = makeFunctionReference<
-  "query",
-  { surveyId: Id<"surveys"> },
-  SurveyAnalyticsRecord | undefined
->("surveys:getAnalytics");
-
-const updateSurveyRef = makeFunctionReference<"mutation", UpdateSurveyArgs, null>("surveys:update");
-const activateSurveyRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"surveys"> },
-  null
->("surveys:activate");
-const pauseSurveyRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"surveys"> },
-  null
->("surveys:pause");
-const exportSurveyResponsesCsvRef = makeFunctionReference<
-  "mutation",
-  { surveyId: Id<"surveys"> },
-  { csv: string; fileName: string }
->("surveys:exportResponsesCsv");
-
 function SurveyBuilderContent() {
   const params = useParams();
   const { activeWorkspace } = useAuth();
   const surveyId = params.id as Id<"surveys">;
-
-  const survey = useQuery(surveyQuery, { id: surveyId }) as SurveyRecord | null | undefined;
-  const analytics = useQuery(surveyAnalyticsQuery, { surveyId }) as SurveyAnalyticsRecord | undefined;
-  const updateSurvey = useMutation(updateSurveyRef);
-  const activateSurvey = useMutation(activateSurveyRef);
-  const pauseSurvey = useMutation(pauseSurveyRef);
-  const exportResponsesCsv = useMutation(exportSurveyResponsesCsvRef);
+  const { activateSurvey, analytics, exportResponsesCsv, pauseSurvey, survey, updateSurvey } =
+    useSurveyBuilderConvex(surveyId);
 
   const [activeTab, setActiveTab] = useState<SurveyEditorTab>("builder");
   const [name, setName] = useState("");

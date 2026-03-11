@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,53 +9,7 @@ import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, Copy, Play, Pause, Search, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
-
-const surveysListQuery = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    status?: "draft" | "active" | "paused" | "archived";
-  },
-  Array<{
-    _id: Id<"surveys">;
-    name: string;
-    description?: string;
-    format: string;
-    questions: unknown[];
-    status: "draft" | "active" | "paused" | "archived";
-    createdAt: number;
-  }>
->("surveys:list");
-
-const createSurveyRef = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; name: string; format: string },
-  Id<"surveys">
->("surveys:create");
-
-const deleteSurveyRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"surveys"> },
-  null
->("surveys:remove");
-
-const activateSurveyRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"surveys"> },
-  null
->("surveys:activate");
-
-const pauseSurveyRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"surveys"> },
-  null
->("surveys:pause");
-
-const duplicateSurveyRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"surveys"> },
-  Id<"surveys"> | null
->("surveys:duplicate");
+import { useSurveysPageConvex } from "./hooks/useSurveysConvex";
 
 function SurveysContent() {
   const router = useRouter();
@@ -66,22 +18,11 @@ function SurveysContent() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "draft" | "active" | "paused" | "archived"
   >("all");
-
-  const surveys = useQuery(
-    surveysListQuery,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        }
-      : "skip"
-  );
-
-  const createSurvey = useMutation(createSurveyRef);
-  const deleteSurvey = useMutation(deleteSurveyRef);
-  const activateSurvey = useMutation(activateSurveyRef);
-  const pauseSurvey = useMutation(pauseSurveyRef);
-  const duplicateSurvey = useMutation(duplicateSurveyRef);
+  const { activateSurvey, createSurvey, deleteSurvey, duplicateSurvey, pauseSurvey, surveys } =
+    useSurveysPageConvex(
+      activeWorkspace?._id,
+      statusFilter === "all" ? undefined : statusFilter
+    );
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;

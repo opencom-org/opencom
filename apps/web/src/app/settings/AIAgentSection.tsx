@@ -1,65 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { Button, Card, Input } from "@opencom/ui";
 import { AlertTriangle, Bot } from "lucide-react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
-
-const aiSettingsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  {
-    enabled: boolean;
-    model: string;
-    confidenceThreshold: number;
-    knowledgeSources: string[];
-    personality?: string;
-    handoffMessage?: string;
-    suggestionsEnabled?: boolean;
-    embeddingModel?: string;
-    lastConfigError?: {
-      message: string;
-      code: string;
-      provider?: string;
-      model?: string;
-    } | null;
-  } | null
->("aiAgent:getSettings");
-
-const availableModelsQuery = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  Array<{ id: string; name: string; provider: string }>
->("aiAgent:listAvailableModels");
-
-const updateAiSettingsRef = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    enabled?: boolean;
-    model?: string;
-    confidenceThreshold?: number;
-    knowledgeSources?: Array<"articles" | "internalArticles" | "snippets">;
-    personality?: string;
-    handoffMessage?: string;
-    suggestionsEnabled?: boolean;
-    embeddingModel?: string;
-  },
-  null
->("aiAgent:updateSettings");
+import { useAIAgentSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function AIAgentSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const aiSettings = useQuery(aiSettingsQuery, workspaceId ? { workspaceId } : "skip");
-
-  const availableModels = useQuery(availableModelsQuery, {});
-
-  const updateSettings = useMutation(updateAiSettingsRef);
+  const { aiSettings, availableModels, updateSettings } = useAIAgentSectionConvex(workspaceId);
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("openai/gpt-5-nano");

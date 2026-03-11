@@ -1,8 +1,7 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
+import { useSignedSessionsSettingsConvex } from "./hooks/useSettingsSectionsConvex";
 
 const SESSION_LIFETIME_OPTIONS = [
   { value: 1 * 60 * 60 * 1000, label: "1 hour" },
@@ -13,25 +12,12 @@ const SESSION_LIFETIME_OPTIONS = [
   { value: 7 * 24 * 60 * 60 * 1000, label: "7 days" },
 ];
 
-const widgetSessionSettingsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { sessionLifetimeMs: number } | null
->("widgetSessions:getSettings");
-
-const updateWidgetSessionSettingsRef = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; sessionLifetimeMs: number },
-  null
->("widgetSessions:updateSettings");
-
 export function SignedSessionsSettings({
   workspaceId,
 }: {
   workspaceId: Id<"workspaces">;
 }): React.JSX.Element {
-  const settings = useQuery(widgetSessionSettingsQuery, { workspaceId });
-  const updateSettings = useMutation(updateWidgetSessionSettingsRef);
+  const { settings, updateSettings } = useSignedSessionsSettingsConvex(workspaceId);
 
   const handleLifetimeChange = async (sessionLifetimeMs: number) => {
     try {

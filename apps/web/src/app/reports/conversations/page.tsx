@@ -1,42 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
-import type { Id } from "@opencom/convex/dataModel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { MessageSquare, Clock, CheckCircle, Download, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
-
-const conversationMetricsQuery = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    startDate: number;
-    endDate: number;
-    granularity: "day" | "week" | "month";
-  },
-  {
-    total: number;
-    volumeByPeriod: Array<{ period: string; count: number }>;
-    byStatus: { open: number; closed: number; snoozed: number };
-    byChannel: { chat: number; email: number };
-  } | null
->("reporting:getConversationMetrics");
-
-const responseTimeMetricsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
-  { averageMs: number; medianMs: number; p95Ms: number; p90Ms: number } | null
->("reporting:getResponseTimeMetrics");
-
-const resolutionTimeMetricsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; startDate: number; endDate: number },
-  { averageMs: number; medianMs: number } | null
->("reporting:getResolutionTimeMetrics");
+import { useConversationsReportConvex } from "../hooks/useReportsConvex";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -56,40 +26,13 @@ function ConversationsReportContent() {
     const startDate = endDate - days * 24 * 60 * 60 * 1000;
     return { startDate, endDate };
   }, [dateRange]);
-
-  const conversationMetrics = useQuery(
-    conversationMetricsQuery,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          startDate: dateWindow.startDate,
-          endDate: dateWindow.endDate,
-          granularity,
-        }
-      : "skip"
-  );
-
-  const responseTimeMetrics = useQuery(
-    responseTimeMetricsQuery,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          startDate: dateWindow.startDate,
-          endDate: dateWindow.endDate,
-        }
-      : "skip"
-  );
-
-  const resolutionTimeMetrics = useQuery(
-    resolutionTimeMetricsQuery,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          startDate: dateWindow.startDate,
-          endDate: dateWindow.endDate,
-        }
-      : "skip"
-  );
+  const { conversationMetrics, resolutionTimeMetrics, responseTimeMetrics } =
+    useConversationsReportConvex(
+      activeWorkspace?._id,
+      dateWindow.startDate,
+      dateWindow.endDate,
+      granularity
+    );
 
   const handleExportCSV = () => {
     if (!conversationMetrics) return;

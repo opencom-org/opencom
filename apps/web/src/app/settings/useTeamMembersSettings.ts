@@ -1,10 +1,9 @@
 "use client";
 
-import { makeFunctionReference } from "convex/server";
 import { useState } from "react";
-import { useAction, useMutation } from "convex/react";
 import { appConfirm } from "@/lib/appConfirm";
 import type { Id } from "@opencom/convex/dataModel";
+import { useTeamMembersSettingsConvex } from "./hooks/useSettingsSectionsConvex";
 
 type WorkspaceMemberRole = "owner" | "admin" | "agent" | "viewer";
 
@@ -52,65 +51,6 @@ export interface TeamMembersSettingsController {
   handleCancelInvitation: (invitationId: Id<"workspaceInvitations">) => Promise<void>;
 }
 
-type InviteToWorkspaceArgs = {
-  workspaceId: Id<"workspaces">;
-  email: string;
-  role: "admin" | "agent" | "viewer";
-  baseUrl: string;
-};
-
-type InviteToWorkspaceResult = {
-  status: "added" | "invited";
-};
-
-type UpdateRoleArgs = {
-  membershipId: Id<"workspaceMembers">;
-  role: "admin" | "agent" | "viewer";
-};
-
-type SuccessResponse = {
-  success: boolean;
-};
-
-type RemoveMemberArgs = {
-  membershipId: Id<"workspaceMembers">;
-};
-
-type CancelInvitationArgs = {
-  invitationId: Id<"workspaceInvitations">;
-};
-
-type TransferOwnershipArgs = {
-  workspaceId: Id<"workspaces">;
-  newOwnerId: Id<"users">;
-};
-
-const INVITE_TO_WORKSPACE_REF = makeFunctionReference<
-  "action",
-  InviteToWorkspaceArgs,
-  InviteToWorkspaceResult
->("workspaceMembers:inviteToWorkspace");
-
-const UPDATE_ROLE_REF = makeFunctionReference<"mutation", UpdateRoleArgs, SuccessResponse>(
-  "workspaceMembers:updateRole"
-);
-
-const REMOVE_MEMBER_REF = makeFunctionReference<"mutation", RemoveMemberArgs, SuccessResponse>(
-  "workspaceMembers:remove"
-);
-
-const CANCEL_INVITATION_REF = makeFunctionReference<
-  "mutation",
-  CancelInvitationArgs,
-  SuccessResponse
->("workspaceMembers:cancelInvitation");
-
-const TRANSFER_OWNERSHIP_REF = makeFunctionReference<
-  "mutation",
-  TransferOwnershipArgs,
-  SuccessResponse
->("workspaceMembers:transferOwnership");
-
 export function useTeamMembersSettings({
   workspaceId,
   onError,
@@ -124,12 +64,8 @@ export function useTeamMembersSettings({
   const [showTransferOwnership, setShowTransferOwnership] = useState(false);
   const [transferTargetId, setTransferTargetId] = useState<Id<"users"> | null>(null);
   const [showRoleConfirm, setShowRoleConfirm] = useState<RoleConfirmState | null>(null);
-
-  const inviteToWorkspace = useAction(INVITE_TO_WORKSPACE_REF);
-  const updateRole = useMutation(UPDATE_ROLE_REF);
-  const removeMember = useMutation(REMOVE_MEMBER_REF);
-  const cancelInvitation = useMutation(CANCEL_INVITATION_REF);
-  const transferOwnership = useMutation(TRANSFER_OWNERSHIP_REF);
+  const { cancelInvitation, inviteToWorkspace, removeMember, transferOwnership, updateRole } =
+    useTeamMembersSettingsConvex();
 
   const handleInvite = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

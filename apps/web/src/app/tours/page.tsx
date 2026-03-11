@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,6 +9,7 @@ import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, Copy, Play, Pause, Search, Route } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useToursPageConvex } from "./hooks/useToursConvex";
 
 type TourRecord = {
   _id: Id<"tours">;
@@ -20,63 +19,16 @@ type TourRecord = {
   createdAt: number;
 };
 
-const listToursQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; status?: "draft" | "active" | "archived" },
-  TourRecord[]
->("tours:list");
-
-const createTourMutationRef = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; name: string },
-  Id<"tours">
->("tours:create");
-
-const deleteTourMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tours"> },
-  null
->("tours:remove");
-
-const activateTourMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tours"> },
-  null
->("tours:activate");
-
-const deactivateTourMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tours"> },
-  null
->("tours:deactivate");
-
-const duplicateTourMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tours"> },
-  Id<"tours">
->("tours:duplicate");
-
 function ToursContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "active" | "archived">("all");
-
-  const tours = useQuery(
-    listToursQueryRef,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        }
-      : "skip"
-  ) as TourRecord[] | undefined;
-
-  const createTour = useMutation(createTourMutationRef);
-  const deleteTour = useMutation(deleteTourMutationRef);
-  const activateTour = useMutation(activateTourMutationRef);
-  const deactivateTour = useMutation(deactivateTourMutationRef);
-  const duplicateTour = useMutation(duplicateTourMutationRef);
+  const { activateTour, createTour, deactivateTour, deleteTour, duplicateTour, tours } =
+    useToursPageConvex(
+      activeWorkspace?._id,
+      statusFilter === "all" ? undefined : statusFilter
+    );
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;
