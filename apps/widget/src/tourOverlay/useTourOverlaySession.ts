@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getAdvanceGuidance } from "./messages";
 import type { ElementPosition, TooltipPosition, TourData } from "./types";
+import { useWidgetMutation, widgetMutationRef } from "../lib/convex/hooks";
 
-const startTourProgressMutationRef = makeFunctionReference<
-  "mutation",
+const startTourProgressMutationRef = widgetMutationRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -93,7 +91,7 @@ export function useTourOverlaySession({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [suppressedTourIds, setSuppressedTourIds] = useState<Set<string>>(new Set());
 
-  const startTour = useMutation(startTourProgressMutationRef);
+  const startTour = useWidgetMutation(startTourProgressMutationRef);
   const currentStep = activeTour?.steps[currentStepIndex] ?? null;
 
   const resetFeedback = useCallback(() => {

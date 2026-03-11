@@ -1,6 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   getDefaultPublicMessengerSettings,
@@ -8,13 +6,13 @@ import {
   type PublicMessengerSettings,
 } from "@opencom/types";
 import { getThemeRoot } from "../portal";
+import { useWidgetQuery, widgetQueryRef } from "../lib/convex/hooks";
 
 export type MessengerSettings = PublicMessengerSettings;
 
 const DEFAULT_SETTINGS: MessengerSettings = getDefaultPublicMessengerSettings();
 
-const publicMessengerSettingsQueryRef = makeFunctionReference<
-  "query",
+const publicMessengerSettingsQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces"> },
   Partial<PublicMessengerSettings> | null
 >("messengerSettings:getPublicSettings");
@@ -33,7 +31,7 @@ function settingsCacheKey(workspaceId: string): string {
 
 export function useWidgetSettings(activeWorkspaceId: string | undefined, isValidIdFormat: boolean) {
   // Messenger customization settings
-  const messengerSettingsData = useQuery(
+  const messengerSettingsData = useWidgetQuery(
     publicMessengerSettingsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
   ) as Partial<PublicMessengerSettings> | null | undefined;

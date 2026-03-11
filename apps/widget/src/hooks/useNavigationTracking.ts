@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
+import { useWidgetMutation, widgetMutationRef } from "../lib/convex/hooks";
 
 interface TooltipTriggerContext {
   currentUrl?: string;
@@ -21,8 +20,7 @@ interface UseNavigationTrackingOptions {
   onTooltipContextChange: (updater: (prev: TooltipTriggerContext) => TooltipTriggerContext) => void;
 }
 
-const trackAutoEventMutationRef = makeFunctionReference<
-  "mutation",
+const trackAutoEventMutationRef = widgetMutationRef<
   {
     workspaceId: Id<"workspaces">;
     visitorId: Id<"visitors">;
@@ -58,7 +56,7 @@ export function useNavigationTracking({
   const maxScrollDepth = useRef(0);
   const scrollDepthThresholds = useRef(new Set<number>());
 
-  const trackAutoEventMutation = useMutation(trackAutoEventMutationRef);
+  const trackAutoEventMutation = useWidgetMutation(trackAutoEventMutationRef);
 
   const trackPageView = useCallback(() => {
     if (!visitorId || !activeWorkspaceId) return;

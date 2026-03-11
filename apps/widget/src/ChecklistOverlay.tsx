@@ -1,9 +1,13 @@
 import { useState, useCallback } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { CheckSquare, ChevronDown, ChevronUp, ExternalLink } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
 import { safeOpenUrl } from "./utils/safeOpenUrl";
+import {
+  useWidgetMutation,
+  useWidgetQuery,
+  widgetMutationRef,
+  widgetQueryRef,
+} from "./lib/convex/hooks";
 
 interface ChecklistTask {
   id: string;
@@ -37,14 +41,12 @@ type EligibleChecklistRecord = {
   progress: { completedTaskIds: string[] } | null;
 };
 
-const eligibleChecklistsQueryRef = makeFunctionReference<
-  "query",
+const eligibleChecklistsQueryRef = widgetQueryRef<
   { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken?: string },
   EligibleChecklistRecord[]
 >("checklists:getEligible");
 
-const completeChecklistTaskMutationRef = makeFunctionReference<
-  "mutation",
+const completeChecklistTaskMutationRef = widgetMutationRef<
   {
     visitorId: Id<"visitors">;
     checklistId: Id<"checklists">;
@@ -55,8 +57,7 @@ const completeChecklistTaskMutationRef = makeFunctionReference<
   null
 >("checklists:completeTask");
 
-const uncompleteChecklistTaskMutationRef = makeFunctionReference<
-  "mutation",
+const uncompleteChecklistTaskMutationRef = widgetMutationRef<
   {
     visitorId: Id<"visitors">;
     checklistId: Id<"checklists">;
@@ -75,14 +76,14 @@ export function ChecklistOverlay({
 }: ChecklistOverlayProps) {
   const [expandedChecklist, setExpandedChecklist] = useState<Id<"checklists"> | null>(null);
 
-  const eligibleChecklists = useQuery(eligibleChecklistsQueryRef, {
+  const eligibleChecklists = useWidgetQuery(eligibleChecklistsQueryRef, {
     workspaceId,
     visitorId,
     sessionToken: sessionToken ?? undefined,
   }) as EligibleChecklistRecord[] | undefined;
 
-  const completeTask = useMutation(completeChecklistTaskMutationRef);
-  const uncompleteTask = useMutation(uncompleteChecklistTaskMutationRef);
+  const completeTask = useWidgetMutation(completeChecklistTaskMutationRef);
+  const uncompleteTask = useWidgetMutation(uncompleteChecklistTaskMutationRef);
 
   const handleTaskClick = useCallback(
     async (checklist: Checklist, task: ChecklistTask, isCompleted: boolean) => {

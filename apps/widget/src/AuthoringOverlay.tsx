@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import { scoreSelectorQuality } from "@opencom/sdk-core";
 import { ErrorFeedbackBanner } from "./components/ErrorFeedbackBanner";
+import {
+  useWidgetMutation,
+  useWidgetQuery,
+  widgetMutationRef,
+  widgetQueryRef,
+} from "./lib/convex/hooks";
 
 interface TourStep {
   _id: Id<"tourSteps">;
@@ -46,14 +50,12 @@ type AuthoringSessionData =
       session?: null;
     };
 
-const validateAuthoringSessionQueryRef = makeFunctionReference<
-  "query",
+const validateAuthoringSessionQueryRef = widgetQueryRef<
   { token: string },
   AuthoringSessionData | null
 >("authoringSessions:validate");
 
-const updateAuthoringStepMutationRef = makeFunctionReference<
-  "mutation",
+const updateAuthoringStepMutationRef = widgetMutationRef<
   {
     token: string;
     stepId: Id<"tourSteps">;
@@ -64,14 +66,12 @@ const updateAuthoringStepMutationRef = makeFunctionReference<
   null
 >("authoringSessions:updateStep");
 
-const setAuthoringCurrentStepMutationRef = makeFunctionReference<
-  "mutation",
+const setAuthoringCurrentStepMutationRef = widgetMutationRef<
   { token: string; stepId: Id<"tourSteps"> },
   null
 >("authoringSessions:setCurrentStep");
 
-const endAuthoringSessionMutationRef = makeFunctionReference<
-  "mutation",
+const endAuthoringSessionMutationRef = widgetMutationRef<
   { token: string },
   null
 >("authoringSessions:end");
@@ -184,12 +184,12 @@ export function AuthoringOverlay({ token, onExit }: AuthoringOverlayProps) {
   );
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const sessionData = useQuery(validateAuthoringSessionQueryRef, { token }) as
+  const sessionData = useWidgetQuery(validateAuthoringSessionQueryRef, { token }) as
     | AuthoringSessionData
     | undefined;
-  const updateStepMutation = useMutation(updateAuthoringStepMutationRef);
-  const setCurrentStepMutation = useMutation(setAuthoringCurrentStepMutationRef);
-  const endSessionMutation = useMutation(endAuthoringSessionMutationRef);
+  const updateStepMutation = useWidgetMutation(updateAuthoringStepMutationRef);
+  const setCurrentStepMutation = useWidgetMutation(setAuthoringCurrentStepMutationRef);
+  const endSessionMutation = useWidgetMutation(endAuthoringSessionMutationRef);
 
   const steps = useMemo(
     () => (sessionData?.valid ? (sessionData.steps ?? []) : []),
