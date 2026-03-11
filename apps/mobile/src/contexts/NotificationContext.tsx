@@ -2,28 +2,15 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "./AuthContext";
 import { router, usePathname } from "expo-router";
+import { useNotificationRegistrationConvex } from "../hooks/convex/useNotificationRegistrationConvex";
 import {
   getActiveConversationIdFromPath,
   getConversationIdFromPayload,
   getNotificationNavigationTarget,
   shouldSuppressForegroundNotification,
 } from "../utils/notificationRouting";
-
-const registerPushTokenMutationRef = makeFunctionReference<
-  "mutation",
-  { token: string; userId: string; platform: "ios" | "android" },
-  null
->("pushTokens:register");
-
-const pushDebugLogMutationRef = makeFunctionReference<
-  "mutation",
-  { stage: string; details?: string },
-  null
->("pushTokens:debugLog");
 
 interface NotificationContextType {
   expoPushToken: string | null;
@@ -58,8 +45,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   const { user, isAuthenticated } = useAuth();
-  const registerToken = useMutation(registerPushTokenMutationRef);
-  const debugLog = useMutation(pushDebugLogMutationRef);
+  const { registerPushToken: registerToken, debugLog } = useNotificationRegistrationConvex();
 
   useEffect(() => {
     activeConversationIdRef.current = getActiveConversationIdFromPath(pathname);

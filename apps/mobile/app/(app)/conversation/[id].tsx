@@ -11,68 +11,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "../../../src/contexts/AuthContext";
-import type { Id } from "@opencom/convex/dataModel";
-
-interface Message {
-  _id: string;
-  content: string;
-  senderType: "user" | "visitor" | "agent" | "bot";
-  createdAt: number;
-}
-
-type ConversationRecord = {
-  _id: Id<"conversations">;
-  visitorId?: Id<"visitors">;
-  status: "open" | "closed" | "snoozed";
-};
-
-type VisitorRecord = {
-  _id: Id<"visitors">;
-  name?: string;
-  email?: string;
-  readableId?: string;
-  location?: { city?: string; country?: string };
-  device?: { browser?: string; os?: string };
-};
-
-const conversationGetQueryRef = makeFunctionReference<
-  "query",
-  { id: Id<"conversations"> },
-  ConversationRecord | null
->("conversations:get");
-
-const visitorGetQueryRef = makeFunctionReference<
-  "query",
-  { id: Id<"visitors"> },
-  VisitorRecord | null
->("visitors:get");
-
-const messagesListQueryRef = makeFunctionReference<
-  "query",
-  { conversationId: Id<"conversations"> },
-  Message[]
->("messages:list");
-
-const sendMessageMutationRef = makeFunctionReference<
-  "mutation",
-  { conversationId: Id<"conversations">; senderId: string; senderType: "agent"; content: string },
-  Id<"messages">
->("messages:send");
-
-const updateConversationStatusMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"conversations">; status: "open" | "closed" | "snoozed" },
-  null
->("conversations:updateStatus");
-
-const markConversationReadMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"conversations">; readerType: "agent" | "visitor" },
-  null
->("conversations:markAsRead");
+import { useConversationConvex } from "../../../src/hooks/convex/useConversationConvex";
+import type { MobileConversationMessage as Message } from "../../../src/hooks/convex/types";
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -86,32 +27,22 @@ export default function ConversationScreen() {
   const { user } = useAuth();
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
-
-  const conversation = useQuery(
-    conversationGetQueryRef,
-    id ? { id: id as Id<"conversations"> } : "skip"
-  ) as ConversationRecord | null | undefined;
-
-  const visitor = useQuery(
-    visitorGetQueryRef,
-    conversation?.visitorId ? { id: conversation.visitorId } : "skip"
-  ) as VisitorRecord | null | undefined;
-
-  const messages = useQuery(
-    messagesListQueryRef,
-    id ? { conversationId: id as Id<"conversations"> } : "skip"
-  ) as Message[] | undefined;
-
-  const sendMessage = useMutation(sendMessageMutationRef);
-  const updateStatus = useMutation(updateConversationStatusMutationRef);
-  const markAsRead = useMutation(markConversationReadMutationRef);
+  const {
+    resolvedConversationId,
+    conversation,
+    visitor,
+    messages,
+    sendMessage,
+    updateConversationStatus: updateStatus,
+    markConversationRead: markAsRead,
+  } = useConversationConvex(id);
 
   // Mark conversation as read when viewing
   useEffect(() => {
-    if (id && conversation) {
-      markAsRead({ id: id as Id<"conversations">, readerType: "agent" }).catch(console.error);
+    if (resolvedConversationId && conversation) {
+      markAsRead({ id: resolvedConversationId, readerType: "agent" }).catch(console.error);
     }
-  }, [id, conversation, markAsRead]);
+  }, [conversation, markAsRead, resolvedConversationId]);
 
   useEffect(() => {
     if (messages && messages.length > 0) {
@@ -122,14 +53,14 @@ export default function ConversationScreen() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || !id || !user) return;
+    if (!inputText.trim() || !resolvedConversationId || !user) return;
 
     const content = inputText.trim();
     setInputText("");
 
     try {
       await sendMessage({
-        conversationId: id as Id<"conversations">,
+        conversationId: resolvedConversationId,
         senderId: user._id,
         senderType: "agent",
         content,
@@ -141,10 +72,10 @@ export default function ConversationScreen() {
   };
 
   const handleStatusChange = async (status: "open" | "closed" | "snoozed") => {
-    if (!id) return;
+    if (!resolvedConversationId) return;
     try {
       await updateStatus({
-        id: id as Id<"conversations">,
+        id: resolvedConversationId,
         status,
       });
     } catch (error) {
