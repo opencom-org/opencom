@@ -159,7 +159,7 @@ export function useWidgetConversationFlow({
   }, []);
 
   const waitForVisitorId = useCallback(async () => {
-    let currentVisitorId = visitorIdRef.current;
+    const currentVisitorId = visitorIdRef.current;
     if (currentVisitorId) {
       return currentVisitorId;
     }

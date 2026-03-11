@@ -31,15 +31,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint (web + convex)
+      - name: Lint
         id: lint
         continue-on-error: true
-        run: pnpm quality:lint
+        run: pnpm lint
 
-      - name: Typecheck (web + convex)
+      - name: Typecheck
         id: typecheck
         continue-on-error: true
-        run: pnpm quality:typecheck
+        run: pnpm typecheck
 
       - name: Convex raw auth guard
         id: convex_auth_guard
