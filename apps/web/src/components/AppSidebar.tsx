@@ -3,9 +3,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
-import type { Id } from "@opencom/convex/dataModel";
 import {
   Inbox,
   FileText,
@@ -35,6 +32,7 @@ import {
   loadInboxCuePreferences,
 } from "@/lib/inboxNotificationCues";
 import { playInboxBingSound } from "@/lib/playInboxBingSound";
+import { useAppSidebarConvex } from "@/components/hooks/useAppSidebarConvex";
 import { WorkspaceSelector } from "./WorkspaceSelector";
 
 type SidebarNavItem = {
@@ -73,18 +71,6 @@ const CORE_NAV_ITEMS: SidebarNavItem[] = [
   { href: "/audit-logs", label: "Audit Logs", icon: Shield },
 ];
 
-const INTEGRATION_SIGNALS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { integrations: Array<{ isActiveNow: boolean }> }
->("workspaces:getHostedOnboardingIntegrationSignals");
-
-const SIDEBAR_CONVERSATIONS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  Array<{ _id: string; unreadByAgent?: number }>
->("conversations:list");
-
 interface AppSidebarProps {
   className?: string;
   onNavigate?: () => void;
@@ -101,13 +87,9 @@ export function AppSidebar({
   const pathname = usePathname();
   const { activeWorkspace, logout, user } = useAuth();
   const isAdmin = activeWorkspace?.role === "owner" || activeWorkspace?.role === "admin";
-  const integrationSignals = useQuery(
-    INTEGRATION_SIGNALS_QUERY,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const sidebarConversations = useQuery(
-    SIDEBAR_CONVERSATIONS_QUERY,
-    activeWorkspace?._id && isAdmin ? { workspaceId: activeWorkspace._id } : "skip"
+  const { integrationSignals, sidebarConversations } = useAppSidebarConvex(
+    activeWorkspace?._id,
+    isAdmin
   );
   const inboxCuePreferencesRef = useRef<{
     browserNotifications: boolean;

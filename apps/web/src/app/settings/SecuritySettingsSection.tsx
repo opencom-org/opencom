@@ -1,46 +1,22 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
 import { Card } from "@opencom/ui";
 import { Shield } from "lucide-react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { AuditLogViewer } from "./AuditLogViewer";
+import { useSecuritySettingsSectionConvex } from "./hooks/useSettingsSectionsConvex";
 import { SecurityIdentitySettingsCard } from "./SecurityIdentitySettingsCard";
 import { SignedSessionsSettings } from "./SignedSessionsSettings";
-
-const auditAccessQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { status: "unauthenticated" | "forbidden" | "ok"; canManageSecurity?: boolean } | null
->("auditLogs:getAccess");
-
-const auditLogSettingsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { retentionDays: number } | null
->("auditLogs:getSettings");
-
-const updateAuditSettingsRef = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; retentionDays: number },
-  null
->("auditLogs:updateSettings");
 
 export function SecuritySettingsSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const auditAccess = useQuery(auditAccessQuery, workspaceId ? { workspaceId } : "skip");
+  const { auditAccess, auditLogSettings, updateAuditSettings } =
+    useSecuritySettingsSectionConvex(workspaceId);
   const isSecurityUnauthenticated = auditAccess?.status === "unauthenticated";
   const canManageSecurity = auditAccess?.status === "ok" ? auditAccess.canManageSecurity : false;
-
-  const auditLogSettings = useQuery(
-    auditLogSettingsQuery,
-    workspaceId && canManageSecurity ? { workspaceId } : "skip"
-  );
-  const updateAuditSettings = useMutation(updateAuditSettingsRef);
 
   if (!workspaceId) {
     return null;

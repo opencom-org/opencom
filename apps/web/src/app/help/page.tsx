@@ -1,74 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
-import type { Id } from "@opencom/convex/dataModel";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { Input } from "@opencom/ui";
 import { Search, FileText, FolderOpen } from "lucide-react";
 import Link from "next/link";
-
-const publicWorkspaceContextQuery = makeFunctionReference<
-  "query",
-  Record<string, never>,
-  { _id?: Id<"workspaces">; helpCenterAccessPolicy?: string } | null
->("workspaces:getPublicWorkspaceContext");
-
-const collectionsListQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; publicOnly: true },
-  Array<{
-    _id: Id<"collections">;
-    name: string;
-    slug?: string;
-    icon?: string;
-    description?: string;
-    publishedArticleCount: number;
-  }>
->("collections:listHierarchy");
-
-const articlesSearchQuery = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    query: string;
-    publishedOnly: true;
-    visibility: "public";
-  },
-  Array<{ _id: Id<"articles">; slug: string; title: string; content: string }>
->("articles:search");
-
-const articlesListQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; status: "published"; visibility: "public" },
-  Array<{ _id: Id<"articles">; slug: string; title: string }>
->("articles:list");
+import {
+  useHelpCenterPageConvex,
+  useHelpWorkspaceContextConvex,
+} from "./hooks/useHelpCenterConvex";
 
 export default function HelpCenterPage() {
   const auth = useAuthOptional();
-  const workspaceContext = useQuery(publicWorkspaceContextQuery, {});
   const [searchQuery, setSearchQuery] = useState("");
+  const { workspaceContext } = useHelpWorkspaceContextConvex();
   const isAuthenticated = auth?.isAuthenticated ?? false;
   const workspaceId = auth?.activeWorkspace?._id ?? workspaceContext?._id;
   const isRestricted =
     !isAuthenticated && workspaceContext?.helpCenterAccessPolicy === "restricted";
-
-  const collections = useQuery(
-    collectionsListQuery,
-    workspaceId ? { workspaceId, publicOnly: true } : "skip"
-  );
-
-  const searchResults = useQuery(
-    articlesSearchQuery,
-    workspaceId && searchQuery.length >= 2
-      ? { workspaceId, query: searchQuery, publishedOnly: true, visibility: "public" }
-      : "skip"
-  );
-
-  const publishedArticles = useQuery(
-    articlesListQuery,
-    workspaceId ? { workspaceId, status: "published", visibility: "public" } : "skip"
+  const { collections, publishedArticles, searchResults } = useHelpCenterPageConvex(
+    workspaceId,
+    searchQuery
   );
 
   const collectionsWithArticles = collections?.filter(

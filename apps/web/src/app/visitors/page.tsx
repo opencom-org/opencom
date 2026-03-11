@@ -1,51 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, Input, Button } from "@opencom/ui";
 import { Search, UserRound, Circle } from "lucide-react";
 import Link from "next/link";
-import type { Id } from "@opencom/convex/dataModel";
 import { formatVisitorEmailLabel, formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
+import { useVisitorsPageConvex } from "./hooks/useVisitorsConvex";
 
 const PAGE_SIZE = 20;
 
 type PresenceFilter = "all" | "online" | "offline";
-
-type VisitorDirectoryRecord = {
-  _id: Id<"visitors">;
-  readableId?: string;
-  name?: string;
-  email?: string;
-  externalUserId?: string;
-  isOnline: boolean;
-  lastActiveAt?: number;
-};
-
-type VisitorDirectoryResult =
-  | {
-      status: "ok";
-      visitors: VisitorDirectoryRecord[];
-      totalCount: number;
-      hasMore: boolean;
-      nextOffset: number | null;
-    }
-  | { status: "unauthenticated" | "forbidden"; visitors: []; totalCount: 0; hasMore: false; nextOffset: null };
-
-const visitorsDirectoryQueryRef = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    search?: string;
-    presence?: PresenceFilter;
-    limit?: number;
-    offset?: number;
-  },
-  VisitorDirectoryResult
->("visitors:listDirectory");
 
 function formatLastActive(timestamp?: number): string {
   if (!timestamp) {
@@ -71,19 +37,13 @@ function VisitorsContent(): React.JSX.Element | null {
   useEffect(() => {
     setOffset(0);
   }, [debouncedSearch, presenceFilter, activeWorkspace?._id]);
-
-  const directoryResult = useQuery(
-    visitorsDirectoryQueryRef,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          search: debouncedSearch.length > 0 ? debouncedSearch : undefined,
-          presence: presenceFilter,
-          limit: PAGE_SIZE,
-          offset,
-        }
-      : "skip"
-  ) as VisitorDirectoryResult | undefined;
+  const { directoryResult } = useVisitorsPageConvex(
+    activeWorkspace?._id,
+    debouncedSearch,
+    presenceFilter,
+    offset,
+    PAGE_SIZE
+  );
 
   const pageMeta = useMemo(() => {
     if (!directoryResult || directoryResult.status !== "ok") {

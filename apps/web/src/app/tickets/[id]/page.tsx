@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   ArrowLeft,
@@ -21,91 +19,10 @@ import { AppLayout } from "@/components/AppLayout";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useTicketDetailConvex } from "../hooks/useTicketsConvex";
 
 type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
 type TicketPriority = "low" | "normal" | "high" | "urgent";
-
-type TicketCommentRecord = {
-  _id: Id<"ticketComments">;
-  authorType: "agent" | "visitor" | "system";
-  content: string;
-  isInternal: boolean;
-  createdAt: number;
-};
-
-type TicketDetailRecord = {
-  _id: Id<"tickets">;
-  visitorId?: Id<"visitors">;
-  assigneeId?: Id<"users">;
-  conversationId?: Id<"conversations">;
-  subject: string;
-  description?: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  createdAt: number;
-  updatedAt: number;
-  resolvedAt?: number;
-  resolutionSummary?: string;
-  visitor?: { _id: Id<"visitors">; readableId?: string; name?: string; email?: string } | null;
-  assignee?: { _id: Id<"users">; name?: string; email?: string } | null;
-  conversation?: { _id: Id<"conversations"> } | null;
-  comments?: TicketCommentRecord[];
-};
-
-type TicketDetailResult =
-  | { status: "ok"; ticket: TicketDetailRecord }
-  | { status: "not_found" | "unauthenticated" | "forbidden"; ticket: null };
-
-type WorkspaceUserRecord = {
-  _id: Id<"workspaceMembers">;
-  userId: Id<"users">;
-  name?: string;
-  email?: string;
-};
-
-const ticketDetailQueryRef = makeFunctionReference<
-  "query",
-  { id: Id<"tickets"> },
-  TicketDetailResult
->("tickets:getForAdminView");
-
-const workspaceUsersQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  WorkspaceUserRecord[]
->("workspaceMembers:listByWorkspace");
-
-const updateTicketMutationRef = makeFunctionReference<
-  "mutation",
-  {
-    id: Id<"tickets">;
-    status?: TicketStatus;
-    priority?: TicketPriority;
-    assigneeId?: Id<"users">;
-    teamId?: string;
-  },
-  Id<"tickets">
->("tickets:update");
-
-const addCommentMutationRef = makeFunctionReference<
-  "mutation",
-  {
-    ticketId: Id<"tickets">;
-    visitorId?: Id<"visitors">;
-    content: string;
-    isInternal?: boolean;
-    authorId?: string;
-    authorType?: "agent" | "visitor" | "system";
-    sessionToken?: string;
-  },
-  Id<"ticketComments">
->("tickets:addComment");
-
-const resolveTicketMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tickets">; resolutionSummary?: string },
-  Id<"tickets">
->("tickets:resolve");
 
 const statusConfig: Record<
   TicketStatus,
@@ -137,19 +54,8 @@ function TicketDetailContent(): React.JSX.Element | null {
   const [isInternal, setIsInternal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolutionSummary, setResolutionSummary] = useState("");
-
-  const ticketResult = useQuery(ticketDetailQueryRef, ticketId ? { id: ticketId } : "skip") as
-    | TicketDetailResult
-    | undefined;
-
-  const workspaceUsers = useQuery(
-    workspaceUsersQueryRef,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  ) as WorkspaceUserRecord[] | undefined;
-
-  const updateTicket = useMutation(updateTicketMutationRef);
-  const addComment = useMutation(addCommentMutationRef);
-  const resolveTicket = useMutation(resolveTicketMutationRef);
+  const { addComment, resolveTicket, ticketResult, updateTicket, workspaceUsers } =
+    useTicketDetailConvex(ticketId, activeWorkspace?._id);
 
   const handleStatusChange = async (newStatus: TicketStatus) => {
     if (!ticketId) return;

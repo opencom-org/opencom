@@ -2,70 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
-import type { Id } from "@opencom/convex/dataModel";
 import { Button, Card } from "@opencom/ui";
 import { AppLayout } from "@/components/AppLayout";
 import { WidgetInstallGuide } from "@/components/WidgetInstallGuide";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBackend } from "@/contexts/BackendContext";
+import { useOnboardingConvex } from "./hooks/useOnboardingConvex";
 
 type VerificationStatus = "idle" | "checking" | "success" | "error";
 
 const VERIFY_TIMEOUT_MS = 15000;
-
-type HostedOnboardingState = {
-  status?: string;
-  verificationToken?: string | null;
-  isWidgetVerified?: boolean;
-} | null;
-
-type HostedOnboardingIntegrationSignals = {
-  integrations?: Array<{
-    id: string;
-    clientType: string;
-    clientVersion?: string;
-    detectedAt?: number | null;
-    isActiveNow?: boolean;
-    matchesCurrentVerificationWindow?: boolean;
-    origin?: string;
-    currentUrl?: string;
-    clientIdentifier?: string;
-    lastSeenAt?: number | null;
-    activeSessionCount?: number;
-  }>;
-} | null;
-
-const HOSTED_ONBOARDING_STATE_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  HostedOnboardingState
->("workspaces:getHostedOnboardingState");
-
-const ONBOARDING_INTEGRATION_SIGNALS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  HostedOnboardingIntegrationSignals
->("workspaces:getHostedOnboardingIntegrationSignals");
-
-const START_HOSTED_ONBOARDING_REF = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces"> },
-  unknown
->("workspaces:startHostedOnboarding");
-
-const ISSUE_VERIFICATION_TOKEN_REF = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces"> },
-  { token: string }
->("workspaces:issueHostedOnboardingVerificationToken");
-
-const COMPLETE_WIDGET_STEP_REF = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; token?: string },
-  { success: boolean }
->("workspaces:completeHostedOnboardingWidgetStep");
 
 function formatTimestamp(value: number | null | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -98,20 +44,13 @@ function OnboardingContent(): React.JSX.Element {
   const [tokenModeEnabled, setTokenModeEnabled] = useState(false);
   const startRequestedRef = useRef(false);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const onboardingState = useQuery(
-    HOSTED_ONBOARDING_STATE_QUERY,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const integrationSignals = useQuery(
-    ONBOARDING_INTEGRATION_SIGNALS_QUERY,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const startHostedOnboarding = useMutation(START_HOSTED_ONBOARDING_REF);
-  const issueVerificationToken = useMutation(ISSUE_VERIFICATION_TOKEN_REF);
-  const completeWidgetStep = useMutation(COMPLETE_WIDGET_STEP_REF);
+  const {
+    completeWidgetStep,
+    integrationSignals,
+    issueVerificationToken,
+    onboardingState,
+    startHostedOnboarding,
+  } = useOnboardingConvex(activeWorkspace?._id);
 
   useEffect(() => {
     if (!onboardingState?.verificationToken) {

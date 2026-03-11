@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Trash2, ChevronDown, GripVertical, Users, Layers } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
@@ -16,6 +14,7 @@ import type {
   PropertyReference,
 } from "@opencom/types";
 import { isAudienceSegmentReference } from "@opencom/types";
+import { useAudienceRuleBuilderConvex } from "@/components/hooks/useAudienceRuleBuilderConvex";
 
 export type SegmentReference = AudienceSegmentReference<Id<"segments">>;
 export type AudienceRule = SharedAudienceRule<Id<"segments">>;
@@ -27,18 +26,6 @@ interface AudienceRuleBuilderProps {
   workspaceId?: Id<"workspaces">;
   showSegmentSelector?: boolean;
 }
-
-const LIST_SEGMENTS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  Array<{ _id: Id<"segments">; name: string }>
->("segments:list");
-
-const PREVIEW_AUDIENCE_RULES_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; audienceRules: AudienceRule },
-  { matching: number; total: number }
->("tours:previewAudienceRules");
 
 const SYSTEM_PROPERTIES = [
   { key: "email", label: "Email", type: "string" },
@@ -524,12 +511,9 @@ export function AudienceRuleBuilder({
   const [targetingMode, setTargetingMode] = useState<"custom" | "segment">(
     isSegmentRule(value) ? "segment" : "custom"
   );
-
-  const segments = useQuery(LIST_SEGMENTS_QUERY, workspaceId ? { workspaceId } : "skip");
-
-  const preview = useQuery(
-    PREVIEW_AUDIENCE_RULES_QUERY,
-    workspaceId && isEnabled && value ? { workspaceId, audienceRules: value } : "skip"
+  const { preview, segments } = useAudienceRuleBuilderConvex(
+    workspaceId,
+    isEnabled ? value : null
   );
 
   const handleToggle = () => {

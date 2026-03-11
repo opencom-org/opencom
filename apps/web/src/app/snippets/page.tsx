@@ -1,48 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, MessageSquare, Search } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
-
-const snippetsListQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  Array<{
-    _id: Id<"snippets">;
-    name: string;
-    content: string;
-    shortcut?: string;
-  }>
->("snippets:list");
-
-const createSnippetRef = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    name: string;
-    content: string;
-    shortcut?: string;
-  },
-  Id<"snippets">
->("snippets:create");
-
-const updateSnippetRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"snippets">; name?: string; content?: string; shortcut?: string },
-  null
->("snippets:update");
-
-const deleteSnippetRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"snippets"> },
-  null
->("snippets:remove");
+import { useSnippetsPageConvex } from "./hooks/useSnippetsPageConvex";
 
 interface SnippetFormData {
   name: string;
@@ -60,15 +25,8 @@ function SnippetsContent() {
     content: "",
     shortcut: "",
   });
-
-  const snippets = useQuery(
-    snippetsListQuery,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createSnippet = useMutation(createSnippetRef);
-  const updateSnippet = useMutation(updateSnippetRef);
-  const deleteSnippet = useMutation(deleteSnippetRef);
+  const { createSnippet, deleteSnippet, snippets, updateSnippet } =
+    useSnippetsPageConvex(activeWorkspace?._id);
 
   const handleOpenModal = (snippet?: NonNullable<typeof snippets>[number]) => {
     if (snippet) {

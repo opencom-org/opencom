@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
 import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import {
@@ -9,42 +8,15 @@ import {
   normalizeHomeTabs,
   type HomeCard,
   type HomeCardType,
-  type HomeConfig,
   type HomeDefaultSpace,
   type HomeTab,
   type HomeTabId,
   type HomeVisibility,
 } from "@opencom/types";
 import { Home, Plus, X, GripVertical, Search, MessageSquare, FileText, Bell } from "lucide-react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
-
-const homeConfigQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  HomeConfig | null
->("messengerSettings:getHomeConfig");
-
-const updateHomeConfigRef = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    homeConfig: {
-      enabled: boolean;
-      cards: HomeCard[];
-      defaultSpace: HomeDefaultSpace;
-      tabs: HomeTab[];
-    };
-  },
-  null
->("messengerSettings:updateHomeConfig");
-
-const toggleHomeEnabledRef = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; enabled: boolean },
-  null
->("messengerSettings:toggleHomeEnabled");
+import { useHomeSettingsSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 // Card type definitions for Home settings
 const CARD_TYPES = [
@@ -130,13 +102,8 @@ export function HomeSettingsSection({
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const homeConfig = useQuery(
-    homeConfigQuery,
-    workspaceId ? { workspaceId } : "skip"
-  ) as HomeConfig | undefined;
-
-  const updateHomeConfig = useMutation(updateHomeConfigRef);
-  const toggleHomeEnabled = useMutation(toggleHomeEnabledRef);
+  const { homeConfig, toggleHomeEnabled, updateHomeConfig } =
+    useHomeSettingsSectionConvex(workspaceId);
 
   const [enabled, setEnabled] = useState(false);
   const [cards, setCards] = useState<HomeCard[]>([]);

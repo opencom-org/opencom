@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   Ticket,
@@ -21,63 +19,10 @@ import { AppLayout, AppPageShell } from "@/components/AppLayout";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useTicketsPageConvex } from "./hooks/useTicketsConvex";
 
 type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
 type TicketPriority = "low" | "normal" | "high" | "urgent";
-
-type VisitorOption = {
-  _id: Id<"visitors">;
-  readableId?: string;
-  name?: string;
-  email?: string;
-};
-
-type AdminTicketRecord = {
-  _id: Id<"tickets">;
-  visitorId?: Id<"visitors">;
-  assigneeId?: Id<"users">;
-  subject: string;
-  description?: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  createdAt: number;
-  visitor?: VisitorOption | null;
-  assignee?: { _id: Id<"users">; name?: string; email?: string } | null;
-};
-
-type TicketsListForAdminViewResult =
-  | { status: "ok"; tickets: AdminTicketRecord[] }
-  | { status: "unauthenticated" | "forbidden"; tickets: [] };
-
-const visitorsSearchQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; query: string; limit?: number },
-  VisitorOption[]
->("visitors:search");
-
-const visitorsListQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; limit?: number },
-  VisitorOption[]
->("visitors:list");
-
-const ticketsListForAdminViewQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; status?: TicketStatus },
-  TicketsListForAdminViewResult
->("tickets:listForAdminView");
-
-const createTicketMutationRef = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    visitorId?: Id<"visitors">;
-    subject: string;
-    description?: string;
-    priority?: TicketPriority;
-  },
-  Id<"tickets">
->("tickets:create");
 
 const statusConfig: Record<
   TicketStatus,
@@ -106,32 +51,11 @@ function TicketsContent(): React.JSX.Element | null {
   const [newTicketPriority, setNewTicketPriority] = useState<TicketPriority>("normal");
   const [selectedVisitorId, setSelectedVisitorId] = useState<Id<"visitors"> | null>(null);
   const [visitorSearchQuery, setVisitorSearchQuery] = useState("");
-
-  const visitors = useQuery(
-    visitorsSearchQueryRef,
-    activeWorkspace?._id && visitorSearchQuery.length >= 2
-      ? { workspaceId: activeWorkspace._id, query: visitorSearchQuery, limit: 10 }
-      : "skip"
-  ) as VisitorOption[] | undefined;
-
-  const recentVisitors = useQuery(
-    visitorsListQueryRef,
-    activeWorkspace?._id && !visitorSearchQuery
-      ? { workspaceId: activeWorkspace._id, limit: 10 }
-      : "skip"
-  ) as VisitorOption[] | undefined;
-
-  const tickets = useQuery(
-    ticketsListForAdminViewQueryRef,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          ...(statusFilter !== "all" && { status: statusFilter }),
-        }
-      : "skip"
-  ) as TicketsListForAdminViewResult | undefined;
-
-  const createTicket = useMutation(createTicketMutationRef);
+  const { createTicket, recentVisitors, tickets, visitors } = useTicketsPageConvex(
+    activeWorkspace?._id,
+    statusFilter === "all" ? undefined : statusFilter,
+    visitorSearchQuery
+  );
 
   const handleCreateTicket = async () => {
     if (!activeWorkspace?._id || !newTicketSubject.trim()) return;

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { Button, Card } from "@opencom/ui";
 import {
   Sparkles,
@@ -15,15 +13,10 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
-
-type Suggestion = {
-  id: string;
-  type: "article" | "internalArticle" | "snippet";
-  title: string;
-  snippet: string;
-  content: string;
-  score: number;
-};
+import {
+  type SuggestionRecord as Suggestion,
+  useSuggestionsPanelConvex,
+} from "@/components/hooks/useSuggestionsPanelConvex";
 
 interface SuggestionsPanelProps {
   conversationId: Id<"conversations">;
@@ -31,40 +24,6 @@ interface SuggestionsPanelProps {
   onInsert: (content: string) => void;
   onSuggestionsUpdated?: (count: number) => void;
 }
-
-const AI_SETTINGS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { suggestionsEnabled?: boolean } | null
->("aiAgent:getSettings");
-
-const GET_SUGGESTIONS_ACTION = makeFunctionReference<
-  "action",
-  { conversationId: Id<"conversations">; limit: number },
-  Suggestion[]
->("suggestions:getForConversation");
-
-const TRACK_USAGE_REF = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    conversationId: Id<"conversations">;
-    contentType: Suggestion["type"];
-    contentId: string;
-  },
-  null
->("suggestions:trackUsage");
-
-const TRACK_DISMISSAL_REF = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    conversationId: Id<"conversations">;
-    contentType: Suggestion["type"];
-    contentId: string;
-  },
-  null
->("suggestions:trackDismissal");
 
 export function SuggestionsPanel({
   conversationId,
@@ -76,11 +35,8 @@ export function SuggestionsPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-
-  const settings = useQuery(AI_SETTINGS_QUERY, { workspaceId });
-  const getSuggestions = useAction(GET_SUGGESTIONS_ACTION);
-  const trackUsage = useMutation(TRACK_USAGE_REF);
-  const trackDismissal = useMutation(TRACK_DISMISSAL_REF);
+  const { settings, getSuggestions, trackUsage, trackDismissal } =
+    useSuggestionsPanelConvex(workspaceId);
 
   const fetchSuggestions = useCallback(async () => {
     if (!settings?.suggestionsEnabled) {

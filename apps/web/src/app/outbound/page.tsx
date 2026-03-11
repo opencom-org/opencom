@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -12,6 +10,7 @@ import { Pencil, Trash2, Play, Pause, Search, MessageSquare, Bell, Flag } from "
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import type { OutboundMessageStatus, OutboundMessageType } from "@opencom/types";
+import { useOutboundMessagesPageConvex } from "./hooks/useOutboundMessagesPageConvex";
 import {
   OUTBOUND_MESSAGE_STATUS_OPTIONS,
   OUTBOUND_MESSAGE_TYPE_OPTIONS,
@@ -19,83 +18,18 @@ import {
   getOutboundMessageStatusBadgeClass,
 } from "./outboundMessageUi";
 
-const OUTBOUND_MESSAGES_LIST_QUERY = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    type?: OutboundMessageType;
-    status?: OutboundMessageStatus;
-  },
-  Array<{
-    _id: Id<"outboundMessages">;
-    name: string;
-    type: OutboundMessageType;
-    status: OutboundMessageStatus;
-    createdAt: number;
-    content: { text?: string; title?: string; body?: string };
-  }>
->("outboundMessages:list");
-
-const CREATE_OUTBOUND_MESSAGE_REF = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    type: OutboundMessageType;
-    name: string;
-    content:
-      | { text: string }
-      | {
-          title: string;
-          body: string;
-          buttons: Array<{ text: string; action: "open_new_conversation" | "dismiss" }>;
-        }
-      | { text: string; style: string; dismissible: boolean };
-    targeting?: unknown;
-    triggers?: unknown;
-    frequency?: unknown;
-    scheduling?: unknown;
-    priority?: number;
-  },
-  Id<"outboundMessages">
->("outboundMessages:create");
-
-const DELETE_OUTBOUND_MESSAGE_REF = makeFunctionReference<
-  "mutation",
-  { id: Id<"outboundMessages"> },
-  null
->("outboundMessages:remove");
-
-const ACTIVATE_OUTBOUND_MESSAGE_REF = makeFunctionReference<
-  "mutation",
-  { id: Id<"outboundMessages"> },
-  null
->("outboundMessages:activate");
-
-const PAUSE_OUTBOUND_MESSAGE_REF = makeFunctionReference<
-  "mutation",
-  { id: Id<"outboundMessages"> },
-  null
->("outboundMessages:pause");
-
 function OutboundContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | OutboundMessageType>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | OutboundMessageStatus>("all");
-
-  const messages = useQuery(OUTBOUND_MESSAGES_LIST_QUERY, activeWorkspace?._id
-    ? {
-        workspaceId: activeWorkspace._id,
-        type: typeFilter === "all" ? undefined : typeFilter,
-        status: statusFilter === "all" ? undefined : statusFilter,
-      }
-    : "skip");
-
-  const createMessage = useMutation(CREATE_OUTBOUND_MESSAGE_REF);
-  const deleteMessage = useMutation(DELETE_OUTBOUND_MESSAGE_REF);
-  const activateMessage = useMutation(ACTIVATE_OUTBOUND_MESSAGE_REF);
-  const pauseMessage = useMutation(PAUSE_OUTBOUND_MESSAGE_REF);
+  const { activateMessage, createMessage, deleteMessage, messages, pauseMessage } =
+    useOutboundMessagesPageConvex(
+      activeWorkspace?._id,
+      typeFilter === "all" ? undefined : typeFilter,
+      statusFilter === "all" ? undefined : statusFilter
+    );
 
   const handleCreate = async (type: OutboundMessageType) => {
     if (!activeWorkspace?._id) return;

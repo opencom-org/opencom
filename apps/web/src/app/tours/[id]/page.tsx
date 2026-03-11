@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -20,139 +18,15 @@ import type { AudienceRule } from "@/components/AudienceRuleBuilder";
 import { TourEditorSettingsPanel } from "./TourEditorSettingsPanel";
 import { TourEditorStepsPanel } from "./TourEditorStepsPanel";
 import { TourStepModal } from "./TourStepModal";
+import { useTourEditorConvex } from "../hooks/useToursConvex";
 import {
   createDefaultStepData,
   getNormalizedStepSaveData,
   toStepFormData,
-  type SelectorQuality,
   type StepFormData,
   type TourDisplayMode,
   type TourEditorStep,
 } from "./tourEditorTypes";
-
-type TourRecord = {
-  _id: Id<"tours">;
-  workspaceId: Id<"workspaces">;
-  name: string;
-  description?: string;
-  status: "draft" | "active" | "archived";
-  targetingRules?: { pageUrl?: string };
-  audienceRules?: AudienceRule | null;
-  displayMode?: TourDisplayMode;
-  priority?: number;
-  buttonColor?: string;
-  showConfetti?: boolean;
-  allowSnooze?: boolean;
-  allowRestart?: boolean;
-};
-
-type TourStepRecord = TourEditorStep;
-
-const tourGetQueryRef = makeFunctionReference<
-  "query",
-  { id: Id<"tours"> },
-  TourRecord | null
->("tours:get");
-
-const tourStepsListQueryRef = makeFunctionReference<
-  "query",
-  { tourId: Id<"tours"> },
-  TourStepRecord[]
->("tourSteps:list");
-
-const eventNamesQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  string[]
->("events:getDistinctNames");
-
-const updateTourMutationRef = makeFunctionReference<
-  "mutation",
-  {
-    id: Id<"tours">;
-    name?: string;
-    description?: string;
-    targetingRules?: { pageUrl?: string };
-    audienceRules?: AudienceRule | null;
-    displayMode?: TourDisplayMode;
-    priority?: number;
-    buttonColor?: string;
-    showConfetti?: boolean;
-    allowSnooze?: boolean;
-    allowRestart?: boolean;
-  },
-  null
->("tours:update");
-
-const activateTourMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tours"> },
-  null
->("tours:activate");
-
-const deactivateTourMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tours"> },
-  null
->("tours:deactivate");
-
-const createStepMutationRef = makeFunctionReference<
-  "mutation",
-  {
-    tourId: Id<"tours">;
-    type: StepFormData["type"];
-    title?: string;
-    content: string;
-    elementSelector?: string;
-    routePath?: string;
-    selectorQuality?: SelectorQuality;
-    position: StepFormData["position"];
-    size: StepFormData["size"];
-    advanceOn: StepFormData["advanceOn"];
-    customButtonText?: string;
-    mediaUrl?: string;
-    mediaType?: StepFormData["mediaType"];
-  },
-  Id<"tourSteps">
->("tourSteps:create");
-
-const updateStepMutationRef = makeFunctionReference<
-  "mutation",
-  {
-    id: Id<"tourSteps">;
-    type?: StepFormData["type"];
-    title?: string;
-    content?: string;
-    elementSelector?: string;
-    routePath?: string;
-    selectorQuality?: SelectorQuality;
-    position?: StepFormData["position"];
-    size?: StepFormData["size"];
-    advanceOn?: StepFormData["advanceOn"];
-    customButtonText?: string;
-    mediaUrl?: string;
-    mediaType?: StepFormData["mediaType"];
-  },
-  null
->("tourSteps:update");
-
-const deleteStepMutationRef = makeFunctionReference<
-  "mutation",
-  { id: Id<"tourSteps"> },
-  null
->("tourSteps:remove");
-
-const reorderStepsMutationRef = makeFunctionReference<
-  "mutation",
-  { tourId: Id<"tours">; stepIds: Id<"tourSteps">[] },
-  null
->("tourSteps:reorder");
-
-const createAuthoringSessionMutationRef = makeFunctionReference<
-  "mutation",
-  { tourId: Id<"tours">; stepId?: Id<"tourSteps">; targetUrl: string },
-  { token: string }
->("authoringSessions:create");
 
 export default function TourEditorPage() {
   const params = useParams();
@@ -177,27 +51,19 @@ export default function TourEditorPage() {
 
   const { user, isLoading: authLoading } = useAuth();
   const canQueryTourData = !authLoading && !!user;
-
-  const tour = useQuery(tourGetQueryRef, canQueryTourData ? { id: tourId } : "skip") as
-    | TourRecord
-    | null
-    | undefined;
-  const steps = useQuery(tourStepsListQueryRef, canQueryTourData ? { tourId } : "skip") as
-    | TourStepRecord[]
-    | undefined;
-  const eventNames = useQuery(
-    eventNamesQueryRef,
-    canQueryTourData && tour?.workspaceId ? { workspaceId: tour.workspaceId } : "skip"
-  ) as string[] | undefined;
-
-  const updateTour = useMutation(updateTourMutationRef);
-  const activateTour = useMutation(activateTourMutationRef);
-  const deactivateTour = useMutation(deactivateTourMutationRef);
-  const createStep = useMutation(createStepMutationRef);
-  const updateStep = useMutation(updateStepMutationRef);
-  const deleteStep = useMutation(deleteStepMutationRef);
-  const reorderSteps = useMutation(reorderStepsMutationRef);
-  const createAuthoringSession = useMutation(createAuthoringSessionMutationRef);
+  const {
+    activateTour,
+    createAuthoringSession,
+    createStep,
+    deactivateTour,
+    deleteStep,
+    eventNames,
+    reorderSteps,
+    steps,
+    tour,
+    updateStep,
+    updateTour,
+  } = useTourEditorConvex(tourId, canQueryTourData);
 
   useEffect(() => {
     if (tour) {
@@ -318,13 +184,13 @@ export default function TourEditorPage() {
 
   const handleMoveStep = async (stepId: Id<"tourSteps">, direction: "up" | "down") => {
     if (!steps) return;
-    const currentIndex = steps.findIndex((s: TourStepRecord) => s._id === stepId);
+    const currentIndex = steps.findIndex((s: TourEditorStep) => s._id === stepId);
     if (currentIndex === -1) return;
 
     const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
     if (newIndex < 0 || newIndex >= steps.length) return;
 
-    const newOrder = [...steps.map((s: TourStepRecord) => s._id)];
+    const newOrder = [...steps.map((s: TourEditorStep) => s._id)];
     [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
 
     await reorderSteps({ tourId, stepIds: newOrder });

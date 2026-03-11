@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -13,98 +11,15 @@ import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
-
-type EmailCampaignRecord = {
-  _id: Id<"emailCampaigns">;
-  name: string;
-  subject: string;
-  previewText?: string;
-  content: string;
-  status: string;
-  audienceRules?: AudienceRule | null;
-  targeting?: AudienceRule | null;
-};
-
-type EmailCampaignStats = {
-  total: number;
-  pending: number;
-  sent: number;
-  delivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  unsubscribed: number;
-  openRate: number;
-  clickRate: number;
-  bounceRate: number;
-};
-
-type UpdateCampaignArgs = {
-  id: Id<"emailCampaigns">;
-  name?: string;
-  subject?: string;
-  previewText?: string;
-  content?: string;
-  templateId?: Id<"emailTemplates">;
-  senderId?: Id<"users">;
-  targeting?: AudienceRule;
-  schedule?: {
-    type: "immediate" | "scheduled";
-    scheduledAt?: number;
-    timezone?: string;
-  };
-};
-
-type SendCampaignArgs = {
-  id: Id<"emailCampaigns">;
-};
-
-type SendCampaignResult = {
-  recipientCount: number;
-};
-
-const CAMPAIGN_QUERY = makeFunctionReference<
-  "query",
-  { id: Id<"emailCampaigns"> },
-  EmailCampaignRecord | null
->("emailCampaigns:get");
-
-const CAMPAIGN_STATS_QUERY = makeFunctionReference<
-  "query",
-  { id: Id<"emailCampaigns"> },
-  EmailCampaignStats
->("emailCampaigns:getStats");
-
-const EVENT_NAMES_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  string[]
->("events:getDistinctNames");
-
-const UPDATE_CAMPAIGN_REF = makeFunctionReference<
-  "mutation",
-  UpdateCampaignArgs,
-  Id<"emailCampaigns">
->("emailCampaigns:update");
-
-const SEND_CAMPAIGN_REF = makeFunctionReference<"mutation", SendCampaignArgs, SendCampaignResult>(
-  "emailCampaigns:send"
-);
+import { useEmailCampaignEditorConvex } from "../../hooks/useEmailCampaignEditorConvex";
 
 function EmailCampaignEditor() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as Id<"emailCampaigns">;
   const { activeWorkspace } = useAuth();
-
-  const campaign = useQuery(CAMPAIGN_QUERY, { id: campaignId });
-  const stats = useQuery(CAMPAIGN_STATS_QUERY, { id: campaignId });
-  const eventNames = useQuery(
-    EVENT_NAMES_QUERY,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const updateCampaign = useMutation(UPDATE_CAMPAIGN_REF);
-  const sendCampaign = useMutation(SEND_CAMPAIGN_REF);
+  const { campaign, eventNames, sendCampaign, stats, updateCampaign } =
+    useEmailCampaignEditorConvex(campaignId, activeWorkspace?._id);
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");

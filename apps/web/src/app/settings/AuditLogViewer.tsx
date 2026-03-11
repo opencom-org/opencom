@@ -1,70 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
 import { Button } from "@opencom/ui";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
-
-const AUDIT_ACCESS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  { status: "unauthenticated" | "ok" | "forbidden"; canRead?: boolean; canExport?: boolean }
->("auditLogs:getAccess");
-
-const AUDIT_LOGS_LIST_QUERY = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    action?: string;
-    actorId?: Id<"users">;
-    resourceType?: string;
-    resourceId?: string;
-    startTime: number;
-    endTime: number;
-    limit: number;
-  },
-  Array<{
-    _id: string;
-    action: string;
-    timestamp: number;
-    actorId?: string;
-    actorType?: string;
-    actorName?: string;
-    actorEmail?: string;
-    resourceType?: string;
-    resourceId?: string;
-    metadata?: unknown;
-    details?: unknown;
-  }>
->("auditLogs:list");
-
-const AUDIT_ACTIONS_QUERY = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  string[]
->("auditLogs:getActions");
-
-const EXPORT_LOGS_QUERY = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    action?: string;
-    actorId?: Id<"users">;
-    resourceType?: string;
-    resourceId?: string;
-    startTime: number;
-    endTime: number;
-    format: "json";
-  },
-  { data: unknown; count: number }
->("auditLogs:exportLogs");
-
-const LOG_EXPORT_REF = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces">; exportType: string; recordCount: number },
-  unknown
->("auditLogs:logExport");
+import { useAuditLogViewerConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function AuditLogViewer({
   workspaceId,
@@ -88,51 +27,28 @@ export function AuditLogViewer({
       endTime: now,
     };
   }, [timeRangeDays]);
-
-  const auditAccess = useQuery(AUDIT_ACCESS_QUERY, showViewer ? { workspaceId } : "skip");
-
+  const {
+    auditAccess,
+    auditLogs,
+    availableActions,
+    canExportAuditLogs,
+    canReadAuditLogs,
+    exportLogs,
+    logExportMutation,
+  } = useAuditLogViewerConvex(
+    workspaceId,
+    showViewer,
+    {
+      action: actionFilter || undefined,
+      actorId: (actorFilter.trim() as Id<"users">) || undefined,
+      resourceType: resourceTypeFilter.trim() || undefined,
+      resourceId: resourceIdFilter.trim() || undefined,
+      startTime,
+      endTime,
+    },
+    isExporting
+  );
   const isAuditUnauthenticated = auditAccess?.status === "unauthenticated";
-  const canReadAuditLogs = auditAccess?.status === "ok" ? auditAccess.canRead : false;
-  const canExportAuditLogs = auditAccess?.status === "ok" ? auditAccess.canExport : false;
-
-  const auditLogs = useQuery(
-    AUDIT_LOGS_LIST_QUERY,
-    showViewer && canReadAuditLogs
-      ? {
-          workspaceId,
-          action: actionFilter || undefined,
-          actorId: (actorFilter.trim() as Id<"users">) || undefined,
-          resourceType: resourceTypeFilter.trim() || undefined,
-          resourceId: resourceIdFilter.trim() || undefined,
-          startTime,
-          endTime,
-          limit: 100,
-        }
-      : "skip"
-  );
-
-  const availableActions = useQuery(
-    AUDIT_ACTIONS_QUERY,
-    showViewer && canReadAuditLogs ? { workspaceId } : "skip"
-  );
-
-  const exportLogs = useQuery(
-    EXPORT_LOGS_QUERY,
-    isExporting && canReadAuditLogs && canExportAuditLogs
-      ? {
-          workspaceId,
-          action: actionFilter || undefined,
-          actorId: (actorFilter.trim() as Id<"users">) || undefined,
-          resourceType: resourceTypeFilter.trim() || undefined,
-          resourceId: resourceIdFilter.trim() || undefined,
-          startTime,
-          endTime,
-          format: "json",
-        }
-      : "skip"
-  );
-
-  const logExportMutation = useMutation(LOG_EXPORT_REF);
 
   const handleExport = async () => {
     if (isAuditUnauthenticated) {

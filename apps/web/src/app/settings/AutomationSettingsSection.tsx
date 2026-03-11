@@ -1,46 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
 import { Zap } from "lucide-react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
-
-const automationSettingsQuery = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  {
-    suggestArticlesEnabled: boolean;
-    showReplyTimeEnabled: boolean;
-    collectEmailEnabled: boolean;
-    askForRatingEnabled: boolean;
-  } | null
->("automationSettings:get");
-
-const upsertAutomationSettingsRef = makeFunctionReference<
-  "mutation",
-  {
-    workspaceId: Id<"workspaces">;
-    suggestArticlesEnabled?: boolean;
-    showReplyTimeEnabled?: boolean;
-    collectEmailEnabled?: boolean;
-    askForRatingEnabled?: boolean;
-  },
-  null
->("automationSettings:upsert");
+import { useAutomationSettingsSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function AutomationSettingsSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const automationSettings = useQuery(
-    automationSettingsQuery,
-    workspaceId ? { workspaceId } : "skip"
-  );
-
-  const upsertSettings = useMutation(upsertAutomationSettingsRef);
+  const { automationSettings, upsertSettings } =
+    useAutomationSettingsSectionConvex(workspaceId);
 
   const [suggestArticlesEnabled, setSuggestArticlesEnabled] = useState(false);
   const [showReplyTimeEnabled, setShowReplyTimeEnabled] = useState(false);
