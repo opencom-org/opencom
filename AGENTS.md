@@ -26,12 +26,27 @@
 
 ### Convex TypeScript deep-instantiation workaround
 
+- Canonical guide: `docs/convex-type-safety-playbook.md`
 - If Convex typecheck hits `TS2589` (`Type instantiation is excessively deep and possibly infinite`) at generated refs like `api.foo.bar` or `internal.foo.bar`, prefer a **local escape hatch** instead of broad weakening.
 - First keep call signatures shallow at the hot spot:
   - cast `ctx.scheduler.runAfter`, `ctx.runQuery`, or `ctx.runMutation` to a local shallow function type.
 - If merely referencing `api...` / `internal...` still triggers `TS2589`, use `makeFunctionReference("module:function")` from `convex/server` at that call site instead of property access on generated refs.
 - Keep this workaround **localized only to pathological sites**. Continue using generated `api` / `internal` refs normally elsewhere.
 - Expect hidden follow-on errors: rerun `pnpm --filter @opencom/convex typecheck` after each small batch of fixes, because resolving one deep-instantiation site can reveal additional ones.
+
+## Convex Type Safety Standards
+
+- Read `docs/convex-type-safety-playbook.md` before adding new Convex boundaries.
+- Frontend runtime/UI modules must not import `convex/react` directly. Use local adapters and wrapper hooks instead.
+- Keep Convex refs at module scope. Never create `makeFunctionReference(...)` values inside React components or hooks.
+- Do not add new `getQueryRef(name: string)`, `getMutationRef(name: string)`, or `getActionRef(name: string)` factories.
+- Backend cross-function calls should use generated `api` / `internal` refs by default. Only move to fixed `makeFunctionReference("module:function")` refs after a real `TS2589` hotspot is confirmed.
+- Keep unavoidable casts localized to adapters or named backend hotspot helpers. Do not spread `as unknown as`, `unsafeApi`, or `unsafeInternal` through runtime code.
+- After changing a boundary, update the relevant hardening guard:
+  - `packages/convex/tests/runtimeTypeHardeningGuard.test.ts`
+  - `apps/web/src/app/typeHardeningGuard.test.ts`
+  - `apps/widget/src/test/refHardeningGuard.test.ts`
+  - `packages/react-native-sdk/tests/hookBoundaryGuard.test.ts`
 
 ### Tests
 

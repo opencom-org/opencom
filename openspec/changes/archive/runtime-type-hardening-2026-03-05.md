@@ -1,5 +1,7 @@
 # Runtime Type Hardening Notes (2026-03-05)
 
+For current standards and new work, use `docs/convex-type-safety-playbook.md`. This file is historical context from an earlier hardening pass.
+
 ## Scope
 
 This pass hardens runtime-critical Convex paths in:
