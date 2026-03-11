@@ -5,10 +5,12 @@ import { describe, expect, it } from "vitest";
 
 const TESTS_DIR = dirname(fileURLToPath(import.meta.url));
 const SRC_DIR = resolve(TESTS_DIR, "../src");
+const MOBILE_APP_DIR = resolve(TESTS_DIR, "../../../apps/mobile");
 
 const INTERNAL_CONVEX_PATH = resolve(SRC_DIR, "internal/convex.ts");
 const INTERNAL_RUNTIME_PATH = resolve(SRC_DIR, "internal/runtime.ts");
 const INTERNAL_OPENCOM_CONTEXT_PATH = resolve(SRC_DIR, "internal/opencomContext.ts");
+const MOBILE_HARDENING_GUARD_PATH = resolve(MOBILE_APP_DIR, "src/typeHardeningGuard.test.ts");
 
 const TRANSPORT_BOUNDARY_FILES = [
   "hooks/useConversations.ts",
@@ -81,5 +83,14 @@ describe("react native sdk hook boundary guards", () => {
     expect(pushSource).toContain("sdkMutationRef(");
     expect(pushSource).toContain("getSdkTransportContext()");
     expect(pushSource).toContain("getSdkVisitorTransport()");
+  });
+
+  it("keeps the mobile app hardening guard discoverable from the React Native guard suite", () => {
+    const mobileGuardSource = readFileSync(MOBILE_HARDENING_GUARD_PATH, "utf8");
+
+    expect(mobileGuardSource).toContain('describe("mobile convex ref hardening guards"');
+    expect(mobileGuardSource).toContain("APPROVED_DIRECT_CONVEX_IMPORT_FILES");
+    expect(mobileGuardSource).toContain("APPROVED_DIRECT_REF_FACTORY_FILES");
+    expect(mobileGuardSource).toContain("findComponentScopedConvexRefs");
   });
 });

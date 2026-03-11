@@ -1,65 +1,11 @@
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { makeFunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { useBackend } from "./BackendContext";
+import { useAuthContextConvex, useAuthHomeRouteConvex } from "../hooks/convex/useAuthConvex";
+import type { MobileAuthUser as User, MobileWorkspace as Workspace } from "../hooks/convex/types";
 import { parseStoredWorkspaceId, resolveActiveWorkspaceId } from "../utils/workspaceSelection";
-
-interface User {
-  _id: Id<"users">;
-  email: string;
-  name?: string;
-  workspaceId: Id<"workspaces">;
-  role: "owner" | "admin" | "agent" | "viewer";
-  avatarUrl?: string;
-}
-
-interface Workspace {
-  _id: Id<"workspaces">;
-  name: string;
-  role: "owner" | "admin" | "agent" | "viewer";
-  allowedOrigins?: string[];
-}
-
-type CurrentUserQueryResult = {
-  user: User | null;
-  workspaces: Workspace[];
-} | null;
-
-type HostedOnboardingState = {
-  isWidgetVerified: boolean;
-  verificationToken?: string | null;
-} | null;
-
-const currentUserQueryRef = makeFunctionReference<"query", Record<string, never>, CurrentUserQueryResult>(
-  "auth:currentUser"
-);
-
-const switchWorkspaceMutationRef = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces"> },
-  null
->("auth:switchWorkspace");
-
-const completeSignupProfileMutationRef = makeFunctionReference<
-  "mutation",
-  { name?: string; workspaceName?: string },
-  null
->("auth:completeSignupProfile");
-
-const unregisterAllPushTokensMutationRef = makeFunctionReference<
-  "mutation",
-  Record<string, never>,
-  null
->("pushTokens:unregisterAllForCurrentUser");
-
-const hostedOnboardingStateQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  HostedOnboardingState
->("workspaces:getHostedOnboardingState");
 
 type HomePath = "/workspace" | "/onboarding" | "/inbox";
 
@@ -94,19 +40,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Convex Auth hooks
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
-
-  // Query current user from Convex Auth session
-  const convexAuthUser = useQuery(currentUserQueryRef, {}) as CurrentUserQueryResult | undefined;
-  const switchWorkspaceMutation = useMutation(switchWorkspaceMutationRef);
-  const completeSignupProfileMutation = useMutation(completeSignupProfileMutationRef);
-  const unregisterAllPushTokensMutation = useMutation(unregisterAllPushTokensMutationRef);
+  const {
+    currentUser: convexAuthUser,
+    switchWorkspace: switchWorkspaceMutation,
+    completeSignupProfile: completeSignupProfileMutation,
+    unregisterAllPushTokens: unregisterAllPushTokensMutation,
+  } = useAuthContextConvex();
 
   // Derive state from query
-  const user = useMemo(() => (convexAuthUser?.user as User | null) ?? null, [convexAuthUser]);
-  const workspaces = useMemo(
-    () => (convexAuthUser?.workspaces as Workspace[] | undefined) ?? [],
-    [convexAuthUser]
-  );
+  const user = useMemo(() => convexAuthUser?.user ?? null, [convexAuthUser]);
+  const workspaces = useMemo(() => convexAuthUser?.workspaces ?? [], [convexAuthUser]);
   const workspaceIds = useMemo(() => workspaces.map((workspace) => workspace._id), [workspaces]);
   const workspaceIdsKey = useMemo(() => workspaceIds.join(","), [workspaceIds]);
   const workspaceStorageKey = useMemo(() => {
@@ -194,12 +137,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const shouldRequireWorkspaceSelection = requiresWorkspaceSelection && workspaces.length > 1;
   const shouldResolveHostedOnboarding =
     isAuthenticated && !!workspaceIdForHomeRouting && !shouldRequireWorkspaceSelection;
-  const hostedOnboardingState = useQuery(
-    hostedOnboardingStateQueryRef,
-    shouldResolveHostedOnboarding && workspaceIdForHomeRouting
-      ? { workspaceId: workspaceIdForHomeRouting }
-      : "skip"
-  ) as HostedOnboardingState | undefined;
+  const { hostedOnboardingState } = useAuthHomeRouteConvex(
+    workspaceIdForHomeRouting,
+    shouldResolveHostedOnboarding
+  );
   const isHomeRouteLoading = shouldResolveHostedOnboarding && hostedOnboardingState === undefined;
   const defaultHomePath: HomePath = shouldRequireWorkspaceSelection
     ? "/workspace"

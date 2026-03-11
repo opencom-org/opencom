@@ -1,29 +1,16 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { useMutation } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "./AuthContext";
 import { router, usePathname } from "expo-router";
+import { useNotificationRegistrationConvex } from "../hooks/convex/useNotificationRegistrationConvex";
 import {
   getActiveConversationIdFromPath,
   getConversationIdFromPayload,
   getNotificationNavigationTarget,
   shouldSuppressForegroundNotification,
 } from "../utils/notificationRouting";
-
-const registerPushTokenMutationRef = makeFunctionReference<
-  "mutation",
-  { token: string; userId: string; platform: "ios" | "android" },
-  null
->("pushTokens:register");
-
-const pushDebugLogMutationRef = makeFunctionReference<
-  "mutation",
-  { stage: string; details?: string },
-  null
->("pushTokens:debugLog");
 
 interface NotificationContextType {
   expoPushToken: string | null;
@@ -58,8 +45,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const pathname = usePathname();
 
   const { user, isAuthenticated } = useAuth();
-  const registerToken = useMutation(registerPushTokenMutationRef);
-  const debugLog = useMutation(pushDebugLogMutationRef);
+  const { registerPushToken: registerToken, debugLog } = useNotificationRegistrationConvex();
 
   useEffect(() => {
     activeConversationIdRef.current = getActiveConversationIdFromPath(pathname);
@@ -87,13 +73,16 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
   }, []);
 
-  const sendDebugLog = async (stage: string, details?: string) => {
-    try {
-      await debugLog({ stage, details });
-    } catch (error) {
-      console.warn("Failed to write push registration debug log", error);
-    }
-  };
+  const sendDebugLog = useCallback(
+    async (stage: string, details?: string) => {
+      try {
+        await debugLog({ stage, details });
+      } catch (error) {
+        console.warn("Failed to write push registration debug log", error);
+      }
+    },
+    [debugLog]
+  );
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -209,7 +198,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         responseListener.current.remove();
       }
     };
-  }, [isAuthenticated, user, registerToken]);
+  }, [isAuthenticated, user, registerToken, sendDebugLog]);
 
   return (
     <NotificationContext.Provider

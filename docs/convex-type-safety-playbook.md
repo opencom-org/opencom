@@ -21,14 +21,14 @@ Historical hardening notes still exist in `openspec/archive/refactor-*` and `run
 
 ## Decision Table
 
-| Situation | Preferred approach | Where | Why |
-| --- | --- | --- | --- |
-| Define a new public Convex query or mutation | Export a normal Convex function with narrow `v.*` args and a narrow return shape | `packages/convex/convex/**` | Keeps the source contract explicit and reusable |
-| Call Convex from web or widget UI/runtime code | Use the local surface adapter plus a feature-local wrapper hook or fixed ref constant | `apps/web/src/**`, `apps/widget/src/**` | Keeps `convex/react` and ref typing out of runtime/UI modules |
-| Call one Convex function from another and generated refs typecheck normally | Use generated `api.*` / `internal.*` refs | `packages/convex/convex/**` | This is the default, simplest path |
-| Call one Convex function from another and generated refs hit `TS2589` | Add a local shallow `runQuery` / `runMutation` / `runAction` / `runAfter` helper | the hotspot file only | Shrinks type instantiation at the call boundary |
-| The generated ref itself still triggers `TS2589` | Replace only that hot ref with a fixed, typed `makeFunctionReference("module:function")` constant | the hotspot file only | Avoids broad weakening of the entire module |
-| Convex React hook tuple typing still needs help | Keep a tiny adapter-local helper/cast in the surface adapter | adapter file only | Localizes the last unavoidable boundary |
+| Situation                                                                   | Preferred approach                                                                                | Where                                   | Why                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
+| Define a new public Convex query or mutation                                | Export a normal Convex function with narrow `v.*` args and a narrow return shape                  | `packages/convex/convex/**`             | Keeps the source contract explicit and reusable               |
+| Call Convex from web or widget UI/runtime code                              | Use the local surface adapter plus a feature-local wrapper hook or fixed ref constant             | `apps/web/src/**`, `apps/widget/src/**` | Keeps `convex/react` and ref typing out of runtime/UI modules |
+| Call one Convex function from another and generated refs typecheck normally | Use generated `api.*` / `internal.*` refs                                                         | `packages/convex/convex/**`             | This is the default, simplest path                            |
+| Call one Convex function from another and generated refs hit `TS2589`       | Add a local shallow `runQuery` / `runMutation` / `runAction` / `runAfter` helper                  | the hotspot file only                   | Shrinks type instantiation at the call boundary               |
+| The generated ref itself still triggers `TS2589`                            | Replace only that hot ref with a fixed, typed `makeFunctionReference("module:function")` constant | the hotspot file only                   | Avoids broad weakening of the entire module                   |
+| Convex React hook tuple typing still needs help                             | Keep a tiny adapter-local helper/cast in the surface adapter                                      | adapter file only                       | Localizes the last unavoidable boundary                       |
 
 ## Non-Negotiable Rules
 
@@ -50,6 +50,7 @@ The current hardening guards freeze these boundaries:
 
 - `apps/web/src/app/typeHardeningGuard.test.ts`
 - `apps/widget/src/test/refHardeningGuard.test.ts`
+- `apps/mobile/src/typeHardeningGuard.test.ts`
 - `packages/react-native-sdk/tests/hookBoundaryGuard.test.ts`
 
 ### 2. Do not create refs inside React components or hooks
@@ -181,9 +182,7 @@ export function useVisitorTickets(
 ) {
   return useWidgetQuery(
     VISITOR_TICKETS_REF,
-    workspaceId && visitorId && sessionToken
-      ? { workspaceId, visitorId, sessionToken }
-      : "skip"
+    workspaceId && visitorId && sessionToken ? { workspaceId, visitorId, sessionToken } : "skip"
   );
 }
 ```
@@ -263,16 +262,9 @@ type ConvexRef<
   Return = unknown,
 > = FunctionReference<Type, Visibility, Args, Return>;
 
-const DELIVER_NOTIFICATION_REF = makeFunctionReference<
-  "mutation",
-  DeliverArgs,
-  DeliverResult
->("notifications:deliver") as unknown as ConvexRef<
-  "mutation",
-  "internal",
-  DeliverArgs,
-  DeliverResult
->;
+const DELIVER_NOTIFICATION_REF = makeFunctionReference<"mutation", DeliverArgs, DeliverResult>(
+  "notifications:deliver"
+) as unknown as ConvexRef<"mutation", "internal", DeliverArgs, DeliverResult>;
 ```
 
 Use this only after the generated ref path proved pathological.
@@ -335,6 +327,7 @@ Use this only after the generated ref path proved pathological.
 - Target the same pattern as web/widget: local wrapper hooks plus module-scope typed refs.
 - Do not add new direct `convex/react` usage to screens, contexts, or controller-style hooks.
 - If a local adapter/wrapper does not exist for the feature yet, create one instead of importing hooks directly into runtime UI.
+- Guard coverage lives in `apps/mobile/src/typeHardeningGuard.test.ts`.
 
 ## Anti-Patterns To Avoid
 
@@ -366,6 +359,7 @@ pnpm --filter @opencom/widget typecheck
 pnpm --filter @opencom/convex test -- --run tests/runtimeTypeHardeningGuard.test.ts
 pnpm --filter @opencom/web test -- --run src/app/typeHardeningGuard.test.ts
 pnpm --filter @opencom/widget test -- --run src/test/refHardeningGuard.test.ts
+pnpm exec vitest run --config apps/mobile/vitest.config.ts apps/mobile/src/typeHardeningGuard.test.ts
 ```
 
 ## Review Rule of Thumb

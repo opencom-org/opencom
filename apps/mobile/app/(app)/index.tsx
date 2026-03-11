@@ -1,50 +1,15 @@
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native";
-import { useQuery } from "convex/react";
-import { makeFunctionReference } from "convex/server";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { router } from "expo-router";
 import { useState, useCallback } from "react";
-import type { Id } from "@opencom/convex/dataModel";
-
-interface ConversationItem {
-  _id: string;
-  visitorId?: string;
-  status: "open" | "closed" | "snoozed";
-  lastMessageAt?: number;
-  createdAt: number;
-  unreadByAgent?: number;
-  visitor: {
-    name?: string;
-    email?: string;
-    readableId?: string;
-  } | null;
-  lastMessage: {
-    content: string;
-    senderType: string;
-    createdAt: number;
-  } | null;
-}
-
-type InboxPageResult =
-  | ConversationItem[]
-  | {
-      conversations: ConversationItem[];
-    };
-
-const visitorIsOnlineQueryRef = makeFunctionReference<
-  "query",
-  { visitorId: Id<"visitors"> },
-  boolean
->("visitors:isOnline");
-
-const inboxListQueryRef = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces">; status?: "open" | "closed" | "snoozed" },
-  InboxPageResult
->("conversations:listForInbox");
+import { useInboxConvex, useVisitorPresenceConvex } from "../../src/hooks/convex/useInboxConvex";
+import type {
+  MobileConversationItem as ConversationItem,
+  MobileConversationStatus,
+} from "../../src/hooks/convex/types";
 
 function PresenceIndicator({ visitorId }: { visitorId: string }) {
-  const isOnline = useQuery(visitorIsOnlineQueryRef, { visitorId: visitorId as Id<"visitors"> });
+  const { isOnline } = useVisitorPresenceConvex(visitorId);
   return (
     <View
       style={[styles.presenceIndicator, isOnline ? styles.presenceOnline : styles.presenceOffline]}
@@ -110,17 +75,9 @@ function ConversationListItem({ item, onPress }: { item: ConversationItem; onPre
 export default function InboxScreen() {
   const { activeWorkspaceId } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"open" | "closed" | "snoozed" | undefined>(
-    undefined
-  );
-
-  const inboxPage = useQuery(
-    inboxListQueryRef,
-    activeWorkspaceId ? { workspaceId: activeWorkspaceId, status: statusFilter } : "skip"
-  ) as InboxPageResult | undefined;
-  const conversations = (Array.isArray(inboxPage) ? inboxPage : inboxPage?.conversations) as
-    | ConversationItem[]
-    | undefined;
+  const [statusFilter, setStatusFilter] = useState<MobileConversationStatus | undefined>(undefined);
+  const { inboxPage } = useInboxConvex({ workspaceId: activeWorkspaceId, status: statusFilter });
+  const conversations = inboxPage?.conversations as ConversationItem[] | undefined;
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
