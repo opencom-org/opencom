@@ -1,5 +1,16 @@
 ## Overview
 
+As of March 11, 2026, a repo-wide scan shows the mobile app has only a small but high-impact set of direct `convex/react` consumers left outside its provider boundary:
+
+- `apps/mobile/src/contexts/AuthContext.tsx`
+- `apps/mobile/src/contexts/NotificationContext.tsx`
+- `apps/mobile/app/(app)/index.tsx`
+- `apps/mobile/app/(app)/conversation/[id].tsx`
+- `apps/mobile/app/(app)/settings.tsx`
+- `apps/mobile/app/(app)/onboarding.tsx`
+
+`apps/mobile/app/_layout.tsx` still imports `ConvexReactClient` for app bootstrapping and remains an allowed provider boundary. The problem is not raw file count anymore. It is that the remaining direct consumers are the exact auth, onboarding, inbox, conversation, settings, and notification surfaces where parity work keeps landing.
+
 This change introduces a mobile-local wrapper hook layer so generated Convex hook refs are no longer consumed directly throughout mobile screens and context modules. The goal is to keep mobile navigation, onboarding, and inbox flows focused on user interaction and device-specific behavior while app-owned wrappers handle generated API refs, gating, and explicit mobile-local types.
 
 ## Goals
@@ -27,8 +38,12 @@ This change introduces a mobile-local wrapper hook layer so generated Convex hoo
 
 ### Domain-first migration
 
-- Start with the most cross-cutting mobile domains: auth/workspace resolution, onboarding decisions, inbox/conversation flows, and settings.
-- After the pattern is stable, migrate additional visitor, notification, and parity-driven flows.
+- Start with the most cross-cutting mobile domains: auth/workspace resolution, onboarding decisions, inbox/conversation flows, settings, and notification registration.
+- Migrate the remaining direct consumers in three file-cluster batches:
+  - auth/onboarding: `AuthContext.tsx`, `onboarding.tsx`
+  - notification/settings: `NotificationContext.tsx`, `settings.tsx`
+  - inbox/conversation shell: `index.tsx`, `conversation/[id].tsx`
+- After the pattern is stable, migrate any new parity-driven mobile flows through the same wrapper layer instead of adding fresh direct hook usage.
 - Keep new mobile code from introducing more direct generated Convex hook usage in screens or contexts once wrapper coverage exists for a domain.
 
 ### Wrapper design rules
@@ -56,5 +71,6 @@ This change introduces a mobile-local wrapper hook layer so generated Convex hoo
 ## Rollout Notes
 
 - Establish mobile-local wrapper foundations first.
-- Migrate auth/workspace, onboarding, inbox/conversation, and settings domains next.
+- Keep `app/_layout.tsx` as the provider/runtime boundary and move all other remaining direct usage behind wrappers.
+- Migrate auth/workspace, onboarding, inbox/conversation, settings, and notification domains next.
 - Treat additional parity-driven mobile surfaces as incremental follow-on migrations.

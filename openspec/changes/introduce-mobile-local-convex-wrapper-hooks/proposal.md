@@ -1,13 +1,14 @@
 ## Why
 
-The mobile app performs direct Convex hook calls inside screens, contexts, and onboarding/inbox flows that also own navigation, permission-aware rendering, and device-local state. As mobile parity work expands across inbox, onboarding, settings, workspace selection, and visitor flows, direct generated hook usage increases coupling between transport concerns and mobile screen orchestration. A dedicated mobile-local wrapper-hook layer would make those screens easier to evolve safely while containing type and gating complexity in mobile-owned modules.
+The mobile app still performs direct Convex hook calls inside screens and context modules that also own navigation, permission-aware rendering, and device-local state. A March 11, 2026 repo scan confirmed the remaining direct usage is concentrated in `AuthContext.tsx`, `NotificationContext.tsx`, `app/(app)/index.tsx`, `app/(app)/conversation/[id].tsx`, `app/(app)/settings.tsx`, and `app/(app)/onboarding.tsx`, which makes this the highest-value remaining wrapper-boundary migration.
 
 ## What Changes
 
 - Introduce mobile-local typed Convex wrapper hooks that isolate generated API ref usage behind app-owned mobile modules.
 - Add a minimal mobile-local adapter boundary, where needed, so unavoidable type escape hatches live outside mobile screens and context modules.
-- Provide explicit domain wrapper hooks first for onboarding/workspace selection, inbox/conversation flows, settings, and notification-related mobile domains.
+- Provide explicit domain wrapper hooks first for auth/workspace selection, onboarding, inbox/conversation, settings, and notification-related mobile domains.
 - Allow route/controller hooks and context modules to compose domain wrappers while preserving mobile-specific navigation and state ownership.
+- Cover the remaining direct mobile hook consumers identified in the March 11, 2026 scan while keeping `app/_layout.tsx` as the accepted provider boundary.
 - Preserve existing mobile behavior, Convex targets, payload semantics, and user-visible workflows.
 
 ## Capabilities
@@ -21,6 +22,6 @@ The mobile app performs direct Convex hook calls inside screens, contexts, and o
 
 ## Impact
 
-- Affected code: `apps/mobile/app/**`, `apps/mobile/src/contexts/**`, new mobile-local wrapper layers under `apps/mobile/src`, and targeted mobile tests.
+- Affected code: `apps/mobile/src/contexts/{AuthContext,NotificationContext}.tsx`, `apps/mobile/app/(app)/{index,onboarding,settings}.tsx`, `apps/mobile/app/(app)/conversation/[id].tsx`, `apps/mobile/app/_layout.tsx` as the allowed provider boundary, new mobile-local wrapper layers under `apps/mobile/src`, and targeted mobile verification flows.
 - Affected contributors: mobile contributors working on inbox, onboarding, settings, workspace selection, and notification-driven flows.
 - Dependencies: no external dependency changes; mobile-local hook boundaries and typing conventions will be introduced.
