@@ -1,11 +1,74 @@
-import { anyApi, makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { authAction, authMutation, authQuery } from "../lib/authWrappers";
 import { evaluateRuleWithSegmentSupport } from "../audienceRules";
+import { routeEventRef } from "../notifications/functionRefs";
 import { hasTerminalImpression } from "./helpers";
 
-const NOTIFICATIONS_ROUTE_EVENT_INTERNAL_REF = makeFunctionReference("notifications:routeEvent");
+type ConvexRef<
+  Type extends "query" | "mutation",
+  Visibility extends "internal" | "public",
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<Type, Visibility, Args, Return>;
+
+type TriggerableCarousel = {
+  _id: Id<"carousels">;
+  name: string;
+  status: string;
+  workspaceId: Id<"workspaces">;
+  updatedAt: number;
+  screens?: Array<{ title?: string; body?: string }>;
+};
+
+type EligibleVisitorForPush = {
+  visitorId: Id<"visitors">;
+};
+
+const GET_CAROUSEL_REF = makeFunctionReference<
+  "query",
+  { id: Id<"carousels"> },
+  TriggerableCarousel | null
+>("carousels:get") as unknown as ConvexRef<
+  "query",
+  "public",
+  { id: Id<"carousels"> },
+  TriggerableCarousel | null
+>;
+
+const GET_ELIGIBLE_VISITORS_WITH_PUSH_TOKENS_REF = makeFunctionReference<
+  "query",
+  { carouselId: Id<"carousels"> },
+  EligibleVisitorForPush[]
+>("carousels:getEligibleVisitorsWithPushTokens") as unknown as ConvexRef<
+  "query",
+  "public",
+  { carouselId: Id<"carousels"> },
+  EligibleVisitorForPush[]
+>;
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    queryRef: ConvexRef<"query", Visibility, Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return = unknown,
+  >(
+    mutationRef: ConvexRef<"mutation", Visibility, Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
+}
 
 export const triggerForVisitors = authMutation({
   args: {
@@ -129,32 +192,11 @@ export const sendPushTrigger = authAction({
     error?: string;
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
-    const runQuery = ctx.runQuery as unknown as (
-      queryRef: unknown,
-      queryArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const runMutation = ctx.runMutation as unknown as (
-      mutationRef: unknown,
-      mutationArgs: Record<string, unknown>
-    ) => Promise<unknown>;
-    const carouselGetRef = (anyApi as unknown as {
-      carousels: { get: unknown; getEligibleVisitorsWithPushTokens: unknown };
-    }).carousels.get;
-    const eligibleVisitorsRef = (anyApi as unknown as {
-      carousels: { getEligibleVisitorsWithPushTokens: unknown };
-    }).carousels.getEligibleVisitorsWithPushTokens;
-    const carousel = (await runQuery(carouselGetRef, {
+    const runQuery = getShallowRunQuery(ctx);
+    const runMutation = getShallowRunMutation(ctx);
+    const carousel = await runQuery(GET_CAROUSEL_REF, {
       id: args.carouselId,
-    })) as
-      | {
-          _id: Id<"carousels">;
-          name: string;
-          status: string;
-          workspaceId: Id<"workspaces">;
-          updatedAt: number;
-          screens?: Array<{ title?: string; body?: string }>;
-        }
-      | null;
+    });
     if (!carousel) {
       throw new Error("Carousel not found");
     }
@@ -166,19 +208,19 @@ export const sendPushTrigger = authAction({
     const title = firstScreen?.title || carousel.name;
     const body = firstScreen?.body || "Check out this new content";
 
-    const eligibleVisitors = (await runQuery(eligibleVisitorsRef, {
+    const eligibleVisitors = await runQuery(GET_ELIGIBLE_VISITORS_WITH_PUSH_TOKENS_REF, {
       carouselId: args.carouselId,
-    })) as Array<{ visitorId: Id<"visitors"> }>;
+    });
 
     if (eligibleVisitors.length === 0) {
       return { success: true, sent: 0, message: "No eligible visitors with push tokens" };
     }
 
     const visitorIds = Array.from(
-      new Set(eligibleVisitors.map((visitor: { visitorId: Id<"visitors"> }) => visitor.visitorId))
+      new Set(eligibleVisitors.map((visitor) => visitor.visitorId))
     ) as Id<"visitors">[];
 
-    const routed = (await runMutation(NOTIFICATIONS_ROUTE_EVENT_INTERNAL_REF, {
+    const routed = (await runMutation(routeEventRef, {
       eventType: "carousel_trigger",
       domain: "outbound",
       audience: "visitor",
