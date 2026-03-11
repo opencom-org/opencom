@@ -1,4 +1,4 @@
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query, internalMutation, QueryCtx, MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
@@ -13,7 +13,41 @@ const DEFAULT_SESSION_LIFETIME_MS = 24 * 60 * 60 * 1000; // 24 hours
 const MIN_SESSION_LIFETIME_MS = 1 * 60 * 60 * 1000; // 1 hour
 const MAX_SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const REFRESH_THRESHOLD = 0.25; // Refresh when <25% lifetime remains
-const VERIFY_IDENTITY_INTERNAL_REF = makeFunctionReference("identityVerification:verifyIdentity");
+
+type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "mutation",
+  "internal",
+  Args,
+  Return
+>;
+
+type VerifyIdentityArgs = {
+  workspaceId: Id<"workspaces">;
+  visitorId: Id<"visitors">;
+  userId: string;
+  userHash: string;
+};
+
+type VerifyIdentityResult = {
+  verified: boolean;
+  skipped?: boolean;
+};
+
+const VERIFY_IDENTITY_INTERNAL_REF = makeFunctionReference<
+  "mutation",
+  VerifyIdentityArgs,
+  VerifyIdentityResult
+>("identityVerification:verifyIdentity") as unknown as InternalMutationRef<
+  VerifyIdentityArgs,
+  VerifyIdentityResult
+>;
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+    mutationRef: InternalMutationRef<Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
+}
 
 /**
  * Generate a cryptographically random session token with `wst_` prefix.
@@ -241,16 +275,13 @@ export const boot = mutation({
     let identityVerified = false;
 
     if (args.externalUserId && args.userHash) {
-      const runMutation = ctx.runMutation as unknown as (
-        mutationRef: unknown,
-        mutationArgs: Record<string, unknown>
-      ) => Promise<unknown>;
-      const result = (await runMutation(VERIFY_IDENTITY_INTERNAL_REF, {
+      const runMutation = getShallowRunMutation(ctx);
+      const result = await runMutation(VERIFY_IDENTITY_INTERNAL_REF, {
         workspaceId: args.workspaceId,
         visitorId: visitor._id,
         userId: args.externalUserId,
         userHash: args.userHash,
-      })) as { verified: boolean; skipped?: boolean };
+      });
 
       if (result.verified) {
         identityVerified = true;

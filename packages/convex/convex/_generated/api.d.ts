@@ -81,6 +81,7 @@ import type * as outboundContracts from "../outboundContracts.js";
 import type * as outboundMessages from "../outboundMessages.js";
 import type * as permissions from "../permissions.js";
 import type * as push from "../push.js";
+import type * as push_functionRefs from "../push/functionRefs.js";
 import type * as pushCampaigns from "../pushCampaigns.js";
 import type * as pushTokens from "../pushTokens.js";
 import type * as reporting from "../reporting.js";
@@ -260,6 +261,7 @@ declare const fullApi: ApiFromModules<{
   outboundMessages: typeof outboundMessages;
   permissions: typeof permissions;
   push: typeof push;
+  "push/functionRefs": typeof push_functionRefs;
   pushCampaigns: typeof pushCampaigns;
   pushTokens: typeof pushTokens;
   reporting: typeof reporting;

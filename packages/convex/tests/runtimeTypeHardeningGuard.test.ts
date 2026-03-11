@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const TARGET_FILES = [
@@ -22,11 +22,70 @@ const TARGET_FILES = [
   "../convex/workspaceMembers.ts",
 ];
 
+const CONVEX_ROOT = new URL("../convex/", import.meta.url);
+
+function collectTypeScriptFiles(dirUrl: URL): URL[] {
+  const files: URL[] = [];
+
+  for (const entry of readdirSync(dirUrl, { withFileTypes: true })) {
+    const entryUrl = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, dirUrl);
+    if (entry.isDirectory()) {
+      files.push(...collectTypeScriptFiles(entryUrl));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(".ts")) {
+      files.push(entryUrl);
+    }
+  }
+
+  return files;
+}
+
+function toConvexRelativePath(fileUrl: URL): string {
+  return fileUrl.pathname.slice(CONVEX_ROOT.pathname.length);
+}
+
 describe("runtime type hardening guards", () => {
   it("prevents broad any-casts in covered runtime-critical modules", () => {
     for (const relativePath of TARGET_FILES) {
       const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
       expect(source).not.toMatch(/\bas any\b/);
+    }
+  });
+
+  it("keeps broad anyApi object casts limited to approved infrastructure files", () => {
+    const offenders = collectTypeScriptFiles(CONVEX_ROOT)
+      .map((fileUrl) => ({
+        relativePath: toConvexRelativePath(fileUrl),
+        source: readFileSync(fileUrl, "utf8"),
+      }))
+      .filter(
+        ({ source }) =>
+          source.includes("anyApi as unknown as") ||
+          source.includes("(anyApi as unknown as") ||
+          source.includes("const unsafeApi") ||
+          source.includes("const unsafeInternal")
+      )
+      .map(({ relativePath }) => relativePath)
+      .sort();
+
+    expect(offenders).toEqual(["lib/authWrappers.ts"]);
+  });
+
+  it("keeps covered backend hotspot runner casts behind named helpers", () => {
+    const hotspotFiles = [
+      "../convex/aiAgentActions.ts",
+      "../convex/outboundMessages.ts",
+      "../convex/carousels/triggering.ts",
+      "../convex/widgetSessions.ts",
+      "../convex/push.ts",
+    ];
+
+    for (const relativePath of hotspotFiles) {
+      const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+      expect(source).not.toContain("const runQuery = ctx.runQuery as unknown as");
+      expect(source).not.toContain("const runMutation = ctx.runMutation as unknown as");
+      expect(source).not.toContain("const runAction = ctx.runAction as unknown as");
     }
   });
 
@@ -126,16 +185,24 @@ describe("runtime type hardening guards", () => {
 
   it("uses fixed typed refs for push delivery boundaries", () => {
     const pushSource = readFileSync(new URL("../convex/push.ts", import.meta.url), "utf8");
+    const pushFunctionRefsSource = readFileSync(
+      new URL("../convex/push/functionRefs.ts", import.meta.url),
+      "utf8"
+    );
 
     expect(pushSource).not.toContain("function getInternalRef(name: string)");
-    expect(pushSource).toContain("SEND_PUSH_REF");
-    expect(pushSource).toContain("GET_TOKENS_FOR_VISITORS_REF");
-    expect(pushSource).toContain("GET_TOKENS_FOR_WORKSPACE_REF");
-    expect(pushSource).toContain("GET_TOKENS_FOR_VISITOR_REF");
-    expect(pushSource).toContain("GET_CONVERSATION_REF");
-    expect(pushSource).toContain("GET_ELIGIBLE_VISITORS_REF");
-    expect(pushSource).toContain("RECORD_PUSH_TOKEN_DELIVERY_FAILURE_REF");
-    expect(pushSource).toContain("RECORD_VISITOR_PUSH_TOKEN_DELIVERY_FAILURE_REF");
+    expect(pushSource).toContain('from "./push/functionRefs"');
+    expect(pushFunctionRefsSource).toContain("SEND_PUSH_REF");
+    expect(pushFunctionRefsSource).toContain("GET_TOKENS_FOR_VISITORS_REF");
+    expect(pushFunctionRefsSource).toContain("GET_TOKENS_FOR_WORKSPACE_REF");
+    expect(pushFunctionRefsSource).toContain("GET_TOKENS_FOR_VISITOR_REF");
+    expect(pushFunctionRefsSource).toContain("GET_CONVERSATION_REF");
+    expect(pushFunctionRefsSource).toContain("GET_ELIGIBLE_VISITORS_REF");
+    expect(pushFunctionRefsSource).toContain("RECORD_PUSH_TOKEN_DELIVERY_FAILURE_REF");
+    expect(pushFunctionRefsSource).toContain("RECORD_VISITOR_PUSH_TOKEN_DELIVERY_FAILURE_REF");
+    expect(pushFunctionRefsSource).toContain("getShallowRunQuery");
+    expect(pushFunctionRefsSource).toContain("getShallowRunAction");
+    expect(pushFunctionRefsSource).toContain("getShallowRunMutation");
   });
 
   it("uses fixed typed refs for push campaign delivery orchestration", () => {
