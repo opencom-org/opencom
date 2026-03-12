@@ -11,4 +11,4 @@ The system SHALL retrieve relevant knowledge context to answer customer question
 
 ### Requirement: In-memory string matching for relevance score
 **Reason**: Replaced by vector similarity search for improved performance and scalability.
-**Migration**: Use the new vector search capability provided by `@mastra/convex`.
+**Migration**: Use the new vector search capability provided natively by Convex (`ctx.vectorSearch`).
