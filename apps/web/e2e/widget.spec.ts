@@ -361,7 +361,8 @@ test.describe("Widget Email Capture", () => {
     await expect(capturePrompt).not.toBeVisible({ timeout: 20000 });
   });
 
-  test("should dismiss email capture prompt", async ({ page }) => {
+// Skipped since we have hidden the dismiss button for now 
+  test.skip("should dismiss email capture prompt", async ({ page }) => {
     const widget = await openWidgetChatOrSkip(page);
     await startConversationIfNeeded(widget);
 
