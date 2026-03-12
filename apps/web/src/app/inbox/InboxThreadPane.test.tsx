@@ -130,14 +130,16 @@ function buildProps(overrides?: Partial<React.ComponentProps<typeof InboxThreadP
 }
 
 describe("InboxThreadPane", () => {
-  it("shows recent content, snippet actions, and snippet workflow controls in the consolidated picker", () => {
+  it("shows recent content and snippet actions in the consolidated picker", () => {
     const props = buildProps();
     render(<InboxThreadPane {...props} />);
 
     expect(screen.getByText("Recently Used")).toBeInTheDocument();
     expect(screen.getByText("Snippets")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save snippet" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /Update "Billing follow-up"/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save snippet" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Update "Billing follow-up"/ })
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Insert Link" }));
     expect(props.onInsertKnowledgeContent).toHaveBeenCalledWith(
@@ -146,15 +148,17 @@ describe("InboxThreadPane", () => {
     );
   });
 
-  it("invokes the inline snippet workflow controls from the composer", () => {
+  it("does not render inline snippet workflow controls in the composer", () => {
     const props = buildProps();
     render(<InboxThreadPane {...props} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Save snippet" }));
-    fireEvent.click(screen.getByRole("button", { name: /Update "Billing follow-up"/ }));
+    expect(screen.queryByRole("button", { name: "Save snippet" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Update "Billing follow-up"/ })
+    ).not.toBeInTheDocument();
 
-    expect(props.onSaveDraftAsSnippet).toHaveBeenCalledTimes(1);
-    expect(props.onUpdateSnippetFromDraft).toHaveBeenCalledTimes(1);
+    expect(props.onSaveDraftAsSnippet).not.toHaveBeenCalled();
+    expect(props.onUpdateSnippetFromDraft).not.toHaveBeenCalled();
   });
 
   it("inserts snippet content directly from the consolidated picker", () => {
