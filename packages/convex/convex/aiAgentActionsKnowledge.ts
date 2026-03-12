@@ -1,7 +1,7 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { embed } from "ai";
-import { createAIClient } from "./aiAgentLib";
+import { createAIClient } from "./lib/aiGateway";
 import { makeFunctionReference } from "convex/server";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
