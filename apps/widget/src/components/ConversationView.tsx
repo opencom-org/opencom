@@ -157,7 +157,7 @@ export function ConversationView({
       setShowEmailCapture(false);
       return;
     }
-    if (!hasVisitorSentMessage) return;
+    // if (!hasVisitorSentMessage) return;
     if (!automationSettings?.collectEmailEnabled) return;
 
     const agentCount = agentMessageCount;

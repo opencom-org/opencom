@@ -127,9 +127,9 @@ export function ConversationFooter({
                   Save
                 </button>
               </div>
-              <button onClick={onEmailDismiss} className="opencom-email-skip" type="button">
+              {/* <button onClick={onEmailDismiss} className="opencom-email-skip" type="button">
                 Skip
-              </button>
+              </button> */}
             </div>
           )}
 
