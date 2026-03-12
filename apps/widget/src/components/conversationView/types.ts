@@ -1,4 +1,5 @@
 import type { Id } from "@opencom/convex/dataModel";
+import type { SupportAttachmentDescriptor } from "@opencom/web-shared";
 
 export interface ConversationViewProps {
   conversationId: Id<"conversations">;
@@ -40,6 +41,7 @@ export interface ConversationMessage {
   senderId: string;
   content: string;
   senderName?: string;
+  attachments?: SupportAttachmentDescriptor[];
 }
 
 export interface AiResponseSource {

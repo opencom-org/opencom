@@ -1,6 +1,12 @@
 "use client";
 
+import { useRef } from "react";
 import { Button, Card, Input } from "@opencom/ui";
+import {
+  SUPPORT_ATTACHMENT_ACCEPT,
+  formatSupportAttachmentSize,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -16,7 +22,7 @@ import {
   ShieldAlert,
   Ticket,
   X,
-  Zap,
+  // Zap,
 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import {
@@ -35,7 +41,9 @@ interface InboxThreadPaneProps {
   workflowError: string | null;
   highlightedMessageId: Id<"messages"> | null;
   inputValue: string;
+  pendingAttachments?: StagedSupportAttachment<Id<"supportAttachments">>[];
   isSending: boolean;
+  isUploadingAttachments?: boolean;
   isResolving: boolean;
   isConvertingTicket: boolean;
   showKnowledgePicker: boolean;
@@ -62,6 +70,8 @@ interface InboxThreadPaneProps {
   onInputChange: (value: string) => void;
   onInputKeyDown: (event: React.KeyboardEvent) => void;
   onSendMessage: () => void;
+  onUploadAttachments?: (files: File[]) => void;
+  onRemovePendingAttachment?: (attachmentId: Id<"supportAttachments">) => void;
   onToggleKnowledgePicker: () => void;
   onKnowledgeSearchChange: (value: string) => void;
   onCloseKnowledgePicker: () => void;
@@ -124,7 +134,9 @@ export function InboxThreadPane({
   workflowError,
   highlightedMessageId,
   inputValue,
+  pendingAttachments = [],
   isSending,
+  isUploadingAttachments = false,
   isResolving,
   isConvertingTicket,
   showKnowledgePicker,
@@ -138,9 +150,9 @@ export function InboxThreadPane({
   isSidecarEnabled,
   suggestionsCount,
   isSuggestionsCountLoading,
-  canSaveDraftAsSnippet,
-  canUpdateSnippetFromDraft,
-  lastInsertedSnippetName,
+  // canSaveDraftAsSnippet,
+  // canUpdateSnippetFromDraft,
+  // lastInsertedSnippetName,
   replyInputRef,
   onBackToList,
   onResolveConversation,
@@ -151,20 +163,32 @@ export function InboxThreadPane({
   onInputChange,
   onInputKeyDown,
   onSendMessage,
+  onUploadAttachments = () => {},
+  onRemovePendingAttachment = () => {},
   onToggleKnowledgePicker,
   onKnowledgeSearchChange,
   onCloseKnowledgePicker,
   onInsertKnowledgeContent,
-  onSaveDraftAsSnippet,
-  onUpdateSnippetFromDraft,
+  // onSaveDraftAsSnippet,
+  // onUpdateSnippetFromDraft,
   getConversationIdentityLabel,
   getHandoffReasonLabel,
 }: InboxThreadPaneProps): React.JSX.Element {
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const normalizedKnowledgeSearch = knowledgeSearch.trim();
   const isSearchingKnowledge = normalizedKnowledgeSearch.length > 0;
   const hasRecentContent = Boolean(recentContent && recentContent.length > 0);
   const hasSnippetLibrary = Boolean(allSnippets && allSnippets.length > 0);
   const hasKnowledgeResults = Boolean(knowledgeResults && knowledgeResults.length > 0);
+  const canSendReply = inputValue.trim().length > 0 || pendingAttachments.length > 0;
+
+  const handleAttachmentInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length > 0) {
+      onUploadAttachments(files);
+    }
+    event.target.value = "";
+  };
 
   const renderKnowledgeActions = (item: InboxKnowledgeItem) => {
     if (item.type === "snippet") {
@@ -440,7 +464,11 @@ export function InboxThreadPane({
                             From: {message.emailMetadata.from}
                           </div>
                         )}
-                      <p className="whitespace-pre-wrap">{message.content.replace(/<[^>]*>/g, "")}</p>
+                      {message.content.trim().length > 0 && (
+                        <p className="whitespace-pre-wrap">
+                          {message.content.replace(/<[^>]*>/g, "")}
+                        </p>
+                      )}
                       {message.emailMetadata?.attachments &&
                         message.emailMetadata.attachments.length > 0 && (
                           <div className="flex items-center gap-1 text-xs opacity-70 mt-2">
@@ -448,6 +476,47 @@ export function InboxThreadPane({
                             <span>{message.emailMetadata.attachments.length} attachment(s)</span>
                           </div>
                         )}
+                      {message.attachments && message.attachments.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {message.attachments.map((attachment) => (
+                            <div
+                              key={attachment._id}
+                              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
+                                message.senderType === "agent"
+                                  ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground"
+                                  : "border-border bg-background/80 text-foreground"
+                              }`}
+                            >
+                              {attachment.url ? (
+                                <a
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex min-w-0 flex-1 items-center justify-between gap-3"
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span className="truncate">{attachment.fileName}</span>
+                                  </span>
+                                  <span className="flex-shrink-0 text-xs opacity-70">
+                                    {formatSupportAttachmentSize(attachment.size)}
+                                  </span>
+                                </a>
+                              ) : (
+                                <>
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span className="truncate">{attachment.fileName}</span>
+                                  </span>
+                                  <span className="ml-3 flex-shrink-0 text-xs opacity-70">
+                                    {formatSupportAttachmentSize(attachment.size)}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div className="flex items-center gap-2 text-xs opacity-70 mt-1">
                         <span>
                           {message.channel === "email" && <Mail className="h-3 w-3 inline mr-1" />}
@@ -563,7 +632,25 @@ export function InboxThreadPane({
               )}
 
               <div className="flex flex-wrap gap-2">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  multiple
+                  accept={SUPPORT_ATTACHMENT_ACCEPT}
+                  className="hidden"
+                  onChange={handleAttachmentInputChange}
+                />
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    title="Attach files"
+                    disabled={isSending || isUploadingAttachments}
+                    data-testid="inbox-attach-button"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant={showKnowledgePicker ? "default" : "ghost"}
                     size="icon"
@@ -572,7 +659,7 @@ export function InboxThreadPane({
                   >
                     <BookOpen className="h-4 w-4" />
                   </Button>
-                  <Button
+                  {/* <Button
                     variant="outline"
                     size="sm"
                     onClick={onSaveDraftAsSnippet}
@@ -580,29 +667,55 @@ export function InboxThreadPane({
                   >
                     <Zap className="mr-2 h-4 w-4" />
                     Save snippet
-                  </Button>
-                  {canUpdateSnippetFromDraft ? (
+                  </Button> */}
+                  {/* {canUpdateSnippetFromDraft ? (
                     <Button variant="outline" size="sm" onClick={onUpdateSnippetFromDraft}>
                       Update {lastInsertedSnippetName ? `"${lastInsertedSnippetName}"` : "snippet"}
                     </Button>
-                  ) : null}
+                  ) : null} */}
                 </div>
-                <Input
-                  ref={replyInputRef}
-                  value={inputValue}
-                  onChange={(event) => onInputChange(event.target.value)}
-                  onKeyDown={onInputKeyDown}
-                  placeholder="Type a message... (/ or Ctrl+K for knowledge)"
-                  data-testid="inbox-reply-input"
-                  disabled={isSending}
-                  className="flex-1"
-                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  {pendingAttachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2" data-testid="inbox-pending-attachments">
+                      {pendingAttachments.map((attachment) => (
+                        <div
+                          key={attachment.attachmentId}
+                          className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs"
+                        >
+                          <Paperclip className="h-3 w-3" />
+                          <span className="max-w-[220px] truncate">{attachment.fileName}</span>
+                          <span className="text-muted-foreground">
+                            {formatSupportAttachmentSize(attachment.size)}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => onRemovePendingAttachment(attachment.attachmentId)}
+                            aria-label={`Remove ${attachment.fileName}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Input
+                    ref={replyInputRef}
+                    value={inputValue}
+                    onChange={(event) => onInputChange(event.target.value)}
+                    onKeyDown={onInputKeyDown}
+                    placeholder="Type a message... (/ or Ctrl+K for knowledge)"
+                    data-testid="inbox-reply-input"
+                    disabled={isSending || isUploadingAttachments}
+                    className="flex-1"
+                  />
+                </div>
                 <Button
                   onClick={onSendMessage}
                   size="icon"
                   data-testid="inbox-send-button"
                   aria-label="Send reply"
-                  disabled={isSending || !inputValue.trim()}
+                  disabled={isSending || isUploadingAttachments || !canSendReply}
                 >
                   <Send className="h-4 w-4" />
                 </Button>

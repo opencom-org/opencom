@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import type { Id } from "@opencom/convex/dataModel";
-import { resolveArticleSourceId } from "@opencom/web-shared";
-import { Bot, ThumbsUp, ThumbsDown, User } from "../../icons";
+import { formatSupportAttachmentSize, resolveArticleSourceId } from "@opencom/web-shared";
+import { Bot, Paperclip, ThumbsUp, ThumbsDown, User } from "../../icons";
 import { formatTime } from "../../utils/format";
 import { resolveHumanAgentName } from "./helpers";
 import type { AiFeedback, AiResponseData, ConversationMessage } from "./types";
@@ -18,6 +18,44 @@ interface ConversationMessageListProps {
   isAiTyping: boolean;
   renderedMessages: Map<string, string>;
   messagesEndRef: RefObject<HTMLDivElement | null>;
+}
+
+function renderAttachmentRow(attachment: NonNullable<ConversationMessage["attachments"]>[number]) {
+  const content = (
+    <>
+      <span className="opencom-message-attachment-name">
+        <Paperclip />
+        {attachment.fileName}
+      </span>
+      <span className="opencom-message-attachment-size">
+        {formatSupportAttachmentSize(attachment.size)}
+      </span>
+    </>
+  );
+
+  if (attachment.url) {
+    return (
+      <a
+        key={attachment._id}
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="opencom-message-attachment"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      key={attachment._id}
+      aria-disabled="true"
+      className="opencom-message-attachment opencom-message-attachment-disabled"
+    >
+      {content}
+    </div>
+  );
 }
 
 export function ConversationMessageList({
@@ -81,12 +119,19 @@ export function ConversationMessageList({
                     <User /> {humanAgentName}
                   </span>
                 )}
-                <div
-                  className="opencom-message-content"
-                  dangerouslySetInnerHTML={{
-                    __html: renderedMessages.get(msg._id) ?? "",
-                  }}
-                />
+                {msg.content.trim().length > 0 && (
+                  <div
+                    className="opencom-message-content"
+                    dangerouslySetInnerHTML={{
+                      __html: renderedMessages.get(msg._id) ?? "",
+                    }}
+                  />
+                )}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className="opencom-message-attachments">
+                    {msg.attachments.map((attachment) => renderAttachmentRow(attachment))}
+                  </div>
+                )}
                 {isAi && aiData && (
                   <div className="opencom-ai-feedback">
                     {aiData.sources && aiData.sources.length > 0 && (

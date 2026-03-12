@@ -1,6 +1,10 @@
 "use client";
 
 import type { Id } from "@opencom/convex/dataModel";
+import type {
+  SupportAttachmentDescriptor,
+  SupportAttachmentFinalizeResult,
+} from "@opencom/web-shared";
 import {
   useWebMutation,
   useWebQuery,
@@ -70,10 +74,21 @@ const CREATE_TICKET_REF = webMutationRef<
     visitorId?: Id<"visitors">;
     subject: string;
     description?: string;
+    attachmentIds?: Id<"supportAttachments">[];
     priority?: TicketPriority;
   },
   Id<"tickets">
 >("tickets:create");
+const GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF = webMutationRef<WorkspaceArgs, string>(
+  "supportAttachments:generateUploadUrl"
+);
+const FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF = webMutationRef<
+  WorkspaceArgs & {
+    storageId: Id<"_storage">;
+    fileName?: string;
+  },
+  SupportAttachmentFinalizeResult<Id<"supportAttachments">>
+>("supportAttachments:finalizeUpload");
 const TICKET_FORMS_LIST_QUERY_REF = webQueryRef<
   WorkspaceArgs,
   Array<{
@@ -159,6 +174,7 @@ const TICKET_DETAIL_QUERY_REF = webQueryRef<
         updatedAt: number;
         resolvedAt?: number;
         resolutionSummary?: string;
+        attachments?: SupportAttachmentDescriptor[];
         visitor?: {
           _id: Id<"visitors">;
           readableId?: string;
@@ -173,6 +189,7 @@ const TICKET_DETAIL_QUERY_REF = webQueryRef<
           content: string;
           isInternal: boolean;
           createdAt: number;
+          attachments?: SupportAttachmentDescriptor[];
         }>;
       };
     }
@@ -202,6 +219,7 @@ const ADD_COMMENT_REF = webMutationRef<
     ticketId: Id<"tickets">;
     visitorId?: Id<"visitors">;
     content: string;
+    attachmentIds?: Id<"supportAttachments">[];
     isInternal?: boolean;
     authorId?: string;
     authorType?: "agent" | "visitor" | "system";
@@ -221,6 +239,10 @@ export function useTicketsPageConvex(
 ) {
   return {
     createTicket: useWebMutation(CREATE_TICKET_REF),
+    finalizeSupportAttachmentUpload: useWebMutation(FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF),
+    generateSupportAttachmentUploadUrl: useWebMutation(
+      GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF
+    ),
     recentVisitors: useWebQuery(
       VISITORS_LIST_QUERY_REF,
       workspaceId && !visitorSearchQuery ? { workspaceId, limit: 10 } : "skip"
@@ -259,6 +281,10 @@ export function useTicketDetailConvex(
 ) {
   return {
     addComment: useWebMutation(ADD_COMMENT_REF),
+    finalizeSupportAttachmentUpload: useWebMutation(FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF),
+    generateSupportAttachmentUploadUrl: useWebMutation(
+      GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF
+    ),
     resolveTicket: useWebMutation(RESOLVE_TICKET_REF),
     ticketResult: useWebQuery(TICKET_DETAIL_QUERY_REF, ticketId ? { id: ticketId } : "skip"),
     updateTicket: useWebMutation(UPDATE_TICKET_REF),

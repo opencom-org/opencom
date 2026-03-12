@@ -1,6 +1,24 @@
-import { internalMutation } from "../../_generated/server";
+import { internalMutation, type MutationCtx } from "../../_generated/server";
 import { v } from "convex/values";
 import { Id } from "../../_generated/dataModel";
+
+async function deleteSupportAttachmentsForWorkspace(
+  ctx: Pick<MutationCtx, "db" | "storage">,
+  workspaceId: Id<"workspaces">
+): Promise<void> {
+  const attachments = await ctx.db
+    .query("supportAttachments")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+
+  for (const attachment of attachments) {
+    const metadata = await ctx.storage.getMetadata(attachment.storageId);
+    if (metadata) {
+      await ctx.storage.delete(attachment.storageId);
+    }
+    await ctx.db.delete(attachment._id);
+  }
+}
 
 const cleanupTestData = internalMutation({
   args: {
@@ -265,6 +283,8 @@ const cleanupTestData = internalMutation({
       await ctx.db.delete(form._id);
     }
 
+    await deleteSupportAttachmentsForWorkspace(ctx, workspaceId);
+
     await ctx.db.delete(workspaceId);
 
     return { success: true };
@@ -370,6 +390,8 @@ const cleanupE2ETestData = internalMutation({
       for (const defaults of workspaceNotificationDefaults) {
         await ctx.db.delete(defaults._id);
       }
+
+      await deleteSupportAttachmentsForWorkspace(ctx, workspaceId);
 
       // Delete the workspace
       try {

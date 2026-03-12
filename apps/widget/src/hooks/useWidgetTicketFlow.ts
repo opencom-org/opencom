@@ -1,6 +1,13 @@
 import { useCallback, useState, type MutableRefObject } from "react";
 import type { Id } from "@opencom/convex/dataModel";
-import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
+import {
+  normalizeUnknownError,
+  uploadSupportAttachments,
+  type ErrorFeedbackMessage,
+  type StagedSupportAttachment,
+  type SupportAttachmentDescriptor,
+  type SupportAttachmentFinalizeResult,
+} from "@opencom/web-shared";
 import { normalizeTicketFormData } from "../widgetShell/helpers";
 import type { TicketFormData, WidgetView } from "../widgetShell/types";
 import {
@@ -34,6 +41,7 @@ type VisitorTicketRecord = {
   subject: string;
   status: string;
   createdAt: number;
+  attachments?: SupportAttachmentDescriptor[];
 };
 
 type TicketDetailRecord = {
@@ -42,12 +50,14 @@ type TicketDetailRecord = {
   status: string;
   description?: string;
   resolutionSummary?: string;
+  attachments?: SupportAttachmentDescriptor[];
   comments?: Array<{
     _id: string;
     authorType: string;
     content: string;
     createdAt: number;
     isInternal: boolean;
+    attachments?: SupportAttachmentDescriptor[];
   }>;
 };
 
@@ -73,7 +83,13 @@ const defaultTicketFormQueryRef = widgetQueryRef<
 >("ticketForms:getDefaultForVisitor");
 
 const addTicketCommentMutationRef = widgetMutationRef<
-  { ticketId: Id<"tickets">; visitorId: Id<"visitors">; content: string; sessionToken?: string },
+  {
+    ticketId: Id<"tickets">;
+    visitorId: Id<"visitors">;
+    content: string;
+    attachmentIds?: Id<"supportAttachments">[];
+    sessionToken?: string;
+  },
   null
 >("tickets:addComment");
 
@@ -84,11 +100,32 @@ const createTicketMutationRef = widgetMutationRef<
     sessionToken?: string;
     subject: string;
     description?: string;
+    attachmentIds?: Id<"supportAttachments">[];
     formId?: string;
     formData: TicketFormData;
   },
   Id<"tickets">
 >("tickets:create");
+
+const generateSupportAttachmentUploadUrlRef = widgetMutationRef<
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+  },
+  string
+>("supportAttachments:generateUploadUrl");
+
+const finalizeSupportAttachmentUploadRef = widgetMutationRef<
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+    storageId: Id<"_storage">;
+    fileName?: string;
+  },
+  SupportAttachmentFinalizeResult<Id<"supportAttachments">>
+>("supportAttachments:finalizeUpload");
 
 export function useWidgetTicketFlow({
   activeWorkspaceId,
@@ -102,6 +139,13 @@ export function useWidgetTicketFlow({
   const [selectedTicketId, setSelectedTicketId] = useState<Id<"tickets"> | null>(null);
   const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
   const [ticketErrorFeedback, setTicketErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
+  const [createTicketAttachments, setCreateTicketAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [commentAttachments, setCommentAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
 
   const visitorTickets = useWidgetQuery(
     visitorTicketsQueryRef,
@@ -128,10 +172,17 @@ export function useWidgetTicketFlow({
 
   const addTicketComment = useWidgetMutation(addTicketCommentMutationRef);
   const createTicket = useWidgetMutation(createTicketMutationRef);
+  const generateSupportAttachmentUploadUrl = useWidgetMutation(
+    generateSupportAttachmentUploadUrlRef
+  );
+  const finalizeSupportAttachmentUpload = useWidgetMutation(
+    finalizeSupportAttachmentUploadRef
+  );
 
   const handleBackFromTickets = useCallback(() => {
     setTicketErrorFeedback(null);
     setSelectedTicketId(null);
+    setCommentAttachments([]);
     onTabChange("tickets");
     onViewChange("conversation-list");
   }, [onTabChange, onViewChange]);
@@ -139,11 +190,13 @@ export function useWidgetTicketFlow({
   const openTicketCreate = useCallback(() => {
     setTicketErrorFeedback(null);
     setSelectedTicketId(null);
+    setCreateTicketAttachments([]);
     onViewChange("ticket-create");
   }, [onViewChange]);
 
   const handleSelectTicket = useCallback(
     (ticketId: Id<"tickets">) => {
+      setCommentAttachments([]);
       setSelectedTicketId(ticketId);
       onViewChange("ticket-detail");
     },
@@ -193,10 +246,12 @@ export function useWidgetTicketFlow({
           sessionToken: sessionTokenRef.current ?? undefined,
           subject: subject.trim(),
           description: description?.trim(),
+          attachmentIds: createTicketAttachments.map((attachment) => attachment.attachmentId),
           formId: ticketForm?._id,
           formData: normalizeTicketFormData(formData) as TicketFormData,
         });
         setSelectedTicketId(ticketId);
+        setCreateTicketAttachments([]);
         onViewChange("ticket-detail");
       } catch (error) {
         console.error("Failed to create ticket:", error);
@@ -212,6 +267,7 @@ export function useWidgetTicketFlow({
     },
     [
       activeWorkspaceId,
+      createTicketAttachments,
       createTicket,
       isSubmittingTicket,
       onViewChange,
@@ -225,20 +281,80 @@ export function useWidgetTicketFlow({
     async (content: string) => {
       if (!selectedTicketId || !visitorId) return;
       try {
+        setTicketErrorFeedback(null);
         await addTicketComment({
           ticketId: selectedTicketId,
           visitorId,
           content,
+          attachmentIds: commentAttachments.map((attachment) => attachment.attachmentId),
           sessionToken: sessionTokenRef.current ?? undefined,
         });
+        setCommentAttachments([]);
       } catch (error) {
         console.error("Failed to add comment:", error);
+        setTicketErrorFeedback(
+          normalizeUnknownError(error, {
+            fallbackMessage: "Failed to add reply.",
+            nextAction: "Please try again.",
+          })
+        );
+        throw error;
       }
     },
-    [addTicketComment, selectedTicketId, sessionTokenRef, visitorId]
+    [addTicketComment, commentAttachments, selectedTicketId, sessionTokenRef, visitorId]
+  );
+
+  const uploadAttachments = useCallback(
+    async (target: "create" | "comment", files: File[]) => {
+      if (!visitorId || !activeWorkspaceId || files.length === 0) {
+        return;
+      }
+
+      const currentAttachments =
+        target === "create" ? createTicketAttachments : commentAttachments;
+      setTicketErrorFeedback(null);
+      setIsUploadingAttachments(true);
+      try {
+        const uploadedAttachments = await uploadSupportAttachments({
+          files,
+          currentCount: currentAttachments.length,
+          workspaceId: activeWorkspaceId as Id<"workspaces">,
+          visitorId,
+          sessionToken: sessionTokenRef.current ?? undefined,
+          generateUploadUrl: generateSupportAttachmentUploadUrl,
+          finalizeUpload: finalizeSupportAttachmentUpload,
+        });
+        if (target === "create") {
+          setCreateTicketAttachments((current) => [...current, ...uploadedAttachments]);
+        } else {
+          setCommentAttachments((current) => [...current, ...uploadedAttachments]);
+        }
+      } catch (error) {
+        setTicketErrorFeedback(
+          normalizeUnknownError(error, {
+            fallbackMessage: "Failed to upload attachment.",
+            nextAction: "Try again with a supported file.",
+          })
+        );
+      } finally {
+        setIsUploadingAttachments(false);
+      }
+    },
+    [
+      activeWorkspaceId,
+      commentAttachments,
+      createTicketAttachments,
+      finalizeSupportAttachmentUpload,
+      generateSupportAttachmentUploadUrl,
+      sessionTokenRef,
+      visitorId,
+    ]
   );
 
   return {
+    commentAttachments,
+    createTicketAttachments,
+    isUploadingAttachments,
     visitorTickets,
     selectedTicket,
     ticketForm,
@@ -249,5 +365,15 @@ export function useWidgetTicketFlow({
     handleSelectTicket,
     handleSubmitTicket,
     handleAddTicketComment,
+    removeCommentAttachment: (attachmentId: Id<"supportAttachments">) =>
+      setCommentAttachments((current) =>
+        current.filter((attachment) => attachment.attachmentId !== attachmentId)
+      ),
+    removeCreateTicketAttachment: (attachmentId: Id<"supportAttachments">) =>
+      setCreateTicketAttachments((current) =>
+        current.filter((attachment) => attachment.attachmentId !== attachmentId)
+      ),
+    uploadCommentAttachments: (files: File[]) => uploadAttachments("comment", files),
+    uploadCreateTicketAttachments: (files: File[]) => uploadAttachments("create", files),
   };
 }

@@ -48,6 +48,8 @@ Goal: ship a professional open-source customer messaging platform with strong de
   - [ ] pull available models from provider API and display them in the settings UI to control which model is used
   - [ ] allow customising the agent's system prompt? 
 - [p] a CI AI agent to check for any doc drift and update docs based on the latest code
+- [ ] convert supportAttachments.finalizeUpload into an action + internal mutation pipeline so we can add real signature checks too. The current finalizeUpload boundary is a Convex mutation and ctx.storage.get() is only available in actions. Doing true magic-byte validation would need a larger refactor of that finalize flow.
+
 
   apps/web/src/app/outbound/[id]/OutboundTriggerPanel.tsx
 Comment on lines +67 to 71

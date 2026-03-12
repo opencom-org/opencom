@@ -1,6 +1,12 @@
-import { useState } from "react";
-import type { ErrorFeedbackMessage } from "@opencom/web-shared";
-import { ChevronLeft, X } from "../icons";
+import { useRef, useState } from "react";
+import type { Id } from "@opencom/convex/dataModel";
+import {
+  SUPPORT_ATTACHMENT_ACCEPT,
+  formatSupportAttachmentSize,
+  type ErrorFeedbackMessage,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
+import { ChevronLeft, Paperclip, X } from "../icons";
 import { ErrorFeedbackBanner } from "./ErrorFeedbackBanner";
 
 type FormField = {
@@ -24,6 +30,10 @@ interface TicketCreateProps {
   onClose: () => void;
   onSubmit: (formData: Record<string, unknown>) => Promise<void>;
   isSubmitting: boolean;
+  isUploadingAttachments: boolean;
+  pendingAttachments: StagedSupportAttachment<Id<"supportAttachments">>[];
+  onUploadAttachments: (files: File[]) => Promise<void> | void;
+  onRemoveAttachment: (attachmentId: Id<"supportAttachments">) => void;
   errorFeedback: ErrorFeedbackMessage | null;
 }
 
@@ -50,9 +60,14 @@ export function TicketCreate({
   onClose,
   onSubmit,
   isSubmitting,
+  isUploadingAttachments,
+  pendingAttachments,
+  onUploadAttachments,
+  onRemoveAttachment,
   errorFeedback,
 }: TicketCreateProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
   const formFields = ((ticketForm?.fields?.length ? ticketForm.fields : fallbackFields) ||
     []) as FormField[];
@@ -75,6 +90,20 @@ export function TicketCreate({
         </div>
       </div>
       <div className="opencom-ticket-form">
+        <input
+          ref={attachmentInputRef}
+          type="file"
+          multiple
+          accept={SUPPORT_ATTACHMENT_ACCEPT}
+          className="opencom-visually-hidden"
+          onChange={(event) => {
+            const files = Array.from(event.target.files ?? []);
+            if (files.length > 0) {
+              void onUploadAttachments(files);
+            }
+            event.target.value = "";
+          }}
+        />
         {errorFeedback && <ErrorFeedbackBanner feedback={errorFeedback} />}
         {ticketForm?.description && (
           <p className="opencom-ticket-form-description">{ticketForm.description}</p>
@@ -161,9 +190,42 @@ export function TicketCreate({
             </div>
           ))}
         </div>
+        <div className="opencom-ticket-attachments">
+          <button
+            type="button"
+            className="opencom-ticket-attach-btn"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={isUploadingAttachments}
+          >
+            <Paperclip />
+            <span>{isUploadingAttachments ? "Uploading..." : "Add attachments"}</span>
+          </button>
+          {pendingAttachments.length > 0 && (
+            <div className="opencom-pending-attachments">
+              {pendingAttachments.map((attachment) => (
+                <div key={attachment.attachmentId} className="opencom-pending-attachment">
+                  <span className="opencom-pending-attachment-name">
+                    <Paperclip />
+                    {attachment.fileName}
+                  </span>
+                  <span className="opencom-pending-attachment-size">
+                    {formatSupportAttachmentSize(attachment.size)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onRemoveAttachment(attachment.attachmentId)}
+                    aria-label={`Remove ${attachment.fileName}`}
+                  >
+                    <X />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           onClick={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isUploadingAttachments}
           className="opencom-ticket-submit-btn"
         >
           {isSubmitting ? "Submitting..." : "Submit Ticket"}

@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { Id } from "@opencom/convex/dataModel";
+import {
+  normalizeUnknownError,
+  uploadSupportAttachments,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
 import { ChevronLeft, X, User } from "../icons";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { useConversationViewConvex } from "../hooks/convex/useConversationViewConvex";
@@ -46,6 +51,11 @@ export function ConversationView({
   const [showArticleSuggestions, setShowArticleSuggestions] = useState(false);
   const [articleSuggestions, setArticleSuggestions] = useState<ArticleSuggestion[]>([]);
   const [, setIsLoadingSuggestions] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [csatPromptVisible, setCsatPromptVisible] = useState(false);
   const [dismissedCsatByConversation, setDismissedCsatByConversation] = useState<
     Record<string, true>
@@ -63,7 +73,9 @@ export function ConversationView({
     aiSettings,
     conversationData,
     csatEligibility,
+    finalizeSupportAttachmentUpload,
     generateAiResponse,
+    generateSupportAttachmentUploadUrl,
     handoffToHuman,
     identifyVisitor,
     messages,
@@ -92,6 +104,10 @@ export function ConversationView({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    setPendingAttachments([]);
+  }, [conversationId]);
 
   useEffect(() => {
     const dismissed = dismissedCsatByConversation[conversationKey];
@@ -184,7 +200,7 @@ export function ConversationView({
 
   const sendMessage = async () => {
     if (
-      !inputValue.trim() ||
+      (!inputValue.trim() && pendingAttachments.length === 0) ||
       !conversationId ||
       !visitorId ||
       !activeWorkspaceId ||
@@ -197,14 +213,17 @@ export function ConversationView({
     setInputValue("");
 
     try {
+      setComposerError(null);
       await sendMessageMutation({
         conversationId,
         senderId: visitorId,
         senderType: "visitor",
         content,
+        attachmentIds: pendingAttachments.map((attachment) => attachment.attachmentId),
         visitorId,
         sessionToken: sessionTokenRef.current ?? undefined,
       });
+      setPendingAttachments([]);
       // if (!hasVisitorSentMessage) {
       //   setHasVisitorSentMessage(true);
       // }
@@ -245,6 +264,42 @@ export function ConversationView({
     } catch (error) {
       console.error("Failed to send message:", error);
       setInputValue(content);
+      setComposerError(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to send message.",
+          nextAction: "Please try again.",
+        }).message
+      );
+    }
+  };
+
+  const handleUploadAttachments = async (files: File[]) => {
+    if (!activeWorkspaceId || !visitorId || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingAttachments(true);
+    try {
+      setComposerError(null);
+      const uploadedAttachments = await uploadSupportAttachments({
+        files,
+        currentCount: pendingAttachments.length,
+        workspaceId: activeWorkspaceId as Id<"workspaces">,
+        visitorId,
+        sessionToken: sessionTokenRef.current ?? undefined,
+        generateUploadUrl: generateSupportAttachmentUploadUrl,
+        finalizeUpload: finalizeSupportAttachmentUpload,
+      });
+      setPendingAttachments((current) => [...current, ...uploadedAttachments]);
+    } catch (error) {
+      const normalizedError = normalizeUnknownError(error, {
+        fallbackMessage: "Failed to upload attachment.",
+        nextAction: "Try again with a supported file.",
+      });
+      console.error("Failed to upload widget attachment:", normalizedError.message);
+      setComposerError(normalizedError.message);
+    } finally {
+      setIsUploadingAttachments(false);
     }
   };
 
@@ -470,9 +525,22 @@ export function ConversationView({
           setShowArticleSuggestions(false);
         }}
         inputValue={inputValue}
-        onInputChange={setInputValue}
+        composerError={composerError}
+        pendingAttachments={pendingAttachments}
+        isUploadingAttachments={isUploadingAttachments}
+        onInputChange={(value) => {
+          setComposerError(null);
+          setInputValue(value);
+        }}
         onInputKeyDown={handleKeyDown}
         onSendMessage={sendMessage}
+        onUploadAttachments={handleUploadAttachments}
+        onRemovePendingAttachment={(attachmentId) => {
+          setComposerError(null);
+          setPendingAttachments((current) =>
+            current.filter((attachment) => attachment.attachmentId !== attachmentId)
+          );
+        }}
       />
     </div>
   );

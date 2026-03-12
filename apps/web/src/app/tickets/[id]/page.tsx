@@ -1,6 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import {
+  SUPPORT_ATTACHMENT_ACCEPT,
+  formatSupportAttachmentSize,
+  normalizeUnknownError,
+  uploadSupportAttachments,
+  type StagedSupportAttachment,
+  type SupportAttachmentDescriptor,
+} from "@opencom/web-shared";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   ArrowLeft,
@@ -12,6 +20,8 @@ import {
   Lock,
   Unlock,
   MessageSquare,
+  Paperclip,
+  X,
 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,6 +55,44 @@ const priorityConfig: Record<TicketPriority, { label: string; color: string }> =
   urgent: { label: "Urgent", color: "bg-red-100 text-red-600" },
 };
 
+function renderAttachmentRow(attachment: SupportAttachmentDescriptor): React.JSX.Element {
+  const content = (
+    <>
+      <span className="flex min-w-0 items-center gap-2">
+        <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="truncate">{attachment.fileName}</span>
+      </span>
+      <span className="ml-3 flex-shrink-0 text-xs text-muted-foreground">
+        {formatSupportAttachmentSize(attachment.size)}
+      </span>
+    </>
+  );
+
+  if (attachment.url) {
+    return (
+      <a
+        key={attachment._id}
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      key={attachment._id}
+      aria-disabled="true"
+      className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm opacity-80"
+    >
+      {content}
+    </div>
+  );
+}
+
 function TicketDetailContent(): React.JSX.Element | null {
   const { user, activeWorkspace } = useAuth();
   const params = useParams();
@@ -54,8 +102,21 @@ function TicketDetailContent(): React.JSX.Element | null {
   const [isInternal, setIsInternal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolutionSummary, setResolutionSummary] = useState("");
-  const { addComment, resolveTicket, ticketResult, updateTicket, workspaceUsers } =
-    useTicketDetailConvex(ticketId, activeWorkspace?._id);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const {
+    addComment,
+    finalizeSupportAttachmentUpload,
+    generateSupportAttachmentUploadUrl,
+    resolveTicket,
+    ticketResult,
+    updateTicket,
+    workspaceUsers,
+  } = useTicketDetailConvex(ticketId, activeWorkspace?._id);
 
   const handleStatusChange = async (newStatus: TicketStatus) => {
     if (!ticketId) return;
@@ -87,19 +148,56 @@ function TicketDetailContent(): React.JSX.Element | null {
     }
   };
 
-  const handleAddComment = async () => {
-    if (!ticketId || !user || !commentContent.trim()) return;
+  const handleUploadAttachments = async (files: File[]) => {
+    if (!activeWorkspace?._id || files.length === 0) {
+      return;
+    }
+
+    setCommentError(null);
+    setIsUploadingAttachments(true);
     try {
+      const uploadedAttachments = await uploadSupportAttachments({
+        files,
+        currentCount: pendingAttachments.length,
+        workspaceId: activeWorkspace._id,
+        generateUploadUrl: generateSupportAttachmentUploadUrl,
+        finalizeUpload: finalizeSupportAttachmentUpload,
+      });
+      setPendingAttachments((current) => [...current, ...uploadedAttachments]);
+    } catch (error) {
+      setCommentError(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to upload attachment.",
+          nextAction: "Try again with a supported file.",
+        }).message
+      );
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (!ticketId || !user || (!commentContent.trim() && pendingAttachments.length === 0)) return;
+    try {
+      setCommentError(null);
       await addComment({
         ticketId,
         authorId: user._id,
         authorType: "agent",
         content: commentContent.trim(),
+        attachmentIds: pendingAttachments.map((attachment) => attachment.attachmentId),
         isInternal,
       });
       setCommentContent("");
+      setPendingAttachments([]);
     } catch (error) {
       console.error("Failed to add comment:", error);
+      setCommentError(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to add comment.",
+          nextAction: "Please try again.",
+        }).message
+      );
     }
   };
 
@@ -215,12 +313,35 @@ function TicketDetailContent(): React.JSX.Element | null {
         <div className="col-span-8">
           <Card className="p-4">
             <h2 className="font-semibold mb-4">Timeline</h2>
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              accept={SUPPORT_ATTACHMENT_ACCEPT}
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                if (files.length > 0) {
+                  void handleUploadAttachments(files);
+                }
+                event.target.value = "";
+              }}
+            />
 
             {/* Description */}
             {ticket.description && (
               <div className="mb-4 p-3 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">Description</p>
                 <p>{ticket.description}</p>
+              </div>
+            )}
+
+            {ticket.attachments && ticket.attachments.length > 0 && (
+              <div className="mb-4 p-3 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">Attachments</p>
+                <div className="mt-2 space-y-2">
+                  {ticket.attachments.map((attachment) => renderAttachmentRow(attachment))}
+                </div>
               </div>
             )}
 
@@ -253,11 +374,18 @@ function TicketDetailContent(): React.JSX.Element | null {
                         {new Date(comment.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    <p className="text-sm">{comment.content}</p>
+                    {comment.content.trim().length > 0 && <p className="text-sm">{comment.content}</p>}
+                    {comment.attachments && comment.attachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {comment.attachments.map((attachment) => renderAttachmentRow(attachment))}
+                      </div>
+                    )}
                   </div>
                 ))}
 
-              {(!ticket.comments || ticket.comments.length === 0) && !ticket.description && (
+              {(!ticket.comments || ticket.comments.length === 0) &&
+                !ticket.description &&
+                (!ticket.attachments || ticket.attachments.length === 0) && (
                 <p className="text-muted-foreground text-center py-4">No activity yet</p>
               )}
             </div>
@@ -265,6 +393,11 @@ function TicketDetailContent(): React.JSX.Element | null {
             {/* Add Comment */}
             {ticket.status !== "resolved" && (
               <div className="border-t pt-4">
+                {commentError && (
+                  <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {commentError}
+                  </div>
+                )}
                 <div className="flex items-center gap-2 mb-2">
                   <button
                     onClick={() => setIsInternal(false)}
@@ -284,13 +417,55 @@ function TicketDetailContent(): React.JSX.Element | null {
                     <Lock className="h-3 w-3" />
                     Internal Note
                   </button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={isUploadingAttachments}
+                  >
+                    <Paperclip className="mr-2 h-4 w-4" />
+                    {isUploadingAttachments ? "Uploading..." : "Attach files"}
+                  </Button>
                 </div>
+                {pendingAttachments.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {pendingAttachments.map((attachment) => (
+                      <div
+                        key={attachment.attachmentId}
+                        className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        <span className="max-w-[220px] truncate">{attachment.fileName}</span>
+                        <span className="text-muted-foreground">
+                          {formatSupportAttachmentSize(attachment.size)}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            setPendingAttachments((current) =>
+                              current.filter(
+                                (currentAttachment) =>
+                                  currentAttachment.attachmentId !== attachment.attachmentId
+                              )
+                            )
+                          }
+                          aria-label={`Remove ${attachment.fileName}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Input
                     value={commentContent}
                     onChange={(e) => setCommentContent(e.target.value)}
                     placeholder={isInternal ? "Add internal note..." : "Reply to customer..."}
                     className="flex-1"
+                    disabled={isUploadingAttachments}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -298,7 +473,10 @@ function TicketDetailContent(): React.JSX.Element | null {
                       }
                     }}
                   />
-                  <Button onClick={handleAddComment} disabled={!commentContent.trim()}>
+                  <Button
+                    onClick={handleAddComment}
+                    disabled={isUploadingAttachments || (!commentContent.trim() && pendingAttachments.length === 0)}
+                  >
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>

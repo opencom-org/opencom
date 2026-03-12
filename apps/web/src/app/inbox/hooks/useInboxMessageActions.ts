@@ -1,6 +1,8 @@
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Id } from "@opencom/convex/dataModel";
+import type { StagedSupportAttachment } from "@opencom/web-shared";
+import type { InboxMessage } from "../inboxRenderTypes";
 
 type ConversationStatus = "open" | "closed" | "snoozed";
 
@@ -9,6 +11,7 @@ export type ConversationUiPatch = {
   status?: ConversationStatus;
   lastMessageAt?: number;
   optimisticLastMessage?: string;
+  optimisticBaseMessageId?: Id<"messages"> | null;
 };
 
 interface ConversationSummaryForActions {
@@ -24,6 +27,7 @@ interface MutationApi {
     senderId: Id<"users">;
     senderType: "agent";
     content: string;
+    attachmentIds?: Id<"supportAttachments">[];
   }) => Promise<unknown>;
   updateStatus: (args: { id: Id<"conversations">; status: "closed" }) => Promise<unknown>;
   convertToTicket: (args: { conversationId: Id<"conversations"> }) => Promise<Id<"tickets">>;
@@ -31,7 +35,11 @@ interface MutationApi {
 
 interface MutationState {
   inputValue: string;
+  pendingAttachments: StagedSupportAttachment<Id<"supportAttachments">>[];
   setInputValue: Dispatch<SetStateAction<string>>;
+  setPendingAttachments: Dispatch<
+    SetStateAction<StagedSupportAttachment<Id<"supportAttachments">>[]>
+  >;
   setIsSending: Dispatch<SetStateAction<boolean>>;
   setIsResolving: Dispatch<SetStateAction<boolean>>;
   setIsConvertingTicket: Dispatch<SetStateAction<boolean>>;
@@ -45,6 +53,7 @@ interface MutationState {
 interface MutationContext {
   userId: Id<"users"> | null;
   selectedConversationId: Id<"conversations"> | null;
+  latestMessageId: Id<"messages"> | null;
   conversations: ConversationSummaryForActions[] | undefined;
   onTicketCreated: (ticketId: Id<"tickets">) => void;
 }
@@ -63,11 +72,42 @@ export interface UseInboxMessageActionsResult {
   handleConvertToTicket: () => Promise<void>;
 }
 
+export function shouldClearOptimisticLastMessage(
+  patch: ConversationUiPatch | undefined,
+  messages: readonly Pick<InboxMessage, "_id" | "senderType">[] | undefined
+): boolean {
+  if (!patch?.optimisticLastMessage || !messages || messages.length === 0) {
+    return false;
+  }
+
+  const baseMessageIndex = patch.optimisticBaseMessageId
+    ? messages.findIndex((message) => message._id === patch.optimisticBaseMessageId)
+    : -1;
+  const messagesAfterOptimisticSend =
+    baseMessageIndex >= 0 ? messages.slice(baseMessageIndex + 1) : messages;
+
+  return messagesAfterOptimisticSend.some((message) => message.senderType === "agent");
+}
+
 export function useInboxMessageActions({
   api,
   state,
   context,
 }: UseInboxMessageActionsArgs): UseInboxMessageActionsResult {
+  const getOptimisticLastMessage = useCallback(
+    (content: string) => {
+      if (content.trim()) {
+        return content;
+      }
+      const attachmentCount = state.pendingAttachments.length;
+      if (attachmentCount === 0) {
+        return "";
+      }
+      return attachmentCount === 1 ? "1 attachment" : `${attachmentCount} attachments`;
+    },
+    [state.pendingAttachments]
+  );
+
   const patchConversationState = useCallback(
     (conversationId: Id<"conversations">, patch: ConversationUiPatch) => {
       state.setConversationPatches((previousState) => ({
@@ -105,12 +145,17 @@ export function useInboxMessageActions({
   );
 
   const handleSendMessage = useCallback(async () => {
-    if (!state.inputValue.trim() || !context.selectedConversationId || !context.userId) {
+    if (
+      (!state.inputValue.trim() && state.pendingAttachments.length === 0) ||
+      !context.selectedConversationId ||
+      !context.userId
+    ) {
       return;
     }
 
     const content = state.inputValue.trim();
     const conversationId = context.selectedConversationId;
+    const attachmentIds = state.pendingAttachments.map((attachment) => attachment.attachmentId);
     const previousPatch = state.conversationPatches[conversationId];
     const now = Date.now();
 
@@ -120,7 +165,8 @@ export function useInboxMessageActions({
     patchConversationState(conversationId, {
       unreadByAgent: 0,
       lastMessageAt: now,
-      optimisticLastMessage: content,
+      optimisticLastMessage: getOptimisticLastMessage(content),
+      optimisticBaseMessageId: context.latestMessageId ?? null,
     });
 
     try {
@@ -129,7 +175,9 @@ export function useInboxMessageActions({
         senderId: context.userId,
         senderType: "agent",
         content,
+        attachmentIds,
       });
+      state.setPendingAttachments([]);
     } catch (error) {
       console.error("Failed to send message:", error);
       state.setInputValue(content);
@@ -146,7 +194,15 @@ export function useInboxMessageActions({
     } finally {
       state.setIsSending(false);
     }
-  }, [api, context.selectedConversationId, context.userId, patchConversationState, state]);
+  }, [
+    api,
+    context.latestMessageId,
+    context.selectedConversationId,
+    context.userId,
+    getOptimisticLastMessage,
+    patchConversationState,
+    state,
+  ]);
 
   const handleResolveConversation = useCallback(async () => {
     if (!context.selectedConversationId) {

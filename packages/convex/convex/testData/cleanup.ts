@@ -1,5 +1,6 @@
-import { internalMutation } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import { v } from "convex/values";
+import { type Id } from "../_generated/dataModel";
 import { formatReadableVisitorId } from "../visitorReadableId";
 
 const E2E_TEST_PREFIX = "e2e_test_";
@@ -7,6 +8,35 @@ const E2E_TEST_PREFIX = "e2e_test_";
 function requireTestDataEnabled() {
   if (process.env.ALLOW_TEST_DATA !== "true") {
     throw new Error("Test data mutations are disabled");
+  }
+}
+
+async function deleteSupportAttachmentById(
+  ctx: Pick<MutationCtx, "db" | "storage">,
+  attachmentId: Id<"supportAttachments">
+): Promise<void> {
+  const attachment = await ctx.db.get(attachmentId);
+  if (!attachment) {
+    return;
+  }
+
+  const metadata = await ctx.storage.getMetadata(attachment.storageId);
+  if (metadata) {
+    await ctx.storage.delete(attachment.storageId);
+  }
+  await ctx.db.delete(attachment._id);
+}
+
+async function deleteSupportAttachmentIds(
+  ctx: Pick<MutationCtx, "db" | "storage">,
+  attachmentIds: readonly Id<"supportAttachments">[] | undefined
+): Promise<void> {
+  if (!attachmentIds || attachmentIds.length === 0) {
+    return;
+  }
+
+  for (const attachmentId of [...new Set(attachmentIds)]) {
+    await deleteSupportAttachmentById(ctx, attachmentId);
   }
 }
 
@@ -260,11 +290,13 @@ const cleanupTestData = internalMutation({
 
     for (const ticket of tickets) {
       if (ticket.subject.startsWith(E2E_TEST_PREFIX)) {
+        await deleteSupportAttachmentIds(ctx, ticket.attachmentIds);
         const comments = await ctx.db
           .query("ticketComments")
           .withIndex("by_ticket", (q) => q.eq("ticketId", ticket._id))
           .collect();
         for (const comment of comments) {
+          await deleteSupportAttachmentIds(ctx, comment.attachmentIds);
           await ctx.db.delete(comment._id);
         }
         await ctx.db.delete(ticket._id);
@@ -303,6 +335,7 @@ const cleanupTestData = internalMutation({
             .withIndex("by_conversation", (q) => q.eq("conversationId", conversation._id))
             .collect();
           for (const message of messages) {
+            await deleteSupportAttachmentIds(ctx, message.attachmentIds);
             await ctx.db.delete(message._id);
           }
           await ctx.db.delete(conversation._id);

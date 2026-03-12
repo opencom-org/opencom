@@ -7,6 +7,7 @@ import { helpCenterTables } from "./schema/helpCenterTables";
 import { inboxNotificationTables } from "./schema/inboxNotificationTables";
 import { operationsTables } from "./schema/operationsTables";
 import { outboundSupportTables } from "./schema/outboundSupportTables";
+import { supportAttachmentTables } from "./schema/supportAttachmentTables";
 
 export default defineSchema({
   ...authTables,
@@ -15,6 +16,7 @@ export default defineSchema({
   ...helpCenterTables,
   ...engagementTables,
   ...outboundSupportTables,
+  ...supportAttachmentTables,
   ...campaignTables,
   ...operationsTables,
 });

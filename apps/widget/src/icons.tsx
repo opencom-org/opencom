@@ -54,6 +54,24 @@ export function Send() {
   );
 }
 
+export function Paperclip() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m21.44 11.05-8.49 8.49a5.5 5.5 0 0 1-7.78-7.78l8.84-8.83a3.5 3.5 0 1 1 4.95 4.95l-8.84 8.84a1.5 1.5 0 0 1-2.12-2.12l8.13-8.13" />
+    </svg>
+  );
+}
+
 export function ChevronLeft() {
   return (
     <svg

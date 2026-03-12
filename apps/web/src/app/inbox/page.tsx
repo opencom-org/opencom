@@ -2,6 +2,11 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { Id } from "@opencom/convex/dataModel";
+import {
+  normalizeUnknownError,
+  uploadSupportAttachments,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
@@ -19,6 +24,7 @@ import { useInboxSuggestionsCount } from "./hooks/useInboxSuggestionsCount";
 import { useInboxAttentionCues } from "./hooks/useInboxAttentionCues";
 import { useInboxConvex } from "./hooks/useInboxConvex";
 import {
+  shouldClearOptimisticLastMessage,
   useInboxMessageActions,
   type ConversationUiPatch,
 } from "./hooks/useInboxMessageActions";
@@ -75,6 +81,10 @@ function InboxContent(): React.JSX.Element | null {
     null
   );
   const [inputValue, setInputValue] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [showKnowledgePicker, setShowKnowledgePicker] = useState(false);
   const [knowledgeSearch, setKnowledgeSearch] = useState("");
   const [snippetDialogMode, setSnippetDialogMode] = useState<"create" | "update" | null>(null);
@@ -98,6 +108,10 @@ function InboxContent(): React.JSX.Element | null {
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<"messages"> | null>(null);
   const messageHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedConversationIdRef = useRef<Id<"conversations"> | null>(selectedConversationId);
+  const attachmentUploadContextVersionRef = useRef(0);
+  const attachmentUploadRequestIdRef = useRef(0);
+  selectedConversationIdRef.current = selectedConversationId;
   const {
     aiResponses,
     aiSettings,
@@ -105,6 +119,8 @@ function InboxContent(): React.JSX.Element | null {
     conversationsData,
     createSnippet,
     convertToTicket,
+    finalizeSupportAttachmentUpload,
+    generateSupportAttachmentUploadUrl,
     getSuggestionsForConversation,
     knowledgeResults,
     markAsRead,
@@ -221,25 +237,30 @@ function InboxContent(): React.JSX.Element | null {
   }, []);
 
   useEffect(() => {
+    attachmentUploadContextVersionRef.current += 1;
+    attachmentUploadRequestIdRef.current += 1;
+    setPendingAttachments([]);
+    setIsUploadingAttachments(false);
+  }, [selectedConversationId]);
+
+  useEffect(() => {
     if (!selectedConversationId || !messages || messages.length === 0) {
       return;
     }
-    const latestMessage = messages[messages.length - 1];
     setConversationPatches((previousState) => {
       const patch = previousState[selectedConversationId];
-      if (!patch?.optimisticLastMessage) {
-        return previousState;
-      }
-      if (latestMessage.content !== patch.optimisticLastMessage) {
+      if (!shouldClearOptimisticLastMessage(patch, messages)) {
         return previousState;
       }
 
+      const latestMessage = messages[messages.length - 1];
       const nextState = { ...previousState };
       const nextPatch: ConversationUiPatch = {
         ...patch,
         lastMessageAt: latestMessage.createdAt,
       };
       delete nextPatch.optimisticLastMessage;
+      delete nextPatch.optimisticBaseMessageId;
 
       if (
         nextPatch.unreadByAgent === undefined &&
@@ -291,7 +312,9 @@ function InboxContent(): React.JSX.Element | null {
     },
     state: {
       inputValue,
+      pendingAttachments,
       setInputValue,
+      setPendingAttachments,
       setIsSending,
       setIsResolving,
       setIsConvertingTicket,
@@ -304,6 +327,7 @@ function InboxContent(): React.JSX.Element | null {
     context: {
       userId: user?._id ?? null,
       selectedConversationId,
+      latestMessageId: messages?.[messages.length - 1]?._id ?? null,
       conversations,
       onTicketCreated: (ticketId) => router.push(`/tickets/${ticketId}`),
     },
@@ -440,6 +464,69 @@ function InboxContent(): React.JSX.Element | null {
   const lastInsertedSnippet =
     allSnippets?.find((snippet) => snippet._id === lastInsertedSnippetId) ?? null;
 
+  const handleUploadAttachments = useCallback(
+    async (files: File[]) => {
+      if (!activeWorkspace?._id || !selectedConversationId || files.length === 0) {
+        return;
+      }
+
+      const uploadConversationId = selectedConversationId;
+      const uploadContextVersion = attachmentUploadContextVersionRef.current;
+      const uploadRequestId = attachmentUploadRequestIdRef.current + 1;
+      attachmentUploadRequestIdRef.current = uploadRequestId;
+      setWorkflowError(null);
+      setIsUploadingAttachments(true);
+      try {
+        const uploadedAttachments = await uploadSupportAttachments({
+          files,
+          currentCount: pendingAttachments.length,
+          workspaceId: activeWorkspace._id,
+          generateUploadUrl: generateSupportAttachmentUploadUrl,
+          finalizeUpload: finalizeSupportAttachmentUpload,
+        });
+        if (
+          selectedConversationIdRef.current !== uploadConversationId ||
+          attachmentUploadContextVersionRef.current !== uploadContextVersion ||
+          attachmentUploadRequestIdRef.current !== uploadRequestId
+        ) {
+          return;
+        }
+        setPendingAttachments((current) => [...current, ...uploadedAttachments]);
+      } catch (error) {
+        if (
+          selectedConversationIdRef.current !== uploadConversationId ||
+          attachmentUploadContextVersionRef.current !== uploadContextVersion ||
+          attachmentUploadRequestIdRef.current !== uploadRequestId
+        ) {
+          return;
+        }
+        setWorkflowError(
+          normalizeUnknownError(error, {
+            fallbackMessage: "Failed to upload attachment.",
+            nextAction: "Try again with a supported file.",
+          }).message
+        );
+      } finally {
+        if (attachmentUploadRequestIdRef.current === uploadRequestId) {
+          setIsUploadingAttachments(false);
+        }
+      }
+    },
+    [
+      activeWorkspace?._id,
+      finalizeSupportAttachmentUpload,
+      generateSupportAttachmentUploadUrl,
+      pendingAttachments.length,
+      selectedConversationId,
+    ]
+  );
+
+  const handleRemovePendingAttachment = useCallback((attachmentId: Id<"supportAttachments">) => {
+    setPendingAttachments((current) =>
+      current.filter((attachment) => attachment.attachmentId !== attachmentId)
+    );
+  }, []);
+
   if (!user || !activeWorkspace) {
     return null;
   }
@@ -476,7 +563,9 @@ function InboxContent(): React.JSX.Element | null {
                 workflowError={workflowError}
                 highlightedMessageId={highlightedMessageId}
                 inputValue={inputValue}
+                pendingAttachments={pendingAttachments}
                 isSending={isSending}
+                isUploadingAttachments={isUploadingAttachments}
                 isResolving={isResolving}
                 isConvertingTicket={isConvertingTicket}
                 showKnowledgePicker={showKnowledgePicker}
@@ -518,6 +607,10 @@ function InboxContent(): React.JSX.Element | null {
                 onSendMessage={() => {
                   void handleSendMessage();
                 }}
+                onUploadAttachments={(files) => {
+                  void handleUploadAttachments(files);
+                }}
+                onRemovePendingAttachment={handleRemovePendingAttachment}
                 onKnowledgeSearchChange={setKnowledgeSearch}
                 onToggleKnowledgePicker={() => {
                   setShowKnowledgePicker((current) => !current);

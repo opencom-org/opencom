@@ -436,6 +436,9 @@ export function Widget({
   });
 
   const {
+    commentAttachments,
+    createTicketAttachments,
+    isUploadingAttachments,
     visitorTickets,
     selectedTicket,
     ticketForm,
@@ -446,6 +449,10 @@ export function Widget({
     handleSelectTicket,
     handleSubmitTicket,
     handleAddTicketComment,
+    removeCommentAttachment,
+    removeCreateTicketAttachment,
+    uploadCommentAttachments,
+    uploadCreateTicketAttachments,
   } = useWidgetTicketFlow({
     activeWorkspaceId,
     isValidIdFormat,
@@ -1191,6 +1198,10 @@ export function Widget({
           onClose={handleCloseWidget}
           onSubmit={handleSubmitTicket}
           isSubmitting={isSubmittingTicket}
+          isUploadingAttachments={isUploadingAttachments}
+          pendingAttachments={createTicketAttachments}
+          onUploadAttachments={uploadCreateTicketAttachments}
+          onRemoveAttachment={removeCreateTicketAttachment}
           errorFeedback={ticketErrorFeedback}
         />
       )}
@@ -1200,6 +1211,11 @@ export function Widget({
           onBack={handleBackFromTickets}
           onClose={handleCloseWidget}
           onAddComment={handleAddTicketComment}
+          onUploadAttachments={uploadCommentAttachments}
+          onRemoveAttachment={removeCommentAttachment}
+          pendingAttachments={commentAttachments}
+          isUploadingAttachments={isUploadingAttachments}
+          errorFeedback={ticketErrorFeedback}
         />
       )}
 
