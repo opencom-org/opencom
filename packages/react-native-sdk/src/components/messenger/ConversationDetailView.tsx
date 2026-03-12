@@ -46,7 +46,7 @@ export function ConversationDetailView({
   onEmailChange,
   showEmailCapture,
   onEmailSubmit,
-  onEmailDismiss,
+  // onEmailDismiss,
   isValidEmail,
   flatListRef,
 }: ConversationDetailViewProps) {
@@ -139,9 +139,9 @@ export function ConversationDetailView({
               </Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={onEmailDismiss} style={messengerStyles.emailSkipButton}>
+          {/* <TouchableOpacity onPress={onEmailDismiss} style={messengerStyles.emailSkipButton}>
             <Text style={[messengerStyles.emailSkipText, { color: theme.textMuted }]}>Skip</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       )}
 

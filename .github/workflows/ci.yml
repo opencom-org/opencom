@@ -106,8 +106,8 @@ jobs:
             fi
           }
 
-          report_blocking "Lint (web + convex)" "${{ steps.lint.outcome }}"
-          report_blocking "Typecheck (web + convex)" "${{ steps.typecheck.outcome }}"
+          report_blocking "Lint" "${{ steps.lint.outcome }}"
+          report_blocking "Typecheck" "${{ steps.typecheck.outcome }}"
           report_blocking "Convex raw auth guard" "${{ steps.convex_auth_guard.outcome }}"
           report_warning "Convex validator any guard" "${{ steps.convex_any_guard.outcome }}"
           report_blocking "Secret scan gate" "${{ steps.secret_scan.outcome }}"
