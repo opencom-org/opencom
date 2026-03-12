@@ -1,4 +1,5 @@
 import type { Id } from "@opencom/convex/dataModel";
+import type { SupportAttachmentFinalizeResult } from "@opencom/web-shared";
 import {
   useWidgetAction,
   useWidgetMutation,
@@ -65,8 +66,20 @@ type SendMessageArgs = {
   senderId: Id<"visitors">;
   senderType: "visitor";
   content: string;
+  attachmentIds?: Id<"supportAttachments">[];
   visitorId: Id<"visitors">;
   sessionToken?: string;
+};
+
+type SupportAttachmentUploadArgs = {
+  workspaceId: Id<"workspaces">;
+  visitorId?: Id<"visitors">;
+  sessionToken?: string;
+};
+
+type FinalizeSupportAttachmentUploadArgs = SupportAttachmentUploadArgs & {
+  storageId: Id<"_storage">;
+  fileName?: string;
 };
 
 type GenerateAiResponseArgs = {
@@ -112,6 +125,14 @@ type ConversationViewConvexOptions = {
 };
 
 const SEND_MESSAGE_MUTATION_REF = widgetMutationRef<SendMessageArgs, unknown>("messages:send");
+const GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF = widgetMutationRef<
+  SupportAttachmentUploadArgs,
+  string
+>("supportAttachments:generateUploadUrl");
+const FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF = widgetMutationRef<
+  FinalizeSupportAttachmentUploadArgs,
+  SupportAttachmentFinalizeResult<Id<"supportAttachments">>
+>("supportAttachments:finalizeUpload");
 const IDENTIFY_VISITOR_MUTATION_REF = widgetMutationRef<IdentifyVisitorArgs, unknown>(
   "visitors:identify"
 );
@@ -156,6 +177,12 @@ export function useConversationViewConvex({
   shouldEvaluateCsat,
 }: ConversationViewConvexOptions) {
   const sendMessageMutation = useWidgetMutation(SEND_MESSAGE_MUTATION_REF);
+  const generateSupportAttachmentUploadUrl = useWidgetMutation(
+    GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF
+  );
+  const finalizeSupportAttachmentUpload = useWidgetMutation(
+    FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF
+  );
   const identifyVisitor = useWidgetMutation(IDENTIFY_VISITOR_MUTATION_REF);
   const generateAiResponse = useWidgetAction(GENERATE_AI_RESPONSE_ACTION_REF);
   const submitAiFeedback = useWidgetMutation(SUBMIT_AI_FEEDBACK_MUTATION_REF);
@@ -199,7 +226,9 @@ export function useConversationViewConvex({
     aiSettings,
     conversationData,
     csatEligibility,
+    finalizeSupportAttachmentUpload,
     generateAiResponse,
+    generateSupportAttachmentUploadUrl,
     handoffToHuman,
     identifyVisitor,
     messages,

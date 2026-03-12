@@ -1,6 +1,7 @@
 "use client";
 
 import type { Id } from "@opencom/convex/dataModel";
+import type { SupportAttachmentDescriptor } from "@opencom/web-shared";
 
 export type InboxAiWorkflowFilter = "all" | "ai_handled" | "handoff";
 export type InboxCompactPanel = "ai-review" | "suggestions" | null;
@@ -44,6 +45,7 @@ export interface InboxMessage {
     from?: string;
     attachments?: Array<{ filename?: string; contentType?: string }>;
   } | null;
+  attachments?: SupportAttachmentDescriptor[];
 }
 
 export interface InboxSnippet {

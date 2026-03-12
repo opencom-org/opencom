@@ -1,6 +1,7 @@
 "use client";
 
 import type { Id } from "@opencom/convex/dataModel";
+import type { SupportAttachmentFinalizeResult } from "@opencom/web-shared";
 import {
   useWebAction,
   useWebMutation,
@@ -44,6 +45,16 @@ type SendMessageArgs = {
   senderId: Id<"users">;
   senderType: "agent";
   content: string;
+  attachmentIds?: Id<"supportAttachments">[];
+};
+
+type SupportAttachmentUploadArgs = {
+  workspaceId: Id<"workspaces">;
+};
+
+type FinalizeSupportAttachmentUploadArgs = SupportAttachmentUploadArgs & {
+  storageId: Id<"_storage">;
+  fileName?: string;
 };
 
 type MarkConversationReadArgs = {
@@ -108,6 +119,14 @@ const AI_CONVERSATION_RESPONSES_QUERY_REF = webQueryRef<ConversationArgs, InboxA
   "aiAgent:getConversationResponses"
 );
 const SEND_MESSAGE_REF = webMutationRef<SendMessageArgs, unknown>("messages:send");
+const GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF = webMutationRef<
+  SupportAttachmentUploadArgs,
+  string
+>("supportAttachments:generateUploadUrl");
+const FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF = webMutationRef<
+  FinalizeSupportAttachmentUploadArgs,
+  SupportAttachmentFinalizeResult<Id<"supportAttachments">>
+>("supportAttachments:finalizeUpload");
 const MARK_CONVERSATION_READ_REF = webMutationRef<MarkConversationReadArgs, unknown>(
   "conversations:markAsRead"
 );
@@ -168,6 +187,10 @@ export function useInboxConvex({
     conversationsData: useWebQuery(INBOX_CONVERSATIONS_QUERY_REF, inboxQueryArgs),
     createSnippet: useWebMutation(CREATE_SNIPPET_REF),
     convertToTicket: useWebMutation(CONVERT_CONVERSATION_TO_TICKET_REF),
+    finalizeSupportAttachmentUpload: useWebMutation(FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF),
+    generateSupportAttachmentUploadUrl: useWebMutation(
+      GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF
+    ),
     getSuggestionsForConversation: useWebAction(GET_SUGGESTIONS_FOR_CONVERSATION_REF),
     knowledgeResults: useWebQuery(
       KNOWLEDGE_SEARCH_QUERY_REF,

@@ -8,6 +8,7 @@ import { emailTestHelpers } from "./helpers/email";
 import { ticketTestHelpers } from "./helpers/tickets";
 import { aiTestHelpers } from "./helpers/ai";
 import { cleanupTestHelpers } from "./helpers/cleanup";
+import { supportAttachmentTestHelpers } from "./helpers/supportAttachments";
 
 export const createTestWorkspace: ReturnType<typeof internalMutation> = workspaceTestHelpers.createTestWorkspace;
 export const updateTestHelpCenterAccessPolicy: ReturnType<typeof internalMutation> = workspaceTestHelpers.updateTestHelpCenterAccessPolicy;
@@ -92,3 +93,7 @@ export const updateWorkspaceOrigins: ReturnType<typeof internalMutation> = works
 export const createTestConversationForVisitor: ReturnType<typeof internalMutation> = conversationTestHelpers.createTestConversationForVisitor;
 export const lookupUserByEmail: ReturnType<typeof internalMutation> = workspaceTestHelpers.lookupUserByEmail;
 export const lookupPendingInvitationsByEmail: ReturnType<typeof internalMutation> = workspaceTestHelpers.lookupPendingInvitationsByEmail;
+export const cleanupExpiredSupportAttachments: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.cleanupExpiredSupportAttachments;
+export const expireTestSupportAttachment: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.expireTestSupportAttachment;
+export const getTestSupportAttachment: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.getTestSupportAttachment;
+export const hasTestStoredFile: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.hasTestStoredFile;

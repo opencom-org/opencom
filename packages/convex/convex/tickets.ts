@@ -5,6 +5,13 @@ import { Doc, Id } from "./_generated/dataModel";
 import { resolveVisitorFromSession } from "./widgetSessions";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
+import {
+  bindStagedSupportAttachments,
+  loadSupportAttachmentDescriptorMap,
+  materializeSupportAttachmentDescriptors,
+  type SupportAttachmentDescriptor,
+} from "./supportAttachments";
+import { supportAttachmentIdArrayValidator } from "./supportAttachmentTypes";
 import { formDataValidator } from "./validators";
 import { authMutation, authQuery } from "./lib/authWrappers";
 
@@ -208,6 +215,31 @@ async function getTicketDirectoryAccessStatus(
   return { status: "ok", userId: user._id };
 }
 
+type AttachmentCarrier = {
+  attachmentIds?: readonly Id<"supportAttachments">[];
+};
+
+async function withSupportAttachments<T extends AttachmentCarrier>(
+  ctx: Pick<QueryCtx, "db" | "storage">,
+  records: readonly T[]
+): Promise<Array<T & { attachments: SupportAttachmentDescriptor[] }>> {
+  const descriptorMap = await loadSupportAttachmentDescriptorMap(
+    ctx,
+    records.flatMap((record) => record.attachmentIds ?? [])
+  );
+
+  return records.map((record) => ({
+    ...record,
+    attachments: materializeSupportAttachmentDescriptors(record.attachmentIds, descriptorMap),
+  }));
+}
+
+function getSupportAttachmentActor(access: WorkspaceTicketAccessResult) {
+  return access.accessType === "agent"
+    ? { accessType: "agent" as const, userId: access.userId }
+    : { accessType: "visitor" as const, visitorId: access.visitorId };
+}
+
 async function listTicketsWithEnrichment(
   ctx: QueryCtx,
   args: {
@@ -274,8 +306,9 @@ async function listTicketsWithEnrichment(
 
   const visitorsById = new Map(visitorEntries);
   const assigneesById = new Map(assigneeEntries);
+  const ticketsWithAttachments = await withSupportAttachments(ctx, tickets);
 
-  return tickets.map((ticket) => ({
+  return ticketsWithAttachments.map((ticket) => ({
     ...ticket,
     visitor: ticket.visitorId ? (visitorsById.get(ticket.visitorId) ?? null) : null,
     assignee: ticket.assigneeId ? (assigneesById.get(ticket.assigneeId) ?? null) : null,
@@ -314,6 +347,7 @@ export const create = mutation({
     sessionToken: v.optional(v.string()),
     subject: v.string(),
     description: v.optional(v.string()),
+    attachmentIds: v.optional(supportAttachmentIdArrayValidator),
     priority: v.optional(ticketPriorityValidator),
     formId: v.optional(v.id("ticketForms")),
     formData: v.optional(formDataValidator),
@@ -348,6 +382,19 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    const attachedIds = await bindStagedSupportAttachments(ctx, {
+      workspaceId: args.workspaceId,
+      attachmentIds: args.attachmentIds,
+      actor: getSupportAttachmentActor(access),
+      binding: { kind: "ticket", ticketId },
+    });
+
+    if (attachedIds.length > 0) {
+      await ctx.db.patch(ticketId, {
+        attachmentIds: attachedIds,
+      });
+    }
 
     await scheduleTicketCreatedNotification(ctx, {
       ticketId,
@@ -486,18 +533,21 @@ export const get = query({
       conversation = (await ctx.db.get(ticket.conversationId)) as Doc<"conversations"> | null;
     }
 
-    const comments = await ctx.db
+    const comments = (await ctx.db
       .query("ticketComments")
       .withIndex("by_ticket", (q) => q.eq("ticketId", args.id))
       .order("asc")
-      .collect();
+      .collect()) as Doc<"ticketComments">[];
+
+    const [ticketWithAttachments] = await withSupportAttachments(ctx, [ticket]);
+    const commentsWithAttachments = await withSupportAttachments(ctx, comments);
 
     return {
-      ...ticket,
+      ...ticketWithAttachments,
       visitor,
       assignee,
       conversation,
-      comments,
+      comments: commentsWithAttachments,
     };
   },
 });
@@ -543,15 +593,17 @@ export const getForAdminView = query({
       .withIndex("by_ticket", (q) => q.eq("ticketId", args.id))
       .order("asc")
       .collect()) as Doc<"ticketComments">[];
+    const [ticketWithAttachments] = await withSupportAttachments(ctx, [ticket]);
+    const commentsWithAttachments = await withSupportAttachments(ctx, comments);
 
     return {
       status: "ok" as const,
       ticket: {
-        ...ticket,
+        ...ticketWithAttachments,
         visitor,
         assignee,
         conversation,
-        comments,
+        comments: commentsWithAttachments,
       },
     };
   },
@@ -610,6 +662,7 @@ export const addComment = mutation({
     ticketId: v.id("tickets"),
     visitorId: v.optional(v.id("visitors")),
     content: v.string(),
+    attachmentIds: v.optional(supportAttachmentIdArrayValidator),
     isInternal: v.optional(v.boolean()),
     authorId: v.optional(v.string()),
     authorType: v.optional(v.union(v.literal("agent"), v.literal("visitor"), v.literal("system"))),
@@ -654,6 +707,19 @@ export const addComment = mutation({
       isInternal,
       createdAt: now,
     });
+
+    const attachedIds = await bindStagedSupportAttachments(ctx, {
+      workspaceId: ticket.workspaceId,
+      attachmentIds: args.attachmentIds,
+      actor: getSupportAttachmentActor(access),
+      binding: { kind: "ticketComment", ticketCommentId: commentId },
+    });
+
+    if (attachedIds.length > 0) {
+      await ctx.db.patch(commentId, {
+        attachmentIds: attachedIds,
+      });
+    }
 
     await ctx.db.patch(args.ticketId, { updatedAt: now });
 
@@ -753,7 +819,7 @@ export const listByVisitor = query({
       .order("desc")
       .collect()) as Doc<"tickets">[];
 
-    return tickets;
+    return await withSupportAttachments(ctx, tickets);
   },
 });
 
@@ -780,10 +846,11 @@ export const getComments = query({
       .order("asc")
       .collect()) as Doc<"ticketComments">[];
 
-    if (args.includeInternal && access.accessType === "agent") {
-      return comments;
-    }
+    const visibleComments =
+      args.includeInternal && access.accessType === "agent"
+        ? comments
+        : comments.filter((comment) => !comment.isInternal);
 
-    return comments.filter((c) => !c.isInternal);
+    return await withSupportAttachments(ctx, visibleComments);
   },
 });

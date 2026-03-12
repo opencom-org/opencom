@@ -111,6 +111,7 @@ import type * as schema_operationsReportingTables from "../schema/operationsRepo
 import type * as schema_operationsTables from "../schema/operationsTables.js";
 import type * as schema_operationsWorkflowTables from "../schema/operationsWorkflowTables.js";
 import type * as schema_outboundSupportTables from "../schema/outboundSupportTables.js";
+import type * as schema_supportAttachmentTables from "../schema/supportAttachmentTables.js";
 import type * as segments from "../segments.js";
 import type * as series from "../series.js";
 import type * as series_authoring from "../series/authoring.js";
@@ -127,6 +128,8 @@ import type * as series_telemetry from "../series/telemetry.js";
 import type * as setup from "../setup.js";
 import type * as snippets from "../snippets.js";
 import type * as suggestions from "../suggestions.js";
+import type * as supportAttachmentTypes from "../supportAttachmentTypes.js";
+import type * as supportAttachments from "../supportAttachments.js";
 import type * as surveys from "../surveys.js";
 import type * as surveys_authoring from "../surveys/authoring.js";
 import type * as surveys_delivery from "../surveys/delivery.js";
@@ -147,6 +150,7 @@ import type * as testing_helpers_conversations from "../testing/helpers/conversa
 import type * as testing_helpers_email from "../testing/helpers/email.js";
 import type * as testing_helpers_notifications from "../testing/helpers/notifications.js";
 import type * as testing_helpers_series from "../testing/helpers/series.js";
+import type * as testing_helpers_supportAttachments from "../testing/helpers/supportAttachments.js";
 import type * as testing_helpers_tickets from "../testing/helpers/tickets.js";
 import type * as testing_helpers_workspace from "../testing/helpers/workspace.js";
 import type * as ticketForms from "../ticketForms.js";
@@ -291,6 +295,7 @@ declare const fullApi: ApiFromModules<{
   "schema/operationsTables": typeof schema_operationsTables;
   "schema/operationsWorkflowTables": typeof schema_operationsWorkflowTables;
   "schema/outboundSupportTables": typeof schema_outboundSupportTables;
+  "schema/supportAttachmentTables": typeof schema_supportAttachmentTables;
   segments: typeof segments;
   series: typeof series;
   "series/authoring": typeof series_authoring;
@@ -307,6 +312,8 @@ declare const fullApi: ApiFromModules<{
   setup: typeof setup;
   snippets: typeof snippets;
   suggestions: typeof suggestions;
+  supportAttachmentTypes: typeof supportAttachmentTypes;
+  supportAttachments: typeof supportAttachments;
   surveys: typeof surveys;
   "surveys/authoring": typeof surveys_authoring;
   "surveys/delivery": typeof surveys_delivery;
@@ -327,6 +334,7 @@ declare const fullApi: ApiFromModules<{
   "testing/helpers/email": typeof testing_helpers_email;
   "testing/helpers/notifications": typeof testing_helpers_notifications;
   "testing/helpers/series": typeof testing_helpers_series;
+  "testing/helpers/supportAttachments": typeof testing_helpers_supportAttachments;
   "testing/helpers/tickets": typeof testing_helpers_tickets;
   "testing/helpers/workspace": typeof testing_helpers_workspace;
   ticketForms: typeof ticketForms;

@@ -18,6 +18,17 @@ export {
   type ErrorFeedbackMessage,
   type NormalizeUnknownErrorOptions,
 } from "./errorFeedback";
+export {
+  SUPPORT_ATTACHMENT_ACCEPT,
+  formatSupportAttachmentSize,
+  getSupportAttachmentMimeType,
+  uploadSupportAttachments,
+  validateSupportAttachmentFiles,
+  type RejectedSupportAttachmentUpload,
+  type SupportAttachmentFinalizeResult,
+  type StagedSupportAttachment,
+  type SupportAttachmentDescriptor,
+} from "./supportAttachments";
 export { resolveArticleSourceId, type AISourceMetadata } from "./aiSourceLinks";
 export {
   scoreSelectorQuality,

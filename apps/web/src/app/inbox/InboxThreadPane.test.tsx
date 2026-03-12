@@ -86,7 +86,9 @@ function buildProps(overrides?: Partial<React.ComponentProps<typeof InboxThreadP
     workflowError: null,
     highlightedMessageId: null,
     inputValue: "",
+    pendingAttachments: [],
     isSending: false,
+    isUploadingAttachments: false,
     isResolving: false,
     isConvertingTicket: false,
     showKnowledgePicker: true,
@@ -113,6 +115,8 @@ function buildProps(overrides?: Partial<React.ComponentProps<typeof InboxThreadP
     onInputChange: vi.fn(),
     onInputKeyDown: vi.fn(),
     onSendMessage: vi.fn(),
+    onUploadAttachments: vi.fn(),
+    onRemovePendingAttachment: vi.fn(),
     onToggleKnowledgePicker: vi.fn(),
     onKnowledgeSearchChange: vi.fn(),
     onCloseKnowledgePicker: vi.fn(),
@@ -187,6 +191,50 @@ describe("InboxThreadPane", () => {
 
     expect(props.onInsertKnowledgeContent).toHaveBeenCalledWith(
       expect.objectContaining({ id: "article-3", type: "internalArticle" })
+    );
+  });
+
+  it("renders message attachments and queued reply attachments", () => {
+    const props = buildProps({
+      inputValue: "",
+      pendingAttachments: [
+        {
+          attachmentId: "support-attachment-1" as Id<"supportAttachments">,
+          fileName: "error-screenshot.png",
+          mimeType: "image/png",
+          size: 2048,
+          status: "staged",
+        },
+      ],
+      messages: [
+        {
+          _id: messageId("message-attachment"),
+          senderType: "visitor" as const,
+          content: "",
+          createdAt: Date.now(),
+          attachments: [
+            {
+              _id: "attached-file-1",
+              fileName: "browser-log.txt",
+              mimeType: "text/plain",
+              size: 1536,
+              url: "https://example.com/browser-log.txt",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<InboxThreadPane {...props} />);
+
+    expect(screen.getByText("browser-log.txt")).toBeInTheDocument();
+    expect(screen.getByTestId("inbox-pending-attachments")).toBeInTheDocument();
+    expect(screen.getByText("error-screenshot.png")).toBeInTheDocument();
+    expect(screen.getByTestId("inbox-send-button")).toBeEnabled();
+
+    fireEvent.click(screen.getByLabelText("Remove error-screenshot.png"));
+    expect(props.onRemovePendingAttachment).toHaveBeenCalledWith(
+      "support-attachment-1" as Id<"supportAttachments">
     );
   });
 });

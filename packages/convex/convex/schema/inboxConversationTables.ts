@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { supportAttachmentIdArrayValidator } from "../supportAttachmentTypes";
 import { customAttributesValidator } from "../validators";
 
 export const inboxConversationTables = {
@@ -141,6 +142,7 @@ export const inboxConversationTables = {
         v.literal("failed")
       )
     ),
+    attachmentIds: v.optional(supportAttachmentIdArrayValidator),
     createdAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])

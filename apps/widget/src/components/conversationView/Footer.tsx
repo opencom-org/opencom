@@ -1,6 +1,11 @@
-import type { KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent } from "react";
 import type { Id } from "@opencom/convex/dataModel";
-import { Book, Send } from "../../icons";
+import {
+  SUPPORT_ATTACHMENT_ACCEPT,
+  formatSupportAttachmentSize,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
+import { Book, Paperclip, Send, X } from "../../icons";
 import { CsatPrompt } from "../../CsatPrompt";
 import type { ArticleSuggestion, ConversationViewProps, CsatEligibility } from "./types";
 
@@ -30,9 +35,14 @@ interface ConversationFooterProps {
   articleSuggestions: ArticleSuggestion[];
   onSelectSuggestionArticle: (id: string) => void;
   inputValue: string;
+  composerError?: string | null;
+  pendingAttachments: StagedSupportAttachment<Id<"supportAttachments">>[];
+  isUploadingAttachments: boolean;
   onInputChange: (value: string) => void;
   onInputKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onSendMessage: () => void | Promise<void>;
+  onUploadAttachments: (files: File[]) => void | Promise<void>;
+  onRemovePendingAttachment: (attachmentId: Id<"supportAttachments">) => void;
 }
 
 export function ConversationFooter({
@@ -61,10 +71,18 @@ export function ConversationFooter({
   articleSuggestions,
   onSelectSuggestionArticle,
   inputValue,
+  composerError,
+  pendingAttachments,
+  isUploadingAttachments,
   onInputChange,
   onInputKeyDown,
   onSendMessage,
+  onUploadAttachments,
+  onRemovePendingAttachment,
 }: ConversationFooterProps) {
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const canSendMessage = inputValue.trim().length > 0 || pendingAttachments.length > 0;
+
   return (
     <div className="opencom-conversation-footer" data-testid="widget-conversation-footer">
       {csatPromptVisible && shouldEvaluateCsat && (
@@ -194,6 +212,52 @@ export function ConversationFooter({
           )}
 
           <div className="opencom-input-container" data-testid="widget-chat-controls">
+            {composerError && <div className="opencom-ticket-error">{composerError}</div>}
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              accept={SUPPORT_ATTACHMENT_ACCEPT}
+              className="opencom-visually-hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                if (files.length > 0) {
+                  void onUploadAttachments(files);
+                }
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              className="opencom-attach"
+              onClick={() => attachmentInputRef.current?.click()}
+              disabled={isUploadingAttachments}
+              aria-label="Attach files"
+            >
+              <Paperclip />
+            </button>
+            {pendingAttachments.length > 0 && (
+              <div className="opencom-pending-attachments">
+                {pendingAttachments.map((attachment) => (
+                  <div key={attachment.attachmentId} className="opencom-pending-attachment">
+                    <span className="opencom-pending-attachment-name">
+                      <Paperclip />
+                      {attachment.fileName}
+                    </span>
+                    <span className="opencom-pending-attachment-size">
+                      {formatSupportAttachmentSize(attachment.size)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onRemovePendingAttachment(attachment.attachmentId)}
+                      aria-label={`Remove ${attachment.fileName}`}
+                    >
+                      <X />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <input
               type="text"
               value={inputValue}
@@ -202,6 +266,7 @@ export function ConversationFooter({
               placeholder="Type a message..."
               className="opencom-input"
               data-testid="widget-message-input"
+              disabled={isUploadingAttachments}
             />
             <button
               onClick={() => {
@@ -210,7 +275,7 @@ export function ConversationFooter({
               className="opencom-send"
               data-testid="widget-send-button"
               type="button"
-              disabled={!inputValue.trim()}
+              disabled={!canSendMessage || isUploadingAttachments}
             >
               <Send />
             </button>

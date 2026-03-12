@@ -4,6 +4,14 @@ import { type Doc, type Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getShallowRunAfter, notifyNewMessageRef } from "./notifications/functionRefs";
 import { hasPermission, requirePermission } from "./permissions";
+import {
+  bindStagedSupportAttachments,
+  describeSupportAttachmentSelection,
+  loadSupportAttachmentDescriptorMap,
+  materializeSupportAttachmentDescriptors,
+  type SupportAttachmentDescriptor,
+} from "./supportAttachments";
+import { supportAttachmentIdArrayValidator } from "./supportAttachmentTypes";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 async function withSupportSenderNames(
@@ -53,6 +61,21 @@ async function withSupportSenderNames(
   });
 }
 
+async function withMessageAttachments(
+  ctx: QueryCtx,
+  messages: Array<Doc<"messages"> & { senderName?: string }>
+): Promise<Array<Doc<"messages"> & { senderName?: string; attachments: SupportAttachmentDescriptor[] }>> {
+  const descriptorMap = await loadSupportAttachmentDescriptorMap(
+    ctx,
+    messages.flatMap((message) => message.attachmentIds ?? [])
+  );
+
+  return messages.map((message) => ({
+    ...message,
+    attachments: materializeSupportAttachmentDescriptors(message.attachmentIds, descriptorMap),
+  }));
+}
+
 export const list = query({
   args: {
     conversationId: v.id("conversations"),
@@ -88,7 +111,7 @@ export const list = query({
           .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
           .order("asc")
           .collect();
-        return await withSupportSenderNames(ctx, messages);
+        return await withMessageAttachments(ctx, await withSupportSenderNames(ctx, messages));
       }
     }
 
@@ -113,7 +136,7 @@ export const list = query({
       .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
       .order("asc")
       .collect();
-    return await withSupportSenderNames(ctx, messages);
+    return await withMessageAttachments(ctx, await withSupportSenderNames(ctx, messages));
   },
 });
 
@@ -128,6 +151,7 @@ export const send = mutation({
       v.literal("bot")
     ),
     content: v.string(),
+    attachmentIds: v.optional(supportAttachmentIdArrayValidator),
     visitorId: v.optional(v.id("visitors")),
     sessionToken: v.optional(v.string()),
   },
@@ -143,8 +167,9 @@ export const send = mutation({
     }
 
     // Authorization: visitors can only send to their own conversations
+    let resolvedVisitorId = args.visitorId;
+    let authenticatedUserId: Id<"users"> | undefined;
     if (args.senderType === "visitor") {
-      let resolvedVisitorId = args.visitorId;
       if (args.sessionToken) {
         const resolved = await resolveVisitorFromSession(ctx, {
           sessionToken: args.sessionToken,
@@ -162,6 +187,7 @@ export const send = mutation({
         throw new Error("Not authenticated");
       }
       await requirePermission(ctx, user._id, conversation.workspaceId, "conversations.reply");
+      authenticatedUserId = user._id;
     }
 
     const now = Date.now();
@@ -173,6 +199,29 @@ export const send = mutation({
       content: args.content,
       createdAt: now,
     });
+
+    let attachedIds: Id<"supportAttachments">[] = [];
+    if (args.senderType === "visitor" && resolvedVisitorId) {
+      attachedIds = await bindStagedSupportAttachments(ctx, {
+        workspaceId: conversation.workspaceId,
+        attachmentIds: args.attachmentIds,
+        actor: { accessType: "visitor", visitorId: resolvedVisitorId },
+        binding: { kind: "message", messageId },
+      });
+    } else if (args.senderType === "agent" && authenticatedUserId) {
+      attachedIds = await bindStagedSupportAttachments(ctx, {
+        workspaceId: conversation.workspaceId,
+        attachmentIds: args.attachmentIds,
+        actor: { accessType: "agent", userId: authenticatedUserId },
+        binding: { kind: "message", messageId },
+      });
+    }
+
+    if (attachedIds.length > 0) {
+      await ctx.db.patch(messageId, {
+        attachmentIds: attachedIds,
+      });
+    }
 
     const updateData: {
       updatedAt: number;
@@ -192,10 +241,15 @@ export const send = mutation({
 
     await ctx.db.patch(args.conversationId, updateData);
 
+    const messagePreview =
+      args.content.trim().length > 0
+        ? args.content
+        : (describeSupportAttachmentSelection(attachedIds) ?? args.content);
+
     const runAfter = getShallowRunAfter(ctx);
     await runAfter(0, notifyNewMessageRef, {
       conversationId: args.conversationId,
-      messageContent: args.content,
+      messageContent: messagePreview,
       senderType: args.senderType,
       messageId,
       senderId: args.senderId,

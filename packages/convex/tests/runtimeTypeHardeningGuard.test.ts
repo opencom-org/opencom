@@ -16,6 +16,7 @@ const TARGET_FILES = [
   "../convex/lib/authWrappers.ts",
   "../convex/internalArticles.ts",
   "../convex/snippets.ts",
+  "../convex/supportAttachments.ts",
   "../convex/testing/helpers/notifications.ts",
   "../convex/tickets.ts",
   "../convex/suggestions.ts",
@@ -133,6 +134,17 @@ describe("runtime type hardening guards", () => {
     expect(suggestionsSource).toContain("GET_EMBEDDING_BY_ID_REF");
     expect(suggestionsSource).toContain("SEARCH_SIMILAR_INTERNAL_REF");
     expect(suggestionsSource).toContain("VALIDATE_SESSION_TOKEN_REF");
+  });
+
+  it("uses fixed typed refs for support attachment cleanup scheduling", () => {
+    const supportAttachmentsSource = readFileSync(
+      new URL("../convex/supportAttachments.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(supportAttachmentsSource).not.toContain("function getInternalRef(name: string)");
+    expect(supportAttachmentsSource).toContain("CLEANUP_EXPIRED_STAGED_UPLOADS_REF");
+    expect(supportAttachmentsSource).toContain("getShallowRunAfter");
   });
 
   it("uses fixed typed refs for HTTP origin validation", () => {

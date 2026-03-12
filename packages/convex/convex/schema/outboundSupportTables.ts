@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { supportAttachmentIdArrayValidator } from "../supportAttachmentTypes";
 import { audienceRulesOrSegmentValidator, formDataValidator, jsonValueValidator } from "../validators";
 import {
   outboundImpressionActionValidator,
@@ -158,6 +159,7 @@ export const outboundSupportTables = {
     formId: v.optional(v.id("ticketForms")),
     formData: v.optional(formDataValidator),
     resolutionSummary: v.optional(v.string()),
+    attachmentIds: v.optional(supportAttachmentIdArrayValidator),
     createdAt: v.number(),
     updatedAt: v.number(),
     resolvedAt: v.optional(v.number()),
@@ -175,6 +177,7 @@ export const outboundSupportTables = {
     authorType: v.union(v.literal("agent"), v.literal("visitor"), v.literal("system")),
     content: v.string(),
     isInternal: v.boolean(),
+    attachmentIds: v.optional(supportAttachmentIdArrayValidator),
     createdAt: v.number(),
   }).index("by_ticket", ["ticketId"]),
 
