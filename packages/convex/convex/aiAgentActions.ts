@@ -158,8 +158,8 @@ const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
   Id<"aiAgentSettings"> | null
 >;
 
-const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_REF = makeFunctionReference<
-  "query",
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
+  "action",
   {
     workspaceId: Id<"workspaces">;
     query: string;
@@ -167,8 +167,8 @@ const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_REF = makeFunctionReference<
     limit?: number;
   },
   RelevantKnowledgeResult[]
->("aiAgent:getRelevantKnowledgeForRuntime") as unknown as ConvexRef<
-  "query",
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
+  "mutation", // We have to use mutation or query here for ConvexRef, but we are running it as an action
   "internal",
   {
     workspaceId: Id<"workspaces">;
@@ -461,7 +461,6 @@ export const generateResponse = action({
 
     const runQuery = getShallowRunQuery(ctx);
     const runMutation = getShallowRunMutation(ctx);
-
     const access = await runQuery(AUTHORIZE_CONVERSATION_ACCESS_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -563,12 +562,20 @@ export const generateResponse = action({
     });
 
     // Get relevant knowledge
-    const knowledgeResults = await runQuery(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_REF, {
+    
+    
+    
+    
+    
+    
+
+    const runActionSafe = (ctx as any).runAction || (ctx as any).runQuery;
+    const knowledgeResults = (await runActionSafe(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF as any, {
       workspaceId: args.workspaceId,
       query: args.query,
       knowledgeSources: settings.knowledgeSources,
       limit: 5,
-    });
+    })) as RelevantKnowledgeResult[];
 
     // Build knowledge context for prompt
     const knowledgeContext = knowledgeResults

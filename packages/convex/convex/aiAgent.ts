@@ -12,11 +12,6 @@ import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authMutation, authQuery } from "./lib/authWrappers";
 import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
-import {
-  isInternalArticle,
-  isPublicArticle,
-  listUnifiedArticlesWithLegacyFallback,
-} from "./lib/unifiedArticles";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 const knowledgeSourceValidator = v.union(
@@ -27,13 +22,6 @@ const knowledgeSourceValidator = v.union(
 
 type KnowledgeSource = "articles" | "internalArticles" | "snippets";
 
-type KnowledgeResult = {
-  id: string;
-  type: "article" | "internalArticle" | "snippet";
-  title: string;
-  content: string;
-  relevanceScore: number;
-};
 
 const aiResponseSourceValidator = v.object({
   type: v.string(),
@@ -103,109 +91,6 @@ async function getWorkspaceAISettings(
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
     .first();
 }
-
-const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const calculateRelevanceScore = (title: string, content: string, term: string): number => {
-  let score = 0;
-  const lowerTitle = title.toLowerCase();
-  const lowerContent = content.toLowerCase();
-
-  if (lowerTitle.includes(term)) {
-    score += 10;
-    if (lowerTitle.startsWith(term)) score += 5;
-    if (lowerTitle === term) score += 10;
-  }
-
-  const contentMatches = (lowerContent.match(new RegExp(escapeRegex(term), "g")) || []).length;
-  score += Math.min(contentMatches, 5);
-
-  const words = term.split(/\s+/).filter((w) => w.length > 2);
-  for (const word of words) {
-    if (lowerTitle.includes(word)) score += 2;
-    if (lowerContent.includes(word)) score += 1;
-  }
-
-  return score;
-};
-
-async function collectRelevantKnowledge(
-  ctx: QueryCtx,
-  args: {
-    workspaceId: Id<"workspaces">;
-    query: string;
-    knowledgeSources?: KnowledgeSource[];
-    limit?: number;
-  }
-): Promise<KnowledgeResult[]> {
-  const searchTerm = args.query.trim().toLowerCase();
-  if (!searchTerm) {
-    return [];
-  }
-
-  const limit = args.limit ?? 5;
-  const sources = args.knowledgeSources ?? ["articles", "internalArticles", "snippets"];
-  const results: KnowledgeResult[] = [];
-  const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
-
-  if (sources.includes("articles")) {
-    for (const article of articles) {
-      if (!isPublicArticle(article) || article.status !== "published") continue;
-
-      const score = calculateRelevanceScore(article.title, article.content, searchTerm);
-      if (score > 0) {
-        results.push({
-          id: article._id,
-          type: "article",
-          title: article.title,
-          content: article.content,
-          relevanceScore: score,
-        });
-      }
-    }
-  }
-
-  if (sources.includes("internalArticles")) {
-    for (const article of articles) {
-      if (!isInternalArticle(article) || article.status !== "published") continue;
-
-      const score = calculateRelevanceScore(article.title, article.content, searchTerm);
-      if (score > 0) {
-        results.push({
-          id: article._id,
-          type: "internalArticle",
-          title: article.title,
-          content: article.content,
-          relevanceScore: score,
-        });
-      }
-    }
-  }
-
-  if (sources.includes("snippets")) {
-    const snippets = await ctx.db
-      .query("snippets")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .collect();
-
-    for (const snippet of snippets) {
-      const score = calculateRelevanceScore(snippet.name, snippet.content, searchTerm);
-      if (score > 0) {
-        results.push({
-          id: snippet._id,
-          type: "snippet",
-          title: snippet.name,
-          content: snippet.content,
-          relevanceScore: score,
-        });
-      }
-    }
-  }
-
-  results.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  return results.slice(0, limit);
-}
-
 async function requireConversationAccess(
   ctx: QueryCtx | MutationCtx,
   args: {
@@ -437,13 +322,11 @@ export const getRelevantKnowledge = authQuery({
     limit: v.optional(v.number()),
   },
   permission: "articles.read",
-  handler: async (ctx, args) => {
-    return await collectRelevantKnowledge(ctx, {
-      workspaceId: args.workspaceId,
-      query: args.query,
-      knowledgeSources: args.knowledgeSources as KnowledgeSource[] | undefined,
-      limit: args.limit,
-    });
+  handler: async () => {
+    // Note: getRelevantKnowledge should ideally also use vector search, but since it is a query, we'd need a client-side action call instead for UI.
+    // However, it is not used in the runtime flow (which uses getRelevantKnowledgeForRuntimeAction).
+    // Let's return empty or throw to enforce migration, or simply deprecate. 
+    throw new Error("getRelevantKnowledge query is deprecated. Use vector search action instead.");
   },
 });
 
@@ -454,13 +337,8 @@ export const getRelevantKnowledgeForRuntime = internalQuery({
     knowledgeSources: v.optional(v.array(knowledgeSourceValidator)),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    return await collectRelevantKnowledge(ctx, {
-      workspaceId: args.workspaceId,
-      query: args.query,
-      knowledgeSources: args.knowledgeSources as KnowledgeSource[] | undefined,
-      limit: args.limit,
-    });
+  handler: async () => {
+    throw new Error("getRelevantKnowledgeForRuntime query is deprecated. Use getRelevantKnowledgeForRuntimeAction instead.");
   },
 });
 
