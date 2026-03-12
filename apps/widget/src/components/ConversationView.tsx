@@ -40,7 +40,7 @@ export function ConversationView({
     return sessionStorage.getItem("opencom_email_dismissed") === "true";
   });
   const [emailCapturedThisSession, setEmailCapturedThisSession] = useState(false);
-  const [hasVisitorSentMessage, setHasVisitorSentMessage] = useState(false);
+  // const [hasVisitorSentMessage, setHasVisitorSentMessage] = useState(false);
   const [lastAgentMessageCount, setLastAgentMessageCount] = useState(0);
   const [emailInput, setEmailInput] = useState("");
   const [showArticleSuggestions, setShowArticleSuggestions] = useState(false);
@@ -175,7 +175,7 @@ export function ConversationView({
   }, [
     visitorId,
     isVisitorAlreadyIdentified,
-    hasVisitorSentMessage,
+    // hasVisitorSentMessage,
     agentMessageCount,
     emailCapturedOrDismissed,
     lastAgentMessageCount,
@@ -205,9 +205,9 @@ export function ConversationView({
         visitorId,
         sessionToken: sessionTokenRef.current ?? undefined,
       });
-      if (!hasVisitorSentMessage) {
-        setHasVisitorSentMessage(true);
-      }
+      // if (!hasVisitorSentMessage) {
+      //   setHasVisitorSentMessage(true);
+      // }
 
       if (aiSettings?.enabled !== false) {
         setIsAiTyping(true);

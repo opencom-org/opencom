@@ -77,7 +77,10 @@ export function evaluateEmailCaptureDecision(
   if (!input.visitorId || input.emailCaptured) {
     return null;
   }
-  if (!input.hasVisitorSentMessage || !input.collectEmailEnabled) {
+  if (
+    // !input.hasVisitorSentMessage ||
+    !input.collectEmailEnabled
+  ) {
     return null;
   }
 

@@ -50,7 +50,7 @@ export function ConversationFooter({
   emailInput,
   onEmailInputChange,
   onEmailSubmit,
-  onEmailDismiss,
+  // onEmailDismiss,
   officeHoursStatus,
   expectedReplyTime,
   commonIssueButtons,
