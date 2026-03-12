@@ -22,7 +22,7 @@ import {
   ShieldAlert,
   Ticket,
   X,
-  Zap,
+  // Zap,
 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import {
@@ -150,9 +150,9 @@ export function InboxThreadPane({
   isSidecarEnabled,
   suggestionsCount,
   isSuggestionsCountLoading,
-  canSaveDraftAsSnippet,
-  canUpdateSnippetFromDraft,
-  lastInsertedSnippetName,
+  // canSaveDraftAsSnippet,
+  // canUpdateSnippetFromDraft,
+  // lastInsertedSnippetName,
   replyInputRef,
   onBackToList,
   onResolveConversation,
@@ -169,8 +169,8 @@ export function InboxThreadPane({
   onKnowledgeSearchChange,
   onCloseKnowledgePicker,
   onInsertKnowledgeContent,
-  onSaveDraftAsSnippet,
-  onUpdateSnippetFromDraft,
+  // onSaveDraftAsSnippet,
+  // onUpdateSnippetFromDraft,
   getConversationIdentityLabel,
   getHandoffReasonLabel,
 }: InboxThreadPaneProps): React.JSX.Element {
@@ -659,7 +659,7 @@ export function InboxThreadPane({
                   >
                     <BookOpen className="h-4 w-4" />
                   </Button>
-                  <Button
+                  {/* <Button
                     variant="outline"
                     size="sm"
                     onClick={onSaveDraftAsSnippet}
@@ -667,12 +667,12 @@ export function InboxThreadPane({
                   >
                     <Zap className="mr-2 h-4 w-4" />
                     Save snippet
-                  </Button>
-                  {canUpdateSnippetFromDraft ? (
+                  </Button> */}
+                  {/* {canUpdateSnippetFromDraft ? (
                     <Button variant="outline" size="sm" onClick={onUpdateSnippetFromDraft}>
                       Update {lastInsertedSnippetName ? `"${lastInsertedSnippetName}"` : "snippet"}
                     </Button>
-                  ) : null}
+                  ) : null} */}
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
                   {pendingAttachments.length > 0 && (

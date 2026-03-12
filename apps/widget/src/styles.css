@@ -457,7 +457,7 @@
 .opencom-input-container {
   padding: 10px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
   background: var(--opencom-bg-surface);
 }
@@ -474,8 +474,16 @@
   border: 0;
 }
 
+.opencom-composer-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .opencom-input {
   flex: 1;
+  min-width: 0;
   padding: 12px 16px;
   border: 2px solid var(--opencom-border-color);
   border-radius: 24px;
@@ -503,6 +511,7 @@
 }
 
 .opencom-send {
+  flex-shrink: 0;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -518,6 +527,7 @@
 }
 
 .opencom-attach {
+  flex-shrink: 0;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -545,25 +555,30 @@
 .opencom-pending-attachments {
   width: 100%;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
+  max-height: 144px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .opencom-pending-attachment {
-  display: inline-flex;
+  width: 100%;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: 100%;
+  gap: 8px;
   padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid var(--opencom-border-color);
   background: var(--opencom-bg-muted);
   font-size: 12px;
   color: var(--opencom-text-color);
+  box-sizing: border-box;
 }
 
 .opencom-pending-attachment-name,
 .opencom-message-attachment-name {
+  flex: 1;
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -571,6 +586,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.opencom-pending-attachment-name svg,
+.opencom-message-attachment-name svg {
+  flex-shrink: 0;
 }
 
 .opencom-pending-attachment-size,
@@ -611,7 +631,7 @@
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--opencom-border-color) 90%, transparent);
   background: color-mix(in srgb, var(--opencom-bg-surface) 92%, transparent);
-  color: inherit;
+  color: var(--opencom-text-color);
   text-decoration: none;
 }
 

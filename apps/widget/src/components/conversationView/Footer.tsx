@@ -227,15 +227,6 @@ export function ConversationFooter({
                 event.target.value = "";
               }}
             />
-            <button
-              type="button"
-              className="opencom-attach"
-              onClick={() => attachmentInputRef.current?.click()}
-              disabled={isUploadingAttachments}
-              aria-label="Attach files"
-            >
-              <Paperclip />
-            </button>
             {pendingAttachments.length > 0 && (
               <div className="opencom-pending-attachments">
                 {pendingAttachments.map((attachment) => (
@@ -258,27 +249,38 @@ export function ConversationFooter({
                 ))}
               </div>
             )}
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => onInputChange(e.target.value)}
-              onKeyDown={onInputKeyDown}
-              placeholder="Type a message..."
-              className="opencom-input"
-              data-testid="widget-message-input"
-              disabled={isUploadingAttachments}
-            />
-            <button
-              onClick={() => {
-                void onSendMessage();
-              }}
-              className="opencom-send"
-              data-testid="widget-send-button"
-              type="button"
-              disabled={!canSendMessage || isUploadingAttachments}
-            >
-              <Send />
-            </button>
+            <div className="opencom-composer-row">
+              <button
+                type="button"
+                className="opencom-attach"
+                onClick={() => attachmentInputRef.current?.click()}
+                disabled={isUploadingAttachments}
+                aria-label="Attach files"
+              >
+                <Paperclip />
+              </button>
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={onInputKeyDown}
+                placeholder="Type a message..."
+                className="opencom-input"
+                data-testid="widget-message-input"
+                disabled={isUploadingAttachments}
+              />
+              <button
+                onClick={() => {
+                  void onSendMessage();
+                }}
+                className="opencom-send"
+                data-testid="widget-send-button"
+                type="button"
+                disabled={!canSendMessage || isUploadingAttachments}
+              >
+                <Send />
+              </button>
+            </div>
           </div>
         </>
       )}
