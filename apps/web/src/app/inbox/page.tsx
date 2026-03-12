@@ -24,6 +24,7 @@ import { useInboxSuggestionsCount } from "./hooks/useInboxSuggestionsCount";
 import { useInboxAttentionCues } from "./hooks/useInboxAttentionCues";
 import { useInboxConvex } from "./hooks/useInboxConvex";
 import {
+  shouldClearOptimisticLastMessage,
   useInboxMessageActions,
   type ConversationUiPatch,
 } from "./hooks/useInboxMessageActions";
@@ -246,25 +247,20 @@ function InboxContent(): React.JSX.Element | null {
     if (!selectedConversationId || !messages || messages.length === 0) {
       return;
     }
-    const latestMessage = messages[messages.length - 1];
     setConversationPatches((previousState) => {
       const patch = previousState[selectedConversationId];
-      if (!patch?.optimisticLastMessage) {
-        return previousState;
-      }
-      if (
-        latestMessage.senderType !== "agent" ||
-        latestMessage.createdAt < (patch.lastMessageAt ?? 0)
-      ) {
+      if (!shouldClearOptimisticLastMessage(patch, messages)) {
         return previousState;
       }
 
+      const latestMessage = messages[messages.length - 1];
       const nextState = { ...previousState };
       const nextPatch: ConversationUiPatch = {
         ...patch,
         lastMessageAt: latestMessage.createdAt,
       };
       delete nextPatch.optimisticLastMessage;
+      delete nextPatch.optimisticBaseMessageId;
 
       if (
         nextPatch.unreadByAgent === undefined &&
@@ -331,6 +327,7 @@ function InboxContent(): React.JSX.Element | null {
     context: {
       userId: user?._id ?? null,
       selectedConversationId,
+      latestMessageId: messages?.[messages.length - 1]?._id ?? null,
       conversations,
       onTicketCreated: (ticketId) => router.push(`/tickets/${ticketId}`),
     },

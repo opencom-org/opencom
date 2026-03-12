@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Id } from "@opencom/convex/dataModel";
 import type { StagedSupportAttachment } from "@opencom/web-shared";
+import type { InboxMessage } from "../inboxRenderTypes";
 
 type ConversationStatus = "open" | "closed" | "snoozed";
 
@@ -10,6 +11,7 @@ export type ConversationUiPatch = {
   status?: ConversationStatus;
   lastMessageAt?: number;
   optimisticLastMessage?: string;
+  optimisticBaseMessageId?: Id<"messages"> | null;
 };
 
 interface ConversationSummaryForActions {
@@ -51,6 +53,7 @@ interface MutationState {
 interface MutationContext {
   userId: Id<"users"> | null;
   selectedConversationId: Id<"conversations"> | null;
+  latestMessageId: Id<"messages"> | null;
   conversations: ConversationSummaryForActions[] | undefined;
   onTicketCreated: (ticketId: Id<"tickets">) => void;
 }
@@ -67,6 +70,23 @@ export interface UseInboxMessageActionsResult {
   handleSendMessage: () => Promise<void>;
   handleResolveConversation: () => Promise<void>;
   handleConvertToTicket: () => Promise<void>;
+}
+
+export function shouldClearOptimisticLastMessage(
+  patch: ConversationUiPatch | undefined,
+  messages: readonly Pick<InboxMessage, "_id" | "senderType">[] | undefined
+): boolean {
+  if (!patch?.optimisticLastMessage || !messages || messages.length === 0) {
+    return false;
+  }
+
+  const baseMessageIndex = patch.optimisticBaseMessageId
+    ? messages.findIndex((message) => message._id === patch.optimisticBaseMessageId)
+    : -1;
+  const messagesAfterOptimisticSend =
+    baseMessageIndex >= 0 ? messages.slice(baseMessageIndex + 1) : messages;
+
+  return messagesAfterOptimisticSend.some((message) => message.senderType === "agent");
 }
 
 export function useInboxMessageActions({
@@ -146,6 +166,7 @@ export function useInboxMessageActions({
       unreadByAgent: 0,
       lastMessageAt: now,
       optimisticLastMessage: getOptimisticLastMessage(content),
+      optimisticBaseMessageId: context.latestMessageId ?? null,
     });
 
     try {
@@ -175,6 +196,7 @@ export function useInboxMessageActions({
     }
   }, [
     api,
+    context.latestMessageId,
     context.selectedConversationId,
     context.userId,
     getOptimisticLastMessage,

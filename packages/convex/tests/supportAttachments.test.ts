@@ -148,13 +148,13 @@ describe("support attachments", () => {
     ]);
   });
 
-  it("rejects unsupported uploads and removes the uploaded storage object", async () => {
+  it("rejects uploads whose extension is not allowlisted and removes the uploaded storage object", async () => {
     const uploadUrl = await agentClient.mutation(api.supportAttachments.generateUploadUrl, {
       workspaceId,
     });
     const response = await fetch(uploadUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
+      headers: { "Content-Type": "image/png" },
       body: TEXT_FILE_BYTES,
     });
     expect(response.ok).toBe(true);

@@ -41,9 +41,6 @@ const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
   zip: "application/zip",
 };
 
-const SUPPORTED_SUPPORT_ATTACHMENT_MIME_TYPES = new Set(Object.values(MIME_TYPE_BY_EXTENSION));
-SUPPORTED_SUPPORT_ATTACHMENT_MIME_TYPES.add("application/x-zip-compressed");
-
 export const SUPPORT_ATTACHMENT_ACCEPT = [
   ".png",
   ".jpg",
@@ -57,6 +54,11 @@ export const SUPPORT_ATTACHMENT_ACCEPT = [
   ".zip",
 ].join(",");
 
+export function normalizeSupportAttachmentFileName(fileName: string): string {
+  const normalized = fileName.split(/[/\\]/).at(-1)?.trim();
+  return normalized && normalized.length > 0 ? normalized : "attachment";
+}
+
 function inferMimeTypeFromFileName(fileName: string): string | null {
   const extension = fileName.split(".").pop()?.trim().toLowerCase();
   if (!extension) {
@@ -66,11 +68,7 @@ function inferMimeTypeFromFileName(fileName: string): string | null {
 }
 
 export function getSupportAttachmentMimeType(file: Pick<File, "name" | "type">): string | null {
-  const normalizedType = file.type?.trim().toLowerCase();
-  if (normalizedType && SUPPORTED_SUPPORT_ATTACHMENT_MIME_TYPES.has(normalizedType)) {
-    return normalizedType;
-  }
-  return inferMimeTypeFromFileName(file.name);
+  return inferMimeTypeFromFileName(normalizeSupportAttachmentFileName(file.name));
 }
 
 export function formatSupportAttachmentSize(size: number): string {
