@@ -70,6 +70,44 @@ function getTicketStatusClass(status: string): string {
   }
 }
 
+function renderAttachmentRow(attachment: SupportAttachmentDescriptor) {
+  const content = (
+    <>
+      <span className="opencom-message-attachment-name">
+        <Paperclip />
+        {attachment.fileName}
+      </span>
+      <span className="opencom-message-attachment-size">
+        {formatSupportAttachmentSize(attachment.size)}
+      </span>
+    </>
+  );
+
+  if (attachment.url) {
+    return (
+      <a
+        key={attachment._id}
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="opencom-message-attachment"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      key={attachment._id}
+      aria-disabled="true"
+      className="opencom-message-attachment opencom-message-attachment-disabled"
+    >
+      {content}
+    </div>
+  );
+}
+
 export function TicketDetail({
   ticket,
   onBack,
@@ -133,27 +171,15 @@ export function TicketDetail({
           {ticket.description && (
             <div className="opencom-ticket-description">
               {ticket.description}
-              {ticket.attachments && ticket.attachments.length > 0 && (
-                <div className="opencom-message-attachments">
-                  {ticket.attachments.map((attachment) => (
-                    <a
-                      key={attachment._id}
-                      href={attachment.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="opencom-message-attachment"
-                    >
-                      <span className="opencom-message-attachment-name">
-                        <Paperclip />
-                        {attachment.fileName}
-                      </span>
-                      <span className="opencom-message-attachment-size">
-                        {formatSupportAttachmentSize(attachment.size)}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
+            </div>
+          )}
+
+          {ticket.attachments && ticket.attachments.length > 0 && (
+            <div className="opencom-ticket-attachments">
+              <span className="opencom-ticket-form-label">Attachments</span>
+              <div className="opencom-message-attachments">
+                {ticket.attachments.map((attachment) => renderAttachmentRow(attachment))}
+              </div>
             </div>
           )}
 
@@ -172,26 +198,12 @@ export function TicketDetail({
                         ? "System"
                         : "Support"}
                   </div>
-                  <div className="opencom-ticket-comment-content">{comment.content}</div>
+                  {comment.content.trim().length > 0 && (
+                    <div className="opencom-ticket-comment-content">{comment.content}</div>
+                  )}
                   {comment.attachments && comment.attachments.length > 0 && (
                     <div className="opencom-message-attachments">
-                      {comment.attachments.map((attachment) => (
-                        <a
-                          key={attachment._id}
-                          href={attachment.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="opencom-message-attachment"
-                        >
-                          <span className="opencom-message-attachment-name">
-                            <Paperclip />
-                            {attachment.fileName}
-                          </span>
-                          <span className="opencom-message-attachment-size">
-                            {formatSupportAttachmentSize(attachment.size)}
-                          </span>
-                        </a>
-                      ))}
+                      {comment.attachments.map((attachment) => renderAttachmentRow(attachment))}
                     </div>
                   )}
                   <div className="opencom-ticket-comment-time">{formatTime(comment.createdAt)}</div>

@@ -107,6 +107,10 @@ function InboxContent(): React.JSX.Element | null {
   const [highlightedMessageId, setHighlightedMessageId] = useState<Id<"messages"> | null>(null);
   const messageHighlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedConversationIdRef = useRef<Id<"conversations"> | null>(selectedConversationId);
+  const attachmentUploadContextVersionRef = useRef(0);
+  const attachmentUploadRequestIdRef = useRef(0);
+  selectedConversationIdRef.current = selectedConversationId;
   const {
     aiResponses,
     aiSettings,
@@ -232,7 +236,10 @@ function InboxContent(): React.JSX.Element | null {
   }, []);
 
   useEffect(() => {
+    attachmentUploadContextVersionRef.current += 1;
+    attachmentUploadRequestIdRef.current += 1;
     setPendingAttachments([]);
+    setIsUploadingAttachments(false);
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -466,6 +473,10 @@ function InboxContent(): React.JSX.Element | null {
         return;
       }
 
+      const uploadConversationId = selectedConversationId;
+      const uploadContextVersion = attachmentUploadContextVersionRef.current;
+      const uploadRequestId = attachmentUploadRequestIdRef.current + 1;
+      attachmentUploadRequestIdRef.current = uploadRequestId;
       setWorkflowError(null);
       setIsUploadingAttachments(true);
       try {
@@ -476,8 +487,22 @@ function InboxContent(): React.JSX.Element | null {
           generateUploadUrl: generateSupportAttachmentUploadUrl,
           finalizeUpload: finalizeSupportAttachmentUpload,
         });
+        if (
+          selectedConversationIdRef.current !== uploadConversationId ||
+          attachmentUploadContextVersionRef.current !== uploadContextVersion ||
+          attachmentUploadRequestIdRef.current !== uploadRequestId
+        ) {
+          return;
+        }
         setPendingAttachments((current) => [...current, ...uploadedAttachments]);
       } catch (error) {
+        if (
+          selectedConversationIdRef.current !== uploadConversationId ||
+          attachmentUploadContextVersionRef.current !== uploadContextVersion ||
+          attachmentUploadRequestIdRef.current !== uploadRequestId
+        ) {
+          return;
+        }
         setWorkflowError(
           normalizeUnknownError(error, {
             fallbackMessage: "Failed to upload attachment.",
@@ -485,7 +510,9 @@ function InboxContent(): React.JSX.Element | null {
           }).message
         );
       } finally {
-        setIsUploadingAttachments(false);
+        if (attachmentUploadRequestIdRef.current === uploadRequestId) {
+          setIsUploadingAttachments(false);
+        }
       }
     },
     [

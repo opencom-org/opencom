@@ -7,6 +7,7 @@ import {
   normalizeUnknownError,
   uploadSupportAttachments,
   type StagedSupportAttachment,
+  type SupportAttachmentDescriptor,
 } from "@opencom/web-shared";
 import { Button, Card, Input } from "@opencom/ui";
 import {
@@ -53,6 +54,44 @@ const priorityConfig: Record<TicketPriority, { label: string; color: string }> =
   high: { label: "High", color: "bg-orange-100 text-orange-600" },
   urgent: { label: "Urgent", color: "bg-red-100 text-red-600" },
 };
+
+function renderAttachmentRow(attachment: SupportAttachmentDescriptor): React.JSX.Element {
+  const content = (
+    <>
+      <span className="flex min-w-0 items-center gap-2">
+        <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="truncate">{attachment.fileName}</span>
+      </span>
+      <span className="ml-3 flex-shrink-0 text-xs text-muted-foreground">
+        {formatSupportAttachmentSize(attachment.size)}
+      </span>
+    </>
+  );
+
+  if (attachment.url) {
+    return (
+      <a
+        key={attachment._id}
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      key={attachment._id}
+      aria-disabled="true"
+      className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm opacity-80"
+    >
+      {content}
+    </div>
+  );
+}
 
 function TicketDetailContent(): React.JSX.Element | null {
   const { user, activeWorkspace } = useAuth();
@@ -294,27 +333,15 @@ function TicketDetailContent(): React.JSX.Element | null {
               <div className="mb-4 p-3 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">Description</p>
                 <p>{ticket.description}</p>
-                {ticket.attachments && ticket.attachments.length > 0 && (
-                  <div className="mt-3 space-y-2">
-                    {ticket.attachments.map((attachment) => (
-                      <a
-                        key={attachment._id}
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span className="truncate">{attachment.fileName}</span>
-                        </span>
-                        <span className="ml-3 flex-shrink-0 text-xs text-muted-foreground">
-                          {formatSupportAttachmentSize(attachment.size)}
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                )}
+              </div>
+            )}
+
+            {ticket.attachments && ticket.attachments.length > 0 && (
+              <div className="mb-4 p-3 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">Attachments</p>
+                <div className="mt-2 space-y-2">
+                  {ticket.attachments.map((attachment) => renderAttachmentRow(attachment))}
+                </div>
               </div>
             )}
 
@@ -347,32 +374,18 @@ function TicketDetailContent(): React.JSX.Element | null {
                         {new Date(comment.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    <p className="text-sm">{comment.content}</p>
+                    {comment.content.trim().length > 0 && <p className="text-sm">{comment.content}</p>}
                     {comment.attachments && comment.attachments.length > 0 && (
                       <div className="mt-3 space-y-2">
-                        {comment.attachments.map((attachment) => (
-                          <a
-                            key={attachment._id}
-                            href={attachment.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-sm"
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
-                              <span className="truncate">{attachment.fileName}</span>
-                            </span>
-                            <span className="ml-3 flex-shrink-0 text-xs text-muted-foreground">
-                              {formatSupportAttachmentSize(attachment.size)}
-                            </span>
-                          </a>
-                        ))}
+                        {comment.attachments.map((attachment) => renderAttachmentRow(attachment))}
                       </div>
                     )}
                   </div>
                 ))}
 
-              {(!ticket.comments || ticket.comments.length === 0) && !ticket.description && (
+              {(!ticket.comments || ticket.comments.length === 0) &&
+                !ticket.description &&
+                (!ticket.attachments || ticket.attachments.length === 0) && (
                 <p className="text-muted-foreground text-center py-4">No activity yet</p>
               )}
             </div>

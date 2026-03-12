@@ -128,6 +128,7 @@ import type * as series_telemetry from "../series/telemetry.js";
 import type * as setup from "../setup.js";
 import type * as snippets from "../snippets.js";
 import type * as suggestions from "../suggestions.js";
+import type * as supportAttachmentFunctionRefs from "../supportAttachmentFunctionRefs.js";
 import type * as supportAttachmentTypes from "../supportAttachmentTypes.js";
 import type * as supportAttachments from "../supportAttachments.js";
 import type * as surveys from "../surveys.js";
@@ -312,6 +313,7 @@ declare const fullApi: ApiFromModules<{
   setup: typeof setup;
   snippets: typeof snippets;
   suggestions: typeof suggestions;
+  supportAttachmentFunctionRefs: typeof supportAttachmentFunctionRefs;
   supportAttachmentTypes: typeof supportAttachmentTypes;
   supportAttachments: typeof supportAttachments;
   surveys: typeof surveys;

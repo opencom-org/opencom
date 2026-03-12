@@ -143,8 +143,11 @@ describe("runtime type hardening guards", () => {
     );
 
     expect(supportAttachmentsSource).not.toContain("function getInternalRef(name: string)");
+    expect(supportAttachmentsSource).not.toContain("makeFunctionReference(");
+    expect(supportAttachmentsSource).not.toContain("as unknown as");
     expect(supportAttachmentsSource).toContain("CLEANUP_EXPIRED_STAGED_UPLOADS_REF");
-    expect(supportAttachmentsSource).toContain("getShallowRunAfter");
+    expect(supportAttachmentsSource).toContain('from "./supportAttachmentFunctionRefs"');
+    expect(supportAttachmentsSource).toContain('from "./notifications/functionRefs"');
   });
 
   it("uses fixed typed refs for HTTP origin validation", () => {

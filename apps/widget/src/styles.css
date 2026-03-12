@@ -635,8 +635,17 @@
   text-decoration: none;
 }
 
+.opencom-message-attachment-disabled {
+  cursor: default;
+  opacity: 0.84;
+}
+
 .opencom-message-attachment:hover {
   border-color: color-mix(in srgb, var(--opencom-primary-color) 24%, var(--opencom-border-color));
+}
+
+.opencom-message-attachment-disabled:hover {
+  border-color: color-mix(in srgb, var(--opencom-border-color) 90%, transparent);
 }
 
 .opencom-send:hover {

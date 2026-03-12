@@ -17,7 +17,7 @@ export const supportAttachmentTables = {
     ticketId: v.optional(v.id("tickets")),
     ticketCommentId: v.optional(v.id("ticketComments")),
     uploadedByType: supportAttachmentUploaderTypeValidator,
-    uploadedById: v.optional(v.string()),
+    uploadedById: v.string(),
     createdAt: v.number(),
     attachedAt: v.optional(v.number()),
     expiresAt: v.optional(v.number()),
@@ -26,5 +26,6 @@ export const supportAttachmentTables = {
     .index("by_message", ["messageId"])
     .index("by_ticket", ["ticketId"])
     .index("by_ticket_comment", ["ticketCommentId"])
-    .index("by_status_expires", ["status", "expiresAt"]),
+    .index("by_status_expires", ["status", "expiresAt"])
+    .index("by_workspace_status_expires", ["workspaceId", "status", "expiresAt"]),
 };

@@ -1,4 +1,3 @@
-import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -18,6 +17,11 @@ import {
 } from "./supportAttachmentTypes";
 import { createError } from "./utils/errors";
 import { resolveVisitorFromSession } from "./widgetSessions";
+import { getShallowRunAfter } from "./notifications/functionRefs";
+import {
+  cleanupExpiredStagedUploadsRef,
+  type CleanupExpiredStagedUploadsArgs,
+} from "./supportAttachmentFunctionRefs";
 
 type SupportAttachmentWorkspaceArgs = {
   workspaceId: Id<"workspaces">;
@@ -29,18 +33,6 @@ type SupportAttachmentActor =
   | { accessType: "agent"; userId: Id<"users"> }
   | { accessType: "visitor"; visitorId: Id<"visitors"> };
 
-type CleanupExpiredStagedUploadsArgs = {
-  limit?: number;
-};
-
-type CleanupExpiredStagedUploadsResult = {
-  deleted: number;
-  hasMore: boolean;
-};
-
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
-
 export type SupportAttachmentDescriptor = {
   _id: Id<"supportAttachments">;
   fileName: string;
@@ -51,26 +43,8 @@ export type SupportAttachmentDescriptor = {
 
 const DEFAULT_CLEANUP_LIMIT = 100;
 const MAX_CLEANUP_LIMIT = 500;
-
-const CLEANUP_EXPIRED_STAGED_UPLOADS_REF = makeFunctionReference<
-  "mutation",
-  CleanupExpiredStagedUploadsArgs,
-  CleanupExpiredStagedUploadsResult
->("supportAttachments:cleanupExpiredStagedUploads") as unknown as InternalMutationRef<
-  CleanupExpiredStagedUploadsArgs,
-  CleanupExpiredStagedUploadsResult
->;
-
-function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as <
-    Args extends Record<string, unknown>,
-    Return = unknown,
-  >(
-    delayMs: number,
-    functionRef: InternalMutationRef<Args, Return>,
-    runArgs: Args
-  ) => Promise<unknown>;
-}
+const CLEANUP_SCHEDULE_GRACE_MS = 1_000;
+const CLEANUP_EXPIRED_STAGED_UPLOADS_REF = cleanupExpiredStagedUploadsRef;
 
 function normalizeAttachmentIds(
   attachmentIds?: readonly Id<"supportAttachments">[]
@@ -141,6 +115,60 @@ async function deleteUploadedFileIfPresent(
     return;
   }
   await ctx.storage.delete(storageId);
+}
+
+function getSupportAttachmentCleanupScheduledAt(expiresAt: number): number {
+  return expiresAt + CLEANUP_SCHEDULE_GRACE_MS;
+}
+
+async function getNextStagedSupportAttachment(
+  ctx: Pick<MutationCtx, "db">,
+  workspaceId: Id<"workspaces">
+): Promise<Doc<"supportAttachments"> | null> {
+  return await ctx.db
+    .query("supportAttachments")
+    .withIndex("by_workspace_status_expires", (q) =>
+      q.eq("workspaceId", workspaceId).eq("status", "staged")
+    )
+    .first();
+}
+
+async function scheduleSupportAttachmentCleanup(
+  ctx: Pick<MutationCtx, "scheduler">,
+  args: CleanupExpiredStagedUploadsArgs
+): Promise<void> {
+  const runAfter = getShallowRunAfter(ctx);
+  await runAfter(
+    Math.max(0, args.scheduledAt - Date.now()),
+    CLEANUP_EXPIRED_STAGED_UPLOADS_REF,
+    args
+  );
+}
+
+async function ensureSupportAttachmentCleanupScheduled(
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
+  workspaceId: Id<"workspaces">,
+  scheduledAt: number
+): Promise<void> {
+  const workspace = await ctx.db.get(workspaceId);
+  if (!workspace) {
+    throw createError("NOT_FOUND", "Workspace not found");
+  }
+
+  const existingScheduledAt = workspace.supportAttachmentCleanupScheduledAt;
+  if (typeof existingScheduledAt === "number" && existingScheduledAt <= scheduledAt) {
+    return;
+  }
+
+  await ctx.db.patch(workspaceId, {
+    supportAttachmentCleanupScheduledAt: scheduledAt,
+  });
+
+  await scheduleSupportAttachmentCleanup(ctx, {
+    workspaceId,
+    scheduledAt,
+    limit: DEFAULT_CLEANUP_LIMIT,
+  });
 }
 
 function buildAttachmentCountError(): Error {
@@ -360,10 +388,11 @@ export const finalizeUpload = mutation({
       expiresAt: now + STAGED_SUPPORT_ATTACHMENT_TTL_MS,
     });
 
-    const runAfter = getShallowRunAfter(ctx);
-    await runAfter(STAGED_SUPPORT_ATTACHMENT_TTL_MS + 1_000, CLEANUP_EXPIRED_STAGED_UPLOADS_REF, {
-      limit: DEFAULT_CLEANUP_LIMIT,
-    });
+    await ensureSupportAttachmentCleanupScheduled(
+      ctx,
+      args.workspaceId,
+      getSupportAttachmentCleanupScheduledAt(now + STAGED_SUPPORT_ATTACHMENT_TTL_MS)
+    );
 
     return {
       status: "staged" as const,
@@ -377,9 +406,25 @@ export const finalizeUpload = mutation({
 
 export const cleanupExpiredStagedUploads = internalMutation({
   args: {
+    workspaceId: v.id("workspaces"),
+    scheduledAt: v.number(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace) {
+      return {
+        deleted: 0,
+        hasMore: false,
+      };
+    }
+    if (workspace.supportAttachmentCleanupScheduledAt !== args.scheduledAt) {
+      return {
+        deleted: 0,
+        hasMore: false,
+      };
+    }
+
     const now = Date.now();
     const limit = Math.max(
       1,
@@ -388,8 +433,8 @@ export const cleanupExpiredStagedUploads = internalMutation({
 
     const expiredUploads = await ctx.db
       .query("supportAttachments")
-      .withIndex("by_status_expires", (q) =>
-        q.eq("status", "staged").lt("expiresAt", now)
+      .withIndex("by_workspace_status_expires", (q) =>
+        q.eq("workspaceId", args.workspaceId).eq("status", "staged").lt("expiresAt", now)
       )
       .take(limit);
 
@@ -399,6 +444,27 @@ export const cleanupExpiredStagedUploads = internalMutation({
       await ctx.db.delete(attachment._id);
       deleted += 1;
     }
+
+    const nextStagedAttachment = await getNextStagedSupportAttachment(ctx, args.workspaceId);
+    if (!nextStagedAttachment?.expiresAt) {
+      await ctx.db.patch(args.workspaceId, {
+        supportAttachmentCleanupScheduledAt: undefined,
+      });
+      return {
+        deleted,
+        hasMore: expiredUploads.length === limit,
+      };
+    }
+
+    const nextScheduledAt = getSupportAttachmentCleanupScheduledAt(nextStagedAttachment.expiresAt);
+    await ctx.db.patch(args.workspaceId, {
+      supportAttachmentCleanupScheduledAt: nextScheduledAt,
+    });
+    await scheduleSupportAttachmentCleanup(ctx, {
+      workspaceId: args.workspaceId,
+      scheduledAt: nextScheduledAt,
+      limit: args.limit ?? DEFAULT_CLEANUP_LIMIT,
+    });
 
     return {
       deleted,

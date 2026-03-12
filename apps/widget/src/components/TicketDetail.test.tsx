@@ -69,4 +69,56 @@ describe("TicketDetail attachments", () => {
       "pending-attachment-1" as Id<"supportAttachments">
     );
   });
+
+  it("shows root attachments for attachment-only tickets and disables missing attachment URLs", () => {
+    render(
+      <TicketDetail
+        ticket={{
+          subject: "Attachment-only ticket",
+          status: "submitted",
+          attachments: [
+            {
+              _id: "ticket-attachment-2",
+              fileName: "missing-url.png",
+              mimeType: "image/png",
+              size: 512,
+            },
+          ],
+          comments: [
+            {
+              _id: "comment-2",
+              authorType: "agent",
+              content: "",
+              createdAt: Date.now(),
+              isInternal: false,
+              attachments: [
+                {
+                  _id: "comment-attachment-2",
+                  fileName: "missing-log.txt",
+                  mimeType: "text/plain",
+                  size: 256,
+                },
+              ],
+            },
+          ],
+        }}
+        onBack={vi.fn()}
+        onClose={vi.fn()}
+        onAddComment={vi.fn().mockResolvedValue(undefined)}
+        onUploadAttachments={vi.fn()}
+        onRemoveAttachment={vi.fn()}
+        pendingAttachments={[]}
+        isUploadingAttachments={false}
+        errorFeedback={null}
+      />
+    );
+
+    expect(screen.getByText("Attachments")).toBeInTheDocument();
+    expect(screen.getByText("missing-url.png")).toBeInTheDocument();
+    expect(screen.getByText("missing-log.txt")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /missing-url\.png/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /missing-log\.txt/i })).not.toBeInTheDocument();
+    expect(screen.getByText("missing-url.png").closest("[aria-disabled='true']")).toBeTruthy();
+    expect(screen.getByText("missing-log.txt").closest("[aria-disabled='true']")).toBeTruthy();
+  });
 });

@@ -20,6 +20,44 @@ interface ConversationMessageListProps {
   messagesEndRef: RefObject<HTMLDivElement | null>;
 }
 
+function renderAttachmentRow(attachment: NonNullable<ConversationMessage["attachments"]>[number]) {
+  const content = (
+    <>
+      <span className="opencom-message-attachment-name">
+        <Paperclip />
+        {attachment.fileName}
+      </span>
+      <span className="opencom-message-attachment-size">
+        {formatSupportAttachmentSize(attachment.size)}
+      </span>
+    </>
+  );
+
+  if (attachment.url) {
+    return (
+      <a
+        key={attachment._id}
+        href={attachment.url}
+        target="_blank"
+        rel="noreferrer"
+        className="opencom-message-attachment"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <div
+      key={attachment._id}
+      aria-disabled="true"
+      className="opencom-message-attachment opencom-message-attachment-disabled"
+    >
+      {content}
+    </div>
+  );
+}
+
 export function ConversationMessageList({
   messages,
   aiSettingsEnabled,
@@ -91,23 +129,7 @@ export function ConversationMessageList({
                 )}
                 {msg.attachments && msg.attachments.length > 0 && (
                   <div className="opencom-message-attachments">
-                    {msg.attachments.map((attachment) => (
-                      <a
-                        key={attachment._id}
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="opencom-message-attachment"
-                      >
-                        <span className="opencom-message-attachment-name">
-                          <Paperclip />
-                          {attachment.fileName}
-                        </span>
-                        <span className="opencom-message-attachment-size">
-                          {formatSupportAttachmentSize(attachment.size)}
-                        </span>
-                      </a>
-                    ))}
+                    {msg.attachments.map((attachment) => renderAttachmentRow(attachment))}
                   </div>
                 )}
                 {isAi && aiData && (
