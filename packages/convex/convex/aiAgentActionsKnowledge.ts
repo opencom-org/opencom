@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { embed } from "ai";
 import { createAIClient } from "./lib/aiGateway";
 import { makeFunctionReference } from "convex/server";
+import type { Id } from "./_generated/dataModel";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 
@@ -19,7 +20,13 @@ const GET_CONTENT_BY_ID_REF = makeFunctionReference<
   "query",
   { contentType: SuggestionContentType; contentId: string },
   SuggestionContentRecord
->("suggestions:getContentById") as unknown as any; // Using any for local ref casting
+>("suggestions:getContentById") as unknown as any;
+
+const GET_EMBEDDING_BY_ID_REF = makeFunctionReference<
+  "query",
+  { id: Id<"contentEmbeddings"> },
+  any
+>("suggestions:getEmbeddingById") as unknown as any;
 
 export const getRelevantKnowledgeForRuntimeAction = internalAction({
   args: {
@@ -46,33 +53,49 @@ export const getRelevantKnowledgeForRuntimeAction = internalAction({
       filter: (q) => q.eq("workspaceId", args.workspaceId),
     });
 
-    // 3. Filter by knowledge sources
-    let filteredResults = results;
+    // 3. Fetch full embedding docs to get contentType and filter them
+    const docs = await Promise.all(
+      results.map(async (r) => {
+        const doc = await ctx.runQuery(GET_EMBEDDING_BY_ID_REF, { id: r._id });
+        if (!doc) return null;
+        return { ...doc, _score: r._score };
+      })
+    );
+
+    let filteredDocs = docs.filter((d) => d !== null);
+
     if (args.knowledgeSources && args.knowledgeSources.length > 0) {
-      const sourceSet = new Set(args.knowledgeSources.map(s => s === "articles" ? "article" : s === "internalArticles" ? "internalArticle" : s));
-      filteredResults = results.filter((r: any) => {
-        return sourceSet.has(r.contentType);
-      });
+      const sourceSet = new Set(
+        args.knowledgeSources.map((s) =>
+          s === "articles" ? "article" : s === "internalArticles" ? "internalArticle" : s
+        )
+      );
+      filteredDocs = filteredDocs.filter((d: any) => sourceSet.has(d.contentType));
     }
 
-    const topResults = filteredResults.slice(0, limit);
+    const topDocs = filteredDocs.slice(0, limit);
 
-    // 4. Fetch the actual content since vectorSearch only returns _id and _score
+    // 4. Fetch the actual content
     const enrichedResults = await Promise.all(
-      topResults.map(async (result: any) => {
+      topDocs.map(async (doc: any) => {
         const content = await ctx.runQuery(GET_CONTENT_BY_ID_REF, {
-          contentType: result.contentType,
-          contentId: result.contentId,
+          contentType: doc.contentType,
+          contentId: doc.contentId,
         });
 
         if (!content) return null;
 
         return {
-          id: result.contentId,
-          type: result.contentType === "article" ? "article" : result.contentType === "internalArticle" ? "internalArticle" : "snippet",
+          id: doc.contentId,
+          type:
+            doc.contentType === "article"
+              ? "article"
+              : doc.contentType === "internalArticle"
+                ? "internalArticle"
+                : "snippet",
           title: content.title,
           content: content.content,
-          relevanceScore: result._score * 100, // Roughly map vector search score to legacy 0-100 scale
+          relevanceScore: doc._score * 100, // Roughly map vector search score to legacy 0-100 scale
         };
       })
     );
