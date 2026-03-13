@@ -65,6 +65,8 @@ function ArticlesContent() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeletingArticle, setIsDeletingArticle] = useState(false);
   const [isBackfillingEmbeddings, setIsBackfillingEmbeddings] = useState(false);
+  const [backfillNotice, setBackfillNotice] = useState<string | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const createQueryHandledRef = useRef(false);
   const {
@@ -163,20 +165,20 @@ function ArticlesContent() {
     }
 
     setIsBackfillingEmbeddings(true);
-    setImportError(null);
-    setImportNotice(null);
+    setBackfillError(null);
+    setBackfillNotice(null);
 
     try {
       const result = await backfillEmbeddings({
         workspaceId: activeWorkspace._id,
         contentTypes: ["article", "internalArticle"],
       });
-      setImportNotice(
+      setBackfillNotice(
         `Embeddings backfilled: ${result.processed} processed, ${result.skipped} skipped (already existed)`
       );
     } catch (error) {
       console.error("Failed to backfill embeddings:", error);
-      setImportError(error instanceof Error ? error.message : "Failed to backfill embeddings.");
+      setBackfillError(error instanceof Error ? error.message : "Failed to backfill embeddings.");
     } finally {
       setIsBackfillingEmbeddings(false);
     }
@@ -545,7 +547,11 @@ function ArticlesContent() {
             <Button
               variant="outline"
               onClick={() => void handleBackfillEmbeddings()}
-              disabled={isBackfillingEmbeddings}
+              disabled={
+                isBackfillingEmbeddings ||
+                !activeWorkspace?._id ||
+                (activeWorkspace.role !== "owner" && activeWorkspace.role !== "admin")
+              }
             >
               <RefreshCw
                 className={`h-4 w-4 mr-2 ${isBackfillingEmbeddings ? "animate-spin" : ""}`}
@@ -566,6 +572,8 @@ function ArticlesContent() {
               New Article
             </Button>
           </div>
+          {backfillNotice && <p className="text-sm text-green-600">{backfillNotice}</p>}
+          {backfillError && <p className="text-sm text-red-600">{backfillError}</p>}
         </div>
       </div>
 

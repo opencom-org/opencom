@@ -83,6 +83,8 @@ type LogExportArgs = WorkspaceArgs & {
 
 type BackfillEmbeddingsArgs = WorkspaceArgs & {
   contentTypes?: ("article" | "internalArticle" | "snippet")[];
+  batchSize?: number;
+  model?: string;
 };
 
 type BackfillEmbeddingsResult = {
