@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 
 const CLAIM_LEASE_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -52,6 +53,15 @@ export const claimConversation = internalMutation({
       createdAt: now,
     });
 
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.conversation.claimed",
+      resourceType: "conversation",
+      resourceId: String(args.conversationId),
+      metadata: { credentialId: String(args.credentialId) },
+    });
+
     return { claimId, renewed: false };
   },
 });
@@ -81,6 +91,24 @@ export const releaseConversation = internalMutation({
     await ctx.db.patch(claim._id, {
       status: "released",
       releasedAt: Date.now(),
+    });
+
+    // Route conversation back to human queue
+    const conv = await ctx.db.get(args.conversationId);
+    if (conv) {
+      await ctx.db.patch(args.conversationId, {
+        assignedAgentId: undefined,
+        updatedAt: Date.now(),
+      });
+    }
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.conversation.released",
+      resourceType: "conversation",
+      resourceId: String(args.conversationId),
+      metadata: { credentialId: String(args.credentialId) },
     });
 
     return { success: true };
@@ -123,6 +151,15 @@ export const escalateConversation = internalMutation({
         updatedAt: Date.now(),
       });
     }
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.conversation.escalated",
+      resourceType: "conversation",
+      resourceId: String(args.conversationId),
+      metadata: { credentialId: String(args.credentialId) },
+    });
 
     return { success: true };
   },

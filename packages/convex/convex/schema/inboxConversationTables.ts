@@ -143,6 +143,7 @@ export const inboxConversationTables = {
       )
     ),
     attachmentIds: v.optional(supportAttachmentIdArrayValidator),
+    automationCredentialId: v.optional(v.id("automationCredentials")),
     createdAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])

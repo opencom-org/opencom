@@ -33,7 +33,17 @@ export type AuditAction =
   | "visitor.merged"
   // Data events
   | "data.exported"
-  | "data.deleted";
+  | "data.deleted"
+  // Automation events
+  | "automation.message.sent"
+  | "automation.conversation.updated"
+  | "automation.visitor.created"
+  | "automation.visitor.updated"
+  | "automation.ticket.created"
+  | "automation.ticket.updated"
+  | "automation.conversation.claimed"
+  | "automation.conversation.released"
+  | "automation.conversation.escalated";
 
 export type ActorType = "user" | "system" | "api";
 

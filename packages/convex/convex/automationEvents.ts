@@ -39,6 +39,18 @@ export const emitEvent = internalMutation({
       if (sub.eventTypes && sub.eventTypes.length > 0 && !sub.eventTypes.includes(args.eventType)) {
         continue;
       }
+      // Resource type filter
+      if (sub.resourceTypes && sub.resourceTypes.length > 0 && !sub.resourceTypes.includes(args.resourceType)) {
+        continue;
+      }
+      // Channel filter
+      if (sub.channels && sub.channels.length > 0 && !sub.channels.includes(args.data?.channel)) {
+        continue;
+      }
+      // AI workflow state filter
+      if (sub.aiWorkflowStates && sub.aiWorkflowStates.length > 0 && !sub.aiWorkflowStates.includes(args.data?.aiWorkflowState)) {
+        continue;
+      }
 
       // Create a pending delivery and schedule it
       const deliveryId = await ctx.db.insert("automationWebhookDeliveries", {
@@ -69,17 +81,14 @@ export const listEvents = internalQuery({
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
 
-    let events = await ctx.db
+    const eventsQuery = ctx.db
       .query("automationEvents")
-      .withIndex("by_workspace_timestamp", (q) => q.eq("workspaceId", args.workspaceId))
-      .order("desc")
-      .take(limit + 1 + (args.cursor ? 10000 : 0));
-
-    if (args.cursor) {
-      const cursorTime = Number.parseFloat(args.cursor);
-      events = events.filter((e) => e.timestamp < cursorTime);
-      events = events.slice(0, limit + 1);
-    }
+      .withIndex("by_workspace_timestamp", (q2) =>
+        args.cursor
+          ? q2.eq("workspaceId", args.workspaceId).lt("timestamp", Number.parseFloat(args.cursor))
+          : q2.eq("workspaceId", args.workspaceId)
+      );
+    const events = await eventsQuery.order("desc").take(limit + 1);
 
     const hasMore = events.length > limit;
     const data = hasMore ? events.slice(0, limit) : events;

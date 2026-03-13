@@ -711,6 +711,7 @@ import {
   createTicket,
   updateTicket,
   eventsFeed,
+  replayWebhookDelivery,
 } from "./automationHttpRoutes";
 
 http.route({ path: "/api/v1/conversations", method: "GET", handler: listConversations });
@@ -730,5 +731,6 @@ http.route({ path: "/api/v1/tickets/get", method: "GET", handler: getTicket });
 http.route({ path: "/api/v1/tickets/create", method: "POST", handler: createTicket });
 http.route({ path: "/api/v1/tickets/update", method: "POST", handler: updateTicket });
 http.route({ path: "/api/v1/events/feed", method: "GET", handler: eventsFeed });
+http.route({ path: "/api/v1/webhooks/replay", method: "POST", handler: replayWebhookDelivery });
 
 export default http;

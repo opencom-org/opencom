@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { logAudit } from "./auditLogs";
 
 // ── Conversations ──────────────────────────────────────────────────
 
@@ -30,30 +31,24 @@ export const listConversationsForAutomation = internalQuery({
         .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId));
     }
 
-    let conversations = await query.order("desc").take(limit + 1 + (args.cursor ? 1000 : 0));
-
-    // Cursor-based pagination using _creationTime
     if (args.cursor) {
       const cursorTime = Number.parseFloat(args.cursor);
-      conversations = conversations.filter((c) => c._creationTime < cursorTime);
-      conversations = conversations.slice(0, limit + 1);
+      query = query.filter((q2) => q2.lt(q2.field("_creationTime"), cursorTime));
     }
-
     if (args.updatedSince) {
-      conversations = conversations.filter((c) => c.updatedAt >= args.updatedSince!);
+      query = query.filter((q2) => q2.gte(q2.field("updatedAt"), args.updatedSince!));
     }
-
     if (args.assigneeId) {
-      conversations = conversations.filter(
-        (c) => c.assignedAgentId === args.assigneeId
-      );
+      query = query.filter((q2) => q2.eq(q2.field("assignedAgentId"), args.assigneeId!));
     }
+    const conversations = await query.order("desc").take(limit + 1);
 
     const hasMore = conversations.length > limit;
     const data = hasMore ? conversations.slice(0, limit) : conversations;
 
-    // Get active claims for these conversations
+    // Get active claims and last inbound message for these conversations
     const claimMap = new Map<string, { credentialId: string; expiresAt: number }>();
+    const inboundMap = new Map<string, { lastInboundMessageAt: number; lastInboundMessagePreview: string | null }>();
     for (const conv of data) {
       const claim = await ctx.db
         .query("automationConversationClaims")
@@ -67,23 +62,43 @@ export const listConversationsForAutomation = internalQuery({
           expiresAt: claim.expiresAt,
         });
       }
+
+      const lastInbound = await ctx.db
+        .query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversationId", conv._id))
+        .order("desc")
+        .filter((q) => q.eq(q.field("senderType"), "visitor"))
+        .first();
+      if (lastInbound) {
+        inboundMap.set(conv._id, {
+          lastInboundMessageAt: lastInbound.createdAt,
+          lastInboundMessagePreview: lastInbound.content?.slice(0, 200) ?? null,
+        });
+      }
     }
 
     return {
-      data: data.map((c) => ({
-        id: c._id,
-        workspaceId: c.workspaceId,
-        visitorId: c.visitorId,
-        assignedAgentId: c.assignedAgentId,
-        status: c.status,
-        channel: c.channel,
-        subject: c.subject,
-        aiWorkflowState: c.aiWorkflowState,
-        createdAt: c.createdAt,
-        updatedAt: c.updatedAt,
-        lastMessageAt: c.lastMessageAt,
-        claim: claimMap.get(c._id) ?? null,
-      })),
+      data: data.map((c) => {
+        const activeClaim = claimMap.get(c._id) ?? null;
+        const inbound = inboundMap.get(c._id);
+        return {
+          id: c._id,
+          workspaceId: c.workspaceId,
+          visitorId: c.visitorId,
+          assignedAgentId: c.assignedAgentId,
+          status: c.status,
+          channel: c.channel,
+          subject: c.subject,
+          aiWorkflowState: c.aiWorkflowState,
+          automationEligible: c.status === "open" && !activeClaim && c.aiWorkflowState !== "ai_handled",
+          createdAt: c.createdAt,
+          updatedAt: c.updatedAt,
+          lastMessageAt: c.lastMessageAt,
+          lastInboundMessageAt: inbound?.lastInboundMessageAt ?? null,
+          lastInboundMessagePreview: inbound?.lastInboundMessagePreview ?? null,
+          claim: activeClaim,
+        };
+      }),
       nextCursor:
         hasMore && data.length > 0
           ? String(data[data.length - 1]._creationTime)
@@ -116,6 +131,14 @@ export const getConversationForAutomation = internalQuery({
         ? { credentialId: claim.credentialId, expiresAt: claim.expiresAt }
         : null;
 
+    // Look up last inbound message for enrichment
+    const lastInboundMessage = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation", (q) => q.eq("conversationId", conv._id))
+      .order("desc")
+      .filter((q) => q.eq(q.field("senderType"), "visitor"))
+      .first();
+
     return {
       id: conv._id,
       workspaceId: conv.workspaceId,
@@ -126,9 +149,12 @@ export const getConversationForAutomation = internalQuery({
       subject: conv.subject,
       aiWorkflowState: conv.aiWorkflowState,
       aiHandoffReason: conv.aiHandoffReason,
+      automationEligible: conv.status === "open" && !activeClaim && conv.aiWorkflowState !== "ai_handled",
       createdAt: conv.createdAt,
       updatedAt: conv.updatedAt,
       lastMessageAt: conv.lastMessageAt,
+      lastInboundMessageAt: lastInboundMessage?.createdAt ?? null,
+      lastInboundMessagePreview: lastInboundMessage?.content?.slice(0, 200) ?? null,
       claim: activeClaim,
     };
   },
@@ -138,6 +164,7 @@ export const updateConversationForAutomation = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
     conversationId: v.id("conversations"),
+    credentialId: v.optional(v.id("automationCredentials")),
     status: v.optional(
       v.union(v.literal("open"), v.literal("closed"), v.literal("snoozed"))
     ),
@@ -161,6 +188,16 @@ export const updateConversationForAutomation = internalMutation({
     }
 
     await ctx.db.patch(args.conversationId, updates);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.conversation.updated",
+      resourceType: "conversation",
+      resourceId: String(args.conversationId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
     return { id: args.conversationId };
   },
 });
@@ -181,17 +218,15 @@ export const listMessagesForAutomation = internalQuery({
     }
 
     const limit = Math.min(args.limit, 100);
-    let messages = await ctx.db
+    let messagesQuery = ctx.db
       .query("messages")
-      .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
-      .order("asc")
-      .take(limit + 1 + (args.cursor ? 10000 : 0));
+      .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId));
 
     if (args.cursor) {
       const cursorTime = Number.parseFloat(args.cursor);
-      messages = messages.filter((m) => m._creationTime > cursorTime);
-      messages = messages.slice(0, limit + 1);
+      messagesQuery = messagesQuery.filter((q2) => q2.gt(q2.field("_creationTime"), cursorTime));
     }
+    const messages = await messagesQuery.order("asc").take(limit + 1);
 
     const hasMore = messages.length > limit;
     const data = hasMore ? messages.slice(0, limit) : messages;
@@ -250,6 +285,7 @@ export const sendMessageForAutomation = internalMutation({
       senderId: `automation:${args.actorName}`,
       senderType: "bot",
       content: args.content,
+      automationCredentialId: args.credentialId,
       createdAt: now,
     });
 
@@ -264,7 +300,111 @@ export const sendMessageForAutomation = internalMutation({
       expiresAt: now + 5 * 60 * 1000, // 5 min from now
     });
 
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.message.sent",
+      resourceType: "message",
+      resourceId: String(messageId),
+      metadata: { credentialId: String(args.credentialId) },
+    });
+
     return { id: messageId };
+  },
+});
+
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+export const sendMessageIdempotent = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    conversationId: v.id("conversations"),
+    credentialId: v.id("automationCredentials"),
+    actorName: v.string(),
+    content: v.string(),
+    idempotencyKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Check idempotency key if provided
+    if (args.idempotencyKey) {
+      const existing = await ctx.db
+        .query("automationIdempotencyKeys")
+        .withIndex("by_workspace_key", (q) =>
+          q.eq("workspaceId", args.workspaceId).eq("key", args.idempotencyKey!)
+        )
+        .first();
+
+      if (existing && existing.expiresAt >= Date.now()) {
+        return { cached: true, result: existing.responseSnapshot };
+      }
+    }
+
+    // Perform the message send (same logic as sendMessageForAutomation)
+    const conv = await ctx.db.get(args.conversationId);
+    if (!conv || conv.workspaceId !== args.workspaceId) {
+      throw new Error("Conversation not found");
+    }
+
+    const claim = await ctx.db
+      .query("automationConversationClaims")
+      .withIndex("by_conversation_status", (q) =>
+        q.eq("conversationId", args.conversationId).eq("status", "active")
+      )
+      .first();
+
+    if (!claim || claim.credentialId !== args.credentialId) {
+      throw new Error("No active claim for this conversation. Claim the conversation first.");
+    }
+
+    if (claim.expiresAt < Date.now()) {
+      throw new Error("Claim has expired. Renew or re-claim the conversation.");
+    }
+
+    const now = Date.now();
+    const messageId = await ctx.db.insert("messages", {
+      conversationId: args.conversationId,
+      senderId: `automation:${args.actorName}`,
+      senderType: "bot",
+      content: args.content,
+      automationCredentialId: args.credentialId,
+      createdAt: now,
+    });
+
+    await ctx.db.patch(args.conversationId, {
+      updatedAt: now,
+      lastMessageAt: now,
+      unreadByVisitor: (conv.unreadByVisitor || 0) + 1,
+    });
+
+    await ctx.db.patch(claim._id, {
+      expiresAt: now + 5 * 60 * 1000,
+    });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.message.sent",
+      resourceType: "message",
+      resourceId: String(messageId),
+      metadata: { credentialId: String(args.credentialId) },
+    });
+
+    const result = { id: messageId };
+
+    // Store idempotency key if provided
+    if (args.idempotencyKey) {
+      await ctx.db.insert("automationIdempotencyKeys", {
+        workspaceId: args.workspaceId,
+        key: args.idempotencyKey,
+        credentialId: args.credentialId,
+        resourceType: "message",
+        resourceId: String(messageId),
+        responseSnapshot: result,
+        expiresAt: now + IDEMPOTENCY_TTL_MS,
+      });
+    }
+
+    return { cached: false, result };
   },
 });
 
@@ -276,26 +416,34 @@ export const listVisitorsForAutomation = internalQuery({
     cursor: v.optional(v.string()),
     limit: v.number(),
     updatedSince: v.optional(v.number()),
+    email: v.optional(v.string()),
+    externalUserId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
-    let visitors = await ctx.db
+    let visitorsQuery = ctx.db
       .query("visitors")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-      .order("desc")
-      .take(limit + 1 + (args.cursor ? 1000 : 0));
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId));
 
     if (args.cursor) {
       const cursorTime = Number.parseFloat(args.cursor);
-      visitors = visitors.filter((v) => v._creationTime < cursorTime);
-      visitors = visitors.slice(0, limit + 1);
+      visitorsQuery = visitorsQuery.filter((q2) => q2.lt(q2.field("_creationTime"), cursorTime));
     }
-
+    // Note: updatedSince filters on lastSeenAt only. Visitors without lastSeenAt
+    // (created outside automation) won't match. This is acceptable since automation-
+    // created visitors always have lastSeenAt set.
     if (args.updatedSince) {
-      visitors = visitors.filter(
-        (v) => (v.lastSeenAt ?? v.createdAt) >= args.updatedSince!
+      visitorsQuery = visitorsQuery.filter((q2) =>
+        q2.gte(q2.field("lastSeenAt"), args.updatedSince!)
       );
     }
+    if (args.email) {
+      visitorsQuery = visitorsQuery.filter((q2) => q2.eq(q2.field("email"), args.email!));
+    }
+    if (args.externalUserId) {
+      visitorsQuery = visitorsQuery.filter((q2) => q2.eq(q2.field("externalUserId"), args.externalUserId!));
+    }
+    const visitors = await visitorsQuery.order("desc").take(limit + 1);
 
     const hasMore = visitors.length > limit;
     const data = hasMore ? visitors.slice(0, limit) : visitors;
@@ -353,6 +501,7 @@ export const getVisitorForAutomation = internalQuery({
 export const createVisitorForAutomation = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
     email: v.optional(v.string()),
     name: v.optional(v.string()),
     externalUserId: v.optional(v.string()),
@@ -374,6 +523,15 @@ export const createVisitorForAutomation = internalMutation({
       lastSeenAt: now,
     });
 
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.visitor.created",
+      resourceType: "visitor",
+      resourceId: String(id),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
     return { id };
   },
 });
@@ -381,6 +539,7 @@ export const createVisitorForAutomation = internalMutation({
 export const updateVisitorForAutomation = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
     visitorId: v.id("visitors"),
     email: v.optional(v.string()),
     name: v.optional(v.string()),
@@ -401,6 +560,16 @@ export const updateVisitorForAutomation = internalMutation({
     updates.lastSeenAt = Date.now();
 
     await ctx.db.patch(args.visitorId, updates);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.visitor.updated",
+      resourceType: "visitor",
+      resourceId: String(args.visitorId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
     return { id: args.visitorId };
   },
 });
@@ -413,6 +582,8 @@ export const listTicketsForAutomation = internalQuery({
     cursor: v.optional(v.string()),
     limit: v.number(),
     status: v.optional(v.string()),
+    priority: v.optional(v.string()),
+    assigneeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
@@ -439,13 +610,17 @@ export const listTicketsForAutomation = internalQuery({
         .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId));
     }
 
-    let tickets = await query.order("desc").take(limit + 1 + (args.cursor ? 1000 : 0));
-
     if (args.cursor) {
       const cursorTime = Number.parseFloat(args.cursor);
-      tickets = tickets.filter((t) => t._creationTime < cursorTime);
-      tickets = tickets.slice(0, limit + 1);
+      query = query.filter((q2) => q2.lt(q2.field("_creationTime"), cursorTime));
     }
+    if (args.priority) {
+      query = query.filter((q2) => q2.eq(q2.field("priority"), args.priority!));
+    }
+    if (args.assigneeId) {
+      query = query.filter((q2) => q2.eq(q2.field("assigneeId"), args.assigneeId!));
+    }
+    const tickets = await query.order("desc").take(limit + 1);
 
     const hasMore = tickets.length > limit;
     const data = hasMore ? tickets.slice(0, limit) : tickets;
@@ -507,6 +682,7 @@ export const getTicketForAutomation = internalQuery({
 export const createTicketForAutomation = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
     subject: v.string(),
     description: v.optional(v.string()),
     priority: v.optional(v.string()),
@@ -529,6 +705,15 @@ export const createTicketForAutomation = internalMutation({
       updatedAt: now,
     });
 
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.ticket.created",
+      resourceType: "ticket",
+      resourceId: String(id),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
     return { id };
   },
 });
@@ -536,6 +721,7 @@ export const createTicketForAutomation = internalMutation({
 export const updateTicketForAutomation = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
     ticketId: v.id("tickets"),
     status: v.optional(v.string()),
     priority: v.optional(v.string()),
@@ -561,6 +747,16 @@ export const updateTicketForAutomation = internalMutation({
       updates.resolutionSummary = args.resolutionSummary;
 
     await ctx.db.patch(args.ticketId, updates);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.ticket.updated",
+      resourceType: "ticket",
+      resourceId: String(args.ticketId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
     return { id: args.ticketId };
   },
 });

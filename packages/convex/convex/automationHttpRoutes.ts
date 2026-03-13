@@ -12,7 +12,6 @@ const listConversationsRef = fn("automationApiInternals:listConversationsForAuto
 const getConversationRef = fn("automationApiInternals:getConversationForAutomation");
 const updateConversationRef = fn("automationApiInternals:updateConversationForAutomation");
 const listMessagesRef = fn("automationApiInternals:listMessagesForAutomation");
-const sendMessageRef = fn("automationApiInternals:sendMessageForAutomation");
 const listVisitorsRef = fn("automationApiInternals:listVisitorsForAutomation");
 const getVisitorRef = fn("automationApiInternals:getVisitorForAutomation");
 const createVisitorRef = fn("automationApiInternals:createVisitorForAutomation");
@@ -21,12 +20,12 @@ const listTicketsRef = fn("automationApiInternals:listTicketsForAutomation");
 const getTicketRef = fn("automationApiInternals:getTicketForAutomation");
 const createTicketRef = fn("automationApiInternals:createTicketForAutomation");
 const updateTicketRef = fn("automationApiInternals:updateTicketForAutomation");
+const sendMessageIdempotentRef = fn("automationApiInternals:sendMessageIdempotent");
 const claimConversationRef = fn("automationConversationClaims:claimConversation");
 const releaseConversationRef = fn("automationConversationClaims:releaseConversation");
 const escalateConversationRef = fn("automationConversationClaims:escalateConversation");
 const listEventsRef = fn("automationEvents:listEvents");
-const checkIdempotencyRef = fn("lib/idempotency:checkIdempotencyKey");
-const storeIdempotencyRef = fn("lib/idempotency:storeIdempotencyKey");
+const replayDeliveryRef = fn("automationWebhookWorker:replayDelivery");
 
 // Shorthand to cast ctx for withAutomationAuth (httpAction ctx is compatible at runtime).
 function asAuthCtx(ctx: { runQuery: unknown; runMutation: unknown }) {
@@ -95,6 +94,7 @@ export const updateConversation = httpAction(async (ctx, request) => {
     const result = await ctx.runMutation(updateConversationRef, {
       workspaceId: authResult.workspaceId,
       conversationId,
+      credentialId: authResult.credentialId,
       status,
       assignedAgentId,
     });
@@ -138,38 +138,21 @@ export const sendMessage = httpAction(async (ctx, request) => {
     if (!conversationId) return errorResponse("Missing conversationId", 400);
     if (!content) return errorResponse("Missing content", 400);
 
-    // Check idempotency key
     const idempotencyKey = request.headers.get("Idempotency-Key");
-    if (idempotencyKey) {
-      const cached = await ctx.runQuery(checkIdempotencyRef, {
-        workspaceId: authResult.workspaceId,
-        key: idempotencyKey,
-      }) as { responseSnapshot?: unknown } | null;
-      if (cached) {
-        return jsonResponse(cached.responseSnapshot ?? cached);
-      }
-    }
 
-    const result = await ctx.runMutation(sendMessageRef, {
+    const result = await ctx.runMutation(sendMessageIdempotentRef, {
       workspaceId: authResult.workspaceId,
       conversationId,
       credentialId: authResult.credentialId,
       actorName: authResult.actorName,
       content,
-    }) as { id?: string };
+      idempotencyKey: idempotencyKey ?? undefined,
+    }) as { cached: boolean; result: unknown };
 
-    if (idempotencyKey) {
-      await ctx.runMutation(storeIdempotencyRef, {
-        workspaceId: authResult.workspaceId,
-        key: idempotencyKey,
-        credentialId: authResult.credentialId,
-        resourceType: "message",
-        resourceId: result.id,
-        responseSnapshot: result,
-      });
+    if (result.cached) {
+      return jsonResponse(result.result, 200);
     }
-
-    return jsonResponse(result, 201);
+    return jsonResponse(result.result, 201);
   } catch (error) {
     return errorResponse(String(error), 500);
   }
@@ -246,12 +229,16 @@ export const listVisitors = httpAction(async (ctx, request) => {
   try {
     const url = new URL(request.url);
     const { cursor, limit, updatedSince } = parsePaginationParams(url);
+    const email = url.searchParams.get("email");
+    const externalUserId = url.searchParams.get("externalUserId");
 
     const result = await ctx.runQuery(listVisitorsRef, {
       workspaceId: authResult.workspaceId,
       cursor: cursor ?? undefined,
       limit,
       updatedSince: updatedSince ?? undefined,
+      email: email ?? undefined,
+      externalUserId: externalUserId ?? undefined,
     });
     return jsonResponse(result);
   } catch (error) {
@@ -289,6 +276,7 @@ export const createVisitor = httpAction(async (ctx, request) => {
     const body = await request.json();
     const result = await ctx.runMutation(createVisitorRef, {
       workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
       email: body.email,
       name: body.name,
       externalUserId: body.externalUserId,
@@ -312,6 +300,7 @@ export const updateVisitor = httpAction(async (ctx, request) => {
 
     const result = await ctx.runMutation(updateVisitorRef, {
       workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
       visitorId,
       email,
       name,
@@ -333,12 +322,16 @@ export const listTickets = httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const { cursor, limit } = parsePaginationParams(url);
     const status = url.searchParams.get("status");
+    const priority = url.searchParams.get("priority");
+    const assignee = url.searchParams.get("assignee");
 
     const result = await ctx.runQuery(listTicketsRef, {
       workspaceId: authResult.workspaceId,
       cursor: cursor ?? undefined,
       limit,
       status: status ?? undefined,
+      priority: priority ?? undefined,
+      assigneeId: assignee ?? undefined,
     });
     return jsonResponse(result);
   } catch (error) {
@@ -378,6 +371,7 @@ export const createTicket = httpAction(async (ctx, request) => {
 
     const result = await ctx.runMutation(createTicketRef, {
       workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
       subject: body.subject,
       description: body.description,
       priority: body.priority,
@@ -403,6 +397,7 @@ export const updateTicket = httpAction(async (ctx, request) => {
 
     const result = await ctx.runMutation(updateTicketRef, {
       workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
       ticketId,
       status,
       priority,
@@ -410,6 +405,26 @@ export const updateTicket = httpAction(async (ctx, request) => {
       resolutionSummary,
     });
     return jsonResponse(result);
+  } catch (error) {
+    return errorResponse(String(error), 500);
+  }
+});
+
+// ── Webhooks: replay ──────────────────────────────────────────────
+export const replayWebhookDelivery = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "webhooks.manage");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    const { deliveryId } = body;
+    if (!deliveryId) return errorResponse("Missing deliveryId", 400);
+
+    const result = await ctx.runMutation(replayDeliveryRef, {
+      deliveryId,
+      workspaceId: authResult.workspaceId,
+    });
+    return jsonResponse(result, 201);
   } catch (error) {
     return errorResponse(String(error), 500);
   }

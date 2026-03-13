@@ -16,34 +16,32 @@ function generateSigningSecret(): string {
   return result;
 }
 
-async function sha256Hex(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 export const createSubscription = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     url: v.string(),
     eventTypes: v.optional(v.array(v.string())),
+    resourceTypes: v.optional(v.array(v.string())),
+    channels: v.optional(v.array(v.string())),
+    aiWorkflowStates: v.optional(v.array(v.string())),
   },
   permission: "settings.integrations",
   handler: async (ctx, args) => {
+    // The signing secret is stored in plaintext in the DB (server-side only).
+    // It's returned once to the admin on creation, never retrievable again.
     const signingSecret = generateSigningSecret();
-    const signingSecretHash = await sha256Hex(signingSecret);
     const signingSecretPrefix = signingSecret.slice(0, 14); // "whsec_" + 8 chars
 
     const now = Date.now();
     const id = await ctx.db.insert("automationWebhookSubscriptions", {
       workspaceId: args.workspaceId,
       url: args.url,
-      signingSecretHash,
+      signingSecret,
       signingSecretPrefix,
       eventTypes: args.eventTypes,
+      resourceTypes: args.resourceTypes,
+      channels: args.channels,
+      aiWorkflowStates: args.aiWorkflowStates,
       status: "active",
       createdBy: ctx.user._id,
       createdAt: now,
@@ -69,6 +67,9 @@ export const listSubscriptions = authQuery({
       url: s.url,
       signingSecretPrefix: s.signingSecretPrefix,
       eventTypes: s.eventTypes,
+      resourceTypes: s.resourceTypes,
+      channels: s.channels,
+      aiWorkflowStates: s.aiWorkflowStates,
       status: s.status,
       createdAt: s.createdAt,
     }));
@@ -81,6 +82,9 @@ export const updateSubscription = authMutation({
     subscriptionId: v.id("automationWebhookSubscriptions"),
     url: v.optional(v.string()),
     eventTypes: v.optional(v.array(v.string())),
+    resourceTypes: v.optional(v.array(v.string())),
+    channels: v.optional(v.array(v.string())),
+    aiWorkflowStates: v.optional(v.array(v.string())),
     status: v.optional(
       v.union(v.literal("active"), v.literal("paused"), v.literal("disabled"))
     ),
@@ -95,6 +99,9 @@ export const updateSubscription = authMutation({
     const updates: Record<string, unknown> = {};
     if (args.url !== undefined) updates.url = args.url;
     if (args.eventTypes !== undefined) updates.eventTypes = args.eventTypes;
+    if (args.resourceTypes !== undefined) updates.resourceTypes = args.resourceTypes;
+    if (args.channels !== undefined) updates.channels = args.channels;
+    if (args.aiWorkflowStates !== undefined) updates.aiWorkflowStates = args.aiWorkflowStates;
     if (args.status !== undefined) updates.status = args.status;
 
     await ctx.db.patch(args.subscriptionId, updates);

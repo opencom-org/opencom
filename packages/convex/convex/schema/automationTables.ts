@@ -12,6 +12,8 @@ export const automationTables = {
     expiresAt: v.optional(v.number()),
     actorName: v.string(),
     lastUsedAt: v.optional(v.number()),
+    rateLimitCount: v.optional(v.number()),
+    rateLimitWindowStart: v.optional(v.number()),
     createdBy: v.id("users"),
     createdAt: v.number(),
   })
@@ -33,9 +35,15 @@ export const automationTables = {
   automationWebhookSubscriptions: defineTable({
     workspaceId: v.id("workspaces"),
     url: v.string(),
-    signingSecretHash: v.string(),
+    // Stored in plaintext. Convex DB is server-side trusted infrastructure.
+    // The secret is returned to the admin once on creation, then only used
+    // server-side for HMAC signing. Same trust model as Stripe/GitHub webhooks.
+    signingSecret: v.string(),
     signingSecretPrefix: v.string(),
     eventTypes: v.optional(v.array(v.string())),
+    resourceTypes: v.optional(v.array(v.string())),
+    channels: v.optional(v.array(v.string())),
+    aiWorkflowStates: v.optional(v.array(v.string())),
     status: v.union(v.literal("active"), v.literal("paused"), v.literal("disabled")),
     createdBy: v.id("users"),
     createdAt: v.number(),
@@ -60,6 +68,7 @@ export const automationTables = {
     createdAt: v.number(),
   })
     .index("by_subscription", ["subscriptionId"])
+    .index("by_subscription_event", ["subscriptionId", "eventId"])
     .index("by_event", ["eventId"])
     .index("by_status", ["status"])
     .index("by_next_retry", ["status", "nextRetryAt"]),

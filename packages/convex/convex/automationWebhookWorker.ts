@@ -1,12 +1,12 @@
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
-import { internalAction, internalMutation } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 
 // Self-references via makeFunctionReference
 const deliverWebhookRef = makeFunctionReference<"action">(
   "automationWebhookWorker:deliverWebhook"
 );
-const getDeliveryDataRef = makeFunctionReference<"mutation">(
+const getDeliveryDataRef = makeFunctionReference<"query">(
   "automationWebhookWorker:getDeliveryData"
 );
 const updateDeliveryStatusRef = makeFunctionReference<"mutation">(
@@ -49,7 +49,7 @@ export const deliverWebhook = internalAction({
   },
   handler: async (ctx, args) => {
     // Load delivery, subscription, and event data
-    const deliveryData = (await ctx.runMutation(getDeliveryDataRef, {
+    const deliveryData = (await ctx.runQuery(getDeliveryDataRef, {
       deliveryId: args.deliveryId,
     })) as {
       delivery: {
@@ -61,7 +61,7 @@ export const deliverWebhook = internalAction({
       };
       subscription: {
         url: string;
-        signingSecretHash: string;
+        signingSecret: string;
       };
       event: {
         eventType: string;
@@ -89,10 +89,7 @@ export const deliverWebhook = internalAction({
     const timestamp = Math.floor(Date.now() / 1000);
     const signedPayload = `${timestamp}.${body}`;
 
-    // Sign with the stored signing secret hash as HMAC key.
-    // The webhook consumer stores the raw signing secret and can verify
-    // by hashing it to get the same key.
-    const signature = await hmacSign(subscription.signingSecretHash, signedPayload);
+    const signature = await hmacSign(subscription.signingSecret, signedPayload);
 
     const runMutation = ctx.runMutation as unknown as RunMutation;
 
@@ -162,7 +159,7 @@ async function handleDeliveryFailure(
   }
 }
 
-export const getDeliveryData = internalMutation({
+export const getDeliveryData = internalQuery({
   args: {
     deliveryId: v.id("automationWebhookDeliveries"),
   },
@@ -207,20 +204,29 @@ export const scheduleRetry = internalMutation({
     const delivery = await ctx.db.get(args.deliveryId);
     if (!delivery) return;
 
-    const nextRetryAt = Date.now() + args.retryDelayMs;
-
+    // Mark current delivery as failed
     await ctx.db.patch(args.deliveryId, {
-      status: "retrying" as const,
+      status: "failed" as const,
       httpStatus: args.httpStatus,
       error: args.error,
-      nextRetryAt,
+    });
+
+    // Create new delivery row for the retry attempt
+    const now = Date.now();
+    const newDeliveryId = await ctx.db.insert("automationWebhookDeliveries", {
+      workspaceId: delivery.workspaceId,
+      subscriptionId: delivery.subscriptionId,
+      eventId: delivery.eventId,
       attemptNumber: delivery.attemptNumber + 1,
+      status: "pending",
+      nextRetryAt: now + args.retryDelayMs,
+      createdAt: now,
     });
 
     await ctx.scheduler.runAfter(
       args.retryDelayMs,
       deliverWebhookRef as any,
-      { deliveryId: args.deliveryId }
+      { deliveryId: newDeliveryId }
     );
   },
 });
@@ -228,23 +234,31 @@ export const scheduleRetry = internalMutation({
 export const replayDelivery = internalMutation({
   args: {
     deliveryId: v.id("automationWebhookDeliveries"),
+    workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
     const delivery = await ctx.db.get(args.deliveryId);
     if (!delivery) throw new Error("Delivery not found");
 
-    await ctx.db.patch(args.deliveryId, {
-      status: "pending" as const,
+    if (delivery.workspaceId !== args.workspaceId) {
+      throw new Error("Delivery does not belong to this workspace");
+    }
+
+    // Create a new delivery row for the replay
+    const now = Date.now();
+    const newDeliveryId = await ctx.db.insert("automationWebhookDeliveries", {
+      workspaceId: delivery.workspaceId,
+      subscriptionId: delivery.subscriptionId,
+      eventId: delivery.eventId,
       attemptNumber: 1,
-      error: undefined,
-      httpStatus: undefined,
-      nextRetryAt: undefined,
+      status: "pending",
+      createdAt: now,
     });
 
     await ctx.scheduler.runAfter(0, deliverWebhookRef as any, {
-      deliveryId: args.deliveryId,
+      deliveryId: newDeliveryId,
     });
 
-    return { success: true };
+    return { success: true, deliveryId: newDeliveryId };
   },
 });

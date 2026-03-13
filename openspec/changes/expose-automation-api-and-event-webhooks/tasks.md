@@ -1,16 +1,16 @@
 ## 1. Automation Platform Foundations
 
 - [x] 1.1 Add persistence and shared services for automation credentials, automation actors, conversation claims, automation events, webhook subscriptions, and delivery attempts.
-- [ ] 1.2 Implement HTTP auth, scope enforcement, secret hashing, one-time secret reveal, rate limiting, and idempotency middleware for automation routes.
+- [x] 1.2 Implement HTTP auth, scope enforcement, secret hashing, one-time secret reveal, rate limiting, and idempotency middleware for automation routes.
 - [ ] 1.3 Define the v1 resource and event coverage matrix used by implementation, docs, and rollout gating.
 
 ## 2. Resource API Surface
 
 - [x] 2.1 Implement versioned HTTP endpoints for v1 core resources: conversations, messages, visitors, and tickets.
 - [ ] 2.1b Extend API to remaining resources: ticket comments, articles, collections, outbound messages, and custom events.
-- [ ] 2.2 Add cursor pagination, updated-since sync, and server-side filters for v1 resources.
+- [x] 2.2 Add cursor pagination, updated-since sync, and server-side filters for v1 resources.
 - [ ] 2.2b Add external reference support and custom-attribute-aware lookups.
-- [ ] 2.3 Implement idempotent mutation handling for message send path via Idempotency-Key header.
+- [x] 2.3 Implement idempotent mutation handling for message send path via Idempotency-Key header.
 - [ ] 2.3b Extend idempotency to remaining mutation hot paths (create, update, activate, delete).
 
 ## 3. Event Feed And Webhook Delivery
@@ -18,12 +18,12 @@
 - [x] 3.1 Implement a canonical automation event ledger with emitEvent internal mutation.
 - [ ] 3.1b Wire emitEvent calls into existing domain files (conversations, messages, tickets, visitors) so events are actually emitted on resource changes.
 - [x] 3.2 Expose a polling endpoint that reads the canonical event stream.
-- [ ] 3.3 Implement webhook subscription management, HMAC signatures, retry/backoff scheduling, delivery attempt storage, and manual replay.
+- [x] 3.3 Implement webhook subscription management, HMAC signatures, retry/backoff scheduling, delivery attempt storage, and manual replay.
 
 ## 4. Conversation Coordination
 
-- [ ] 4.1 Expose automation-relevant conversation metadata including AI workflow state, handoff reason, claim state, and automation eligibility.
-- [ ] 4.2 Implement claim, release, and escalate flows for automation-managed conversations with bounded lease semantics.
+- [x] 4.1 Expose automation-relevant conversation metadata including AI workflow state, handoff reason, claim state, and automation eligibility.
+- [x] 4.2 Implement claim, release, and escalate flows for automation-managed conversations with bounded lease semantics.
 - [x] 4.3 Enforce conflict protection: claimed conversations require active claim for automation message send.
 - [ ] 4.3b Modify AI agent response path to check for active automation claim before posting AI response.
 

@@ -138,6 +138,9 @@ export const lookupCredential = internalQuery({
   },
 });
 
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 60; // 60 requests per minute
+
 // Internal mutation to check rate limit and update lastUsedAt.
 export const checkRateLimit = internalMutation({
   args: {
@@ -145,11 +148,34 @@ export const checkRateLimit = internalMutation({
     workspaceId: v.id("workspaces"),
   },
   handler: async (ctx, args) => {
-    // Update lastUsedAt
-    await ctx.db.patch(args.credentialId, { lastUsedAt: Date.now() });
+    const now = Date.now();
+    const credential = await ctx.db.get(args.credentialId);
+    if (!credential) {
+      return { allowed: false, retryAfter: 60 };
+    }
 
-    // For v1, simple pass-through. Rate limiting can be enhanced later
-    // with a dedicated counter table if needed.
+    const windowStart = credential.rateLimitWindowStart ?? 0;
+    const count = credential.rateLimitCount ?? 0;
+
+    if (now > windowStart + RATE_LIMIT_WINDOW_MS) {
+      // New window
+      await ctx.db.patch(args.credentialId, {
+        lastUsedAt: now,
+        rateLimitCount: 1,
+        rateLimitWindowStart: now,
+      });
+      return { allowed: true };
+    }
+
+    if (count >= RATE_LIMIT_MAX_REQUESTS) {
+      const retryAfter = Math.ceil((windowStart + RATE_LIMIT_WINDOW_MS - now) / 1000);
+      return { allowed: false, retryAfter };
+    }
+
+    await ctx.db.patch(args.credentialId, {
+      lastUsedAt: now,
+      rateLimitCount: count + 1,
+    });
     return { allowed: true };
   },
 });
