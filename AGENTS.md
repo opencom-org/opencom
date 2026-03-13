@@ -5,6 +5,7 @@
 - Use **PNPM** commands in this repo (workspace uses `pnpm-workspace.yaml`).
 - Always run new/updated tests after creating or changing them.
 - Prefer focused verification first (targeted package/spec), then broader checks when needed.
+- At the end of each proposal when ready for a PR, run `pnpm ci:check` to ensure all checks pass.
 
 ## Quick Repo Orientation
 

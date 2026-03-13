@@ -9,6 +9,7 @@ const TARGET_FILES = [
   "../convex/emailChannel.ts",
   "../convex/events.ts",
   "../convex/http.ts",
+  "../convex/knowledge.ts",
   "../convex/push.ts",
   "../convex/pushCampaigns.ts",
   "../convex/series/runtime.ts",
@@ -179,6 +180,18 @@ describe("runtime type hardening guards", () => {
     expect(suggestionsSource).toContain("GET_EMBEDDING_BY_ID_REF");
     expect(suggestionsSource).toContain("SEARCH_SIMILAR_INTERNAL_REF");
     expect(suggestionsSource).toContain("VALIDATE_SESSION_TOKEN_REF");
+  });
+
+  it("uses fixed typed refs for knowledge vector search", () => {
+    const knowledgeSource = readFileSync(
+      new URL("../convex/knowledge.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(knowledgeSource).not.toContain("function getQueryRef(name: string)");
+    expect(knowledgeSource).toContain("GET_EMBEDDING_BY_ID_REF");
+    expect(knowledgeSource).toContain("GET_CONTENT_BY_ID_REF");
+    expect(knowledgeSource).toContain("getShallowRunQuery");
   });
 
   it("uses fixed typed refs for support attachment cleanup scheduling", () => {
