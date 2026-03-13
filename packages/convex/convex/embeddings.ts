@@ -22,52 +22,34 @@ type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = 
   Return
 >;
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
-type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"action", "internal", Args, Return>;
-
-function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): InternalQueryRef<Args, Return> {
-  return makeFunctionReference<"query", Args, Return>(name) as unknown as InternalQueryRef<Args, Return>;
-}
-
-function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
-  name: string
-): InternalMutationRef<Args, Return> {
-  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
-    Args,
-    Return
-  >;
-}
-
-function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): InternalActionRef<Args, Return> {
-  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalActionRef<
-    Args,
-    Return
-  >;
-}
+type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "action",
+  "internal",
+  Args,
+  Return
+>;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runQuery as <Args extends Record<string, unknown>, Return>(
     queryRef: InternalQueryRef<Args, Return>,
     queryArgs: Args
   ) => Promise<Return>;
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return>(
     mutationRef: InternalMutationRef<Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;
 }
 
 function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runAction as <Args extends Record<string, unknown>, Return>(
     actionRef: InternalActionRef<Args, Return>,
     actionArgs: Args
   ) => Promise<Return>;
@@ -146,37 +128,68 @@ type RemoveEmbeddingsByIdsArgs = {
   ids: Id<"contentEmbeddings">[];
 };
 
-const LIST_BY_CONTENT_REF = makeInternalQueryRef<GetByContentArgs, Doc<"contentEmbeddings">[]>(
-  "embeddings:listByContent"
-);
+const LIST_BY_CONTENT_REF = makeFunctionReference<
+  "query",
+  GetByContentArgs,
+  Doc<"contentEmbeddings">[]
+>("embeddings:listByContent") as unknown as InternalQueryRef<
+  GetByContentArgs,
+  Doc<"contentEmbeddings">[]
+>;
 
-const INSERT_EMBEDDING_REF = makeInternalMutationRef<InsertEmbeddingArgs, Id<"contentEmbeddings">>(
-  "embeddings:insert"
-);
+const INSERT_EMBEDDING_REF = makeFunctionReference<
+  "mutation",
+  InsertEmbeddingArgs,
+  Id<"contentEmbeddings">
+>("embeddings:insert") as unknown as InternalMutationRef<
+  InsertEmbeddingArgs,
+  Id<"contentEmbeddings">
+>;
 
-const GENERATE_INTERNAL_REF = makeInternalActionRef<GenerateEmbeddingArgs, GenerateEmbeddingResult>(
-  "embeddings:generateInternal"
-);
+const GENERATE_INTERNAL_REF = makeFunctionReference<
+  "action",
+  GenerateEmbeddingArgs,
+  GenerateEmbeddingResult
+>("embeddings:generateInternal") as unknown as InternalActionRef<
+  GenerateEmbeddingArgs,
+  GenerateEmbeddingResult
+>;
 
-const REQUIRE_PERMISSION_FOR_ACTION_REF = makeInternalQueryRef<PermissionForActionArgs, unknown>(
-  "permissions:requirePermissionForAction"
-);
+const REQUIRE_PERMISSION_FOR_ACTION_REF = makeFunctionReference<
+  "query",
+  PermissionForActionArgs,
+  unknown
+>("permissions:requirePermissionForAction") as unknown as InternalQueryRef<
+  PermissionForActionArgs,
+  unknown
+>;
 
-const LIST_ARTICLES_REF = makeInternalQueryRef<WorkspaceArgs, ListedArticle[]>("embeddings:listArticles");
+const LIST_ARTICLES_REF = makeFunctionReference<"query", WorkspaceArgs, ListedArticle[]>(
+  "embeddings:listArticles"
+) as unknown as InternalQueryRef<WorkspaceArgs, ListedArticle[]>;
 
-const LIST_INTERNAL_ARTICLES_REF = makeInternalQueryRef<WorkspaceArgs, ListedArticle[]>(
+const LIST_INTERNAL_ARTICLES_REF = makeFunctionReference<"query", WorkspaceArgs, ListedArticle[]>(
   "embeddings:listInternalArticles"
-);
+) as unknown as InternalQueryRef<WorkspaceArgs, ListedArticle[]>;
 
-const LIST_SNIPPETS_REF = makeInternalQueryRef<WorkspaceArgs, ListedSnippet[]>("embeddings:listSnippets");
+const LIST_SNIPPETS_REF = makeFunctionReference<"query", WorkspaceArgs, ListedSnippet[]>(
+  "embeddings:listSnippets"
+) as unknown as InternalQueryRef<WorkspaceArgs, ListedSnippet[]>;
 
-const REMOVE_EMBEDDINGS_BY_IDS_REF = makeInternalMutationRef<RemoveEmbeddingsByIdsArgs>(
-  "embeddings:removeByIds"
-);
+const REMOVE_EMBEDDINGS_BY_IDS_REF = makeFunctionReference<
+  "mutation",
+  RemoveEmbeddingsByIdsArgs,
+  unknown
+>("embeddings:removeByIds") as unknown as InternalMutationRef<RemoveEmbeddingsByIdsArgs>;
 
-const GENERATE_BATCH_INTERNAL_REF = makeInternalActionRef<GenerateBatchArgs, GenerateBatchResult>(
-  "embeddings:generateBatchInternal"
-);
+const GENERATE_BATCH_INTERNAL_REF = makeFunctionReference<
+  "action",
+  GenerateBatchArgs,
+  GenerateBatchResult
+>("embeddings:generateBatchInternal") as unknown as InternalActionRef<
+  GenerateBatchArgs,
+  GenerateBatchResult
+>;
 
 async function createTextHash(text: string): Promise<string> {
   const data = new TextEncoder().encode(text);
@@ -213,8 +226,14 @@ function splitContentIntoChunks(
       const minBreakIndex = Math.floor(maxChars * 0.6);
       const paragraphBreak = window.lastIndexOf("\n\n");
       const lineBreak = window.lastIndexOf("\n");
-      const sentenceBreak = Math.max(window.lastIndexOf(". "), window.lastIndexOf("? "), window.lastIndexOf("! "));
-      const bestBreak = [paragraphBreak, lineBreak, sentenceBreak].find((index) => index >= minBreakIndex);
+      const sentenceBreak = Math.max(
+        window.lastIndexOf(". "),
+        window.lastIndexOf("? "),
+        window.lastIndexOf("! ")
+      );
+      const bestBreak = [paragraphBreak, lineBreak, sentenceBreak].find(
+        (index) => index >= minBreakIndex
+      );
       if (bestBreak !== undefined) {
         end = start + bestBreak + 1;
       }
@@ -393,15 +412,18 @@ export const generateBatch = authAction({
     }
 
     const runAction = getShallowRunAction(ctx);
-    const results = await runWithConcurrency(args.items, EMBEDDING_GENERATE_CONCURRENCY, async (item) =>
-      runAction(GENERATE_INTERNAL_REF, {
-        workspaceId: item.workspaceId,
-        contentType: item.contentType,
-        contentId: item.contentId,
-        title: item.title,
-        content: item.content,
-        model: args.model,
-      })
+    const results = await runWithConcurrency(
+      args.items,
+      EMBEDDING_GENERATE_CONCURRENCY,
+      async (item) =>
+        runAction(GENERATE_INTERNAL_REF, {
+          workspaceId: item.workspaceId,
+          contentType: item.contentType,
+          contentId: item.contentId,
+          title: item.title,
+          content: item.content,
+          model: args.model,
+        })
     );
 
     const skipped = results.filter((result) => result.skipped).length;
@@ -535,15 +557,18 @@ export const generateBatchInternal = internalAction({
     }
 
     const runAction = getShallowRunAction(ctx);
-    const results = await runWithConcurrency(args.items, EMBEDDING_GENERATE_CONCURRENCY, async (item) =>
-      runAction(GENERATE_INTERNAL_REF, {
-        workspaceId: item.workspaceId,
-        contentType: item.contentType,
-        contentId: item.contentId,
-        title: item.title,
-        content: item.content,
-        model: args.model,
-      })
+    const results = await runWithConcurrency(
+      args.items,
+      EMBEDDING_GENERATE_CONCURRENCY,
+      async (item) =>
+        runAction(GENERATE_INTERNAL_REF, {
+          workspaceId: item.workspaceId,
+          contentType: item.contentType,
+          contentId: item.contentId,
+          title: item.title,
+          content: item.content,
+          model: args.model,
+        })
     );
 
     const skipped = results.filter((result) => result.skipped).length;

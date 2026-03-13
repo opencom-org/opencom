@@ -13,6 +13,37 @@
 - Backend: `packages/convex`
 - OpenSpec source of truth: `openspec/changes/<change-name>/`
 
+## General Workflow Guardrails
+
+- Start every non-trivial task by grounding in current repo state before changing files:
+  1. identify the active scope
+  2. read the relevant files/specs/tests
+  3. verify whether the work is already partly done
+  4. choose a narrow verification plan
+- If working from an existing OpenSpec change, always read:
+  - `openspec status --change "<change-name>" --json`
+  - `openspec instructions apply --change "<change-name>" --json`
+  - the current `proposal.md`, `design.md`, `specs/**/*.md`, and `tasks.md`
+- Never assume unchecked boxes in `tasks.md` mean the code is still missing. Verify the current implementation first, then update artifacts or tasks to match reality.
+- Before creating a new OpenSpec change, quickly check for overlapping active changes or existing specs so you do not create duplicates or split ownership accidentally.
+- For multi-step work, keep an explicit plan/todo and update it as tasks complete. Prefer one active task at a time.
+- When changing course mid-task, record the new scope and the reason in the active change artifacts if they are affected.
+- Before marking work complete, verify both code and artifacts:
+  - code/tests/typechecks reflect the final state
+  - `tasks.md` checkboxes match what is actually done
+  - any follow-up work is written down explicitly instead of left implicit
+
+## Existing Proposal Discipline
+
+- If you did not create the current proposal/change, treat the artifacts as hypotheses until verified against the codebase.
+- Separate findings into three buckets before editing artifacts:
+  - already implemented
+  - still unfinished
+  - intentionally out of scope or accepted exception
+- Only put unfinished work into active proposal/spec/task artifacts.
+- If code and artifacts disagree, prefer fixing the artifact first unless the user explicitly asked for implementation.
+- When leaving partial progress, record exact remaining file clusters, blockers, and verification still needed so a later pass can continue without re-auditing the whole repo.
+
 ## High-Value Commands (copy/paste)
 
 ### Typecheck
@@ -47,6 +78,37 @@
   - `apps/web/src/app/typeHardeningGuard.test.ts`
   - `apps/widget/src/test/refHardeningGuard.test.ts`
   - `packages/react-native-sdk/tests/hookBoundaryGuard.test.ts`
+
+## Convex Hardening Audit Triage
+
+- Before treating an audit item as open work, verify whether it is already implemented and only the guard/proposal text is stale.
+- Default classification for current repo state:
+  - `packages/sdk-core/src/api/*.ts` manual fixed refs are generally **approved TS2589 hotspots**, not automatic cleanup targets.
+  - `packages/sdk-core/src/api/aiAgent.ts` already routes `getRelevantKnowledge` through `client.action(...)`; do not reopen the old query-path migration unless you find a current regression.
+  - `packages/convex/convex/embeddings.ts` batching/backfill concurrency work is already in place; do not create new perf tasks for `generateBatch`, `backfillExisting`, or `generateBatchInternal` unless the current code regressed.
+  - `packages/convex/convex/testAdmin.ts` is an explicit dynamic exception because it intentionally dispatches caller-selected internal test mutations.
+- Treat these patterns differently:
+  - **Remaining cleanup target:** generic `name: string` ref helpers such as `makeInternalQueryRef(name)` / `getQueryRef(name)` in covered runtime files.
+  - **Usually acceptable hotspot:** fixed module-scope `makeFunctionReference("module:function")` constants with a narrow comment or guard-railed `TS2589` justification.
+  - **Accepted exception:** intentionally dynamic dispatch that is security-constrained and documented (currently `testAdmin.ts`).
+- When cleaning backend Convex boundaries, prefer this order:
+  1. Generated `api` / `internal` refs
+  2. Named shallow runner helper at the hot spot
+  3. Fixed `makeFunctionReference("module:function")` constant
+  4. Only if intentionally dynamic and documented, a narrow exception
+- Do not add new generic helper factories to shared ref modules. If a module exists to share refs, export fixed named refs from it.
+
+## Agent Handoff Notes
+
+- When converting a repo audit into OpenSpec artifacts, put **only unfinished work** into `proposal.md`, spec deltas, and `tasks.md`.
+- Explicitly call out already-finished adjacent work so a follow-up agent does not reopen it by mistake.
+- For the current Convex hardening area, the default out-of-scope items are:
+  - sdk-core `getRelevantKnowledge` action routing
+  - embedding batching/backfill concurrency in `packages/convex/convex/embeddings.ts`
+- If you change the covered hardening inventory or accepted exceptions, update the matching guard in the same change. Common files:
+  - `packages/convex/tests/runtimeTypeHardeningGuard.test.ts`
+  - `packages/sdk-core/tests/refHardeningGuard.test.ts`
+- When leaving work half-finished, record the remaining file clusters explicitly in `openspec/changes/<change>/tasks.md` so the next agent can resume without re-auditing the repo.
 
 ### Tests
 

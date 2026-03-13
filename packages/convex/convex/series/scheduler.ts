@@ -11,17 +11,10 @@ export type SeriesEvaluateEntryResult = {
   progressId?: Id<"seriesProgress">;
 };
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
-
-function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
-  name: string
-): InternalMutationRef<Args, Return> {
-  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
-    Args,
-    Return
-  >;
-}
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type SeriesEvaluateEnrollmentArgs = {
   workspaceId: Id<"workspaces">;
@@ -51,25 +44,45 @@ type SeriesProcessWaitingProgressArgs = {
   waitingLimitPerSeries?: number;
 };
 
-const EVALUATE_ENROLLMENT_FOR_VISITOR_REF =
-  makeInternalMutationRef<SeriesEvaluateEnrollmentArgs>("series:evaluateEnrollmentForVisitor");
+const EVALUATE_ENROLLMENT_FOR_VISITOR_REF = makeFunctionReference<
+  "mutation",
+  SeriesEvaluateEnrollmentArgs,
+  unknown
+>(
+  "series:evaluateEnrollmentForVisitor"
+) as unknown as InternalMutationRef<SeriesEvaluateEnrollmentArgs>;
 
-const RESUME_WAITING_FOR_EVENT_REF = makeInternalMutationRef<SeriesResumeWaitingForEventArgs>(
+const RESUME_WAITING_FOR_EVENT_REF = makeFunctionReference<
+  "mutation",
+  SeriesResumeWaitingForEventArgs,
+  unknown
+>(
   "series:resumeWaitingForEvent"
-);
+) as unknown as InternalMutationRef<SeriesResumeWaitingForEventArgs>;
 
-const PROCESS_PROGRESS_REF = makeInternalMutationRef<SeriesProcessProgressArgs>("series:processProgress");
+const PROCESS_PROGRESS_REF = makeFunctionReference<"mutation", SeriesProcessProgressArgs, unknown>(
+  "series:processProgress"
+) as unknown as InternalMutationRef<SeriesProcessProgressArgs>;
 
-const EVALUATE_ENTRY_REF = makeInternalMutationRef<SeriesEvaluateEntryArgs, SeriesEvaluateEntryResult>(
-  "series:evaluateEntry"
-);
+const EVALUATE_ENTRY_REF = makeFunctionReference<
+  "mutation",
+  SeriesEvaluateEntryArgs,
+  SeriesEvaluateEntryResult
+>("series:evaluateEntry") as unknown as InternalMutationRef<
+  SeriesEvaluateEntryArgs,
+  SeriesEvaluateEntryResult
+>;
 
-const PROCESS_WAITING_PROGRESS_REF = makeInternalMutationRef<SeriesProcessWaitingProgressArgs>(
+const PROCESS_WAITING_PROGRESS_REF = makeFunctionReference<
+  "mutation",
+  SeriesProcessWaitingProgressArgs,
+  unknown
+>(
   "series:processWaitingProgress"
-);
+) as unknown as InternalMutationRef<SeriesProcessWaitingProgressArgs>;
 
 function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.scheduler.runAfter as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
     functionRef: InternalMutationRef<Args, Return>,
     runArgs: Args
@@ -77,7 +90,7 @@ function getShallowRunAfter(ctx: MutationCtx) {
 }
 
 function getShallowRunMutation(ctx: MutationCtx) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return = unknown>(
     mutationRef: InternalMutationRef<Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;

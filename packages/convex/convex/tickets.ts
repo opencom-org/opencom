@@ -58,33 +58,43 @@ type TicketNotificationRef<Args extends Record<string, unknown>> = FunctionRefer
   unknown
 >;
 
-function makeTicketNotificationRef<Args extends Record<string, unknown>>(
-  name: string
-): TicketNotificationRef<Args> {
-  return makeFunctionReference<"mutation", Args, unknown>(name) as TicketNotificationRef<Args>;
-}
-
-const NOTIFY_TICKET_CREATED_REF = makeTicketNotificationRef<TicketCreatedNotificationArgs>(
-  "notifications:notifyTicketCreated"
-);
-const NOTIFY_TICKET_STATUS_CHANGED_REF = makeTicketNotificationRef<TicketStatusChangedNotificationArgs>(
+const NOTIFY_TICKET_CREATED_REF = makeFunctionReference<
+  "mutation",
+  TicketCreatedNotificationArgs,
+  unknown
+>("notifications:notifyTicketCreated") as TicketNotificationRef<TicketCreatedNotificationArgs>;
+const NOTIFY_TICKET_STATUS_CHANGED_REF = makeFunctionReference<
+  "mutation",
+  TicketStatusChangedNotificationArgs,
+  unknown
+>(
   "notifications:notifyTicketStatusChanged"
-);
-const NOTIFY_TICKET_ASSIGNED_REF = makeTicketNotificationRef<TicketAssignedNotificationArgs>(
-  "notifications:notifyTicketAssigned"
-);
-const NOTIFY_TICKET_COMMENT_REF = makeTicketNotificationRef<TicketCommentNotificationArgs>(
-  "notifications:notifyTicketComment"
-);
-const NOTIFY_TICKET_CUSTOMER_REPLY_REF = makeTicketNotificationRef<TicketCustomerReplyNotificationArgs>(
+) as TicketNotificationRef<TicketStatusChangedNotificationArgs>;
+const NOTIFY_TICKET_ASSIGNED_REF = makeFunctionReference<
+  "mutation",
+  TicketAssignedNotificationArgs,
+  unknown
+>("notifications:notifyTicketAssigned") as TicketNotificationRef<TicketAssignedNotificationArgs>;
+const NOTIFY_TICKET_COMMENT_REF = makeFunctionReference<
+  "mutation",
+  TicketCommentNotificationArgs,
+  unknown
+>("notifications:notifyTicketComment") as TicketNotificationRef<TicketCommentNotificationArgs>;
+const NOTIFY_TICKET_CUSTOMER_REPLY_REF = makeFunctionReference<
+  "mutation",
+  TicketCustomerReplyNotificationArgs,
+  unknown
+>(
   "notifications:notifyTicketCustomerReply"
-);
-const NOTIFY_TICKET_RESOLVED_REF = makeTicketNotificationRef<TicketResolvedNotificationArgs>(
-  "notifications:notifyTicketResolved"
-);
+) as TicketNotificationRef<TicketCustomerReplyNotificationArgs>;
+const NOTIFY_TICKET_RESOLVED_REF = makeFunctionReference<
+  "mutation",
+  TicketResolvedNotificationArgs,
+  unknown
+>("notifications:notifyTicketResolved") as TicketNotificationRef<TicketResolvedNotificationArgs>;
 
 function getShallowRunAfter(ctx: Pick<MutationCtx, "scheduler">) {
-  return ctx.scheduler.runAfter as unknown as (
+  return ctx.scheduler.runAfter as (
     delayMs: number,
     functionRef: TicketNotificationRef<Record<string, unknown>>,
     args: Record<string, unknown>

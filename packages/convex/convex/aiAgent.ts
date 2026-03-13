@@ -45,27 +45,21 @@ type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> =
   Return
 >;
 
-function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): InternalActionRef<Args, Return> {
-  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalActionRef<
-    Args,
-    Return
-  >;
-}
-
 function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runAction as <Args extends Record<string, unknown>, Return>(
     actionRef: InternalActionRef<Args, Return>,
     actionArgs: Args
   ) => Promise<Return>;
 }
 
-const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeInternalActionRef<
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
+  "action",
   GetRelevantKnowledgeForRuntimeActionArgs,
   RuntimeKnowledgeResult[]
->("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction");
-
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as InternalActionRef<
+  GetRelevantKnowledgeForRuntimeActionArgs,
+  RuntimeKnowledgeResult[]
+>;
 
 const aiResponseSourceValidator = v.object({
   type: v.string(),
@@ -403,9 +397,7 @@ export const storeResponse = mutation({
     query: v.string(),
     response: v.string(),
     generatedCandidateResponse: v.optional(v.string()),
-    generatedCandidateSources: v.optional(
-      v.array(aiResponseSourceValidator)
-    ),
+    generatedCandidateSources: v.optional(v.array(aiResponseSourceValidator)),
     generatedCandidateConfidence: v.optional(v.number()),
     sources: v.array(aiResponseSourceValidator),
     confidence: v.number(),

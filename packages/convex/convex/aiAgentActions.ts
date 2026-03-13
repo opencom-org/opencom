@@ -21,50 +21,6 @@ type ConvexRef<
   Return = unknown,
 > = FunctionReference<Type, Visibility, Args, Return>;
 
-function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): ConvexRef<"query", "internal", Args, Return> {
-  return makeFunctionReference<"query", Args, Return>(name) as unknown as ConvexRef<
-    "query",
-    "internal",
-    Args,
-    Return
-  >;
-}
-
-function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
-  name: string
-): ConvexRef<"mutation", "internal", Args, Return> {
-  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as ConvexRef<
-    "mutation",
-    "internal",
-    Args,
-    Return
-  >;
-}
-
-function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): ConvexRef<"action", "internal", Args, Return> {
-  return makeFunctionReference<"action", Args, Return>(name) as unknown as ConvexRef<
-    "action",
-    "internal",
-    Args,
-    Return
-  >;
-}
-
-function makePublicMutationRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): ConvexRef<"mutation", "public", Args, Return> {
-  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as ConvexRef<
-    "mutation",
-    "public",
-    Args,
-    Return
-  >;
-}
-
 type ConversationAccessArgs = {
   conversationId: Id<"conversations">;
   visitorId?: Id<"visitors">;
@@ -172,44 +128,89 @@ type StoreResponseArgs = {
   provider: string;
 };
 
-const AUTHORIZE_CONVERSATION_ACCESS_REF = makeInternalQueryRef<
+const AUTHORIZE_CONVERSATION_ACCESS_REF = makeFunctionReference<
+  "query",
   ConversationAccessArgs,
   ConversationAccessResult
->("aiAgent:authorizeConversationAccess");
+>("aiAgent:authorizeConversationAccess") as unknown as ConvexRef<
+  "query",
+  "internal",
+  ConversationAccessArgs,
+  ConversationAccessResult
+>;
 
-const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeInternalQueryRef<WorkspaceIdArgs, RuntimeSettings>(
-  "aiAgent:getRuntimeSettingsForWorkspace"
-);
+const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeFunctionReference<
+  "query",
+  WorkspaceIdArgs,
+  RuntimeSettings
+>("aiAgent:getRuntimeSettingsForWorkspace") as unknown as ConvexRef<
+  "query",
+  "internal",
+  WorkspaceIdArgs,
+  RuntimeSettings
+>;
 
-const RECORD_RUNTIME_DIAGNOSTIC_REF = makeInternalMutationRef<RuntimeDiagnosticArgs>(
-  "aiAgent:recordRuntimeDiagnostic"
-);
+const RECORD_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
+  "mutation",
+  RuntimeDiagnosticArgs,
+  unknown
+>("aiAgent:recordRuntimeDiagnostic") as unknown as ConvexRef<
+  "mutation",
+  "internal",
+  RuntimeDiagnosticArgs,
+  unknown
+>;
 
-const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeInternalMutationRef<
+const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
+  "mutation",
   WorkspaceIdArgs,
   Id<"aiAgentSettings"> | null
->("aiAgent:clearRuntimeDiagnostic");
+>("aiAgent:clearRuntimeDiagnostic") as unknown as ConvexRef<
+  "mutation",
+  "internal",
+  WorkspaceIdArgs,
+  Id<"aiAgentSettings"> | null
+>;
 
-const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeInternalActionRef<
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
+  "action",
   GetRelevantKnowledgeForRuntimeActionArgs,
   RelevantKnowledgeResult[]
->("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction");
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
+  "action",
+  "internal",
+  GetRelevantKnowledgeForRuntimeActionArgs,
+  RelevantKnowledgeResult[]
+>;
 
-const HANDOFF_TO_HUMAN_REF = makePublicMutationRef<HandoffToHumanArgs, HandoffToHumanResult>(
-  "aiAgent:handoffToHuman"
-);
+const HANDOFF_TO_HUMAN_REF = makeFunctionReference<
+  "mutation",
+  HandoffToHumanArgs,
+  HandoffToHumanResult
+>("aiAgent:handoffToHuman") as unknown as ConvexRef<
+  "mutation",
+  "public",
+  HandoffToHumanArgs,
+  HandoffToHumanResult
+>;
 
-const STORE_RESPONSE_REF = makePublicMutationRef<StoreResponseArgs, Id<"aiResponses">>(
+const STORE_RESPONSE_REF = makeFunctionReference<"mutation", StoreResponseArgs, Id<"aiResponses">>(
   "aiAgent:storeResponse"
-);
+) as unknown as ConvexRef<"mutation", "public", StoreResponseArgs, Id<"aiResponses">>;
 
-const INTERNAL_SEND_BOT_MESSAGE_REF = makeInternalMutationRef<
+const INTERNAL_SEND_BOT_MESSAGE_REF = makeFunctionReference<
+  "mutation",
   InternalSendBotMessageArgs,
   Id<"messages">
->("messages:internalSendBotMessage");
+>("messages:internalSendBotMessage") as unknown as ConvexRef<
+  "mutation",
+  "internal",
+  InternalSendBotMessageArgs,
+  Id<"messages">
+>;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <
+  return ctx.runQuery as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return,
@@ -220,7 +221,7 @@ function getShallowRunQuery(ctx: { runQuery: unknown }) {
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <
+  return ctx.runMutation as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return = unknown,
@@ -231,7 +232,7 @@ function getShallowRunMutation(ctx: { runMutation: unknown }) {
 }
 
 function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as <
+  return ctx.runAction as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return,
@@ -467,10 +468,7 @@ export const generateResponse = action({
       )
     ),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<GenerateResponseResult> => {
+  handler: async (ctx, args): Promise<GenerateResponseResult> => {
     const startTime = Date.now();
 
     const runQuery = getShallowRunQuery(ctx);
@@ -587,7 +585,10 @@ export const generateResponse = action({
         embeddingModel: settings.embeddingModel,
       });
     } catch (retrievalError) {
-      console.error("Knowledge retrieval failed; continuing without knowledge context:", retrievalError);
+      console.error(
+        "Knowledge retrieval failed; continuing without knowledge context:",
+        retrievalError
+      );
     }
 
     // Build knowledge context for prompt

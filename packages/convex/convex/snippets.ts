@@ -3,17 +3,10 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery } from "./lib/authWrappers";
 
-type InternalSchedulableRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"action" | "mutation", "internal", Args, Return>;
-
-function makeInternalActionRef<Args extends Record<string, unknown>, Return = unknown>(
-  name: string
-): InternalSchedulableRef<Args, Return> {
-  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalSchedulableRef<
-    Args,
-    Return
-  >;
-}
+type InternalSchedulableRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"action" | "mutation", "internal", Args, Return>;
 
 type GenerateSnippetEmbeddingArgs = {
   workspaceId: Id<"workspaces">;
@@ -23,12 +16,14 @@ type GenerateSnippetEmbeddingArgs = {
   content: string;
 };
 
-const GENERATE_SNIPPET_EMBEDDINGS_REF = makeInternalActionRef<GenerateSnippetEmbeddingArgs>(
-  "embeddings:generateInternal"
-);
+const GENERATE_SNIPPET_EMBEDDINGS_REF = makeFunctionReference<
+  "action",
+  GenerateSnippetEmbeddingArgs,
+  unknown
+>("embeddings:generateInternal") as unknown as InternalSchedulableRef<GenerateSnippetEmbeddingArgs>;
 
 function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.scheduler.runAfter as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
     functionRef: InternalSchedulableRef<Args, Return>,
     args: Args

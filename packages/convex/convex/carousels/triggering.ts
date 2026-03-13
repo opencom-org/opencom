@@ -13,17 +13,6 @@ type ConvexRef<
   Return = unknown,
 > = FunctionReference<Type, Visibility, Args, Return>;
 
-function makePublicQueryRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): ConvexRef<"query", "public", Args, Return> {
-  return makeFunctionReference<"query", Args, Return>(name) as unknown as ConvexRef<
-    "query",
-    "public",
-    Args,
-    Return
-  >;
-}
-
 type TriggerableCarousel = {
   _id: Id<"carousels">;
   name: string;
@@ -38,17 +27,30 @@ type EligibleVisitorForPush = {
   token: string;
 };
 
-const GET_CAROUSEL_REF = makePublicQueryRef<{ id: Id<"carousels"> }, TriggerableCarousel | null>(
-  "carousels:get"
-);
+const GET_CAROUSEL_REF = makeFunctionReference<
+  "query",
+  { id: Id<"carousels"> },
+  TriggerableCarousel | null
+>("carousels:get") as unknown as ConvexRef<
+  "query",
+  "public",
+  { id: Id<"carousels"> },
+  TriggerableCarousel | null
+>;
 
-const GET_ELIGIBLE_VISITORS_WITH_PUSH_TOKENS_REF = makePublicQueryRef<
+const GET_ELIGIBLE_VISITORS_WITH_PUSH_TOKENS_REF = makeFunctionReference<
+  "query",
   { carouselId: Id<"carousels"> },
   EligibleVisitorForPush[]
->("carousels:getEligibleVisitorsWithPushTokens");
+>("carousels:getEligibleVisitorsWithPushTokens") as unknown as ConvexRef<
+  "query",
+  "public",
+  { carouselId: Id<"carousels"> },
+  EligibleVisitorForPush[]
+>;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <
+  return ctx.runQuery as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return,
@@ -59,7 +61,7 @@ function getShallowRunQuery(ctx: { runQuery: unknown }) {
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <
+  return ctx.runMutation as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return = unknown,

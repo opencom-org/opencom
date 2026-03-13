@@ -44,26 +44,24 @@ type GetEmbeddingByIdArgs = {
   id: Id<"contentEmbeddings">;
 };
 
-function makeQueryRef<Args extends Record<string, unknown>, Return>(
-  name: string
-): InternalQueryRef<Args, Return> {
-  return makeFunctionReference<"query", Args, Return>(name) as InternalQueryRef<Args, Return>;
-}
-
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runQuery as <Args extends Record<string, unknown>, Return>(
     queryRef: InternalQueryRef<Args, Return>,
     queryArgs: Args
   ) => Promise<Return>;
 }
 
-const GET_CONTENT_BY_ID_REF = makeQueryRef<GetContentByIdArgs, SuggestionContentRecord>(
-  "suggestions:getContentById"
-);
+const GET_CONTENT_BY_ID_REF = makeFunctionReference<
+  "query",
+  GetContentByIdArgs,
+  SuggestionContentRecord
+>("suggestions:getContentById") as InternalQueryRef<GetContentByIdArgs, SuggestionContentRecord>;
 
-const GET_EMBEDDING_BY_ID_REF = makeQueryRef<GetEmbeddingByIdArgs, EmbeddingRecord>(
-  "suggestions:getEmbeddingById"
-);
+const GET_EMBEDDING_BY_ID_REF = makeFunctionReference<
+  "query",
+  GetEmbeddingByIdArgs,
+  EmbeddingRecord
+>("suggestions:getEmbeddingById") as InternalQueryRef<GetEmbeddingByIdArgs, EmbeddingRecord>;
 
 export const getRelevantKnowledgeForRuntimeAction = internalAction({
   args: {
@@ -106,18 +104,12 @@ export const getRelevantKnowledgeForRuntimeAction = internalAction({
       })
     );
 
-    let filteredDocs = docs.filter(
-      (d): d is NonNullable<(typeof docs)[number]> => d !== null
-    );
+    let filteredDocs = docs.filter((d): d is NonNullable<(typeof docs)[number]> => d !== null);
 
     if (args.knowledgeSources && args.knowledgeSources.length > 0) {
       const sourceSet = new Set(
         args.knowledgeSources.map((s) =>
-          s === "articles"
-            ? "article"
-            : s === "internalArticles"
-              ? "internalArticle"
-              : "snippet"
+          s === "articles" ? "article" : s === "internalArticles" ? "internalArticle" : "snippet"
         )
       );
       filteredDocs = filteredDocs.filter((d) => sourceSet.has(d.contentType));
