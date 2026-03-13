@@ -691,4 +691,44 @@ http.route({
   }),
 });
 
+// ── Automation API v1 routes ─────────────────────────────────────
+
+import {
+  listConversations,
+  getConversation,
+  updateConversation,
+  listMessages,
+  sendMessage,
+  claimConversation,
+  releaseConversation,
+  escalateConversation,
+  listVisitors,
+  getVisitor,
+  createVisitor,
+  updateVisitor,
+  listTickets,
+  getTicket,
+  createTicket,
+  updateTicket,
+  eventsFeed,
+} from "./automationHttpRoutes";
+
+http.route({ path: "/api/v1/conversations", method: "GET", handler: listConversations });
+http.route({ path: "/api/v1/conversations/get", method: "GET", handler: getConversation });
+http.route({ path: "/api/v1/conversations/update", method: "POST", handler: updateConversation });
+http.route({ path: "/api/v1/conversations/messages", method: "GET", handler: listMessages });
+http.route({ path: "/api/v1/conversations/messages/send", method: "POST", handler: sendMessage });
+http.route({ path: "/api/v1/conversations/claim", method: "POST", handler: claimConversation });
+http.route({ path: "/api/v1/conversations/release", method: "POST", handler: releaseConversation });
+http.route({ path: "/api/v1/conversations/escalate", method: "POST", handler: escalateConversation });
+http.route({ path: "/api/v1/visitors", method: "GET", handler: listVisitors });
+http.route({ path: "/api/v1/visitors/get", method: "GET", handler: getVisitor });
+http.route({ path: "/api/v1/visitors/create", method: "POST", handler: createVisitor });
+http.route({ path: "/api/v1/visitors/update", method: "POST", handler: updateVisitor });
+http.route({ path: "/api/v1/tickets", method: "GET", handler: listTickets });
+http.route({ path: "/api/v1/tickets/get", method: "GET", handler: getTicket });
+http.route({ path: "/api/v1/tickets/create", method: "POST", handler: createTicket });
+http.route({ path: "/api/v1/tickets/update", method: "POST", handler: updateTicket });
+http.route({ path: "/api/v1/events/feed", method: "GET", handler: eventsFeed });
+
 export default http;
