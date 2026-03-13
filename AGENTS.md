@@ -98,6 +98,109 @@
   4. Only if intentionally dynamic and documented, a narrow exception
 - Do not add new generic helper factories to shared ref modules. If a module exists to share refs, export fixed named refs from it.
 
+## Testing Best Practices
+
+### Do
+
+- Create isolated test data using helpers
+- Clean up after tests
+- Use descriptive test names
+- Test both success and error cases
+- Use `data-testid` attributes for E2E selectors
+- Keep tests focused and independent
+
+### Don't
+
+- Share state between tests
+- Rely on specific database IDs
+- Skip cleanup in afterAll
+- Hard-code timeouts (use Playwright's auto-wait)
+
+
+## Code Style and Comments
+
+### Comment Tags
+
+Use these tags to highlight important information in code comments:
+
+- `IMPORTANT:` - Critical information that must not be overlooked
+- `NOTE:` - Helpful context or clarification
+- `WARNING:` - Potential pitfalls or dangerous operations
+- `TODO:` - Future work that should be done
+- `FIXME:` - Known issues that need fixing
+
+### Code Patterns
+
+- Use `MUST` / `MUST NOT` for hard requirements
+- Use `NEVER` / `ALWAYS` for absolute rules
+- Use `AVOID` for anti-patterns to stay away from
+- Use `DO NOT` for explicit prohibitions
+
+### Example
+
+```typescript
+// IMPORTANT: This function must be called before any Convex operations
+// NOTE: The widget uses Shadow DOM, so overlays must portal into the shadow root
+// WARNING: Never fall back to wildcard "*" for CORS
+// TODO: Add rate limiting to this endpoint
+// FIXME: This cast should be removed after TS2589 is resolved
+```
+
+## Modularity Patterns
+
+### Module Organization
+
+- Separate orchestration from rendering
+- Extract helper logic from page components
+- Use explicit domain modules instead of co-locating all logic
+- Preserve existing behavior when refactoring
+
+### Key Principles
+
+1. **Single Responsibility**: Each module should have one clear purpose
+2. **Explicit Contracts**: Modules must expose typed internal contracts
+3. **Preserve Semantics**: Refactoring must preserve existing behavior
+4. **Shared Utilities**: Common logic should be extracted to shared modules
+
+### Common Patterns
+
+- **Controller/View Separation**: Separate orchestration from rendering
+- **Domain Modules**: Group related functionality by domain
+- **Adapter Pattern**: Use adapters for external dependencies
+- **Wrapper Hooks**: Wrap external hooks with local adapters
+
+## Error Handling Patterns
+
+### Standard Error Functions
+
+Use the standardized error functions from `packages/convex/convex/utils/errors.ts`:
+
+- `throwNotFound(resourceType)` - Resource not found
+- `throwNotAuthenticated()` - Authentication required
+- `throwPermissionDenied(permission?)` - Permission denied
+
+### Error Feedback
+
+- Use standardized non-blocking error feedback for frontend paths
+- Provide actionable user messaging
+- Centralize unknown error mapping for covered paths
+
+## Documentation Standards
+
+### Source of Truth
+
+- OpenSpec specs are the source of truth for requirements
+- `docs/` contains reference documentation
+- `AGENTS.md` contains AI agent guardrails
+- Code comments provide inline guidance
+
+### When to Update Docs
+
+- When adding new features or changing behavior
+- When fixing bugs that affect user-facing behavior
+- When refactoring that changes module boundaries
+- When adding new patterns or conventions
+
 ## Agent Handoff Notes
 
 - When converting a repo audit into OpenSpec artifacts, put **only unfinished work** into `proposal.md`, spec deltas, and `tasks.md`.
