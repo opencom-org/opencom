@@ -1,9 +1,9 @@
 import { v } from "convex/values";
-import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { type FunctionReference } from "convex/server";
 import { embed } from "ai";
+import { internal } from "./_generated/api";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { Id } from "./_generated/dataModel";
-import { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { createAIClient } from "./lib/aiGateway";
 import {
@@ -238,34 +238,16 @@ export const search = authQuery({
 
 type EmbeddingQueryRef<Args extends Record<string, unknown>, Return> = FunctionReference<
   "query",
-  "public",
+  "internal",
   Args,
   Return
 >;
 
-const GET_EMBEDDING_BY_ID_REF: EmbeddingQueryRef<
-  { id: Id<"contentEmbeddings"> },
-  Doc<"contentEmbeddings"> | null
-> = makeFunctionReference<
-  "query",
-  { id: Id<"contentEmbeddings"> },
-  Doc<"contentEmbeddings"> | null
->("suggestions:getEmbeddingById");
-
-type ContentRecord = {
-  content: string;
-  title: string;
-} | null;
-
-const GET_CONTENT_BY_ID_REF: EmbeddingQueryRef<
-  { contentType: KnowledgeContentType; contentId: string },
-  ContentRecord
-> = makeFunctionReference<
-  "query",
-  { contentType: KnowledgeContentType; contentId: string },
-  ContentRecord
->("suggestions:getContentById");
-
+// NOTE: getShallowRunQuery uses a type escape cast to work around TS2589
+// (Type instantiation is excessively deep) when calling ctx.runQuery with
+// generated internal refs. The cast keeps the call signature shallow at the
+// hotspot. This can be removed once TypeScript or Convex provides better
+// type inference for cross-function calls in actions.
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
     queryRef: EmbeddingQueryRef<Args, Return>,
@@ -310,7 +292,7 @@ export const searchWithEmbeddings = authAction({
 
     const embeddingDocs = await Promise.all(
       vectorResults.map((result) =>
-        runQuery(GET_EMBEDDING_BY_ID_REF, { id: result._id }).then((doc) =>
+        runQuery(internal.suggestions.getEmbeddingById, { id: result._id }).then((doc) =>
           doc ? { ...doc, _score: result._score } : null
         )
       )
@@ -348,7 +330,7 @@ export const searchWithEmbeddings = authAction({
 
     const contentRecords = await Promise.all(
       dedupedEmbeddingDocs.map((doc) =>
-        runQuery(GET_CONTENT_BY_ID_REF, {
+        runQuery(internal.suggestions.getContentById, {
           contentType: doc.contentType,
           contentId: doc.contentId,
         })
@@ -367,6 +349,7 @@ export const searchWithEmbeddings = authAction({
         title: doc.title,
         content: content.content,
         snippet: doc.snippet,
+        slug: content.slug,
         relevanceScore: doc._score,
         updatedAt: doc.updatedAt,
       });

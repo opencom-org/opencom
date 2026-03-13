@@ -92,9 +92,11 @@ type OriginValidationResult = {
 const GET_EMBEDDING_BY_ID_REF: SuggestionQueryRef<
   { id: Id<"contentEmbeddings"> },
   Doc<"contentEmbeddings"> | null
-> = makeFunctionReference<"query", { id: Id<"contentEmbeddings"> }, Doc<"contentEmbeddings"> | null>(
-  "suggestions:getEmbeddingById"
-);
+> = makeFunctionReference<
+  "query",
+  { id: Id<"contentEmbeddings"> },
+  Doc<"contentEmbeddings"> | null
+>("suggestions:getEmbeddingById");
 
 const GET_CONVERSATION_REF: SuggestionQueryRef<
   { conversationId: Id<"conversations"> },
@@ -125,9 +127,11 @@ const REQUIRE_PERMISSION_FOR_ACTION_REF: SuggestionQueryRef<
 const GET_AI_SETTINGS_REF: SuggestionQueryRef<
   { workspaceId: Id<"workspaces"> },
   Doc<"aiAgentSettings"> | null
-> = makeFunctionReference<"query", { workspaceId: Id<"workspaces"> }, Doc<"aiAgentSettings"> | null>(
-  "suggestions:getAiSettings"
-);
+> = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Doc<"aiAgentSettings"> | null
+>("suggestions:getAiSettings");
 
 const GET_RECENT_MESSAGES_REF: SuggestionQueryRef<
   { conversationId: Id<"conversations">; limit: number },
@@ -228,7 +232,11 @@ function normalizeSuggestionContentTypes(
   }
 
   const normalized = Array.from(
-    new Set(values.map(normalizeSuggestionContentType).filter((value): value is SuggestionContentType => Boolean(value)))
+    new Set(
+      values
+        .map(normalizeSuggestionContentType)
+        .filter((value): value is SuggestionContentType => Boolean(value))
+    )
   );
 
   return normalized.length > 0 ? normalized : undefined;
@@ -628,7 +636,7 @@ export const getContentById = internalQuery({
         args.contentId as Id<"articles"> | Id<"internalArticles">
       );
       if (article && article.visibility !== "internal") {
-        return { content: article.content, title: article.title };
+        return { content: article.content, title: article.title, slug: article.slug };
       }
     } else if (args.contentType === "internalArticle") {
       const article = await getUnifiedArticleByIdOrLegacyInternalId(

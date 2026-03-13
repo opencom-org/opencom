@@ -189,9 +189,10 @@ describe("runtime type hardening guards", () => {
     );
 
     expect(knowledgeSource).not.toContain("function getQueryRef(name: string)");
-    expect(knowledgeSource).toContain("GET_EMBEDDING_BY_ID_REF");
-    expect(knowledgeSource).toContain("GET_CONTENT_BY_ID_REF");
+    expect(knowledgeSource).toContain("internal.suggestions.getEmbeddingById");
+    expect(knowledgeSource).toContain("internal.suggestions.getContentById");
     expect(knowledgeSource).toContain("getShallowRunQuery");
+    expect(knowledgeSource).toContain("NOTE: getShallowRunQuery uses a type escape cast");
   });
 
   it("uses fixed typed refs for support attachment cleanup scheduling", () => {
