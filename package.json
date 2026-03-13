@@ -65,7 +65,7 @@
     "@typescript-eslint/parser": "^6.13.0",
     "@vitest/coverage-v8": "^4.0.17",
     "@vitest/ui": "^4.0.17",
-    "convex": "^1.32.0",
+    "convex": "^1.33.0",
     "eslint": "^8.55.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
