@@ -18,6 +18,15 @@ import { logAudit } from "./auditLogs";
 type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"mutation", "internal", Args, Return>;
 
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
 type CreateInvitationArgs = {
   inviterId: Id<"users">;
   workspaceId: Id<"workspaces">;
@@ -32,14 +41,9 @@ type CreateInvitationResult = {
   targetEmail: string;
 };
 
-const CREATE_INVITATION_REF = makeFunctionReference<
-  "mutation",
-  CreateInvitationArgs,
-  CreateInvitationResult
->("workspaceMembers:createInvitation") as unknown as InternalMutationRef<
-  CreateInvitationArgs,
-  CreateInvitationResult
->;
+const CREATE_INVITATION_REF = makeInternalMutationRef<CreateInvitationArgs, CreateInvitationResult>(
+  "workspaceMembers:createInvitation"
+);
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
   return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(

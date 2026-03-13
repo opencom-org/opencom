@@ -198,6 +198,16 @@ type MutationRef<
   Return = unknown,
 > = FunctionReference<"mutation", Visibility, Args, Return>;
 
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): MutationRef<"internal", Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as MutationRef<
+    "internal",
+    Args,
+    Return
+  >;
+}
+
 type ValidateOriginArgs = {
   workspaceId: Id<"workspaces">;
   origin: string;
@@ -286,14 +296,10 @@ const PROCESS_INBOUND_EMAIL_REF = makeFunctionReference<
   Record<string, unknown>
 >;
 
-const UPDATE_DELIVERY_STATUS_BY_EXTERNAL_ID_REF = makeFunctionReference<
-  "mutation",
-  UpdateDeliveryStatusByExternalIdArgs,
-  unknown
->("emailChannel:updateDeliveryStatusByExternalId") as unknown as MutationRef<
-  "internal",
-  UpdateDeliveryStatusByExternalIdArgs
->;
+const UPDATE_DELIVERY_STATUS_BY_EXTERNAL_ID_REF =
+  makeInternalMutationRef<UpdateDeliveryStatusByExternalIdArgs>(
+    "emailChannel:updateDeliveryStatusByExternalId"
+  );
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(

@@ -30,10 +30,25 @@ type RuntimeKnowledgeResult = {
 };
 type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
   "query",
-  "internal",
+  "internal" | "public",
   Args,
   Return
 >;
+
+type GetContentByIdArgs = {
+  contentType: SuggestionContentType;
+  contentId: string;
+};
+
+type GetEmbeddingByIdArgs = {
+  id: Id<"contentEmbeddings">;
+};
+
+function makeQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalQueryRef<Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as InternalQueryRef<Args, Return>;
+}
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
@@ -42,23 +57,13 @@ function getShallowRunQuery(ctx: { runQuery: unknown }) {
   ) => Promise<Return>;
 }
 
-const GET_CONTENT_BY_ID_REF = makeFunctionReference<
-  "query",
-  { contentType: SuggestionContentType; contentId: string },
-  SuggestionContentRecord
->("suggestions:getContentById") as unknown as InternalQueryRef<
-  { contentType: SuggestionContentType; contentId: string },
-  SuggestionContentRecord
->;
+const GET_CONTENT_BY_ID_REF = makeQueryRef<GetContentByIdArgs, SuggestionContentRecord>(
+  "suggestions:getContentById"
+);
 
-const GET_EMBEDDING_BY_ID_REF = makeFunctionReference<
-  "query",
-  { id: Id<"contentEmbeddings"> },
-  EmbeddingRecord
->("suggestions:getEmbeddingById") as unknown as InternalQueryRef<
-  { id: Id<"contentEmbeddings"> },
-  EmbeddingRecord
->;
+const GET_EMBEDDING_BY_ID_REF = makeQueryRef<GetEmbeddingByIdArgs, EmbeddingRecord>(
+  "suggestions:getEmbeddingById"
+);
 
 export const getRelevantKnowledgeForRuntimeAction = internalAction({
   args: {

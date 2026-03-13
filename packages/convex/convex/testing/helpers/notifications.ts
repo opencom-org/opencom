@@ -13,6 +13,24 @@ type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = 
   Return
 >;
 
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
+function makeInternalQueryRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalQueryRef<Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as InternalQueryRef<
+    Args,
+    Return
+  >;
+}
+
 type SendForTestingArgs = {
   id: Id<"pushCampaigns">;
 };
@@ -35,36 +53,21 @@ type VisitorRecipientsArgs = {
   channel?: "chat" | "email";
 };
 
-const SEND_FOR_TESTING_REF = makeFunctionReference<
-  "mutation",
-  SendForTestingArgs,
-  SendForTestingResult
->("pushCampaigns:sendForTesting") as unknown as InternalMutationRef<
-  SendForTestingArgs,
-  SendForTestingResult
->;
+const SEND_FOR_TESTING_REF = makeInternalMutationRef<SendForTestingArgs, SendForTestingResult>(
+  "pushCampaigns:sendForTesting"
+);
 
-const GET_PENDING_RECIPIENTS_REF = makeFunctionReference<
-  "query",
-  PendingRecipientsArgs,
-  unknown
->("pushCampaigns:getPendingRecipients") as unknown as InternalQueryRef<PendingRecipientsArgs>;
+const GET_PENDING_RECIPIENTS_REF = makeInternalQueryRef<PendingRecipientsArgs>(
+  "pushCampaigns:getPendingRecipients"
+);
 
-const GET_MEMBER_RECIPIENTS_FOR_NEW_VISITOR_MESSAGE_REF = makeFunctionReference<
-  "query",
-  MemberRecipientsArgs,
-  unknown
->("notifications:getMemberRecipientsForNewVisitorMessage") as unknown as InternalQueryRef<
-  MemberRecipientsArgs
->;
+const GET_MEMBER_RECIPIENTS_FOR_NEW_VISITOR_MESSAGE_REF = makeInternalQueryRef<MemberRecipientsArgs>(
+  "notifications:getMemberRecipientsForNewVisitorMessage"
+);
 
-const GET_VISITOR_RECIPIENTS_FOR_SUPPORT_REPLY_REF = makeFunctionReference<
-  "query",
-  VisitorRecipientsArgs,
-  unknown
->("notifications:getVisitorRecipientsForSupportReply") as unknown as InternalQueryRef<
-  VisitorRecipientsArgs
->;
+const GET_VISITOR_RECIPIENTS_FOR_SUPPORT_REPLY_REF = makeInternalQueryRef<VisitorRecipientsArgs>(
+  "notifications:getVisitorRecipientsForSupportReply"
+);
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
   return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import {
   mutation,
   query,
@@ -10,10 +11,9 @@ import {
 import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
-import { authMutation, authQuery } from "./lib/authWrappers";
+import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
 import { resolveVisitorFromSession } from "./widgetSessions";
-import { isInternalArticle, isPublicArticle, listUnifiedArticlesWithLegacyFallback } from "./lib/unifiedArticles";
 
 const knowledgeSourceValidator = v.union(
   v.literal("articles"),
@@ -22,6 +22,49 @@ const knowledgeSourceValidator = v.union(
 );
 
 type KnowledgeSource = "articles" | "internalArticles" | "snippets";
+
+type RuntimeKnowledgeResult = {
+  id: string;
+  type: "article" | "internalArticle" | "snippet";
+  title: string;
+  content: string;
+  relevanceScore: number;
+};
+
+type GetRelevantKnowledgeForRuntimeActionArgs = {
+  workspaceId: Id<"workspaces">;
+  query: string;
+  knowledgeSources?: KnowledgeSource[];
+  limit?: number;
+};
+
+type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "action",
+  "internal",
+  Args,
+  Return
+>;
+
+function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalActionRef<Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalActionRef<
+    Args,
+    Return
+  >;
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+    actionRef: InternalActionRef<Args, Return>,
+    actionArgs: Args
+  ) => Promise<Return>;
+}
+
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeInternalActionRef<
+  GetRelevantKnowledgeForRuntimeActionArgs,
+  RuntimeKnowledgeResult[]
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction");
 
 
 const aiResponseSourceValidator = v.object({
@@ -315,7 +358,7 @@ export const clearRuntimeDiagnostic = internalMutation({
 });
 
 // Get relevant knowledge for a query
-export const getRelevantKnowledge = authQuery({
+export const getRelevantKnowledge = authAction({
   args: {
     workspaceId: v.id("workspaces"),
     query: v.string(),
@@ -323,97 +366,18 @@ export const getRelevantKnowledge = authQuery({
     limit: v.optional(v.number()),
   },
   permission: "articles.read",
-  handler: async (ctx, args) => {
-    const normalizedQuery = args.query.trim().toLowerCase();
-    if (!normalizedQuery) {
+  handler: async (ctx, args): Promise<RuntimeKnowledgeResult[]> => {
+    if (!args.query.trim()) {
       return [];
     }
-
+    const runAction = getShallowRunAction(ctx);
     const limit = Math.max(1, Math.min(args.limit ?? 5, 20));
-    const requestedSources = new Set(args.knowledgeSources ?? ["articles"]);
-    const queryTerms = normalizedQuery
-      .split(/[^a-z0-9]+/g)
-      .map((term) => term.trim())
-      .filter((term) => term.length >= 3);
-
-    const scoreText = (title: string, content: string): number => {
-      const titleLower = title.toLowerCase();
-      const contentLower = content.toLowerCase();
-      let score = 0;
-
-      if (titleLower.includes(normalizedQuery)) score += 8;
-      if (contentLower.includes(normalizedQuery)) score += 4;
-
-      for (const term of queryTerms) {
-        if (titleLower.includes(term)) score += 3;
-        if (contentLower.includes(term)) score += 1;
-      }
-
-      return score;
-    };
-
-    const candidates: Array<{
-      id: string;
-      type: "article" | "internalArticle" | "snippet";
-      title: string;
-      content: string;
-      relevanceScore: number;
-    }> = [];
-
-    if (requestedSources.has("articles") || requestedSources.has("internalArticles")) {
-      const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
-      for (const article of articles) {
-        if (article.status !== "published") {
-          continue;
-        }
-        if (isPublicArticle(article) && requestedSources.has("articles")) {
-          const score = scoreText(article.title, article.content);
-          if (score > 0) {
-            candidates.push({
-              id: article._id,
-              type: "article",
-              title: article.title,
-              content: article.content,
-              relevanceScore: Math.min(100, score * 10),
-            });
-          }
-        }
-        if (isInternalArticle(article) && requestedSources.has("internalArticles")) {
-          const score = scoreText(article.title, article.content);
-          if (score > 0) {
-            candidates.push({
-              id: article._id,
-              type: "internalArticle",
-              title: article.title,
-              content: article.content,
-              relevanceScore: Math.min(100, score * 10),
-            });
-          }
-        }
-      }
-    }
-
-    if (requestedSources.has("snippets")) {
-      const snippets = (await ctx.db
-        .query("snippets")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-        .collect()) as Doc<"snippets">[];
-      for (const snippet of snippets) {
-        const score = scoreText(snippet.name, snippet.content);
-        if (score > 0) {
-          candidates.push({
-            id: snippet._id,
-            type: "snippet",
-            title: snippet.name,
-            content: snippet.content,
-            relevanceScore: Math.min(100, score * 10),
-          });
-        }
-      }
-    }
-
-    candidates.sort((a, b) => b.relevanceScore - a.relevanceScore);
-    return candidates.slice(0, limit);
+    return await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
+      workspaceId: args.workspaceId,
+      query: args.query,
+      knowledgeSources: args.knowledgeSources,
+      limit,
+    });
   },
 });
 

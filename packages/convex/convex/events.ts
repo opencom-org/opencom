@@ -20,19 +20,24 @@ const RATE_LIMIT_MAX_EVENTS = 100;
 type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"mutation", "internal", Args, Return>;
 
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
 type CheckAutoCompletionArgs = {
   visitorId: Id<"visitors">;
   workspaceId: Id<"workspaces">;
   eventName: string;
 };
 
-const CHECK_AUTO_COMPLETION_REF = makeFunctionReference<
-  "mutation",
-  CheckAutoCompletionArgs,
-  unknown
->("checklists:checkAutoCompletion") as unknown as InternalMutationRef<
-  CheckAutoCompletionArgs
->;
+const CHECK_AUTO_COMPLETION_REF = makeInternalMutationRef<CheckAutoCompletionArgs>(
+  "checklists:checkAutoCompletion"
+);
 
 function getShallowRunAfter(ctx: MutationCtx) {
   return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(

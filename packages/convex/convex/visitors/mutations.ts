@@ -23,6 +23,15 @@ import {
 type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"mutation", "internal", Args, Return>;
 
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
 type VerifyIdentityArgs = {
   workspaceId: Id<"workspaces">;
   visitorId: Id<"visitors">;
@@ -35,14 +44,9 @@ type VerifyIdentityResult = {
   skipped?: boolean;
 };
 
-const VERIFY_IDENTITY_REF = makeFunctionReference<
-  "mutation",
-  VerifyIdentityArgs,
-  VerifyIdentityResult
->("identityVerification:verifyIdentity") as unknown as InternalMutationRef<
-  VerifyIdentityArgs,
-  VerifyIdentityResult
->;
+const VERIFY_IDENTITY_REF = makeInternalMutationRef<VerifyIdentityArgs, VerifyIdentityResult>(
+  "identityVerification:verifyIdentity"
+);
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
   return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(

@@ -26,6 +26,17 @@ type ConvexRef<
   Return = unknown,
 > = FunctionReference<Type, Visibility, Args, Return>;
 
+function makePublicQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): ConvexRef<"query", "public", Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as ConvexRef<
+    "query",
+    "public",
+    Args,
+    Return
+  >;
+}
+
 type GetOutboundMessageArgs = {
   id: Id<"outboundMessages">;
 };
@@ -40,27 +51,14 @@ type EligibleVisitorForPush = {
   token: string;
 };
 
-const GET_OUTBOUND_MESSAGE_REF = makeFunctionReference<
-  "query",
-  GetOutboundMessageArgs,
-  Doc<"outboundMessages"> | null
->("outboundMessages:get") as unknown as ConvexRef<
-  "query",
-  "public",
-  GetOutboundMessageArgs,
-  Doc<"outboundMessages"> | null
->;
+const GET_OUTBOUND_MESSAGE_REF = makePublicQueryRef<GetOutboundMessageArgs, Doc<"outboundMessages"> | null>(
+  "outboundMessages:get"
+);
 
-const GET_ELIGIBLE_VISITORS_FOR_PUSH_REF = makeFunctionReference<
-  "query",
+const GET_ELIGIBLE_VISITORS_FOR_PUSH_REF = makePublicQueryRef<
   GetEligibleVisitorsForPushArgs,
   EligibleVisitorForPush[]
->("outboundMessages:getEligibleVisitorsForPush") as unknown as ConvexRef<
-  "query",
-  "public",
-  GetEligibleVisitorsForPushArgs,
-  EligibleVisitorForPush[]
->;
+>("outboundMessages:getEligibleVisitorsForPush");
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <

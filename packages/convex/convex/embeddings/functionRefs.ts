@@ -9,6 +9,26 @@ type InternalSchedulableRef<
   Return = unknown,
 > = FunctionReference<Type, "internal", Args, Return>;
 
+function makeInternalActionRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalSchedulableRef<"action", Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalSchedulableRef<
+    "action",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalSchedulableRef<"mutation", Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalSchedulableRef<
+    "mutation",
+    Args,
+    Return
+  >;
+}
+
 type GenerateEmbeddingArgs = {
   workspaceId: Id<"workspaces">;
   contentType: EmbeddingContentType;
@@ -23,18 +43,11 @@ type RemoveEmbeddingArgs = {
   contentId: string;
 };
 
-export const generateInternalEmbeddingRef = makeFunctionReference<
-  "action",
-  GenerateEmbeddingArgs,
-  unknown
->("embeddings:generateInternal") as unknown as InternalSchedulableRef<
-  "action",
-  GenerateEmbeddingArgs
->;
+export const generateInternalEmbeddingRef = makeInternalActionRef<GenerateEmbeddingArgs>(
+  "embeddings:generateInternal"
+);
 
-export const removeEmbeddingRef = makeFunctionReference<"mutation", RemoveEmbeddingArgs, unknown>(
-  "embeddings:remove"
-) as unknown as InternalSchedulableRef<"mutation", RemoveEmbeddingArgs>;
+export const removeEmbeddingRef = makeInternalMutationRef<RemoveEmbeddingArgs>("embeddings:remove");
 
 export function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
   return ctx.scheduler.runAfter as unknown as <

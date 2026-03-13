@@ -8,6 +8,36 @@ type InternalFunctionRef<
   Return = unknown,
 > = FunctionReference<Type, "internal", Args, Return>;
 
+function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalFunctionRef<"query", Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as InternalFunctionRef<
+    "query",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalFunctionRef<"mutation", Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalFunctionRef<
+    "mutation",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalFunctionRef<"action", Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalFunctionRef<
+    "action",
+    Args,
+    Return
+  >;
+}
+
 type MemberRecipientArgs = {
   workspaceId: Id<"workspaces">;
 };
@@ -141,89 +171,50 @@ type PushTokenDeliveryFailureArgs = {
 };
 
 export const getMemberRecipientsForNewVisitorMessageRef =
-  makeFunctionReference<"query", MemberRecipientArgs, MemberRecipientResult>(
+  makeInternalQueryRef<MemberRecipientArgs, MemberRecipientResult>(
     "notifications:getMemberRecipientsForNewVisitorMessage"
-  ) as unknown as InternalFunctionRef<"query", MemberRecipientArgs, MemberRecipientResult>;
+  );
 
 export const getVisitorRecipientsForSupportReplyRef =
-  makeFunctionReference<"query", VisitorReplyRecipientArgs, VisitorReplyRecipientResult>(
+  makeInternalQueryRef<VisitorReplyRecipientArgs, VisitorReplyRecipientResult>(
     "notifications:getVisitorRecipientsForSupportReply"
-  ) as unknown as InternalFunctionRef<"query", VisitorReplyRecipientArgs, VisitorReplyRecipientResult>;
+  );
 
-export const routeEventRef = makeFunctionReference<"mutation", RouteEventArgs, unknown>(
-  "notifications:routeEvent"
-) as unknown as InternalFunctionRef<"mutation", RouteEventArgs>;
+export const routeEventRef = makeInternalMutationRef<RouteEventArgs>("notifications:routeEvent");
 
-export const notifyNewMessageRef = makeFunctionReference<"mutation", NotifyNewMessageArgs, unknown>(
+export const notifyNewMessageRef = makeInternalMutationRef<NotifyNewMessageArgs>(
   "notifications:notifyNewMessage"
-) as unknown as InternalFunctionRef<"mutation", NotifyNewMessageArgs>;
+);
 
-export const notifyNewConversationRef = makeFunctionReference<
-  "mutation",
-  NotifyNewConversationArgs,
-  unknown
->("notifications:notifyNewConversation") as unknown as InternalFunctionRef<
-  "mutation",
-  NotifyNewConversationArgs
->;
+export const notifyNewConversationRef = makeInternalMutationRef<NotifyNewConversationArgs>(
+  "notifications:notifyNewConversation"
+);
 
-export const notifyAssignmentRef = makeFunctionReference<
-  "mutation",
-  NotifyAssignmentArgs,
-  unknown
->("notifications:notifyAssignment") as unknown as InternalFunctionRef<
-  "mutation",
-  NotifyAssignmentArgs
->;
+export const notifyAssignmentRef = makeInternalMutationRef<NotifyAssignmentArgs>(
+  "notifications:notifyAssignment"
+);
 
-export const sendNotificationEmailRef = makeFunctionReference<
-  "action",
-  SendNotificationEmailArgs,
-  unknown
->("notifications:sendNotificationEmail") as unknown as InternalFunctionRef<
-  "action",
-  SendNotificationEmailArgs
->;
+export const sendNotificationEmailRef = makeInternalActionRef<SendNotificationEmailArgs, unknown>(
+  "notifications:sendNotificationEmail"
+);
 
-export const dispatchPushAttemptsRef = makeFunctionReference<
-  "action",
-  DispatchPushAttemptsArgs,
-  unknown
->("notifications:dispatchPushAttempts") as unknown as InternalFunctionRef<
-  "action",
-  DispatchPushAttemptsArgs
->;
+export const dispatchPushAttemptsRef = makeInternalActionRef<DispatchPushAttemptsArgs, unknown>(
+  "notifications:dispatchPushAttempts"
+);
 
-export const logDeliveryOutcomeRef = makeFunctionReference<
-  "mutation",
-  LogDeliveryOutcomeArgs,
-  unknown
->("notifications:logDeliveryOutcome") as unknown as InternalFunctionRef<
-  "mutation",
-  LogDeliveryOutcomeArgs
->;
+export const logDeliveryOutcomeRef = makeInternalMutationRef<LogDeliveryOutcomeArgs>(
+  "notifications:logDeliveryOutcome"
+);
 
-export const sendPushRef = makeFunctionReference<"action", PushSendArgs, PushSendResult>(
-  "push:sendPush"
-) as unknown as InternalFunctionRef<"action", PushSendArgs, PushSendResult>;
+export const sendPushRef = makeInternalActionRef<PushSendArgs, PushSendResult>("push:sendPush");
 
-export const recordPushTokenDeliveryFailureRef = makeFunctionReference<
-  "mutation",
-  PushTokenDeliveryFailureArgs,
-  unknown
->("pushTokens:recordDeliveryFailure") as unknown as InternalFunctionRef<
-  "mutation",
+export const recordPushTokenDeliveryFailureRef = makeInternalMutationRef<PushTokenDeliveryFailureArgs>(
+  "pushTokens:recordDeliveryFailure"
+);
+
+export const recordVisitorPushTokenDeliveryFailureRef = makeInternalMutationRef<
   PushTokenDeliveryFailureArgs
->;
-
-export const recordVisitorPushTokenDeliveryFailureRef = makeFunctionReference<
-  "mutation",
-  PushTokenDeliveryFailureArgs,
-  unknown
->("visitorPushTokens:recordDeliveryFailure") as unknown as InternalFunctionRef<
-  "mutation",
-  PushTokenDeliveryFailureArgs
->;
+>("visitorPushTokens:recordDeliveryFailure");
 
 export function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(

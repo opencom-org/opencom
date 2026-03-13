@@ -7,6 +7,36 @@ type InternalFunctionRef<
   Return = unknown,
 > = FunctionReference<Type, "internal", Args, Return>;
 
+function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalFunctionRef<"query", Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as InternalFunctionRef<
+    "query",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalFunctionRef<"mutation", Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalFunctionRef<
+    "mutation",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalFunctionRef<"action", Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalFunctionRef<
+    "action",
+    Args,
+    Return
+  >;
+}
+
 type PushSendArgs = {
   tokens: string[];
   title?: string;
@@ -66,77 +96,34 @@ type SendWithTargetingArgs = {
   };
 };
 
-export const SEND_PUSH_REF = makeFunctionReference<"action", PushSendArgs, PushSendResult>(
-  "push:sendPush"
-) as unknown as InternalFunctionRef<"action", PushSendArgs, PushSendResult>;
+export const SEND_PUSH_REF = makeInternalActionRef<PushSendArgs, PushSendResult>("push:sendPush");
 
-export const RECORD_PUSH_TOKEN_DELIVERY_FAILURE_REF = makeFunctionReference<
-  "mutation",
-  RecordDeliveryFailureArgs,
-  unknown
->("pushTokens:recordDeliveryFailure") as unknown as InternalFunctionRef<
-  "mutation",
-  RecordDeliveryFailureArgs
->;
+export const RECORD_PUSH_TOKEN_DELIVERY_FAILURE_REF = makeInternalMutationRef<RecordDeliveryFailureArgs>(
+  "pushTokens:recordDeliveryFailure"
+);
 
-export const RECORD_VISITOR_PUSH_TOKEN_DELIVERY_FAILURE_REF = makeFunctionReference<
-  "mutation",
-  RecordDeliveryFailureArgs,
-  unknown
->("visitorPushTokens:recordDeliveryFailure") as unknown as InternalFunctionRef<
-  "mutation",
-  RecordDeliveryFailureArgs
->;
+export const RECORD_VISITOR_PUSH_TOKEN_DELIVERY_FAILURE_REF =
+  makeInternalMutationRef<RecordDeliveryFailureArgs>("visitorPushTokens:recordDeliveryFailure");
 
-export const GET_TOKENS_FOR_VISITORS_REF = makeFunctionReference<
-  "query",
-  GetTokensForVisitorsArgs,
-  string[]
->("push:getTokensForVisitors") as unknown as InternalFunctionRef<
-  "query",
-  GetTokensForVisitorsArgs,
-  string[]
->;
+export const GET_TOKENS_FOR_VISITORS_REF = makeInternalQueryRef<GetTokensForVisitorsArgs, string[]>(
+  "push:getTokensForVisitors"
+);
 
-export const GET_TOKENS_FOR_WORKSPACE_REF = makeFunctionReference<
-  "query",
-  GetTokensForWorkspaceArgs,
-  string[]
->("push:getTokensForWorkspace") as unknown as InternalFunctionRef<
-  "query",
-  GetTokensForWorkspaceArgs,
-  string[]
->;
+export const GET_TOKENS_FOR_WORKSPACE_REF = makeInternalQueryRef<GetTokensForWorkspaceArgs, string[]>(
+  "push:getTokensForWorkspace"
+);
 
-export const GET_TOKENS_FOR_VISITOR_REF = makeFunctionReference<
-  "query",
-  GetTokensForVisitorArgs,
-  string[]
->("push:getTokensForVisitor") as unknown as InternalFunctionRef<
-  "query",
-  GetTokensForVisitorArgs,
-  string[]
->;
+export const GET_TOKENS_FOR_VISITOR_REF = makeInternalQueryRef<GetTokensForVisitorArgs, string[]>(
+  "push:getTokensForVisitor"
+);
 
-export const GET_CONVERSATION_REF = makeFunctionReference<
-  "query",
-  GetConversationArgs,
-  Doc<"conversations"> | null
->("push:getConversation") as unknown as InternalFunctionRef<
-  "query",
-  GetConversationArgs,
-  Doc<"conversations"> | null
->;
+export const GET_CONVERSATION_REF = makeInternalQueryRef<GetConversationArgs, Doc<"conversations"> | null>(
+  "push:getConversation"
+);
 
-export const GET_ELIGIBLE_VISITORS_REF = makeFunctionReference<
-  "query",
-  SendWithTargetingArgs,
-  Id<"visitors">[]
->("push:getEligibleVisitors") as unknown as InternalFunctionRef<
-  "query",
-  SendWithTargetingArgs,
-  Id<"visitors">[]
->;
+export const GET_ELIGIBLE_VISITORS_REF = makeInternalQueryRef<SendWithTargetingArgs, Id<"visitors">[]>(
+  "push:getEligibleVisitors"
+);
 
 export function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(

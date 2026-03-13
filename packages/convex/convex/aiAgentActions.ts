@@ -21,6 +21,50 @@ type ConvexRef<
   Return = unknown,
 > = FunctionReference<Type, Visibility, Args, Return>;
 
+function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): ConvexRef<"query", "internal", Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as ConvexRef<
+    "query",
+    "internal",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): ConvexRef<"mutation", "internal", Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as ConvexRef<
+    "mutation",
+    "internal",
+    Args,
+    Return
+  >;
+}
+
+function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): ConvexRef<"action", "internal", Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as ConvexRef<
+    "action",
+    "internal",
+    Args,
+    Return
+  >;
+}
+
+function makePublicMutationRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): ConvexRef<"mutation", "public", Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as ConvexRef<
+    "mutation",
+    "public",
+    Args,
+    Return
+  >;
+}
+
 type ConversationAccessArgs = {
   conversationId: Id<"conversations">;
   visitorId?: Id<"visitors">;
@@ -54,12 +98,24 @@ type RuntimeDiagnosticArgs = {
   model?: string;
 };
 
+type WorkspaceIdArgs = {
+  workspaceId: Id<"workspaces">;
+};
+
 type RelevantKnowledgeResult = {
   type: string;
   id: string;
   title: string;
   content: string;
   relevanceScore: number;
+};
+
+type GetRelevantKnowledgeForRuntimeActionArgs = {
+  workspaceId: Id<"workspaces">;
+  query: string;
+  knowledgeSources?: KnowledgeSource[];
+  limit?: number;
+  embeddingModel?: string;
 };
 
 type HandoffToHumanArgs = {
@@ -116,97 +172,41 @@ type StoreResponseArgs = {
   provider: string;
 };
 
-const AUTHORIZE_CONVERSATION_ACCESS_REF = makeFunctionReference<
-  "query",
+const AUTHORIZE_CONVERSATION_ACCESS_REF = makeInternalQueryRef<
   ConversationAccessArgs,
   ConversationAccessResult
->("aiAgent:authorizeConversationAccess") as unknown as ConvexRef<
-  "query",
-  "internal",
-  ConversationAccessArgs,
-  ConversationAccessResult
->;
+>("aiAgent:authorizeConversationAccess");
 
-const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeFunctionReference<
-  "query",
-  { workspaceId: Id<"workspaces"> },
-  RuntimeSettings
->("aiAgent:getRuntimeSettingsForWorkspace") as unknown as ConvexRef<
-  "query",
-  "internal",
-  { workspaceId: Id<"workspaces"> },
-  RuntimeSettings
->;
+const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeInternalQueryRef<WorkspaceIdArgs, RuntimeSettings>(
+  "aiAgent:getRuntimeSettingsForWorkspace"
+);
 
-const RECORD_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
-  "mutation",
-  RuntimeDiagnosticArgs,
-  unknown
->("aiAgent:recordRuntimeDiagnostic") as unknown as ConvexRef<
-  "mutation",
-  "internal",
-  RuntimeDiagnosticArgs
->;
+const RECORD_RUNTIME_DIAGNOSTIC_REF = makeInternalMutationRef<RuntimeDiagnosticArgs>(
+  "aiAgent:recordRuntimeDiagnostic"
+);
 
-const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
-  "mutation",
-  { workspaceId: Id<"workspaces"> },
+const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeInternalMutationRef<
+  WorkspaceIdArgs,
   Id<"aiAgentSettings"> | null
->("aiAgent:clearRuntimeDiagnostic") as unknown as ConvexRef<
-  "mutation",
-  "internal",
-  { workspaceId: Id<"workspaces"> },
-  Id<"aiAgentSettings"> | null
->;
+>("aiAgent:clearRuntimeDiagnostic");
 
-const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
-  "action",
-  {
-    workspaceId: Id<"workspaces">;
-    query: string;
-    knowledgeSources?: KnowledgeSource[];
-    limit?: number;
-    embeddingModel?: string;
-  },
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeInternalActionRef<
+  GetRelevantKnowledgeForRuntimeActionArgs,
   RelevantKnowledgeResult[]
->("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
-  "action",
-  "internal",
-  {
-    workspaceId: Id<"workspaces">;
-    query: string;
-    knowledgeSources?: KnowledgeSource[];
-    limit?: number;
-    embeddingModel?: string;
-  },
-  RelevantKnowledgeResult[]
->;
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction");
 
-const HANDOFF_TO_HUMAN_REF = makeFunctionReference<
-  "mutation",
-  HandoffToHumanArgs,
-  HandoffToHumanResult
->("aiAgent:handoffToHuman") as unknown as ConvexRef<
-  "mutation",
-  "public",
-  HandoffToHumanArgs,
-  HandoffToHumanResult
->;
+const HANDOFF_TO_HUMAN_REF = makePublicMutationRef<HandoffToHumanArgs, HandoffToHumanResult>(
+  "aiAgent:handoffToHuman"
+);
 
-const STORE_RESPONSE_REF = makeFunctionReference<"mutation", StoreResponseArgs, Id<"aiResponses">>(
+const STORE_RESPONSE_REF = makePublicMutationRef<StoreResponseArgs, Id<"aiResponses">>(
   "aiAgent:storeResponse"
-) as unknown as ConvexRef<"mutation", "public", StoreResponseArgs, Id<"aiResponses">>;
+);
 
-const INTERNAL_SEND_BOT_MESSAGE_REF = makeFunctionReference<
-  "mutation",
+const INTERNAL_SEND_BOT_MESSAGE_REF = makeInternalMutationRef<
   InternalSendBotMessageArgs,
   Id<"messages">
->("messages:internalSendBotMessage") as unknown as ConvexRef<
-  "mutation",
-  "internal",
-  InternalSendBotMessageArgs,
-  Id<"messages">
->;
+>("messages:internalSendBotMessage");
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <

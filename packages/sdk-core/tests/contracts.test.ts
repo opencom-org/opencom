@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const clientMocks = vi.hoisted(() => {
   const query = vi.fn();
   const mutation = vi.fn();
+  const action = vi.fn();
   const constructor = vi.fn().mockImplementation(function MockConvexReactClient() {
-    return { query, mutation };
+    return { query, mutation, action };
   });
-  return { query, mutation, constructor };
+  return { query, mutation, action, constructor };
 });
 
 vi.mock("convex/react", () => ({
@@ -114,6 +115,20 @@ async function expectLatestMutationCall(
   expect(mutationArgs).toEqual(expectedArgs);
 }
 
+async function expectLatestActionCall(
+  expectedPath: string,
+  invoke: () => Promise<unknown>,
+  expectedArgs: unknown,
+  resolvedValue: unknown
+): Promise<void> {
+  clientMocks.action.mockResolvedValueOnce(resolvedValue);
+  await invoke();
+
+  const [actionRef, actionArgs] = clientMocks.action.mock.calls.at(-1) ?? [];
+  expect(resolveFunctionPath(actionRef)).toBe(expectedPath);
+  expect(actionArgs).toEqual(expectedArgs);
+}
+
 async function expectLatestQueryCall(
   expectedPath: string,
   invoke: () => Promise<unknown>,
@@ -132,6 +147,7 @@ describe("sdk-core backend contract conformance", () => {
   beforeEach(() => {
     clientMocks.mutation.mockReset();
     clientMocks.query.mockReset();
+    clientMocks.action.mockReset();
     resetClient();
     resetVisitorState();
 
@@ -473,7 +489,7 @@ describe("sdk-core backend contract conformance", () => {
       }
     );
 
-    await expectLatestQueryCall(
+    await expectLatestActionCall(
       "aiAgent:getRelevantKnowledge",
       () => getRelevantKnowledge("refund policy", 5),
       {

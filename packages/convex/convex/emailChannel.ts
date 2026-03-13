@@ -29,6 +29,24 @@ type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown>
 type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"action", "internal", Args, Return>;
 
+function makeInternalActionRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalActionRef<Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalActionRef<
+    Args,
+    Return
+  >;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
 type SendEmailViaProviderArgs = {
   messageId: Id<"messages">;
   to: string[];
@@ -50,17 +68,13 @@ type UpdateDeliveryStatusArgs = {
   status: "sent" | "delivered" | "bounced" | "failed";
 };
 
-const SEND_EMAIL_VIA_PROVIDER_REF = makeFunctionReference<
-  "action",
-  SendEmailViaProviderArgs,
-  unknown
->("emailChannel:sendEmailViaProvider") as unknown as InternalActionRef<SendEmailViaProviderArgs>;
+const SEND_EMAIL_VIA_PROVIDER_REF = makeInternalActionRef<SendEmailViaProviderArgs>(
+  "emailChannel:sendEmailViaProvider"
+);
 
-const UPDATE_DELIVERY_STATUS_REF = makeFunctionReference<
-  "mutation",
-  UpdateDeliveryStatusArgs,
-  unknown
->("emailChannel:updateDeliveryStatus") as unknown as InternalMutationRef<UpdateDeliveryStatusArgs>;
+const UPDATE_DELIVERY_STATUS_REF = makeInternalMutationRef<UpdateDeliveryStatusArgs>(
+  "emailChannel:updateDeliveryStatus"
+);
 
 function assertWebhookInternalAccess(providedSecret?: string): void {
   if (!WEBHOOK_INTERNAL_SECRET) {

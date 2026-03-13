@@ -12,6 +12,8 @@ import {
 } from "./lib/unifiedArticles";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+const EMBEDDING_GENERATE_CONCURRENCY = 4;
+const EMBEDDING_BACKFILL_BATCH_CONCURRENCY = 2;
 
 type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
   "query",
@@ -25,6 +27,30 @@ type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown>
 
 type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"action", "internal", Args, Return>;
+
+function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalQueryRef<Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as InternalQueryRef<Args, Return>;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
+function makeInternalActionRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalActionRef<Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalActionRef<
+    Args,
+    Return
+  >;
+}
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
   return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
@@ -116,67 +142,41 @@ type ListedSnippet = {
   content: string;
 };
 
-const LIST_BY_CONTENT_REF = makeFunctionReference<
-  "query",
-  GetByContentArgs,
-  Doc<"contentEmbeddings">[]
->("embeddings:listByContent") as unknown as InternalQueryRef<
-  GetByContentArgs,
-  Doc<"contentEmbeddings">[]
->;
-
-const INSERT_EMBEDDING_REF = makeFunctionReference<
-  "mutation",
-  InsertEmbeddingArgs,
-  Id<"contentEmbeddings">
->("embeddings:insert") as unknown as InternalMutationRef<
-  InsertEmbeddingArgs,
-  Id<"contentEmbeddings">
->;
-
-const GENERATE_INTERNAL_REF = makeFunctionReference<
-  "action",
-  GenerateEmbeddingArgs,
-  GenerateEmbeddingResult
->("embeddings:generateInternal") as unknown as InternalActionRef<
-  GenerateEmbeddingArgs,
-  GenerateEmbeddingResult
->;
-
-const REQUIRE_PERMISSION_FOR_ACTION_REF = makeFunctionReference<
-  "query",
-  PermissionForActionArgs,
-  unknown
->("permissions:requirePermissionForAction") as unknown as InternalQueryRef<PermissionForActionArgs>;
-
-const LIST_ARTICLES_REF = makeFunctionReference<"query", WorkspaceArgs, ListedArticle[]>(
-  "embeddings:listArticles"
-) as unknown as InternalQueryRef<WorkspaceArgs, ListedArticle[]>;
-
-const LIST_INTERNAL_ARTICLES_REF = makeFunctionReference<"query", WorkspaceArgs, ListedArticle[]>(
-  "embeddings:listInternalArticles"
-) as unknown as InternalQueryRef<WorkspaceArgs, ListedArticle[]>;
-
-const LIST_SNIPPETS_REF = makeFunctionReference<"query", WorkspaceArgs, ListedSnippet[]>(
-  "embeddings:listSnippets"
-) as unknown as InternalQueryRef<WorkspaceArgs, ListedSnippet[]>;
-
-const REMOVE_EMBEDDINGS_BY_IDS_REF = makeFunctionReference<
-  "mutation",
-  { ids: Id<"contentEmbeddings">[] },
-  unknown
->("embeddings:removeByIds") as unknown as InternalMutationRef<{
+type RemoveEmbeddingsByIdsArgs = {
   ids: Id<"contentEmbeddings">[];
-}>;
+};
 
-const GENERATE_BATCH_INTERNAL_REF = makeFunctionReference<
-  "action",
-  GenerateBatchArgs,
-  GenerateBatchResult
->("embeddings:generateBatchInternal") as unknown as InternalActionRef<
-  GenerateBatchArgs,
-  GenerateBatchResult
->;
+const LIST_BY_CONTENT_REF = makeInternalQueryRef<GetByContentArgs, Doc<"contentEmbeddings">[]>(
+  "embeddings:listByContent"
+);
+
+const INSERT_EMBEDDING_REF = makeInternalMutationRef<InsertEmbeddingArgs, Id<"contentEmbeddings">>(
+  "embeddings:insert"
+);
+
+const GENERATE_INTERNAL_REF = makeInternalActionRef<GenerateEmbeddingArgs, GenerateEmbeddingResult>(
+  "embeddings:generateInternal"
+);
+
+const REQUIRE_PERMISSION_FOR_ACTION_REF = makeInternalQueryRef<PermissionForActionArgs, unknown>(
+  "permissions:requirePermissionForAction"
+);
+
+const LIST_ARTICLES_REF = makeInternalQueryRef<WorkspaceArgs, ListedArticle[]>("embeddings:listArticles");
+
+const LIST_INTERNAL_ARTICLES_REF = makeInternalQueryRef<WorkspaceArgs, ListedArticle[]>(
+  "embeddings:listInternalArticles"
+);
+
+const LIST_SNIPPETS_REF = makeInternalQueryRef<WorkspaceArgs, ListedSnippet[]>("embeddings:listSnippets");
+
+const REMOVE_EMBEDDINGS_BY_IDS_REF = makeInternalMutationRef<RemoveEmbeddingsByIdsArgs>(
+  "embeddings:removeByIds"
+);
+
+const GENERATE_BATCH_INTERNAL_REF = makeInternalActionRef<GenerateBatchArgs, GenerateBatchResult>(
+  "embeddings:generateBatchInternal"
+);
 
 async function createTextHash(text: string): Promise<string> {
   const data = new TextEncoder().encode(text);
@@ -240,6 +240,34 @@ function createSnippet(content: string, maxLength: number = 200): string {
     .trim();
   if (cleaned.length <= maxLength) return cleaned;
   return cleaned.slice(0, maxLength - 3) + "...";
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const maxWorkers = Math.max(1, Math.min(concurrency, items.length));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: maxWorkers }, async () => {
+      while (true) {
+        const currentIndex = nextIndex++;
+        if (currentIndex >= items.length) {
+          return;
+        }
+        results[currentIndex] = await worker(items[currentIndex], currentIndex);
+      }
+    })
+  );
+
+  return results;
 }
 
 export const generateInternal = internalAction({
@@ -365,25 +393,19 @@ export const generateBatch = authAction({
     }
 
     const runAction = getShallowRunAction(ctx);
-    let processed = 0;
-    let skipped = 0;
-
-    for (const item of args.items) {
-      const result = await runAction(GENERATE_INTERNAL_REF, {
+    const results = await runWithConcurrency(args.items, EMBEDDING_GENERATE_CONCURRENCY, async (item) =>
+      runAction(GENERATE_INTERNAL_REF, {
         workspaceId: item.workspaceId,
         contentType: item.contentType,
         contentId: item.contentId,
         title: item.title,
         content: item.content,
         model: args.model,
-      });
-      if (result.skipped) {
-        skipped += 1;
-      } else {
-        processed += 1;
-      }
-    }
+      })
+    );
 
+    const skipped = results.filter((result) => result.skipped).length;
+    const processed = results.length - skipped;
     return { processed, skipped };
   },
 });
@@ -462,12 +484,22 @@ export const backfillExisting = authAction({
     let totalProcessed = 0;
     let totalSkipped = 0;
 
+    const batches: BatchItem[][] = [];
     for (let i = 0; i < items.length; i += batchSize) {
-      const batch = items.slice(i, i + batchSize);
-      const result = await runAction(GENERATE_BATCH_INTERNAL_REF, {
-        items: batch,
-        model: args.model,
-      });
+      batches.push(items.slice(i, i + batchSize));
+    }
+
+    const batchResults = await runWithConcurrency(
+      batches,
+      EMBEDDING_BACKFILL_BATCH_CONCURRENCY,
+      async (batch) =>
+        runAction(GENERATE_BATCH_INTERNAL_REF, {
+          items: batch,
+          model: args.model,
+        })
+    );
+
+    for (const result of batchResults) {
       totalProcessed += result.processed;
       totalSkipped += result.skipped;
     }
@@ -503,25 +535,19 @@ export const generateBatchInternal = internalAction({
     }
 
     const runAction = getShallowRunAction(ctx);
-    let processed = 0;
-    let skipped = 0;
-
-    for (const item of args.items) {
-      const result = await runAction(GENERATE_INTERNAL_REF, {
+    const results = await runWithConcurrency(args.items, EMBEDDING_GENERATE_CONCURRENCY, async (item) =>
+      runAction(GENERATE_INTERNAL_REF, {
         workspaceId: item.workspaceId,
         contentType: item.contentType,
         contentId: item.contentId,
         title: item.title,
         content: item.content,
         model: args.model,
-      });
-      if (result.skipped) {
-        skipped += 1;
-      } else {
-        processed += 1;
-      }
-    }
+      })
+    );
 
+    const skipped = results.filter((result) => result.skipped).length;
+    const processed = results.length - skipped;
     return { processed, skipped };
   },
 });

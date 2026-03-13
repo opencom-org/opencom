@@ -35,6 +35,21 @@ type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = 
 type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"mutation", "internal", Args, Return>;
 
+function makeInternalQueryRef<Args extends Record<string, unknown>, Return>(
+  name: string
+): InternalQueryRef<Args, Return> {
+  return makeFunctionReference<"query", Args, Return>(name) as unknown as InternalQueryRef<Args, Return>;
+}
+
+function makeInternalMutationRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalMutationRef<Args, Return> {
+  return makeFunctionReference<"mutation", Args, Return>(name) as unknown as InternalMutationRef<
+    Args,
+    Return
+  >;
+}
+
 type GetInternalArgs = {
   id: Id<"pushCampaigns">;
 };
@@ -56,30 +71,20 @@ type UpdateStatsArgs = {
   failed: number;
 };
 
-const GET_INTERNAL_REF = makeFunctionReference<"query", GetInternalArgs, Doc<"pushCampaigns"> | null>(
+const GET_INTERNAL_REF = makeInternalQueryRef<GetInternalArgs, Doc<"pushCampaigns"> | null>(
   "pushCampaigns:getInternal"
-) as unknown as InternalQueryRef<GetInternalArgs, Doc<"pushCampaigns"> | null>;
+);
 
-const GET_PENDING_RECIPIENTS_REF = makeFunctionReference<
-  "query",
+const GET_PENDING_RECIPIENTS_REF = makeInternalQueryRef<
   PendingRecipientsArgs,
   PendingRecipientWithToken[]
->("pushCampaigns:getPendingRecipients") as unknown as InternalQueryRef<
-  PendingRecipientsArgs,
-  PendingRecipientWithToken[]
->;
+>("pushCampaigns:getPendingRecipients");
 
-const UPDATE_RECIPIENT_STATUS_REF = makeFunctionReference<
-  "mutation",
-  UpdateRecipientStatusArgs,
-  unknown
->("pushCampaigns:updateRecipientStatus") as unknown as InternalMutationRef<
-  UpdateRecipientStatusArgs
->;
+const UPDATE_RECIPIENT_STATUS_REF = makeInternalMutationRef<UpdateRecipientStatusArgs>(
+  "pushCampaigns:updateRecipientStatus"
+);
 
-const UPDATE_STATS_REF = makeFunctionReference<"mutation", UpdateStatsArgs, unknown>(
-  "pushCampaigns:updateStats"
-) as unknown as InternalMutationRef<UpdateStatsArgs>;
+const UPDATE_STATS_REF = makeInternalMutationRef<UpdateStatsArgs>("pushCampaigns:updateStats");
 
 function clampLimit(limit: number | undefined, defaultValue: number, maxValue: number): number {
   const normalized = limit ?? defaultValue;

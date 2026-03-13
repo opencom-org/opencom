@@ -6,6 +6,15 @@ import { authMutation, authQuery } from "./lib/authWrappers";
 type InternalSchedulableRef<Args extends Record<string, unknown>, Return = unknown> =
   FunctionReference<"action" | "mutation", "internal", Args, Return>;
 
+function makeInternalActionRef<Args extends Record<string, unknown>, Return = unknown>(
+  name: string
+): InternalSchedulableRef<Args, Return> {
+  return makeFunctionReference<"action", Args, Return>(name) as unknown as InternalSchedulableRef<
+    Args,
+    Return
+  >;
+}
+
 type GenerateSnippetEmbeddingArgs = {
   workspaceId: Id<"workspaces">;
   contentType: "snippet";
@@ -14,11 +23,9 @@ type GenerateSnippetEmbeddingArgs = {
   content: string;
 };
 
-const GENERATE_SNIPPET_EMBEDDINGS_REF = makeFunctionReference<
-  "action",
-  GenerateSnippetEmbeddingArgs,
-  unknown
->("embeddings:generateInternal") as unknown as InternalSchedulableRef<GenerateSnippetEmbeddingArgs>;
+const GENERATE_SNIPPET_EMBEDDINGS_REF = makeInternalActionRef<GenerateSnippetEmbeddingArgs>(
+  "embeddings:generateInternal"
+);
 
 function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
   return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
