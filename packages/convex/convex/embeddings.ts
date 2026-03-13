@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { embed, embedMany } from "ai";
+import { embedMany } from "ai";
 import { authAction } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
 import {
@@ -55,12 +55,6 @@ type BatchItem = {
   content: string;
 };
 
-type BatchItemWithHash = BatchItem & {
-  textToEmbed: string;
-  textHash: string;
-  snippet: string;
-};
-
 type GenerateEmbeddingArgs = {
   workspaceId: Id<"workspaces">;
   contentType: BatchItem["contentType"];
@@ -100,14 +94,6 @@ type InsertEmbeddingArgs = {
   snippet: string;
 };
 
-type UpdateEmbeddingArgs = {
-  id: Id<"contentEmbeddings">;
-  embedding: number[];
-  textHash: string;
-  title: string;
-  snippet: string;
-};
-
 type PermissionForActionArgs = {
   userId: Id<"users">;
   workspaceId: Id<"workspaces">;
@@ -130,18 +116,14 @@ type ListedSnippet = {
   content: string;
 };
 
-const GET_BY_CONTENT_REF = makeFunctionReference<
+const LIST_BY_CONTENT_REF = makeFunctionReference<
   "query",
   GetByContentArgs,
-  Doc<"contentEmbeddings"> | null
->("embeddings:getByContent") as unknown as InternalQueryRef<
+  Doc<"contentEmbeddings">[]
+>("embeddings:listByContent") as unknown as InternalQueryRef<
   GetByContentArgs,
-  Doc<"contentEmbeddings"> | null
+  Doc<"contentEmbeddings">[]
 >;
-
-const UPDATE_EMBEDDING_REF = makeFunctionReference<"mutation", UpdateEmbeddingArgs, unknown>(
-  "embeddings:update"
-) as unknown as InternalMutationRef<UpdateEmbeddingArgs>;
 
 const INSERT_EMBEDDING_REF = makeFunctionReference<
   "mutation",
@@ -179,6 +161,15 @@ const LIST_SNIPPETS_REF = makeFunctionReference<"query", WorkspaceArgs, ListedSn
   "embeddings:listSnippets"
 ) as unknown as InternalQueryRef<WorkspaceArgs, ListedSnippet[]>;
 
+const REMOVE_EMBEDDINGS_REF = makeFunctionReference<
+  "mutation",
+  { contentType: BatchItem["contentType"]; contentId: string },
+  unknown
+>("embeddings:remove") as unknown as InternalMutationRef<{
+  contentType: BatchItem["contentType"];
+  contentId: string;
+}>;
+
 const GENERATE_BATCH_INTERNAL_REF = makeFunctionReference<
   "action",
   GenerateBatchArgs,
@@ -194,6 +185,53 @@ async function createTextHash(text: string): Promise<string> {
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+const EMBEDDING_CHUNK_MAX_CHARS = 3000;
+const EMBEDDING_CHUNK_OVERLAP_CHARS = 300;
+
+function splitContentIntoChunks(
+  content: string,
+  maxChars: number = EMBEDDING_CHUNK_MAX_CHARS,
+  overlapChars: number = EMBEDDING_CHUNK_OVERLAP_CHARS
+): string[] {
+  const normalized = content.replace(/\r\n/g, "\n").trim();
+  if (normalized.length === 0) {
+    return [""];
+  }
+  if (normalized.length <= maxChars) {
+    return [normalized];
+  }
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < normalized.length) {
+    let end = Math.min(start + maxChars, normalized.length);
+
+    if (end < normalized.length) {
+      const window = normalized.slice(start, end);
+      const minBreakIndex = Math.floor(maxChars * 0.6);
+      const paragraphBreak = window.lastIndexOf("\n\n");
+      const lineBreak = window.lastIndexOf("\n");
+      const sentenceBreak = Math.max(window.lastIndexOf(". "), window.lastIndexOf("? "), window.lastIndexOf("! "));
+      const bestBreak = [paragraphBreak, lineBreak, sentenceBreak].find((index) => index >= minBreakIndex);
+      if (bestBreak !== undefined) {
+        end = start + bestBreak + 1;
+      }
+    }
+
+    const chunk = normalized.slice(start, end).trim();
+    if (chunk.length > 0) {
+      chunks.push(chunk);
+    }
+    if (end >= normalized.length) {
+      break;
+    }
+    start = Math.max(end - overlapChars, start + 1);
+  }
+
+  return chunks.length > 0 ? chunks : [normalized];
 }
 
 function createSnippet(content: string, maxLength: number = 200): string {
@@ -215,51 +253,61 @@ export const generateInternal = internalAction({
     model: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<GenerateEmbeddingResult> => {
-    const textToEmbed = `${args.title}\n\n${args.content}`;
-    const textHash = await createTextHash(textToEmbed);
+    const fullText = `${args.title}\n\n${args.content}`;
+    const textHash = await createTextHash(fullText);
+    const chunks = splitContentIntoChunks(args.content);
 
     const runQuery = getShallowRunQuery(ctx);
-    const existing = await runQuery(GET_BY_CONTENT_REF, {
+    const existing = await runQuery(LIST_BY_CONTENT_REF, {
       contentType: args.contentType,
       contentId: args.contentId,
     });
 
-    if (existing && existing.textHash === textHash) {
-      return { id: existing._id, skipped: true };
+    if (
+      existing.length === chunks.length &&
+      existing.length > 0 &&
+      existing.every((embeddingDoc) => embeddingDoc.textHash === textHash)
+    ) {
+      return { id: existing[0]._id, skipped: true };
     }
 
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
     const aiClient = createAIClient();
-    const { embedding } = await embed({
+    const chunkTexts = chunks.map((chunk) => `${args.title}\n\n${chunk}`);
+    const { embeddings } = await embedMany({
       model: aiClient.embedding(modelName),
-      value: textToEmbed,
+      values: chunkTexts,
     });
 
-    const snippetText = createSnippet(args.content);
     const runMutation = getShallowRunMutation(ctx);
-
-    if (existing) {
-      await runMutation(UPDATE_EMBEDDING_REF, {
-        id: existing._id,
-        embedding: embedding,
-        textHash,
-        title: args.title,
-        snippet: snippetText,
+    if (existing.length > 0) {
+      await runMutation(REMOVE_EMBEDDINGS_REF, {
+        contentType: args.contentType,
+        contentId: args.contentId,
       });
-      return { id: existing._id, skipped: false };
     }
 
-    const id = await runMutation(INSERT_EMBEDDING_REF, {
-      workspaceId: args.workspaceId,
-      contentType: args.contentType,
-      contentId: args.contentId,
-      embedding: embedding,
-      textHash,
-      title: args.title,
-      snippet: snippetText,
-    });
+    const insertedIds: Id<"contentEmbeddings">[] = [];
+    for (let index = 0; index < embeddings.length; index += 1) {
+      const embedding = embeddings[index];
+      const chunk = chunks[index];
+      const id = await runMutation(INSERT_EMBEDDING_REF, {
+        workspaceId: args.workspaceId,
+        contentType: args.contentType,
+        contentId: args.contentId,
+        embedding,
+        textHash,
+        title: args.title,
+        snippet: createSnippet(chunk),
+      });
+      insertedIds.push(id);
+    }
 
-    return { id, skipped: false };
+    if (insertedIds.length === 0) {
+      throw new Error("Failed to generate embeddings: no chunks were inserted");
+    }
+
+    return { id: insertedIds[0], skipped: false };
   },
 });
 
@@ -318,77 +366,27 @@ export const generateBatch = authAction({
       });
     }
 
-    const itemsWithHash: BatchItemWithHash[] = await Promise.all(
-      args.items.map(async (item: BatchItem) => ({
-        ...item,
-        textToEmbed: `${item.title}\n\n${item.content}`,
-        textHash: await createTextHash(`${item.title}\n\n${item.content}`),
-        snippet: createSnippet(item.content),
-      }))
-    );
+    const runAction = getShallowRunAction(ctx);
+    let processed = 0;
+    let skipped = 0;
 
-    const existingEmbeddings: (Doc<"contentEmbeddings"> | null)[] = await Promise.all(
-      itemsWithHash.map((item: BatchItemWithHash) =>
-        runQuery(GET_BY_CONTENT_REF, {
-          contentType: item.contentType,
-          contentId: item.contentId,
-        })
-      )
-    );
-
-    const itemsToProcess: BatchItemWithHash[] = itemsWithHash.filter(
-      (item: BatchItemWithHash, index: number) => {
-        const existing: Doc<"contentEmbeddings"> | null = existingEmbeddings[index];
-        return !existing || existing.textHash !== item.textHash;
-      }
-    );
-
-    if (itemsToProcess.length === 0) {
-      return { processed: 0, skipped: args.items.length };
-    }
-
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
-    const aiClient = createAIClient();
-    const { embeddings } = await embedMany({
-      model: aiClient.embedding(modelName),
-      values: itemsToProcess.map((item: BatchItemWithHash) => item.textToEmbed),
-    });
-
-    const runMutation = getShallowRunMutation(ctx);
-
-    for (let i = 0; i < itemsToProcess.length; i++) {
-      const item = itemsToProcess[i];
-      const embedding = embeddings[i];
-      const existingIndex = itemsWithHash.findIndex(
-        (ih) => ih.contentType === item.contentType && ih.contentId === item.contentId
-      );
-      const existing = existingEmbeddings[existingIndex];
-
-      if (existing) {
-        await runMutation(UPDATE_EMBEDDING_REF, {
-          id: existing._id,
-          embedding,
-          textHash: item.textHash,
-          title: item.title,
-          snippet: item.snippet,
-        });
+    for (const item of args.items) {
+      const result = await runAction(GENERATE_INTERNAL_REF, {
+        workspaceId: item.workspaceId,
+        contentType: item.contentType,
+        contentId: item.contentId,
+        title: item.title,
+        content: item.content,
+        model: args.model,
+      });
+      if (result.skipped) {
+        skipped += 1;
       } else {
-        await runMutation(INSERT_EMBEDDING_REF, {
-          workspaceId: item.workspaceId,
-          contentType: item.contentType,
-          contentId: item.contentId,
-          embedding,
-          textHash: item.textHash,
-          title: item.title,
-          snippet: item.snippet,
-        });
+        processed += 1;
       }
     }
 
-    return {
-      processed: itemsToProcess.length,
-      skipped: args.items.length - itemsToProcess.length,
-    };
+    return { processed, skipped };
   },
 });
 
@@ -506,78 +504,27 @@ export const generateBatchInternal = internalAction({
       return { processed: 0, skipped: 0 };
     }
 
-    const runQuery = getShallowRunQuery(ctx);
-    const itemsWithHash: BatchItemWithHash[] = await Promise.all(
-      args.items.map(async (item: BatchItem) => ({
-        ...item,
-        textToEmbed: `${item.title}\n\n${item.content}`,
-        textHash: await createTextHash(`${item.title}\n\n${item.content}`),
-        snippet: createSnippet(item.content),
-      }))
-    );
+    const runAction = getShallowRunAction(ctx);
+    let processed = 0;
+    let skipped = 0;
 
-    const existingEmbeddings: (Doc<"contentEmbeddings"> | null)[] = await Promise.all(
-      itemsWithHash.map((item: BatchItemWithHash) =>
-        runQuery(GET_BY_CONTENT_REF, {
-          contentType: item.contentType,
-          contentId: item.contentId,
-        })
-      )
-    );
-
-    const itemsToProcess: BatchItemWithHash[] = itemsWithHash.filter(
-      (item: BatchItemWithHash, index: number) => {
-        const existing: Doc<"contentEmbeddings"> | null = existingEmbeddings[index];
-        return !existing || existing.textHash !== item.textHash;
-      }
-    );
-
-    if (itemsToProcess.length === 0) {
-      return { processed: 0, skipped: args.items.length };
-    }
-
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
-    const aiClient = createAIClient();
-    const { embeddings } = await embedMany({
-      model: aiClient.embedding(modelName),
-      values: itemsToProcess.map((item: BatchItemWithHash) => item.textToEmbed),
-    });
-
-    const runMutation = getShallowRunMutation(ctx);
-
-    for (let i = 0; i < itemsToProcess.length; i++) {
-      const item = itemsToProcess[i];
-      const embedding = embeddings[i];
-      const existingIndex = itemsWithHash.findIndex(
-        (ih) => ih.contentType === item.contentType && ih.contentId === item.contentId
-      );
-      const existing = existingEmbeddings[existingIndex];
-
-      if (existing) {
-        await runMutation(UPDATE_EMBEDDING_REF, {
-          id: existing._id,
-          embedding,
-          textHash: item.textHash,
-          title: item.title,
-          snippet: item.snippet,
-        });
+    for (const item of args.items) {
+      const result = await runAction(GENERATE_INTERNAL_REF, {
+        workspaceId: item.workspaceId,
+        contentType: item.contentType,
+        contentId: item.contentId,
+        title: item.title,
+        content: item.content,
+        model: args.model,
+      });
+      if (result.skipped) {
+        skipped += 1;
       } else {
-        await runMutation(INSERT_EMBEDDING_REF, {
-          workspaceId: item.workspaceId,
-          contentType: item.contentType,
-          contentId: item.contentId,
-          embedding,
-          textHash: item.textHash,
-          title: item.title,
-          snippet: item.snippet,
-        });
+        processed += 1;
       }
     }
 
-    return {
-      processed: itemsToProcess.length,
-      skipped: args.items.length - itemsToProcess.length,
-    };
+    return { processed, skipped };
   },
 });
 
@@ -592,10 +539,10 @@ export const remove = internalMutation({
       .withIndex("by_content", (q) =>
         q.eq("contentType", args.contentType).eq("contentId", args.contentId)
       )
-      .first();
+      .collect();
 
-    if (existing) {
-      await ctx.db.delete(existing._id);
+    for (const embeddingDoc of existing) {
+      await ctx.db.delete(embeddingDoc._id);
     }
   },
 });
@@ -606,12 +553,28 @@ export const getByContent = internalQuery({
     contentId: v.string(),
   },
   handler: async (ctx, args) => {
+    const docs = await ctx.db
+      .query("contentEmbeddings")
+      .withIndex("by_content", (q) =>
+        q.eq("contentType", args.contentType).eq("contentId", args.contentId)
+      )
+      .collect();
+    return docs[0] ?? null;
+  },
+});
+
+export const listByContent = internalQuery({
+  args: {
+    contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
+    contentId: v.string(),
+  },
+  handler: async (ctx, args) => {
     return await ctx.db
       .query("contentEmbeddings")
       .withIndex("by_content", (q) =>
         q.eq("contentType", args.contentType).eq("contentId", args.contentId)
       )
-      .first();
+      .collect();
   },
 });
 

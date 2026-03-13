@@ -15,7 +15,7 @@ type AIConfigurationDiagnostic = {
 };
 
 type ConvexRef<
-  Type extends "query" | "mutation",
+  Type extends "query" | "mutation" | "action",
   Visibility extends "internal" | "public",
   Args extends Record<string, unknown>,
   Return = unknown,
@@ -168,7 +168,7 @@ const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
   },
   RelevantKnowledgeResult[]
 >("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
-  "mutation", // We have to use mutation or query here for ConvexRef, but we are running it as an action
+  "action",
   "internal",
   {
     workspaceId: Id<"workspaces">;
@@ -224,6 +224,17 @@ function getShallowRunMutation(ctx: { runMutation: unknown }) {
   >(
     mutationRef: ConvexRef<"mutation", Visibility, Args, Return>,
     mutationArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as unknown as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    actionRef: ConvexRef<"action", Visibility, Args, Return>,
+    actionArgs: Args
   ) => Promise<Return>;
 }
 
@@ -461,6 +472,7 @@ export const generateResponse = action({
 
     const runQuery = getShallowRunQuery(ctx);
     const runMutation = getShallowRunMutation(ctx);
+    const runAction = getShallowRunAction(ctx);
     const access = await runQuery(AUTHORIZE_CONVERSATION_ACCESS_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -562,20 +574,12 @@ export const generateResponse = action({
     });
 
     // Get relevant knowledge
-    
-    
-    
-    
-    
-    
-
-    const runActionSafe = (ctx as any).runAction || (ctx as any).runQuery;
-    const knowledgeResults = (await runActionSafe(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF as any, {
+    const knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
       workspaceId: args.workspaceId,
       query: args.query,
       knowledgeSources: settings.knowledgeSources,
       limit: 5,
-    })) as RelevantKnowledgeResult[];
+    });
 
     // Build knowledge context for prompt
     const knowledgeContext = knowledgeResults

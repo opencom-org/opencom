@@ -10,6 +10,7 @@
 
 import type * as aiAgent from "../aiAgent.js";
 import type * as aiAgentActions from "../aiAgentActions.js";
+import type * as aiAgentActionsKnowledge from "../aiAgentActionsKnowledge.js";
 import type * as articles from "../articles.js";
 import type * as assignmentRules from "../assignmentRules.js";
 import type * as audienceRules from "../audienceRules.js";
@@ -195,6 +196,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   aiAgent: typeof aiAgent;
   aiAgentActions: typeof aiAgentActions;
+  aiAgentActionsKnowledge: typeof aiAgentActionsKnowledge;
   articles: typeof articles;
   assignmentRules: typeof assignmentRules;
   audienceRules: typeof audienceRules;

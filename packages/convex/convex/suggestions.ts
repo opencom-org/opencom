@@ -256,23 +256,15 @@ export const searchSimilar = authAction({
 
     const results = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
       vector: embedding,
-      limit: limit * 2,
+      limit: limit * 8,
       filter: (q) => q.eq("workspaceId", args.workspaceId),
     });
 
-    let filteredResults = results;
-    if (args.contentTypes && args.contentTypes.length > 0) {
-      const contentTypeSet = new Set(args.contentTypes);
-      filteredResults = results.filter((r: { _id: Id<"contentEmbeddings">; _score: number }) => {
-        const doc = r as unknown as { contentType: string };
-        return contentTypeSet.has(doc.contentType as "article" | "internalArticle" | "snippet");
-      });
-    }
-
-    const topResults = filteredResults.slice(0, limit);
+    const contentTypeSet =
+      args.contentTypes && args.contentTypes.length > 0 ? new Set(args.contentTypes) : null;
 
     const enrichedResults: (SuggestionResult | null)[] = await Promise.all(
-      topResults.map(
+      results.map(
         async (result: {
           _id: Id<"contentEmbeddings">;
           _score: number;
@@ -281,6 +273,7 @@ export const searchSimilar = authAction({
             id: result._id,
           });
           if (!doc) return null;
+          if (contentTypeSet && !contentTypeSet.has(doc.contentType)) return null;
           return {
             id: doc.contentId,
             type: doc.contentType,
@@ -292,7 +285,22 @@ export const searchSimilar = authAction({
       )
     );
 
-    return enrichedResults.filter((r): r is SuggestionResult => r !== null);
+    const filtered = enrichedResults.filter((r): r is SuggestionResult => r !== null);
+    const deduped: SuggestionResult[] = [];
+    const seen = new Set<string>();
+    for (const result of filtered) {
+      const key = `${result.type}:${result.id}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      deduped.push(result);
+      if (deduped.length >= limit) {
+        break;
+      }
+    }
+
+    return deduped;
   },
 });
 
@@ -390,20 +398,12 @@ export const searchSimilarInternal = internalAction({
 
     const results = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
       vector: embedding,
-      limit: limit * 2,
+      limit: limit * 8,
       filter: (q) => q.eq("workspaceId", args.workspaceId),
     });
 
-    let filteredResults = results;
-    if (args.contentTypes && args.contentTypes.length > 0) {
-      const contentTypeSet = new Set(args.contentTypes);
-      filteredResults = results.filter((r: { _id: Id<"contentEmbeddings">; _score: number }) => {
-        const doc = r as unknown as { contentType: string };
-        return contentTypeSet.has(doc.contentType as "article" | "internalArticle" | "snippet");
-      });
-    }
-
-    const topResults = filteredResults.slice(0, limit);
+    const contentTypeSet =
+      args.contentTypes && args.contentTypes.length > 0 ? new Set(args.contentTypes) : null;
 
     type EnrichedResult = {
       id: string;
@@ -415,7 +415,7 @@ export const searchSimilarInternal = internalAction({
     } | null;
 
     const enrichedResults: EnrichedResult[] = await Promise.all(
-      topResults.map(
+      results.map(
         async (result: {
           _id: Id<"contentEmbeddings">;
           _score: number;
@@ -424,6 +424,7 @@ export const searchSimilarInternal = internalAction({
             id: result._id,
           });
           if (!doc) return null;
+          if (contentTypeSet && !contentTypeSet.has(doc.contentType)) return null;
 
           const content = await runQuery(GET_CONTENT_BY_ID_REF, {
             contentType: doc.contentType,
@@ -442,7 +443,22 @@ export const searchSimilarInternal = internalAction({
       )
     );
 
-    return enrichedResults.filter((r): r is NonNullable<typeof r> => r !== null);
+    const filtered = enrichedResults.filter((r): r is NonNullable<typeof r> => r !== null);
+    const deduped: NonNullable<EnrichedResult>[] = [];
+    const seen = new Set<string>();
+    for (const result of filtered) {
+      const key = `${result.type}:${result.id}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      deduped.push(result);
+      if (deduped.length >= limit) {
+        break;
+      }
+    }
+
+    return deduped;
   },
 });
 
@@ -689,19 +705,12 @@ export const searchForWidget = action({
 
     const results = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
       vector: embedding,
-      limit: limit * 2,
+      limit: limit * 8,
       filter: (q) => q.eq("workspaceId", args.workspaceId),
     });
 
-    const articleResults = results.filter((r: { _id: Id<"contentEmbeddings">; _score: number }) => {
-      const doc = r as unknown as { contentType: string };
-      return doc.contentType === "article";
-    });
-
-    const topResults = articleResults.slice(0, limit);
-
     const enrichedResults: (WidgetSuggestionResult | null)[] = await Promise.all(
-      topResults.map(
+      results.map(
         async (result: {
           _id: Id<"contentEmbeddings">;
           _score: number;
@@ -710,6 +719,7 @@ export const searchForWidget = action({
             id: result._id,
           });
           if (!doc) return null;
+          if (doc.contentType !== "article") return null;
 
           return {
             id: doc.contentId,
@@ -720,8 +730,21 @@ export const searchForWidget = action({
         }
       )
     );
+    const filtered = enrichedResults.filter((r): r is WidgetSuggestionResult => r !== null);
+    const deduped: WidgetSuggestionResult[] = [];
+    const seen = new Set<string>();
+    for (const result of filtered) {
+      if (seen.has(result.id)) {
+        continue;
+      }
+      seen.add(result.id);
+      deduped.push(result);
+      if (deduped.length >= limit) {
+        break;
+      }
+    }
 
-    return enrichedResults.filter((r): r is WidgetSuggestionResult => r !== null);
+    return deduped;
   },
 });
 
