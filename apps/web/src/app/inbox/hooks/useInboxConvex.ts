@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Id } from "@opencom/convex/dataModel";
 import type { SupportAttachmentFinalizeResult } from "@opencom/web-shared";
 import {
@@ -144,8 +145,8 @@ const GET_SUGGESTIONS_FOR_CONVERSATION_REF = webActionRef<
 const CREATE_SNIPPET_REF = webMutationRef<CreateSnippetArgs, Id<"snippets">>("snippets:create");
 const UPDATE_SNIPPET_REF = webMutationRef<UpdateSnippetArgs, unknown>("snippets:update");
 const SNIPPETS_LIST_QUERY_REF = webQueryRef<WorkspaceArgs, InboxSnippet[]>("snippets:list");
-const KNOWLEDGE_SEARCH_QUERY_REF = webQueryRef<KnowledgeSearchArgs, InboxKnowledgeItem[]>(
-  "knowledge:search"
+const KNOWLEDGE_SEARCH_ACTION_REF = webActionRef<KnowledgeSearchArgs, InboxKnowledgeItem[]>(
+  "knowledge:searchWithEmbeddings"
 );
 const RECENTLY_USED_KNOWLEDGE_QUERY_REF = webQueryRef<
   RecentlyUsedKnowledgeArgs,
@@ -177,6 +178,37 @@ export function useInboxConvex({
       }
     : "skip";
 
+  const searchKnowledge = useWebAction(KNOWLEDGE_SEARCH_ACTION_REF);
+  const [knowledgeResults, setKnowledgeResults] = useState<InboxKnowledgeItem[] | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    if (!workspaceId || knowledgeSearch.trim().length < 1) {
+      setKnowledgeResults(undefined);
+      return;
+    }
+
+    let cancelled = false;
+
+    searchKnowledge({ workspaceId, query: knowledgeSearch, limit: 20 })
+      .then((results) => {
+        if (!cancelled) {
+          setKnowledgeResults(results);
+        }
+      })
+      .catch((error) => {
+        console.error("Knowledge search failed:", error);
+        if (!cancelled) {
+          setKnowledgeResults(undefined);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, knowledgeSearch, searchKnowledge]);
+
   return {
     aiResponses: useWebQuery(
       AI_CONVERSATION_RESPONSES_QUERY_REF,
@@ -188,16 +220,9 @@ export function useInboxConvex({
     createSnippet: useWebMutation(CREATE_SNIPPET_REF),
     convertToTicket: useWebMutation(CONVERT_CONVERSATION_TO_TICKET_REF),
     finalizeSupportAttachmentUpload: useWebMutation(FINALIZE_SUPPORT_ATTACHMENT_UPLOAD_REF),
-    generateSupportAttachmentUploadUrl: useWebMutation(
-      GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF
-    ),
+    generateSupportAttachmentUploadUrl: useWebMutation(GENERATE_SUPPORT_ATTACHMENT_UPLOAD_URL_REF),
     getSuggestionsForConversation: useWebAction(GET_SUGGESTIONS_FOR_CONVERSATION_REF),
-    knowledgeResults: useWebQuery(
-      KNOWLEDGE_SEARCH_QUERY_REF,
-      workspaceId && knowledgeSearch.trim().length >= 1
-        ? { workspaceId, query: knowledgeSearch, limit: 20 }
-        : "skip"
-    ),
+    knowledgeResults,
     markAsRead: useWebMutation(MARK_CONVERSATION_READ_REF),
     messages: useWebQuery(
       MESSAGES_LIST_QUERY_REF,

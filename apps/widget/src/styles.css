@@ -34,7 +34,13 @@
   right: var(--opencom-launcher-position-right);
   left: var(--opencom-launcher-position-left);
   z-index: 10000010;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
 }
 
 .opencom-widget-article-backdrop {
@@ -74,7 +80,10 @@
   box-shadow:
     0 12px 24px color-mix(in srgb, var(--opencom-primary-color) 38%, transparent),
     inset 0 1px 0 color-mix(in srgb, white 32%, transparent);
-  transition: transform 0.18s ease, box-shadow 0.22s ease, filter 0.2s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    filter 0.2s ease;
 }
 
 .opencom-launcher::before {
@@ -153,7 +162,9 @@
   height: 560px;
   background: var(--opencom-bg-surface);
   border-radius: 16px;
-  box-shadow: 0 12px 40px var(--opencom-shadow-color), 0 0 0 1px var(--opencom-border-color);
+  box-shadow:
+    0 12px 40px var(--opencom-shadow-color),
+    0 0 0 1px var(--opencom-border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -251,7 +262,9 @@
   align-items: center;
   justify-content: center;
   opacity: 0.8;
-  transition: opacity 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
   border-radius: 6px;
 }
 
@@ -341,7 +354,11 @@
 
 .opencom-message-user {
   align-self: flex-end;
-  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, var(--opencom-primary-color) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--opencom-primary-color) 0%,
+    var(--opencom-primary-color) 100%
+  );
   color: var(--opencom-text-on-primary);
   border-bottom-right-radius: 6px;
   box-shadow: 0 2px 4px color-mix(in srgb, var(--opencom-primary-color) 25%, transparent);
@@ -489,7 +506,10 @@
   border-radius: 24px;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background-color 0.2s;
   background-color: var(--opencom-bg-muted);
   color: var(--opencom-text-color);
 }
@@ -515,14 +535,20 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, var(--opencom-primary-color) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--opencom-primary-color) 0%,
+    var(--opencom-primary-color) 100%
+  );
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--opencom-text-on-primary);
-  transition: transform 0.15s, box-shadow 0.2s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.2s;
   box-shadow: 0 2px 6px color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
 }
 
@@ -538,7 +564,9 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: border-color 0.2s, background-color 0.2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
 }
 
 .opencom-attach:hover {
@@ -799,7 +827,11 @@
   cursor: pointer;
   text-align: left;
   border-radius: 12px;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    transform 0.15s,
+    box-shadow 0.2s,
+    border-color 0.2s;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -840,7 +872,8 @@
     color-mix(in srgb, var(--opencom-primary-color) 22%, white 78%) 0%,
     color-mix(in srgb, var(--opencom-primary-color) 10%, white 90%) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--opencom-primary-color) 22%, var(--opencom-border-color));
+  border: 1px solid
+    color-mix(in srgb, var(--opencom-primary-color) 22%, var(--opencom-border-color));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -933,14 +966,20 @@
 
 .opencom-start-conv {
   padding: 12px 24px;
-  background: linear-gradient(135deg, var(--opencom-primary-color) 0%, var(--opencom-primary-color) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--opencom-primary-color) 0%,
+    var(--opencom-primary-color) 100%
+  );
   color: var(--opencom-text-on-primary);
   border: none;
   border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: transform 0.15s, box-shadow 0.2s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.2s;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
 }
 
@@ -963,7 +1002,9 @@
   align-items: center;
   justify-content: center;
   opacity: 0.8;
-  transition: opacity 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
   margin-right: 8px;
   border-radius: 6px;
 }
@@ -987,7 +1028,9 @@
   align-items: center;
   justify-content: center;
   opacity: 0.8;
-  transition: opacity 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
   border-radius: 6px;
 }
 
@@ -1197,7 +1240,9 @@
   border-radius: 6px;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .opencom-email-input:focus {
@@ -1247,7 +1292,9 @@
   align-items: center;
   justify-content: center;
   opacity: 0.8;
-  transition: opacity 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
   border-radius: 6px;
 }
 
@@ -1323,7 +1370,9 @@
   justify-content: space-between;
   gap: 12px;
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
   box-shadow: 0 1px 2px var(--opencom-shadow-color);
 }
 
@@ -1398,7 +1447,9 @@
   cursor: pointer;
   text-align: left;
   border-radius: 10px;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -1682,7 +1733,10 @@
   cursor: pointer;
   text-align: left;
   border-radius: 12px;
-  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.15s;
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -1801,7 +1855,9 @@
   border: none;
   cursor: pointer;
   border-radius: 10px;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
   color: var(--opencom-text-muted);
   position: relative;
   min-width: 56px;
@@ -1889,7 +1945,10 @@
   cursor: pointer;
   text-align: left;
   border-radius: 12px;
-  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    transform 0.15s,
+    box-shadow 0.2s;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2085,8 +2144,13 @@
 }
 
 @keyframes tourHighlightPulse {
-  0%, 100% { box-shadow: 0 0 0 4px rgba(121, 44, 212, 0.2); }
-  50% { box-shadow: 0 0 0 8px rgba(121, 44, 212, 0.1); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px rgba(121, 44, 212, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(121, 44, 212, 0.1);
+  }
 }
 
 .opencom-tour-tooltip {
@@ -2109,8 +2173,14 @@
 }
 
 @keyframes tourTooltipFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .opencom-tour-modal {
@@ -2132,8 +2202,14 @@
 }
 
 @keyframes tourModalFadeIn {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
-  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 .opencom-tour-title {
@@ -2332,8 +2408,14 @@
 }
 
 @keyframes tooltipFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .opencom-tooltip-content {
@@ -2387,7 +2469,8 @@
 }
 
 @keyframes beaconPulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(121, 44, 212, 0.4);
   }
@@ -2405,7 +2488,13 @@
   right: 0;
   bottom: 0;
   z-index: 9999999;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
   pointer-events: none;
 }
 
@@ -2434,7 +2523,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .opencom-authoring-error {
@@ -2805,8 +2896,14 @@
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .opencom-outbound-chat-bubble {
@@ -2893,8 +2990,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .opencom-outbound-post {
@@ -2910,8 +3011,14 @@
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .opencom-outbound-post-close {
@@ -3017,8 +3124,12 @@
 }
 
 @keyframes slideDown {
-  from { transform: translateY(-100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .opencom-outbound-banner.floating {
@@ -4201,6 +4312,17 @@
   color: #1d4ed8;
 }
 
+.opencom-article-link {
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+
+.opencom-article-link:hover {
+  color: #1d4ed8;
+}
+
 .opencom-ai-source-text {
   color: #6b7280;
   font-style: italic;
@@ -4263,7 +4385,9 @@
   justify-content: center;
   gap: 4px;
   opacity: 0.9;
-  transition: opacity 0.2s, background 0.2s;
+  transition:
+    opacity 0.2s,
+    background 0.2s;
   border-radius: 6px;
   font-size: 12px;
 }
@@ -4278,8 +4402,13 @@
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .opencom-typing-dots {
@@ -4304,8 +4433,14 @@
 }
 
 @keyframes bounce {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-4px); }
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
 }
 
 /* CSAT Prompt Styles */
@@ -4366,7 +4501,9 @@
   cursor: pointer;
   padding: 4px;
   color: #d1d5db;
-  transition: color 0.2s, transform 0.2s;
+  transition:
+    color 0.2s,
+    transform 0.2s;
 }
 
 .opencom-csat-star:hover {

@@ -207,17 +207,25 @@ export function InboxThreadPane({
             <Link className="mr-1 h-3.5 w-3.5" />
             Insert Link
           </Button>
-          <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
+          {/* <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
             Insert Content
-          </Button>
+          </Button> */}
         </div>
       );
     }
 
     return (
-      <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
-        Insert Content
-      </Button>
+                <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onInsertKnowledgeContent(item, "link")}
+          >
+            <Link className="mr-1 h-3.5 w-3.5" />
+            Insert Link
+          </Button>
+      // <Button size="sm" variant="outline" onClick={() => onInsertKnowledgeContent(item)}>
+      //   Insert Content
+      // </Button>
     );
   };
 

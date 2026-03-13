@@ -1,7 +1,11 @@
 import { v } from "convex/values";
-import { authMutation, authQuery } from "./lib/authWrappers";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+import { embed } from "ai";
+import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { Id } from "./_generated/dataModel";
+import { Doc } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { createAIClient } from "./lib/aiGateway";
 import {
   getArticleVisibility,
   getUnifiedArticleByIdOrLegacyInternalId,
@@ -232,6 +236,132 @@ export const search = authQuery({
   },
 });
 
+type EmbeddingQueryRef<Args extends Record<string, unknown>, Return> = FunctionReference<
+  "query",
+  "public",
+  Args,
+  Return
+>;
+
+const GET_EMBEDDING_BY_ID_REF: EmbeddingQueryRef<
+  { id: Id<"contentEmbeddings"> },
+  Doc<"contentEmbeddings"> | null
+> = makeFunctionReference<
+  "query",
+  { id: Id<"contentEmbeddings"> },
+  Doc<"contentEmbeddings"> | null
+>("suggestions:getEmbeddingById");
+
+type ContentRecord = {
+  content: string;
+  title: string;
+  slug?: string;
+  tags?: string[];
+} | null;
+
+const GET_CONTENT_BY_ID_REF: EmbeddingQueryRef<
+  { contentType: KnowledgeContentType; contentId: string },
+  ContentRecord
+> = makeFunctionReference<
+  "query",
+  { contentType: KnowledgeContentType; contentId: string },
+  ContentRecord
+>("suggestions:getContentById");
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+    queryRef: EmbeddingQueryRef<Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
+}
+
+const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+const KNOWLEDGE_SEARCH_DEFAULT_LIMIT = 20;
+const KNOWLEDGE_SEARCH_MAX_LIMIT = 50;
+
+export const searchWithEmbeddings = authAction({
+  args: {
+    workspaceId: v.id("workspaces"),
+    query: v.string(),
+    contentTypes: v.optional(v.array(contentTypeValidator)),
+    limit: v.optional(v.number()),
+  },
+  permission: "articles.read",
+  handler: async (ctx, args): Promise<KnowledgeSearchResult[]> => {
+    const limit = Math.max(
+      1,
+      Math.min(args.limit ?? KNOWLEDGE_SEARCH_DEFAULT_LIMIT, KNOWLEDGE_SEARCH_MAX_LIMIT)
+    );
+
+    const aiClient = createAIClient();
+    const runQuery = getShallowRunQuery(ctx);
+
+    const { embedding } = await embed({
+      model: aiClient.embedding(DEFAULT_EMBEDDING_MODEL),
+      value: args.query,
+    });
+
+    const results = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
+      vector: embedding,
+      limit: limit * 8,
+      filter: (q) => q.eq("workspaceId", args.workspaceId),
+    });
+
+    const contentTypeSet =
+      args.contentTypes && args.contentTypes.length > 0 ? new Set(args.contentTypes) : null;
+
+    const enrichedResults: (KnowledgeSearchResult | null)[] = await Promise.all(
+      results.map(
+        async (result: {
+          _id: Id<"contentEmbeddings">;
+          _score: number;
+        }): Promise<KnowledgeSearchResult | null> => {
+          const doc = await runQuery(GET_EMBEDDING_BY_ID_REF, {
+            id: result._id,
+          });
+          if (!doc) return null;
+          if (contentTypeSet && !contentTypeSet.has(doc.contentType)) return null;
+
+          const contentRecord = await runQuery(GET_CONTENT_BY_ID_REF, {
+            contentType: doc.contentType,
+            contentId: doc.contentId,
+          });
+          if (!contentRecord) return null;
+
+          return {
+            id: doc.contentId,
+            type: doc.contentType,
+            title: doc.title,
+            content: contentRecord.content,
+            snippet: doc.snippet,
+            slug: contentRecord.slug,
+            tags: contentRecord.tags,
+            relevanceScore: result._score,
+            updatedAt: doc.updatedAt,
+          };
+        }
+      )
+    );
+
+    const filtered = enrichedResults.filter((r): r is KnowledgeSearchResult => r !== null);
+    const deduped: KnowledgeSearchResult[] = [];
+    const seen = new Set<string>();
+    for (const result of filtered) {
+      const key = `${result.type}:${result.id}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      deduped.push(result);
+      if (deduped.length >= limit) {
+        break;
+      }
+    }
+
+    return deduped;
+  },
+});
+
 export const trackAccess = authMutation({
   args: {
     userId: v.id("users"),
@@ -316,7 +446,9 @@ export const getRecentlyUsed = authQuery({
       accessedAt: number;
     }> = [];
 
-    for (const record of accessRecords.sort((a, b) => b.accessedAt - a.accessedAt).slice(0, limit)) {
+    for (const record of accessRecords
+      .sort((a, b) => b.accessedAt - a.accessedAt)
+      .slice(0, limit)) {
       if (record.contentType === "snippet") {
         const snippet = await ctx.db.get(record.contentId as Id<"snippets">);
         if (!snippet) {
@@ -425,7 +557,12 @@ export const getFrequentlyUsed = authQuery({
         continue;
       }
 
-      const article = await resolveArticleKnowledgeItem(ctx, args.workspaceId, data.type, contentId);
+      const article = await resolveArticleKnowledgeItem(
+        ctx,
+        args.workspaceId,
+        data.type,
+        contentId
+      );
       if (!article) {
         continue;
       }
