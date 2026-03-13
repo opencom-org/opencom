@@ -60,7 +60,7 @@ export function ArticlesListSection({
   onCreateInternalArticle,
   onTogglePublish,
   onDeleteRequest,
-}: ArticlesListSectionProps) {
+}: ArticlesListSectionProps): React.JSX.Element {
   return (
     <>
       <div className="flex items-center gap-4 mb-6">
@@ -233,7 +233,9 @@ export function ArticlesListSection({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onTogglePublish(article._id, article.status === "published")}
+                          onClick={() =>
+                            onTogglePublish(article._id, article.status === "published")
+                          }
                         >
                           {article.status === "published" ? (
                             <EyeOff className="h-4 w-4" />
