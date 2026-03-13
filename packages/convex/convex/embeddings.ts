@@ -439,7 +439,7 @@ export const backfillExisting = authAction({
     batchSize: v.optional(v.number()),
     model: v.optional(v.string()),
   },
-  permission: "articles.read",
+  permission: "articles.publish",
   handler: async (ctx, args) => {
     const contentTypes = args.contentTypes || ["article", "internalArticle", "snippet"];
     const batchSize = args.batchSize || 50;

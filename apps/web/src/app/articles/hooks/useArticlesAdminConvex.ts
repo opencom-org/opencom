@@ -2,8 +2,10 @@
 
 import type { Id } from "@opencom/convex/dataModel";
 import {
+  useWebAction,
   useWebMutation,
   useWebQuery,
+  webActionRef,
   webMutationRef,
   webQueryRef,
 } from "@/lib/convex/hooks";
@@ -79,6 +81,18 @@ type LogExportArgs = WorkspaceArgs & {
   recordCount: number;
 };
 
+type BackfillEmbeddingsArgs = WorkspaceArgs & {
+  contentTypes?: ("article" | "internalArticle" | "snippet")[];
+  batchSize?: number;
+  model?: string;
+};
+
+type BackfillEmbeddingsResult = {
+  total: number;
+  processed: number;
+  skipped: number;
+};
+
 const ARTICLES_LIST_QUERY_REF = webQueryRef<WorkspaceArgs, ArticleListItem[]>("articles:list");
 const COLLECTIONS_LIST_HIERARCHY_QUERY_REF = webQueryRef<WorkspaceArgs, CollectionListItem[]>(
   "collections:listHierarchy"
@@ -107,6 +121,9 @@ const GENERATE_ASSET_UPLOAD_URL_REF = webMutationRef<GenerateAssetUploadUrlArgs,
   "articles:generateAssetUploadUrl"
 );
 const LOG_EXPORT_REF = webMutationRef<LogExportArgs, null>("auditLogs:logExport");
+const BACKFILL_EMBEDDINGS_REF = webActionRef<BackfillEmbeddingsArgs, BackfillEmbeddingsResult>(
+  "embeddings:backfillExisting"
+);
 
 type UseArticlesAdminConvexOptions = {
   workspaceId?: Id<"workspaces"> | null;
@@ -120,10 +137,7 @@ export function useArticlesAdminConvex({
   exportSourceId,
 }: UseArticlesAdminConvexOptions) {
   return {
-    articles: useWebQuery(
-      ARTICLES_LIST_QUERY_REF,
-      workspaceId ? { workspaceId } : "skip"
-    ),
+    articles: useWebQuery(ARTICLES_LIST_QUERY_REF, workspaceId ? { workspaceId } : "skip"),
     collections: useWebQuery(
       COLLECTIONS_LIST_HIERARCHY_QUERY_REF,
       workspaceId ? { workspaceId } : "skip"
@@ -135,10 +149,7 @@ export function useArticlesAdminConvex({
       IMPORT_HISTORY_QUERY_REF,
       workspaceId ? { workspaceId, limit: 10 } : "skip"
     ),
-    importSources: useWebQuery(
-      IMPORT_SOURCES_QUERY_REF,
-      workspaceId ? { workspaceId } : "skip"
-    ),
+    importSources: useWebQuery(IMPORT_SOURCES_QUERY_REF, workspaceId ? { workspaceId } : "skip"),
     logExport: useWebMutation(LOG_EXPORT_REF),
     markdownExport: useWebQuery(
       EXPORT_MARKDOWN_QUERY_REF,
@@ -154,5 +165,6 @@ export function useArticlesAdminConvex({
     restoreImportRun: useWebMutation(RESTORE_IMPORT_RUN_REF),
     syncMarkdownFolder: useWebMutation(SYNC_MARKDOWN_FOLDER_REF),
     unpublishArticle: useWebMutation(UNPUBLISH_ARTICLE_REF),
+    backfillEmbeddings: useWebAction(BACKFILL_EMBEDDINGS_REF),
   };
 }
