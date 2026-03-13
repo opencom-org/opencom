@@ -39,7 +39,7 @@ function AuthNavigationGuard({ children }: { children: React.ReactNode }) {
     const currentAppRoute = segments.at(1) ?? "";
     const onWorkspaceRoute = inAppGroup && currentAppRoute === "workspace";
     const onOnboardingRoute = inAppGroup && currentAppRoute === "onboarding";
-    const onHomeEntryRoute = inAppGroup && onAppRoot;
+    const onHomeEntryRoute = inAppGroup && (onAppRoot || (currentAppRoute as string) === "index");
 
     const homeRoute =
       defaultHomePath === "/workspace"

@@ -109,7 +109,7 @@ jobs:
           report_blocking "Lint" "${{ steps.lint.outcome }}"
           report_blocking "Typecheck" "${{ steps.typecheck.outcome }}"
           report_blocking "Convex raw auth guard" "${{ steps.convex_auth_guard.outcome }}"
-          report_warning "Convex validator any guard" "${{ steps.convex_any_guard.outcome }}"
+          report_blocking "Convex validator any guard" "${{ steps.convex_any_guard.outcome }}"
           report_blocking "Secret scan gate" "${{ steps.secret_scan.outcome }}"
           report_blocking "Security headers policy check" "${{ steps.headers_check.outcome }}"
           report_blocking "Convex backend tests" "${{ steps.convex_tests.outcome }}"

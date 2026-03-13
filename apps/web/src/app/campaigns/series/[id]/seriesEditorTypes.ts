@@ -60,7 +60,10 @@ export function parseRuleText(
   }
 
   try {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { error: `${label} must be a JSON object.` };
+    }
     return { value: parsed };
   } catch {
     return { error: `${label} must be valid JSON.` };

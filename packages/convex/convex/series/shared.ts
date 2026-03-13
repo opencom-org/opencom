@@ -2,6 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { getAuthenticatedUserFromSession } from "../auth";
 import { hasPermission, requirePermission } from "../permissions";
+import { throwNotAuthenticated } from "../utils/errors";
 import {
   SERIES_ORCHESTRATION_GUARD_ERROR_CODE,
   SERIES_READINESS_BLOCKED_ERROR_CODE,
@@ -72,7 +73,11 @@ export function sortProgressDeterministically(progressList: Doc<"seriesProgress"
   });
 }
 
-export function clampLimit(limit: number | undefined, defaultValue: number, maxValue: number): number {
+export function clampLimit(
+  limit: number | undefined,
+  defaultValue: number,
+  maxValue: number
+): number {
   const normalized = limit ?? defaultValue;
   if (!Number.isFinite(normalized) || normalized <= 0) {
     return defaultValue;
@@ -86,7 +91,7 @@ export async function requireSeriesManagePermission(
 ) {
   const user = await getAuthenticatedUserFromSession(ctx);
   if (!user) {
-    throw new Error("Not authenticated");
+    throwNotAuthenticated();
   }
   await requirePermission(ctx, user._id, workspaceId, "settings.workspace");
 }

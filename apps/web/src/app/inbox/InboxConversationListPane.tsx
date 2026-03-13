@@ -91,11 +91,13 @@ export function InboxConversationListPane({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {conversation.channel === "email" ? (
-                      <Mail className="h-4 w-4 text-primary-foreground0" />
+                      <Mail className="h-4 w-4 text-primary-foreground" />
                     ) : (
                       <MessageSquare className="h-4 w-4 text-green-500" />
                     )}
-                    {conversation.visitorId && <PresenceIndicator visitorId={conversation.visitorId} />}
+                    {conversation.visitorId && (
+                      <PresenceIndicator visitorId={conversation.visitorId} />
+                    )}
                     <span
                       className="font-medium"
                       data-testid={`conversation-label-${conversation._id}`}
@@ -115,14 +117,15 @@ export function InboxConversationListPane({
                     {readSyncConversationId === conversation._id && (
                       <span className="text-xs text-muted-foreground">Syncing...</span>
                     )}
-                    {typeof conversation.unreadByAgent === "number" && conversation.unreadByAgent > 0 && (
-                      <span
-                        className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full"
-                        data-testid={`conversation-unread-badge-${conversation._id}`}
-                      >
-                        {conversation.unreadByAgent}
-                      </span>
-                    )}
+                    {typeof conversation.unreadByAgent === "number" &&
+                      conversation.unreadByAgent > 0 && (
+                        <span
+                          className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full"
+                          data-testid={`conversation-unread-badge-${conversation._id}`}
+                        >
+                          {conversation.unreadByAgent}
+                        </span>
+                      )}
                     <span
                       className={`text-xs px-2 py-1 rounded-full ${
                         conversation.status === "open"

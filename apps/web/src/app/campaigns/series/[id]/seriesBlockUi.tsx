@@ -32,6 +32,11 @@ export function getSeriesBlockIcon(type: BlockType): React.JSX.Element {
       return <GitBranch className="h-4 w-4" />;
     case "tag":
       return <Tag className="h-4 w-4" />;
+    default: {
+      const _exhaustive: never = type;
+      void _exhaustive;
+      return <MessageSquare className="h-4 w-4" />;
+    }
   }
 }
 
@@ -53,5 +58,10 @@ export function getSeriesBlockColor(type: BlockType): string {
       return "bg-pink-100 border-pink-300";
     case "tag":
       return "bg-orange-100 border-orange-300";
+    default: {
+      const _exhaustive: never = type;
+      void _exhaustive;
+      return "bg-gray-100 border-gray-300";
+    }
   }
 }

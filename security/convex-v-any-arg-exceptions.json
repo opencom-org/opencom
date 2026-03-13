@@ -12,6 +12,66 @@
       "originalExpiresOn": "2026-04-15",
       "expiresOn": "2026-04-15",
       "justificationUpdatedOn": "2026-02-14"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers/content.ts",
+      "handler": "updateTestArticle",
+      "kind": "mutation",
+      "arg": "audienceRules",
+      "riskTier": "low",
+      "owner": "backend-security",
+      "reason": "Test helper bypasses auth for E2E seeding; audienceRules shape is validated by production code paths.",
+      "originalExpiresOn": "2026-06-01",
+      "expiresOn": "2026-06-01",
+      "justificationUpdatedOn": "2026-03-13"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers/content.ts",
+      "handler": "createTestTour",
+      "kind": "mutation",
+      "arg": "targetingRules",
+      "riskTier": "low",
+      "owner": "backend-security",
+      "reason": "Test helper bypasses auth for E2E seeding; targetingRules shape is validated by production code paths.",
+      "originalExpiresOn": "2026-06-01",
+      "expiresOn": "2026-06-01",
+      "justificationUpdatedOn": "2026-03-13"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers/content.ts",
+      "handler": "createTestTour",
+      "kind": "mutation",
+      "arg": "audienceRules",
+      "riskTier": "low",
+      "owner": "backend-security",
+      "reason": "Test helper bypasses auth for E2E seeding; audienceRules shape is validated by production code paths.",
+      "originalExpiresOn": "2026-06-01",
+      "expiresOn": "2026-06-01",
+      "justificationUpdatedOn": "2026-03-13"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers/content.ts",
+      "handler": "updateTestTour",
+      "kind": "mutation",
+      "arg": "targetingRules",
+      "riskTier": "low",
+      "owner": "backend-security",
+      "reason": "Test helper bypasses auth for E2E seeding; targetingRules shape is validated by production code paths.",
+      "originalExpiresOn": "2026-06-01",
+      "expiresOn": "2026-06-01",
+      "justificationUpdatedOn": "2026-03-13"
+    },
+    {
+      "file": "packages/convex/convex/testing/helpers/content.ts",
+      "handler": "updateTestTour",
+      "kind": "mutation",
+      "arg": "audienceRules",
+      "riskTier": "low",
+      "owner": "backend-security",
+      "reason": "Test helper bypasses auth for E2E seeding; audienceRules shape is validated by production code paths.",
+      "originalExpiresOn": "2026-06-01",
+      "expiresOn": "2026-06-01",
+      "justificationUpdatedOn": "2026-03-13"
     }
   ]
 }

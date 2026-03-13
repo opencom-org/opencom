@@ -56,10 +56,12 @@ async function gotoWidgetDemoAndWait(page: import("@playwright/test").Page, url:
 async function gotoFreshWidgetDemoAndWait(page: import("@playwright/test").Page, url: string) {
   await page.context().clearCookies();
   await page.goto("about:blank");
-  await page.evaluate(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-  }).catch(() => {});
+  await page
+    .evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    })
+    .catch(() => {});
   await gotoWidgetDemoAndWait(page, url);
 }
 
@@ -85,19 +87,22 @@ async function waitForTourToRender(
   let widgetOpened = false;
 
   await expect
-    .poll(async () => {
-      const visible = await isTourStepVisible(page);
-      if (visible) {
-        return true;
-      }
+    .poll(
+      async () => {
+        const visible = await isTourStepVisible(page);
+        if (visible) {
+          return true;
+        }
 
-      if (!widgetOpened) {
-        widgetOpened = true;
-        await openWidgetChat(page).catch(() => {});
-      }
+        if (!widgetOpened) {
+          widgetOpened = true;
+          await openWidgetChat(page).catch(() => {});
+        }
 
-      return isTourStepVisible(page);
-    }, { timeout })
+        return isTourStepVisible(page);
+      },
+      { timeout }
+    )
     .toBe(true);
 }
 
@@ -129,7 +134,7 @@ async function ensureTourAvailableForDismissal(
   await expect(toursTab).toBeVisible({ timeout: 10000 });
   await toursTab.click();
 
-  const availableTour = widget.locator(".opencom-tour-item:not([disabled])").first();
+  const availableTour = widget.locator("[data-testid^='tour-item-']:not([disabled])").first();
   await expect(availableTour).toBeVisible({ timeout: 10000 });
   await availableTour.click();
 
@@ -440,7 +445,9 @@ test.describe("Widget E2E Tests - Help Center", () => {
     const collectionButton = await waitForHelpArticleVisible(page, 10000);
     await collectionButton.click();
 
-    const articleButton = frame.locator(".opencom-article-item, button:has(.opencom-article-item)").first();
+    const articleButton = frame
+      .locator(".opencom-article-item, button:has(.opencom-article-item)")
+      .first();
     await expect(articleButton).toBeVisible({ timeout: 10000 });
     await articleButton.click();
     await expect(
@@ -464,7 +471,9 @@ test.describe("Widget E2E Tests - Help Center", () => {
     const collectionButton = await waitForHelpArticleVisible(page, 10000);
     await collectionButton.click();
 
-    const articleButton = frame.locator(".opencom-article-item, button:has(.opencom-article-item)").first();
+    const articleButton = frame
+      .locator(".opencom-article-item, button:has(.opencom-article-item)")
+      .first();
     await expect(articleButton).toBeVisible({ timeout: 10000 });
     await articleButton.click();
     await expect(
@@ -547,7 +556,11 @@ test.describe("Widget E2E Tests - AI Agent", () => {
     await waitForAIResponse(page, 15000);
 
     await expect(
-      frame.locator(":text('Waiting for human support'), :text('connect you with a human agent'), button:has-text('Talk to a human')").first()
+      frame
+        .locator(
+          ":text('Waiting for human support'), :text('connect you with a human agent'), button:has-text('Talk to a human')"
+        )
+        .first()
     ).toBeVisible({ timeout: 15000 });
   });
 
@@ -563,7 +576,10 @@ test.describe("Widget E2E Tests - AI Agent", () => {
     const feedbackButtons = frame.locator(
       "[data-testid='feedback-helpful'], [data-testid='feedback-not-helpful'], .feedback-button, button[aria-label*='helpful'], button[aria-label*='not helpful']"
     );
-    const feedbackVisible = await feedbackButtons.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const feedbackVisible = await feedbackButtons
+      .first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
 
     if (feedbackVisible) {
       await feedbackButtons.first().click();

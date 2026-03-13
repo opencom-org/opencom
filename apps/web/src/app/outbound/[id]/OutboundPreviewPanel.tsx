@@ -24,7 +24,9 @@ export function OutboundPreviewPanel({
   return (
     <div className="bg-gray-100 border rounded-lg p-6">
       <h2 className="text-lg font-semibold mb-4">Preview</h2>
-      <div className="flex justify-center">{renderPreview(messageType, content, postButtonForm)}</div>
+      <div className="flex justify-center">
+        {renderPreview(messageType, content, postButtonForm)}
+      </div>
       <div className="mt-4 flex items-center gap-2 text-xs text-gray-500 border-t pt-3">
         <span className="font-medium text-gray-700">Click action:</span>
         <span className="font-medium text-gray-700">{clickActionSummary}</span>
@@ -37,7 +39,7 @@ function renderPreview(
   messageType: MessageType,
   content: MessageContent,
   postButtonForm: PostButtonFormState
-) {
+): React.ReactNode {
   switch (messageType) {
     case "chat":
       return (
@@ -60,7 +62,9 @@ function renderPreview(
 
       return (
         <div className="bg-white rounded-lg shadow-lg max-w-md overflow-hidden">
-          {content.imageUrl && <img src={content.imageUrl} alt="" className="w-full h-40 object-cover" />}
+          {content.imageUrl && (
+            <img src={content.imageUrl} alt="" className="w-full h-40 object-cover" />
+          )}
           {content.videoUrl && (
             <video src={content.videoUrl} controls className="w-full max-h-64 bg-black" />
           )}
@@ -104,5 +108,11 @@ function renderPreview(
           )}
         </div>
       );
+
+    default: {
+      const _exhaustive: never = messageType;
+      void _exhaustive;
+      return null;
+    }
   }
 }

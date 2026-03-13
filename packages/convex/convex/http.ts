@@ -251,7 +251,7 @@ const VALIDATE_ORIGIN_REF = makeFunctionReference<
   "query",
   ValidateOriginArgs,
   ValidateOriginResult
->("workspaces.validateOrigin") as PublicQueryRef<ValidateOriginArgs, ValidateOriginResult>;
+>("workspaces:validateOrigin") as PublicQueryRef<ValidateOriginArgs, ValidateOriginResult>;
 
 const GET_METADATA_REF = makeFunctionReference<"query", Record<string, never>, DiscoveryMetadata>(
   "discovery:getMetadata"

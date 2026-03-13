@@ -34,6 +34,7 @@ type CreateInvitationResult = {
   targetEmail: string;
 };
 
+// TS2589 hotspot: generated internal.workspaceMembers.createInvitation triggers deep instantiation
 const CREATE_INVITATION_REF = makeFunctionReference<
   "mutation",
   CreateInvitationArgs,
