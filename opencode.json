@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "jcodemunch-mcp": {
+      "type":"local",
+      "command": ["uvx", "jcodemunch-mcp"],
+      "enabled": true
+    },
+    "jdocmunch-mcp": {
+      "type":"local",
+      "command": ["uvx", "jdocmunch-mcp"],
+      "enabled": true
+    }
+  }
+}

@@ -1,5 +1,5 @@
+import { anyApi } from "convex/server";
 import type { ObjectType, PropertyValidators } from "convex/values";
-import { api, internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import {
   action,
@@ -13,10 +13,17 @@ import { getAuthenticatedUserFromSession } from "../auth";
 import { type Permission, requirePermission } from "../permissions";
 
 type WorkspaceId = Id<"workspaces">;
+type ActionRunQuery = (queryRef: unknown, args: Record<string, unknown>) => Promise<unknown>;
+type ActionCtxWithRunQuery = ActionCtx & {
+  runQuery: ActionRunQuery;
+};
 
 export type AuthenticatedUser = NonNullable<
   Awaited<ReturnType<typeof getAuthenticatedUserFromSession>>
 >;
+
+type WrappedArgs<ArgsValidator extends PropertyValidators> = ObjectType<ArgsValidator> &
+  Record<string, unknown>;
 
 type WorkspaceResolver<Ctx, Args> = (
   ctx: Ctx,
@@ -33,11 +40,11 @@ type WrapperOptions<
   permission?: Permission;
   // Allow handlers (typically "get by id" queries) to return null when an entity no longer exists.
   allowMissingWorkspace?: boolean;
-  workspaceIdArg?: keyof ObjectType<ArgsValidator> & string;
-  resolveWorkspaceId?: WorkspaceResolver<Ctx, ObjectType<ArgsValidator>>;
+  workspaceIdArg?: keyof WrappedArgs<ArgsValidator> & string;
+  resolveWorkspaceId?: WorkspaceResolver<Ctx, WrappedArgs<ArgsValidator>>;
   handler: (
     ctx: Ctx & { user: AuthenticatedUser },
-    args: ObjectType<ArgsValidator>
+    args: WrappedArgs<ArgsValidator>
   ) => Promise<ReturnValue> | ReturnValue;
 };
 
@@ -71,7 +78,11 @@ async function getWorkspaceIdForPermission<
 }
 
 async function getActionUser(ctx: ActionCtx): Promise<AuthenticatedUser> {
-  const currentUser = await ctx.runQuery(api.auth.currentUser, {});
+  const runQuery = (ctx as ActionCtxWithRunQuery).runQuery;
+  const currentUserRef = (anyApi as unknown as { auth: { currentUser: unknown } }).auth.currentUser;
+  const currentUser = (await runQuery(currentUserRef, {})) as
+    | { user?: AuthenticatedUser }
+    | null;
   if (!currentUser?.user) {
     throw new Error("Not authenticated");
   }
@@ -81,31 +92,22 @@ async function getActionUser(ctx: ActionCtx): Promise<AuthenticatedUser> {
 export function authMutation<ArgsValidator extends PropertyValidators, ReturnValue = unknown>(
   options: WrapperOptions<MutationCtx, ArgsValidator, ReturnValue>
 ) {
-  const workspaceIdArg =
-    options.workspaceIdArg ?? ("workspaceId" as keyof ObjectType<ArgsValidator> & string);
+  type Args = WrappedArgs<ArgsValidator>;
+  const workspaceIdArg = options.workspaceIdArg ?? ("workspaceId" as keyof Args & string);
 
   return mutation({
     args: options.args,
-    handler: async (ctx: MutationCtx, args: ObjectType<ArgsValidator>) => {
+    handler: async (ctx: MutationCtx, args: Args) => {
       const user = await getAuthenticatedUserFromSession(ctx);
       if (!user) {
         throw new Error("Not authenticated");
       }
 
       if (options.permission) {
-        const workspaceId = await getWorkspaceIdForPermission(
-          ctx,
-          args as ObjectType<ArgsValidator> & Record<string, unknown>,
-          user,
-          {
-            workspaceIdArg: workspaceIdArg as keyof (ObjectType<ArgsValidator> &
-              Record<string, unknown>) &
-              string,
-            resolveWorkspaceId: options.resolveWorkspaceId as
-              | WorkspaceResolver<MutationCtx, ObjectType<ArgsValidator> & Record<string, unknown>>
-              | undefined,
-          }
-        );
+        const workspaceId = await getWorkspaceIdForPermission(ctx, args, user, {
+          workspaceIdArg,
+          resolveWorkspaceId: options.resolveWorkspaceId,
+        });
         if (!workspaceId) {
           if (options.allowMissingWorkspace) {
             return options.handler(withUser(ctx, user), args);
@@ -117,37 +119,28 @@ export function authMutation<ArgsValidator extends PropertyValidators, ReturnVal
 
       return options.handler(withUser(ctx, user), args);
     },
-  } as any);
+  });
 }
 
 export function authQuery<ArgsValidator extends PropertyValidators, ReturnValue = unknown>(
   options: WrapperOptions<QueryCtx, ArgsValidator, ReturnValue>
 ) {
-  const workspaceIdArg =
-    options.workspaceIdArg ?? ("workspaceId" as keyof ObjectType<ArgsValidator> & string);
+  type Args = WrappedArgs<ArgsValidator>;
+  const workspaceIdArg = options.workspaceIdArg ?? ("workspaceId" as keyof Args & string);
 
   return query({
     args: options.args,
-    handler: async (ctx: QueryCtx, args: ObjectType<ArgsValidator>) => {
+    handler: async (ctx: QueryCtx, args: Args) => {
       const user = await getAuthenticatedUserFromSession(ctx);
       if (!user) {
         throw new Error("Not authenticated");
       }
 
       if (options.permission) {
-        const workspaceId = await getWorkspaceIdForPermission(
-          ctx,
-          args as ObjectType<ArgsValidator> & Record<string, unknown>,
-          user,
-          {
-            workspaceIdArg: workspaceIdArg as keyof (ObjectType<ArgsValidator> &
-              Record<string, unknown>) &
-              string,
-            resolveWorkspaceId: options.resolveWorkspaceId as
-              | WorkspaceResolver<QueryCtx, ObjectType<ArgsValidator> & Record<string, unknown>>
-              | undefined,
-          }
-        );
+        const workspaceId = await getWorkspaceIdForPermission(ctx, args, user, {
+          workspaceIdArg,
+          resolveWorkspaceId: options.resolveWorkspaceId,
+        });
         if (!workspaceId) {
           if (options.allowMissingWorkspace) {
             return options.handler(withUser(ctx, user), args);
@@ -159,41 +152,36 @@ export function authQuery<ArgsValidator extends PropertyValidators, ReturnValue 
 
       return options.handler(withUser(ctx, user), args);
     },
-  } as any);
+  });
 }
 
 export function authAction<ArgsValidator extends PropertyValidators, ReturnValue = unknown>(
   options: WrapperOptions<ActionCtx, ArgsValidator, ReturnValue>
 ) {
-  const workspaceIdArg =
-    options.workspaceIdArg ?? ("workspaceId" as keyof ObjectType<ArgsValidator> & string);
+  type Args = WrappedArgs<ArgsValidator>;
+  const workspaceIdArg = options.workspaceIdArg ?? ("workspaceId" as keyof Args & string);
 
   return action({
     args: options.args,
-    handler: async (ctx: ActionCtx, args: ObjectType<ArgsValidator>) => {
+    handler: async (ctx: ActionCtx, args: Args) => {
       const user = await getActionUser(ctx);
 
       if (options.permission) {
-        const workspaceId = await getWorkspaceIdForPermission(
-          ctx,
-          args as ObjectType<ArgsValidator> & Record<string, unknown>,
-          user,
-          {
-            workspaceIdArg: workspaceIdArg as keyof (ObjectType<ArgsValidator> &
-              Record<string, unknown>) &
-              string,
-            resolveWorkspaceId: options.resolveWorkspaceId as
-              | WorkspaceResolver<ActionCtx, ObjectType<ArgsValidator> & Record<string, unknown>>
-              | undefined,
-          }
-        );
+        const workspaceId = await getWorkspaceIdForPermission(ctx, args, user, {
+          workspaceIdArg,
+          resolveWorkspaceId: options.resolveWorkspaceId,
+        });
         if (!workspaceId) {
           if (options.allowMissingWorkspace) {
             return options.handler(withUser(ctx, user), args);
           }
           throw new Error("Auth wrapper misconfigured: missing workspace resolver");
         }
-        await ctx.runQuery(internal.permissions.requirePermissionForAction, {
+        const runQuery = (ctx as ActionCtxWithRunQuery).runQuery;
+        const permissionRef = (anyApi as unknown as {
+          permissions: { requirePermissionForAction: unknown };
+        }).permissions.requirePermissionForAction;
+        await runQuery(permissionRef, {
           userId: user._id,
           workspaceId,
           permission: options.permission,
@@ -202,5 +190,5 @@ export function authAction<ArgsValidator extends PropertyValidators, ReturnValue
 
       return options.handler(withUser(ctx, user), args);
     },
-  } as any);
+  });
 }

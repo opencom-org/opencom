@@ -21,6 +21,9 @@ function WidgetDemoContent() {
   const searchParams = useSearchParams();
   const auth = useAuthOptional();
   const activeWorkspace = auth?.activeWorkspace;
+  const e2eVisitorKey = searchParams.get("visitorKey") || "default";
+  const visitorEmail = `e2e_test_visitor_${e2eVisitorKey}@test.opencom.dev`;
+  const visitorName = `E2E Test Visitor ${e2eVisitorKey}`;
 
   // Get configuration from URL params, environment, or defaults
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL || "";
@@ -38,8 +41,8 @@ function WidgetDemoContent() {
       workspaceId,
       trackPageViews: true,
       user: {
-        email: "e2e_test_visitor@test.opencom.dev",
-        name: "E2E Test Visitor",
+        email: visitorEmail,
+        name: visitorName,
         customAttributes: {
           plan: "test",
           source: "e2e-test",
@@ -51,7 +54,7 @@ function WidgetDemoContent() {
     return () => {
       window.OpencomWidget?.destroy();
     };
-  }, [widgetLoaded, convexUrl, workspaceId]);
+  }, [widgetLoaded, convexUrl, workspaceId, visitorEmail, visitorName]);
 
   const handleTrackEvent = () => {
     if (window.OpencomWidget) {

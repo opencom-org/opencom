@@ -1,8 +1,17 @@
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+// Generated api.checklists.* refs trigger TS2589 in sdk-core, so keep the
+// fallback localized to these explicit checklist refs only.
+const GET_ELIGIBLE_CHECKLISTS_REF =
+  makeFunctionReference("checklists:getEligible") as FunctionReference<"query">;
+const GET_CHECKLIST_PROGRESS_REF =
+  makeFunctionReference("checklists:getProgress") as FunctionReference<"query">;
+const COMPLETE_CHECKLIST_TASK_REF =
+  makeFunctionReference("checklists:completeTask") as FunctionReference<"mutation">;
 
 export type ChecklistId = Id<"checklists">;
 
@@ -55,7 +64,7 @@ export async function getEligibleChecklists(
   const config = getConfig();
   const token = sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const results = await client.query(api.checklists.getEligible, {
+  const results = await client.query(GET_ELIGIBLE_CHECKLISTS_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: token,
@@ -73,7 +82,7 @@ export async function getChecklistProgress(
   const config = getConfig();
   const token = sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const progress = await client.query(api.checklists.getProgress, {
+  const progress = await client.query(GET_CHECKLIST_PROGRESS_REF, {
     visitorId,
     checklistId,
     workspaceId: config.workspaceId as Id<"workspaces">,
@@ -99,7 +108,7 @@ export async function completeChecklistItem(
   const config = getConfig();
   const token = sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  await client.mutation(api.checklists.completeTask, {
+  await client.mutation(COMPLETE_CHECKLIST_TASK_REF, {
     visitorId,
     checklistId,
     taskId,
@@ -118,7 +127,7 @@ export async function dismissChecklist(
   const config = getConfig();
   const token = sessionToken ?? getVisitorState().sessionToken ?? undefined;
 
-  const checklists = await client.query(api.checklists.getEligible, {
+  const checklists = await client.query(GET_ELIGIBLE_CHECKLISTS_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     visitorId,
     sessionToken: token,
@@ -130,7 +139,7 @@ export async function dismissChecklist(
   // Complete all remaining tasks to dismiss
   for (const task of checklist.checklist.tasks) {
     if (!checklist.progress?.completedTaskIds.includes(task.id)) {
-      await client.mutation(api.checklists.completeTask, {
+      await client.mutation(COMPLETE_CHECKLIST_TASK_REF, {
         visitorId,
         checklistId,
         taskId: task.id,

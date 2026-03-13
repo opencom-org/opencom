@@ -15,6 +15,8 @@ import { OpencomSurveyRuntime } from "./OpencomSurveyRuntime";
 import { OpencomContextProvider } from "./OpencomProvider";
 import { MessengerContent, type MainTab, type MessengerView } from "./MessengerContent";
 import type { UserIdentification } from "@opencom/sdk-core";
+import type { MessengerConversationId } from "./messengerCompositionTypes";
+import { toMessengerConversationId } from "./messengerCompositionTypes";
 
 // ============================================================================
 // Types
@@ -187,9 +189,14 @@ export const Opencom = forwardRef<OpencomRef, OpencomProps>(function Opencom(
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<MainTab>("home");
   const [messengerView, setMessengerView] = useState<MessengerView>("tabs");
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<MessengerConversationId>(
+    null
+  );
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [identifiedUser, setIdentifiedUser] = useState<OpencomUser | null>(user ?? null);
+  const handleSelectedConversationChange = useCallback((id: MessengerConversationId) => {
+    setSelectedConversationId(id);
+  }, []);
 
   // Initialize SDK
   useEffect(() => {
@@ -289,7 +296,7 @@ export const Opencom = forwardRef<OpencomRef, OpencomProps>(function Opencom(
       onOpen?.();
     },
     presentConversation: (conversationId: string) => {
-      setSelectedConversationId(conversationId);
+      setSelectedConversationId(toMessengerConversationId(conversationId));
       setMessengerView("conversation");
       setIsOpen(true);
       onOpen?.();
@@ -375,7 +382,7 @@ export const Opencom = forwardRef<OpencomRef, OpencomProps>(function Opencom(
               messengerView={messengerView}
               setMessengerView={setMessengerView}
               selectedConversationId={selectedConversationId}
-              setSelectedConversationId={setSelectedConversationId}
+              setSelectedConversationId={handleSelectedConversationChange}
               selectedArticleId={selectedArticleId}
               setSelectedArticleId={setSelectedArticleId}
               availableTabs={availableTabs}

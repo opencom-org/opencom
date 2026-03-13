@@ -19,6 +19,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
+    "lint": "eslint convex scripts tests --ext .ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -28,8 +29,9 @@
     "@ai-sdk/openai": "^3.0.18",
     "@auth/core": "0.41.1",
     "@convex-dev/auth": "^0.0.90",
+    "@opencom/types": "workspace:*",
     "ai": "^6.0.48",
-    "convex": "^1.31.7",
+    "convex": "^1.32.0",
     "convex-test": "^0.0.41",
     "jose": "^6.1.3",
     "oslo": "^1.2.1",

@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
@@ -19,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useArticleCollectionsConvex } from "../hooks/useArticleCollectionsConvex";
 
 interface CollectionFormData {
   name: string;
@@ -73,15 +72,8 @@ export default function CollectionsPage() {
     icon: "",
     parentId: "",
   });
-
-  const collections = useQuery(
-    api.collections.listHierarchy,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createCollection = useMutation(api.collections.create);
-  const updateCollection = useMutation(api.collections.update);
-  const deleteCollection = useMutation(api.collections.remove);
+  const { collections, createCollection, deleteCollection, updateCollection } =
+    useArticleCollectionsConvex(activeWorkspace?._id);
 
   type CollectionItem = NonNullable<typeof collections>[number];
   type FlattenedCollectionRow = {
@@ -283,11 +275,13 @@ export default function CollectionsPage() {
       return;
     }
 
-    if (collection.articleCount > 0) {
+    const articleCount = collection.articleCount ?? 0;
+
+    if (articleCount > 0) {
       setNotice({
         tone: "warning",
-        message: `"${collection.name}" still has ${collection.articleCount} article${
-          collection.articleCount !== 1 ? "s" : ""
+        message: `"${collection.name}" still has ${articleCount} article${
+          articleCount !== 1 ? "s" : ""
         }. Move or delete those articles first.`,
       });
       return;

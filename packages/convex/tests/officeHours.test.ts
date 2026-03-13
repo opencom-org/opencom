@@ -46,7 +46,7 @@ describe("officeHours timezone-aware evaluation", () => {
   afterAll(async () => {
     if (workspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, { workspaceId });
+        await client.mutation(api.testing_helpers.cleanupTestData, { workspaceId });
       } catch (error) {
         console.warn("Cleanup failed:", error);
       }

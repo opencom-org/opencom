@@ -15,14 +15,14 @@ describe("Origin Allowlist Integration Tests", () => {
     client = new ConvexClient(convexUrl);
 
     // Create test workspace
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -56,12 +56,12 @@ describe("Origin Allowlist Integration Tests", () => {
     it("should update allowed origins", async () => {
       const origins = ["https://myapp.com", "https://staging.myapp.com"];
 
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: origins,
       });
 
-      const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+      const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
         id: testWorkspaceId,
       });
 
@@ -70,7 +70,7 @@ describe("Origin Allowlist Integration Tests", () => {
 
     it("should allow origins in allowlist", async () => {
       // First set allowed origins
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://allowed.com"],
       });
@@ -85,7 +85,7 @@ describe("Origin Allowlist Integration Tests", () => {
 
     it("should reject origins not in allowlist when allowlist is set", async () => {
       // Set allowed origins
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://allowed.com"],
       });
@@ -111,7 +111,7 @@ describe("Origin Allowlist Integration Tests", () => {
 
   describe("CORS-like origin handling", () => {
     it("should handle origins with ports", async () => {
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://myapp.com:8080"],
       });
@@ -125,7 +125,7 @@ describe("Origin Allowlist Integration Tests", () => {
     });
 
     it("should treat different ports as different origins", async () => {
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://myapp.com:8080"],
       });
@@ -139,7 +139,7 @@ describe("Origin Allowlist Integration Tests", () => {
     });
 
     it("should handle subdomains correctly", async () => {
-      await client.mutation(api.testing.helpers.updateWorkspaceOrigins, {
+      await client.mutation(api.testing_helpers.updateWorkspaceOrigins, {
         workspaceId: testWorkspaceId,
         allowedOrigins: ["https://app.mysite.com"],
       });

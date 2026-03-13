@@ -7,7 +7,6 @@ describe("workspaceMembers - advanced", () => {
   let client: ConvexClient;
   let testWorkspaceId: Id<"workspaces">;
   let adminUserId: Id<"users">;
-  let adminToken: string;
 
   beforeAll(async () => {
     const convexUrl = process.env.CONVEX_URL;
@@ -16,7 +15,7 @@ describe("workspaceMembers - advanced", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
     adminUserId = workspace.userId;
   });
@@ -24,7 +23,7 @@ describe("workspaceMembers - advanced", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -35,7 +34,7 @@ describe("workspaceMembers - advanced", () => {
   });
 
   it("should prevent removing last admin", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -43,21 +42,21 @@ describe("workspaceMembers - advanced", () => {
     expect(adminMembership).toBeDefined();
 
     await expect(
-      client.mutation(api.testing.helpers.removeTestMember, {
+      client.mutation(api.testing_helpers.removeTestMember, {
         membershipId: adminMembership!._id,
       })
     ).rejects.toThrow(/at least one admin/i);
   });
 
   it("should prevent demoting last admin to agent", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
     const adminMembership = members.find((m: { userId: string }) => m.userId === adminUserId);
 
     await expect(
-      client.mutation(api.testing.helpers.updateTestMemberRole, {
+      client.mutation(api.testing_helpers.updateTestMemberRole, {
         membershipId: adminMembership!._id,
         role: "agent",
       })
@@ -66,14 +65,14 @@ describe("workspaceMembers - advanced", () => {
 
   it("should allow demoting admin when another admin exists", async () => {
     // Create second admin
-    const secondAdmin = await client.mutation(api.testing.helpers.createTestUser, {
+    const secondAdmin = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: `second-admin-${Date.now()}@test.opencom.dev`,
       role: "admin",
     });
 
     // Get first admin's membership
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -82,12 +81,12 @@ describe("workspaceMembers - advanced", () => {
     );
 
     // Should be able to demote second admin since first admin still exists
-    await client.mutation(api.testing.helpers.updateTestMemberRole, {
+    await client.mutation(api.testing_helpers.updateTestMemberRole, {
       membershipId: secondAdminMembership!._id,
       role: "agent",
     });
 
-    const updatedMembers = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const updatedMembers = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -100,13 +99,13 @@ describe("workspaceMembers - advanced", () => {
   it("should create agent member in workspace", async () => {
     // Create an agent user via test helper
     const agentEmail = `agent-${Date.now()}@test.opencom.dev`;
-    const agent = await client.mutation(api.testing.helpers.createTestUser, {
+    const agent = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: agentEmail,
       role: "agent",
     });
 
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -116,13 +115,13 @@ describe("workspaceMembers - advanced", () => {
   });
 
   it("should remove a member from workspace", async () => {
-    const targetUser = await client.mutation(api.testing.helpers.createTestUser, {
+    const targetUser = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: `target-${Date.now()}@test.opencom.dev`,
       role: "agent",
     });
 
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -131,11 +130,11 @@ describe("workspaceMembers - advanced", () => {
     );
     expect(targetMembership).toBeDefined();
 
-    await client.mutation(api.testing.helpers.removeTestMember, {
+    await client.mutation(api.testing_helpers.removeTestMember, {
       membershipId: targetMembership!._id,
     });
 
-    const updatedMembers = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const updatedMembers = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -144,7 +143,7 @@ describe("workspaceMembers - advanced", () => {
   });
 
   it("should list workspace members after changes", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -153,7 +152,7 @@ describe("workspaceMembers - advanced", () => {
 
   it("should add existing user directly to workspace", async () => {
     const existingUserEmail = `existing-${Date.now()}@test.opencom.dev`;
-    const existingUser = await client.mutation(api.testing.helpers.createTestUser, {
+    const existingUser = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: existingUserEmail,
       role: "agent",
@@ -162,7 +161,7 @@ describe("workspaceMembers - advanced", () => {
     expect(existingUser.userId).toBeDefined();
 
     // Verify they appear in the workspace members
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 
@@ -170,7 +169,7 @@ describe("workspaceMembers - advanced", () => {
   });
 
   it("should have correct member count", async () => {
-    const members = await client.mutation(api.testing.helpers.listTestWorkspaceMembers, {
+    const members = await client.mutation(api.testing_helpers.listTestWorkspaceMembers, {
       workspaceId: testWorkspaceId,
     });
 

@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,6 +9,7 @@ import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, Copy, Play, Pause, Search, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useSurveysPageConvex } from "./hooks/useSurveysConvex";
 
 function SurveysContent() {
   const router = useRouter();
@@ -19,22 +18,11 @@ function SurveysContent() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "draft" | "active" | "paused" | "archived"
   >("all");
-
-  const surveys = useQuery(
-    api.surveys.list,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        }
-      : "skip"
-  );
-
-  const createSurvey = useMutation(api.surveys.create);
-  const deleteSurvey = useMutation(api.surveys.remove);
-  const activateSurvey = useMutation(api.surveys.activate);
-  const pauseSurvey = useMutation(api.surveys.pause);
-  const duplicateSurvey = useMutation(api.surveys.duplicate);
+  const { activateSurvey, createSurvey, deleteSurvey, duplicateSurvey, pauseSurvey, surveys } =
+    useSurveysPageConvex(
+      activeWorkspace?._id,
+      statusFilter === "all" ? undefined : statusFilter
+    );
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;

@@ -19,10 +19,10 @@ describe("notification settings", () => {
 
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     workspaceId = workspace.workspaceId;
 
-    const agent = await client.mutation(api.testing.helpers.createTestUser, {
+    const agent = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId,
       email: `notify-agent-${Date.now()}@test.opencom.dev`,
       role: "agent",
@@ -30,14 +30,14 @@ describe("notification settings", () => {
     agentUserId = agent.userId;
     agentEmail = agent.email;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId,
       email: `visitor-${Date.now()}@example.com`,
       name: "Notification Visitor",
     });
     visitorId = visitor.visitorId;
 
-    const conversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const conversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId,
       visitorId,
     });
@@ -47,7 +47,7 @@ describe("notification settings", () => {
   afterAll(async () => {
     if (workspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId,
         });
       } catch (error) {
@@ -60,7 +60,7 @@ describe("notification settings", () => {
 
   it("defaults member email notifications to enabled for new visitor messages", async () => {
     const recipients = await client.mutation(
-      api.testing.helpers.getTestMemberRecipientsForNewVisitorMessage,
+      api.testing_helpers.getTestMemberRecipientsForNewVisitorMessage,
       {
         workspaceId,
       }
@@ -70,14 +70,14 @@ describe("notification settings", () => {
   });
 
   it("suppresses member email notifications after opt-out", async () => {
-    await client.mutation(api.testing.helpers.upsertTestNotificationPreference, {
+    await client.mutation(api.testing_helpers.upsertTestNotificationPreference, {
       userId: agentUserId,
       workspaceId,
       newVisitorMessageEmail: false,
     });
 
     const recipients = await client.mutation(
-      api.testing.helpers.getTestMemberRecipientsForNewVisitorMessage,
+      api.testing_helpers.getTestMemberRecipientsForNewVisitorMessage,
       {
         workspaceId,
       }
@@ -87,23 +87,23 @@ describe("notification settings", () => {
   });
 
   it("excludes disabled member device tokens from push recipients", async () => {
-    const enabledToken = await client.mutation(api.testing.helpers.createTestPushToken, {
+    const enabledToken = await client.mutation(api.testing_helpers.createTestPushToken, {
       userId: agentUserId,
       notificationsEnabled: true,
     });
-    const disabledToken = await client.mutation(api.testing.helpers.createTestPushToken, {
+    const disabledToken = await client.mutation(api.testing_helpers.createTestPushToken, {
       userId: agentUserId,
       notificationsEnabled: false,
     });
 
-    await client.mutation(api.testing.helpers.upsertTestNotificationPreference, {
+    await client.mutation(api.testing_helpers.upsertTestNotificationPreference, {
       userId: agentUserId,
       workspaceId,
       newVisitorMessagePush: true,
     });
 
     const recipients = await client.mutation(
-      api.testing.helpers.getTestMemberRecipientsForNewVisitorMessage,
+      api.testing_helpers.getTestMemberRecipientsForNewVisitorMessage,
       {
         workspaceId,
       }
@@ -121,14 +121,14 @@ describe("notification settings", () => {
 
   it("resolves visitor support reply recipients and suppresses duplicate email-channel notifications", async () => {
     const enabledVisitorToken = await client.mutation(
-      api.testing.helpers.createTestVisitorPushToken,
+      api.testing_helpers.createTestVisitorPushToken,
       {
         visitorId,
         notificationsEnabled: true,
       }
     );
     const disabledVisitorToken = await client.mutation(
-      api.testing.helpers.createTestVisitorPushToken,
+      api.testing_helpers.createTestVisitorPushToken,
       {
         visitorId,
         notificationsEnabled: false,
@@ -136,7 +136,7 @@ describe("notification settings", () => {
     );
 
     const chatRecipients = await client.mutation(
-      api.testing.helpers.getTestVisitorRecipientsForSupportReply,
+      api.testing_helpers.getTestVisitorRecipientsForSupportReply,
       {
         conversationId: visitorConversationId,
         channel: "chat",
@@ -148,7 +148,7 @@ describe("notification settings", () => {
     expect(chatRecipients.pushTokens).not.toContain(disabledVisitorToken.token);
 
     const emailChannelRecipients = await client.mutation(
-      api.testing.helpers.getTestVisitorRecipientsForSupportReply,
+      api.testing_helpers.getTestVisitorRecipientsForSupportReply,
       {
         conversationId: visitorConversationId,
         channel: "email",
@@ -159,18 +159,18 @@ describe("notification settings", () => {
   });
 
   it("does not resolve visitor email recipient when visitor email is missing", async () => {
-    const noEmailVisitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const noEmailVisitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId,
       name: "No Email Visitor",
     });
 
-    const noEmailConversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const noEmailConversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId,
       visitorId: noEmailVisitor.visitorId,
     });
 
     const recipients = await client.mutation(
-      api.testing.helpers.getTestVisitorRecipientsForSupportReply,
+      api.testing_helpers.getTestVisitorRecipientsForSupportReply,
       {
         conversationId: noEmailConversation.conversationId,
         channel: "chat",

@@ -19,7 +19,7 @@ describe("tourSteps", () => {
     client = new ConvexClient(convexUrl);
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
-    testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    testTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Test Tour for Steps",
     });
@@ -28,7 +28,7 @@ describe("tourSteps", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

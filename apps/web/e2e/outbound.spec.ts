@@ -181,9 +181,6 @@ test.describe("Outbound Messages", () => {
   });
 
   test("should delete message", async ({ page }) => {
-    // Handle confirmation dialog before any action that could trigger it
-    page.on("dialog", (dialog) => dialog.accept());
-
     await gotoWithAuthRecovery(page, "/outbound");
     await page.waitForLoadState("networkidle").catch(() => {});
 
@@ -191,6 +188,10 @@ test.describe("Outbound Messages", () => {
     const deleteBtn = page.getByRole("button", { name: /delete/i }).first();
     if (await deleteBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await deleteBtn.click();
+      const confirmButton = page.getByRole("button", { name: /^confirm$/i }).first();
+      if (await confirmButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await confirmButton.click();
+      }
     }
 
     // Page should still be on outbound
@@ -356,9 +357,6 @@ test.describe("Checklists", () => {
     await expect(page).toHaveURL(/checklists/, { timeout: 12000 });
     await page.waitForLoadState("networkidle").catch(() => {});
 
-    // Handle confirmation dialog if present
-    page.on("dialog", (dialog) => dialog.accept());
-
     // Look for delete button on a checklist item - try multiple selectors
     const deleteBtn = page
       .locator("button[title='Delete']")
@@ -369,6 +367,10 @@ test.describe("Checklists", () => {
 
     if (await deleteBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await deleteBtn.click();
+      const confirmButton = page.getByRole("button", { name: /^confirm$/i }).first();
+      if (await confirmButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await confirmButton.click();
+      }
       await page.waitForLoadState("networkidle").catch(() => {});
     }
 

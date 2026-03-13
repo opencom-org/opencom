@@ -16,15 +16,15 @@ describe("checklists", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorId = visitor.visitorId;
 
-    const session = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const session = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: testVisitorId,
       workspaceId: testWorkspaceId,
     });
@@ -34,7 +34,7 @@ describe("checklists", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

@@ -1,8 +1,9 @@
 "use node";
 
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
 import { generateText } from "ai";
 import { createAIClient } from "./lib/aiGateway";
 
@@ -12,6 +13,234 @@ type AIConfigurationDiagnostic = {
   provider?: string;
   model?: string;
 };
+
+type ConvexRef<
+  Type extends "query" | "mutation" | "action",
+  Visibility extends "internal" | "public",
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<Type, Visibility, Args, Return>;
+
+type ConversationAccessArgs = {
+  conversationId: Id<"conversations">;
+  visitorId?: Id<"visitors">;
+  sessionToken?: string;
+};
+
+type ConversationAccessResult = {
+  conversationId: Id<"conversations">;
+  workspaceId: Id<"workspaces">;
+  visitorId: Id<"visitors">;
+  aiWorkflowState?: string | null;
+  hasHumanAgentResponse: boolean;
+};
+
+type KnowledgeSource = "articles" | "internalArticles" | "snippets";
+
+type RuntimeSettings = {
+  enabled: boolean;
+  model: string;
+  knowledgeSources?: KnowledgeSource[];
+  embeddingModel?: string;
+  personality?: string | null;
+  confidenceThreshold?: number;
+};
+
+type RuntimeDiagnosticArgs = {
+  workspaceId: Id<"workspaces">;
+  code: string;
+  message: string;
+  provider?: string;
+  model?: string;
+};
+
+type WorkspaceIdArgs = {
+  workspaceId: Id<"workspaces">;
+};
+
+type RelevantKnowledgeResult = {
+  type: string;
+  id: string;
+  title: string;
+  content: string;
+  relevanceScore: number;
+};
+
+type GetRelevantKnowledgeForRuntimeActionArgs = {
+  workspaceId: Id<"workspaces">;
+  query: string;
+  knowledgeSources?: KnowledgeSource[];
+  limit?: number;
+  embeddingModel?: string;
+};
+
+type HandoffToHumanArgs = {
+  conversationId: Id<"conversations">;
+  visitorId?: Id<"visitors">;
+  sessionToken?: string;
+  reason?: string;
+};
+
+type HandoffToHumanResult = {
+  messageId: Id<"messages">;
+  handoffMessage: string;
+};
+
+type InternalSendBotMessageArgs = {
+  conversationId: Id<"conversations">;
+  content: string;
+  senderId?: string;
+};
+
+type AIResponseSource = {
+  type: string;
+  id: string;
+  title: string;
+  articleId?: string;
+};
+
+type GenerateResponseResult = {
+  response: string;
+  confidence: number;
+  sources: AIResponseSource[];
+  handoff: boolean;
+  handoffReason: string | null;
+  messageId: HandoffToHumanResult["messageId"] | null;
+};
+
+type StoreResponseArgs = {
+  conversationId: Id<"conversations">;
+  visitorId?: Id<"visitors">;
+  sessionToken?: string;
+  messageId: Id<"messages">;
+  query: string;
+  response: string;
+  generatedCandidateResponse?: string;
+  generatedCandidateSources?: AIResponseSource[];
+  generatedCandidateConfidence?: number;
+  sources: AIResponseSource[];
+  confidence: number;
+  handedOff: boolean;
+  handoffReason?: string;
+  generationTimeMs: number;
+  tokensUsed?: number;
+  model: string;
+  provider: string;
+};
+
+const AUTHORIZE_CONVERSATION_ACCESS_REF = makeFunctionReference<
+  "query",
+  ConversationAccessArgs,
+  ConversationAccessResult
+>("aiAgent:authorizeConversationAccess") as unknown as ConvexRef<
+  "query",
+  "internal",
+  ConversationAccessArgs,
+  ConversationAccessResult
+>;
+
+const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeFunctionReference<
+  "query",
+  WorkspaceIdArgs,
+  RuntimeSettings
+>("aiAgent:getRuntimeSettingsForWorkspace") as unknown as ConvexRef<
+  "query",
+  "internal",
+  WorkspaceIdArgs,
+  RuntimeSettings
+>;
+
+const RECORD_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
+  "mutation",
+  RuntimeDiagnosticArgs,
+  unknown
+>("aiAgent:recordRuntimeDiagnostic") as unknown as ConvexRef<
+  "mutation",
+  "internal",
+  RuntimeDiagnosticArgs,
+  unknown
+>;
+
+const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
+  "mutation",
+  WorkspaceIdArgs,
+  Id<"aiAgentSettings"> | null
+>("aiAgent:clearRuntimeDiagnostic") as unknown as ConvexRef<
+  "mutation",
+  "internal",
+  WorkspaceIdArgs,
+  Id<"aiAgentSettings"> | null
+>;
+
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
+  "action",
+  GetRelevantKnowledgeForRuntimeActionArgs,
+  RelevantKnowledgeResult[]
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
+  "action",
+  "internal",
+  GetRelevantKnowledgeForRuntimeActionArgs,
+  RelevantKnowledgeResult[]
+>;
+
+const HANDOFF_TO_HUMAN_REF = makeFunctionReference<
+  "mutation",
+  HandoffToHumanArgs,
+  HandoffToHumanResult
+>("aiAgent:handoffToHuman") as unknown as ConvexRef<
+  "mutation",
+  "public",
+  HandoffToHumanArgs,
+  HandoffToHumanResult
+>;
+
+const STORE_RESPONSE_REF = makeFunctionReference<"mutation", StoreResponseArgs, Id<"aiResponses">>(
+  "aiAgent:storeResponse"
+) as unknown as ConvexRef<"mutation", "public", StoreResponseArgs, Id<"aiResponses">>;
+
+const INTERNAL_SEND_BOT_MESSAGE_REF = makeFunctionReference<
+  "mutation",
+  InternalSendBotMessageArgs,
+  Id<"messages">
+>("messages:internalSendBotMessage") as unknown as ConvexRef<
+  "mutation",
+  "internal",
+  InternalSendBotMessageArgs,
+  Id<"messages">
+>;
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    queryRef: ConvexRef<"query", Visibility, Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return = unknown,
+  >(
+    mutationRef: ConvexRef<"mutation", Visibility, Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    actionRef: ConvexRef<"action", Visibility, Args, Return>,
+    actionArgs: Args
+  ) => Promise<Return>;
+}
 
 const SUPPORTED_AI_PROVIDERS = new Set(["openai"]);
 const GENERATION_FAILURE_FALLBACK_RESPONSE =
@@ -239,20 +468,13 @@ export const generateResponse = action({
       )
     ),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<{
-    response: string;
-    confidence: number;
-    sources: Array<{ type: string; id: string; title: string }>;
-    handoff: boolean;
-    handoffReason: string | null;
-    messageId: string | null;
-  }> => {
+  handler: async (ctx, args): Promise<GenerateResponseResult> => {
     const startTime = Date.now();
 
-    const access = await ctx.runQuery(internal.aiAgent.authorizeConversationAccess, {
+    const runQuery = getShallowRunQuery(ctx);
+    const runMutation = getShallowRunMutation(ctx);
+    const runAction = getShallowRunAction(ctx);
+    const access = await runQuery(AUTHORIZE_CONVERSATION_ACCESS_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
       sessionToken: args.sessionToken,
@@ -279,14 +501,14 @@ export const generateResponse = action({
     }
 
     // Get AI settings
-    const settings = await ctx.runQuery(internal.aiAgent.getRuntimeSettingsForWorkspace, {
+    const settings = await runQuery(GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF, {
       workspaceId: args.workspaceId,
     });
 
     if (!settings.enabled) {
       const reason = "AI Agent is disabled";
       try {
-        const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+        const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,
           sessionToken: args.sessionToken,
@@ -305,7 +527,7 @@ export const generateResponse = action({
         console.error("Failed to handoff when AI Agent is disabled:", handoffError);
       }
 
-      const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+      const messageId = await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
         conversationId: args.conversationId,
         senderId: "ai-agent",
         content: GENERATION_FAILURE_FALLBACK_RESPONSE,
@@ -323,7 +545,7 @@ export const generateResponse = action({
 
     const configurationDiagnostic = getAIConfigurationDiagnostic(settings.model);
     if (configurationDiagnostic) {
-      await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
+      await runMutation(RECORD_RUNTIME_DIAGNOSTIC_REF, {
         workspaceId: args.workspaceId,
         code: configurationDiagnostic.code,
         message: configurationDiagnostic.message,
@@ -331,7 +553,7 @@ export const generateResponse = action({
         model: configurationDiagnostic.model,
       });
 
-      const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+      const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
         sessionToken: args.sessionToken,
@@ -348,19 +570,26 @@ export const generateResponse = action({
       };
     }
 
-    await ctx.runMutation(internal.aiAgent.clearRuntimeDiagnostic, {
+    await runMutation(CLEAR_RUNTIME_DIAGNOSTIC_REF, {
       workspaceId: args.workspaceId,
     });
 
     // Get relevant knowledge
-    const knowledgeResults = await ctx.runQuery(internal.aiAgent.getRelevantKnowledgeForRuntime, {
-      workspaceId: args.workspaceId,
-      query: args.query,
-      knowledgeSources: settings.knowledgeSources as Array<
-        "articles" | "internalArticles" | "snippets"
-      >,
-      limit: 5,
-    });
+    let knowledgeResults: RelevantKnowledgeResult[] = [];
+    try {
+      knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
+        workspaceId: args.workspaceId,
+        query: args.query,
+        knowledgeSources: settings.knowledgeSources,
+        limit: 5,
+        embeddingModel: settings.embeddingModel,
+      });
+    } catch (retrievalError) {
+      console.error(
+        "Knowledge retrieval failed; continuing without knowledge context:",
+        retrievalError
+      );
+    }
 
     // Build knowledge context for prompt
     const knowledgeContext = knowledgeResults
@@ -387,7 +616,7 @@ export const generateResponse = action({
       const generationTimeMs = Date.now() - startTime;
 
       try {
-        await ctx.runMutation(internal.aiAgent.recordRuntimeDiagnostic, {
+        await runMutation(RECORD_RUNTIME_DIAGNOSTIC_REF, {
           workspaceId: args.workspaceId,
           code: diagnosticCode,
           message: diagnosticMessage,
@@ -399,7 +628,7 @@ export const generateResponse = action({
       }
 
       try {
-        const handoff = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+        const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,
           sessionToken: args.sessionToken,
@@ -407,7 +636,7 @@ export const generateResponse = action({
         });
 
         try {
-          await ctx.runMutation(api.aiAgent.storeResponse, {
+          await runMutation(STORE_RESPONSE_REF, {
             conversationId: args.conversationId,
             visitorId: args.visitorId,
             sessionToken: args.sessionToken,
@@ -442,14 +671,14 @@ export const generateResponse = action({
         console.error("Failed to handoff after AI generation error:", handoffError);
       }
 
-      const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+      const messageId = await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
         conversationId: args.conversationId,
         senderId: "ai-agent",
         content: GENERATION_FAILURE_FALLBACK_RESPONSE,
       });
 
       try {
-        await ctx.runMutation(api.aiAgent.storeResponse, {
+        await runMutation(STORE_RESPONSE_REF, {
           conversationId: args.conversationId,
           visitorId: args.visitorId,
           sessionToken: args.sessionToken,
@@ -621,7 +850,7 @@ export const generateResponse = action({
     const { handoff, reason: handoffReason } = shouldHandoff(
       responseText,
       confidence,
-      settings.confidenceThreshold,
+      settings.confidenceThreshold ?? 0.6,
       args.query
     );
 
@@ -630,18 +859,19 @@ export const generateResponse = action({
       type: r.type,
       id: r.id,
       title: r.title,
+      articleId: r.type === "article" ? r.id : undefined,
     }));
 
     if (handoff) {
       // Preserve both generated and delivered contexts while keeping one visitor-facing handoff message.
-      const handoffResult = await ctx.runMutation(api.aiAgent.handoffToHuman, {
+      const handoffResult = await runMutation(HANDOFF_TO_HUMAN_REF, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
         sessionToken: args.sessionToken,
         reason: handoffReason ?? undefined,
       });
 
-      await ctx.runMutation(api.aiAgent.storeResponse, {
+      await runMutation(STORE_RESPONSE_REF, {
         conversationId: args.conversationId,
         visitorId: args.visitorId,
         sessionToken: args.sessionToken,
@@ -672,14 +902,14 @@ export const generateResponse = action({
     }
 
     // Create the AI message via the internal bot-only path.
-    const messageId = await ctx.runMutation(internal.messages.internalSendBotMessage, {
+    const messageId = await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
       conversationId: args.conversationId,
       senderId: "ai-agent",
       content: responseText,
     });
 
     // Store the AI response for analytics
-    await ctx.runMutation(api.aiAgent.storeResponse, {
+    await runMutation(STORE_RESPONSE_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
       sessionToken: args.sessionToken,

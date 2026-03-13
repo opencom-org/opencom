@@ -267,7 +267,7 @@
 .opencom-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 16px 16px 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -431,7 +431,6 @@
   background: var(--opencom-bg-surface);
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 
 .opencom-conversation-status {
@@ -456,14 +455,35 @@
 }
 
 .opencom-input-container {
-  padding: 12px 16px 16px;
+  padding: 10px;
   display: flex;
+  flex-direction: column;
   gap: 8px;
   background: var(--opencom-bg-surface);
 }
 
+.opencom-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.opencom-composer-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .opencom-input {
   flex: 1;
+  min-width: 0;
   padding: 12px 16px;
   border: 2px solid var(--opencom-border-color);
   border-radius: 24px;
@@ -491,6 +511,7 @@
 }
 
 .opencom-send {
+  flex-shrink: 0;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -503,6 +524,128 @@
   color: var(--opencom-text-on-primary);
   transition: transform 0.15s, box-shadow 0.2s;
   box-shadow: 0 2px 6px color-mix(in srgb, var(--opencom-primary-color) 30%, transparent);
+}
+
+.opencom-attach {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--opencom-border-color);
+  background: var(--opencom-bg-muted);
+  color: var(--opencom-text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.opencom-attach:hover {
+  border-color: var(--opencom-primary-color);
+  background: var(--opencom-bg-surface);
+}
+
+.opencom-attach:disabled,
+.opencom-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.opencom-pending-attachments {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 144px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.opencom-pending-attachment {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--opencom-border-color);
+  background: var(--opencom-bg-muted);
+  font-size: 12px;
+  color: var(--opencom-text-color);
+  box-sizing: border-box;
+}
+
+.opencom-pending-attachment-name,
+.opencom-message-attachment-name {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.opencom-pending-attachment-name svg,
+.opencom-message-attachment-name svg {
+  flex-shrink: 0;
+}
+
+.opencom-pending-attachment-size,
+.opencom-message-attachment-size {
+  flex-shrink: 0;
+  color: var(--opencom-text-muted);
+  font-size: 11px;
+}
+
+.opencom-pending-attachment button {
+  border: none;
+  background: transparent;
+  color: var(--opencom-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.opencom-pending-attachment button:hover {
+  color: var(--opencom-text-color);
+}
+
+.opencom-message-attachments {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.opencom-message-attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--opencom-border-color) 90%, transparent);
+  background: color-mix(in srgb, var(--opencom-bg-surface) 92%, transparent);
+  color: var(--opencom-text-color);
+  text-decoration: none;
+}
+
+.opencom-message-attachment-disabled {
+  cursor: default;
+  opacity: 0.84;
+}
+
+.opencom-message-attachment:hover {
+  border-color: color-mix(in srgb, var(--opencom-primary-color) 24%, var(--opencom-border-color));
+}
+
+.opencom-message-attachment-disabled:hover {
+  border-color: color-mix(in srgb, var(--opencom-border-color) 90%, transparent);
 }
 
 .opencom-send:hover {
@@ -1018,7 +1161,7 @@
 }
 
 .opencom-email-capture {
-  padding: 12px 16px;
+  padding: 8px 10px;
   background: linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%);
   border-top: 1px solid #c4b5fd;
   animation: slideInUp 0.3s ease-out;
@@ -1881,9 +2024,9 @@
     max-width: 85%;
   }
 
-  .opencom-email-capture {
+  /* .opencom-email-capture {
     padding: 14px 16px;
-  }
+  } */
 
   .opencom-email-input {
     padding: 10px 14px;
@@ -2334,6 +2477,15 @@
   padding: 0 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   z-index: 10000000;
+}
+
+.opencom-authoring-feedback {
+  position: fixed;
+  top: 64px;
+  left: 16px;
+  right: 16px;
+  max-width: 560px;
+  z-index: 10000001;
 }
 
 .opencom-authoring-toolbar-left,
@@ -3297,9 +3449,26 @@
 
 .opencom-ticket-reply {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--opencom-border-color);
+}
+
+.opencom-ticket-reply-actions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.opencom-ticket-error {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 10px 12px;
+  font-size: 12px;
 }
 
 .opencom-ticket-reply-input {
@@ -3339,6 +3508,11 @@
 
 .opencom-ticket-reply-send:hover {
   opacity: 0.85;
+}
+
+.opencom-ticket-reply-send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .opencom-ticket-resolution {
@@ -3390,6 +3564,59 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.opencom-ticket-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.opencom-ticket-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--opencom-border-color);
+  background: var(--opencom-bg-muted);
+  color: var(--opencom-text-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.opencom-ticket-attach-btn:hover {
+  border-color: var(--opencom-primary-color);
+  background: var(--opencom-bg-surface);
+}
+
+.opencom-ticket-attach-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.opencom-error-feedback {
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  padding: 10px 12px;
+}
+
+.opencom-error-feedback-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #b91c1c;
+}
+
+.opencom-error-feedback-next-action {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #dc2626;
 }
 
 .opencom-ticket-form-description {
@@ -3938,6 +4165,44 @@
   color: #6b7280;
   font-size: 11px;
   margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.opencom-ai-source-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.opencom-ai-source-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.opencom-ai-source-link {
+  border: none;
+  background: none;
+  color: #2563eb;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.opencom-ai-source-link:hover {
+  color: #1d4ed8;
+}
+
+.opencom-ai-source-text {
+  color: #6b7280;
   font-style: italic;
 }
 

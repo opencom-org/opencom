@@ -1,6 +1,15 @@
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
+
+// Generated api.officeHours.* refs trigger TS2589 in sdk-core, so keep the
+// fallback localized to these explicit office-hours refs only.
+const IS_CURRENTLY_OPEN_REF =
+  makeFunctionReference("officeHours:isCurrentlyOpen") as FunctionReference<"query">;
+const GET_EXPECTED_REPLY_TIME_REF =
+  makeFunctionReference("officeHours:getExpectedReplyTime") as FunctionReference<"query">;
+const GET_OFFICE_HOURS_REF =
+  makeFunctionReference("officeHours:getOrDefault") as FunctionReference<"query">;
 
 export interface OfficeHoursStatus {
   isOpen: boolean;
@@ -27,7 +36,7 @@ export async function getOfficeHoursStatus(): Promise<OfficeHoursStatus> {
   const client = getClient();
   const config = getConfig();
 
-  const status = await client.query(api.officeHours.isCurrentlyOpen, {
+  const status = await client.query(IS_CURRENTLY_OPEN_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 
@@ -42,7 +51,7 @@ export async function getExpectedReplyTime(): Promise<string | null> {
   const client = getClient();
   const config = getConfig();
 
-  const replyTime = await client.query(api.officeHours.getExpectedReplyTime, {
+  const replyTime = await client.query(GET_EXPECTED_REPLY_TIME_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 
@@ -53,7 +62,7 @@ export async function getOfficeHours(): Promise<OfficeHoursData> {
   const client = getClient();
   const config = getConfig();
 
-  const officeHours = await client.query(api.officeHours.getOrDefault, {
+  const officeHours = await client.query(GET_OFFICE_HOURS_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 

@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { useEffect, useState, type FormEvent } from "react";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
-import { scoreSelectorQuality, type SelectorQualityMetadata } from "@opencom/sdk-core";
+import { scoreSelectorQuality, type SelectorQualityMetadata } from "@opencom/web-shared";
 import { Plus, Pencil, Trash2, Search, Info, MousePointer2, ExternalLink } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
-
-type TriggerType = "hover" | "click" | "auto";
+import {
+  type TooltipListItem,
+  type TriggerType,
+  useTooltipsConvex,
+} from "./hooks/useTooltipsConvex";
 
 interface TooltipFormData {
   name: string;
@@ -37,24 +38,19 @@ function TooltipsContent() {
   const [activeSessionToken, setActiveSessionToken] = useState<string | null>(null);
   const [pendingSelectorQuality, setPendingSelectorQuality] =
     useState<SelectorQualityMetadata | null>(null);
+  const {
+    authoringSession,
+    createAuthoringSession,
+    createTooltip,
+    deleteTooltip,
+    tooltips,
+    updateTooltip,
+  } = useTooltipsConvex({
+    workspaceId: activeWorkspace?._id,
+    activeSessionToken,
+  });
 
-  const tooltips = useQuery(
-    api.tooltips.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createTooltip = useMutation(api.tooltips.create);
-  const updateTooltip = useMutation(api.tooltips.update);
-  const deleteTooltip = useMutation(api.tooltips.remove);
-  const createAuthoringSession = useMutation(api.tooltipAuthoringSessions.create);
-  const authoringSession = useQuery(
-    api.tooltipAuthoringSessions.getByToken,
-    activeSessionToken && activeWorkspace?._id
-      ? { token: activeSessionToken, workspaceId: activeWorkspace._id }
-      : "skip"
-  );
-
-  const handleOpenModal = (tooltip?: NonNullable<typeof tooltips>[number]) => {
+  const handleOpenModal = (tooltip?: TooltipListItem) => {
     if (tooltip) {
       setEditingId(tooltip._id);
       setFormData({
@@ -63,9 +59,7 @@ function TooltipsContent() {
         content: tooltip.content,
         triggerType: tooltip.triggerType,
       });
-      setPendingSelectorQuality(
-        (tooltip.selectorQuality ?? null) as SelectorQualityMetadata | null
-      );
+      setPendingSelectorQuality(tooltip.selectorQuality ?? null);
     } else {
       setEditingId(null);
       setFormData({
@@ -91,7 +85,7 @@ function TooltipsContent() {
     setPendingSelectorQuality(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!activeWorkspace?._id) return;
 
@@ -159,7 +153,7 @@ function TooltipsContent() {
   };
 
   // Poll for session completion
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isPollingSession || !authoringSession) return;
 
     if (authoringSession.status === "completed" && authoringSession.selectedSelector) {
@@ -167,9 +161,7 @@ function TooltipsContent() {
         ...prev,
         elementSelector: authoringSession.selectedSelector || "",
       }));
-      setPendingSelectorQuality(
-        (authoringSession.selectedSelectorQuality ?? null) as SelectorQualityMetadata | null
-      );
+      setPendingSelectorQuality(authoringSession.selectedSelectorQuality ?? null);
       setIsPollingSession(false);
       setActiveSessionToken(null);
     }
@@ -186,7 +178,7 @@ function TooltipsContent() {
       : null;
 
   const filteredTooltips = tooltips?.filter(
-    (tooltip: NonNullable<typeof tooltips>[number]) =>
+    (tooltip: TooltipListItem) =>
       tooltip.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tooltip.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tooltip.elementSelector.toLowerCase().includes(searchQuery.toLowerCase())
@@ -245,7 +237,7 @@ function TooltipsContent() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredTooltips?.map((tooltip: NonNullable<typeof tooltips>[number]) => (
+          {filteredTooltips?.map((tooltip: TooltipListItem) => (
             <div
               key={tooltip._id}
               data-testid={`tooltip-card-${tooltip._id}`}

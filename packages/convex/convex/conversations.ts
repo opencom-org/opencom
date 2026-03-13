@@ -1,8 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query, MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
+import {
+  getShallowRunAfter,
+  notifyAssignmentRef,
+  notifyNewConversationRef,
+} from "./notifications/functionRefs";
 import { requirePermission, hasPermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
@@ -31,7 +35,8 @@ async function createConversationInternal(
     createdAt: now,
   });
 
-  await ctx.scheduler.runAfter(0, internal.notifications.notifyNewConversation, {
+  const runAfter = getShallowRunAfter(ctx);
+  await runAfter(0, notifyNewConversationRef, {
     conversationId: id,
   });
 
@@ -221,7 +226,8 @@ export const assign = mutation({
       updatedAt: Date.now(),
     });
 
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyAssignment, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, notifyAssignmentRef, {
       conversationId: args.id,
       assignedAgentId: args.agentId,
       actorUserId: user._id,

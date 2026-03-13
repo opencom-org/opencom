@@ -1,35 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import {
+  getDefaultHomeConfig,
+  type HomeCard,
+  type NormalizedHomeConfig,
+  type PublicMessengerSettings,
+} from "@opencom/types";
 import { Search, MessageCircle, ChevronRight, FileText, Bell, Send } from "../icons";
-
-interface HomeCard {
-  id: string;
-  type:
-    | "welcome"
-    | "search"
-    | "conversations"
-    | "startConversation"
-    | "featuredArticles"
-    | "announcements";
-  config?: Record<string, unknown>;
-  visibleTo: "all" | "visitors" | "users";
-}
-
-interface HomeTab {
-  id: "home" | "messages" | "help" | "tours" | "tasks" | "tickets";
-  enabled: boolean;
-  visibleTo: "all" | "visitors" | "users";
-}
-
-interface HomeConfig {
-  enabled: boolean;
-  cards: HomeCard[];
-  defaultSpace: "home" | "messages" | "help";
-  launchDirectlyToConversation: boolean;
-  tabs?: HomeTab[];
-}
+import { useWidgetQuery, widgetQueryRef } from "../lib/convex/hooks";
 
 interface Conversation {
   _id: Id<"conversations">;
@@ -48,18 +26,35 @@ interface Article {
   slug: string;
 }
 
+const publicHomeConfigQueryRef = widgetQueryRef<
+  { workspaceId: Id<"workspaces">; isIdentified: boolean },
+  NormalizedHomeConfig
+>("messengerSettings:getPublicHomeConfig");
+
+const visitorArticlesListQueryRef = widgetQueryRef<
+  { workspaceId: Id<"workspaces">; visitorId: Id<"visitors">; sessionToken: string },
+  Article[]
+>("articles:listForVisitor");
+
+const visitorArticlesSearchQueryRef = widgetQueryRef<
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken: string;
+    query: string;
+  },
+  Article[]
+>("articles:searchForVisitor");
+
 interface HomeProps {
   workspaceId: Id<"workspaces">;
   visitorId: Id<"visitors"> | null;
   sessionToken: string | null;
   isIdentified: boolean;
-  settings: {
-    primaryColor: string;
-    backgroundColor: string;
-    logo: string | null;
-    welcomeMessage: string;
-    teamIntroduction: string | null;
-  };
+  settings: Pick<
+    PublicMessengerSettings,
+    "primaryColor" | "backgroundColor" | "logo" | "welcomeMessage" | "teamIntroduction"
+  >;
   conversations: Conversation[] | undefined;
   onStartConversation: () => void;
   onSelectConversation: (id: Id<"conversations">) => void;
@@ -81,18 +76,18 @@ export function Home({
 }: HomeProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const homeConfig = useQuery(api.messengerSettings.getPublicHomeConfig, {
+  const homeConfig = useWidgetQuery(publicHomeConfigQueryRef, {
     workspaceId,
     isIdentified,
-  }) as HomeConfig | undefined;
+  }) as NormalizedHomeConfig | undefined;
 
-  const featuredArticles = useQuery(
-    api.articles.listForVisitor,
+  const featuredArticles = useWidgetQuery(
+    visitorArticlesListQueryRef,
     visitorId && sessionToken ? { workspaceId, visitorId, sessionToken } : "skip"
   ) as Article[] | undefined;
 
-  const searchResults = useQuery(
-    api.articles.searchForVisitor,
+  const searchResults = useWidgetQuery(
+    visitorArticlesSearchQueryRef,
     visitorId && sessionToken && searchQuery.length >= 2
       ? { workspaceId, visitorId, sessionToken, query: searchQuery }
       : "skip"
@@ -268,36 +263,11 @@ export function Home({
   return <div className="opencom-home">{homeConfig.cards.map(renderCard)}</div>;
 }
 
-const DEFAULT_HOME_CONFIG: HomeConfig = {
-  enabled: true,
-  cards: [
-    { id: "welcome", type: "welcome", visibleTo: "all" },
-    { id: "search", type: "search", visibleTo: "all" },
-    { id: "conversations", type: "conversations", visibleTo: "all" },
-    { id: "startConversation", type: "startConversation", visibleTo: "all" },
-  ],
-  defaultSpace: "home",
-  launchDirectlyToConversation: false,
-  tabs: [
-    { id: "home", enabled: true, visibleTo: "all" },
-    { id: "messages", enabled: true, visibleTo: "all" },
-    { id: "help", enabled: true, visibleTo: "all" },
-    { id: "tours", enabled: true, visibleTo: "all" },
-    { id: "tasks", enabled: true, visibleTo: "all" },
-    { id: "tickets", enabled: true, visibleTo: "all" },
-  ],
-};
-
 export function useHomeConfig(workspaceId: Id<"workspaces"> | undefined, isIdentified: boolean) {
-  const homeConfig = useQuery(
-    api.messengerSettings.getPublicHomeConfig,
+  const homeConfig = useWidgetQuery(
+    publicHomeConfigQueryRef,
     workspaceId ? { workspaceId, isIdentified } : "skip"
-  ) as HomeConfig | undefined;
+  ) as NormalizedHomeConfig | undefined;
 
-  const resolvedConfig = homeConfig ?? DEFAULT_HOME_CONFIG;
-  return {
-    ...resolvedConfig,
-    launchDirectlyToConversation: resolvedConfig.launchDirectlyToConversation ?? false,
-    tabs: resolvedConfig.tabs ?? DEFAULT_HOME_CONFIG.tabs,
-  };
+  return homeConfig ?? getDefaultHomeConfig();
 }

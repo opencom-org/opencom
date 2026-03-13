@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
+import { useRef, useState } from "react";
+import {
+  SUPPORT_ATTACHMENT_ACCEPT,
+  formatSupportAttachmentSize,
+  normalizeUnknownError,
+  uploadSupportAttachments,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
 import { Button, Card, Input } from "@opencom/ui";
 import {
   Ticket,
@@ -15,12 +20,15 @@ import {
   User,
   MessageSquare,
   FileText,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useTicketsPageConvex } from "./hooks/useTicketsConvex";
 
 type TicketStatus = "submitted" | "in_progress" | "waiting_on_customer" | "resolved";
 type TicketPriority = "low" | "normal" | "high" | "urgent";
@@ -52,52 +60,86 @@ function TicketsContent(): React.JSX.Element | null {
   const [newTicketPriority, setNewTicketPriority] = useState<TicketPriority>("normal");
   const [selectedVisitorId, setSelectedVisitorId] = useState<Id<"visitors"> | null>(null);
   const [visitorSearchQuery, setVisitorSearchQuery] = useState("");
-
-  const visitors = useQuery(
-    api.visitors.search,
-    activeWorkspace?._id && visitorSearchQuery.length >= 2
-      ? { workspaceId: activeWorkspace._id, query: visitorSearchQuery, limit: 10 }
-      : "skip"
+  const [pendingAttachments, setPendingAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+  const [createTicketError, setCreateTicketError] = useState<string | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
+  const {
+    createTicket,
+    finalizeSupportAttachmentUpload,
+    generateSupportAttachmentUploadUrl,
+    recentVisitors,
+    tickets,
+    visitors,
+  } = useTicketsPageConvex(
+    activeWorkspace?._id,
+    statusFilter === "all" ? undefined : statusFilter,
+    visitorSearchQuery
   );
 
-  const recentVisitors = useQuery(
-    api.visitors.list,
-    activeWorkspace?._id && !visitorSearchQuery
-      ? { workspaceId: activeWorkspace._id, limit: 10 }
-      : "skip"
-  );
+  const resetCreateTicketState = () => {
+    setShowCreateModal(false);
+    setNewTicketSubject("");
+    setNewTicketDescription("");
+    setNewTicketPriority("normal");
+    setSelectedVisitorId(null);
+    setVisitorSearchQuery("");
+    setPendingAttachments([]);
+    setCreateTicketError(null);
+  };
 
-  const tickets = useQuery(
-    api.tickets.listForAdminView,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          ...(statusFilter !== "all" && { status: statusFilter }),
-        }
-      : "skip"
-  );
+  const handleUploadAttachments = async (files: File[]) => {
+    if (!activeWorkspace?._id || files.length === 0) {
+      return;
+    }
 
-  const createTicket = useMutation(api.tickets.create);
+    setCreateTicketError(null);
+    setIsUploadingAttachments(true);
+    try {
+      const uploadedAttachments = await uploadSupportAttachments({
+        files,
+        currentCount: pendingAttachments.length,
+        workspaceId: activeWorkspace._id,
+        generateUploadUrl: generateSupportAttachmentUploadUrl,
+        finalizeUpload: finalizeSupportAttachmentUpload,
+      });
+      setPendingAttachments((current) => [...current, ...uploadedAttachments]);
+    } catch (error) {
+      setCreateTicketError(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to upload attachment.",
+          nextAction: "Try again with a supported file.",
+        }).message
+      );
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  };
 
   const handleCreateTicket = async () => {
     if (!activeWorkspace?._id || !newTicketSubject.trim()) return;
 
     try {
+      setCreateTicketError(null);
       await createTicket({
         workspaceId: activeWorkspace._id,
         subject: newTicketSubject.trim(),
         description: newTicketDescription.trim() || undefined,
         priority: newTicketPriority,
         visitorId: selectedVisitorId || undefined,
+        attachmentIds: pendingAttachments.map((attachment) => attachment.attachmentId),
       });
-      setShowCreateModal(false);
-      setNewTicketSubject("");
-      setNewTicketDescription("");
-      setNewTicketPriority("normal");
-      setSelectedVisitorId(null);
-      setVisitorSearchQuery("");
+      resetCreateTicketState();
     } catch (error) {
       console.error("Failed to create ticket:", error);
+      setCreateTicketError(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to create ticket.",
+          nextAction: "Review the details and try again.",
+        }).message
+      );
     }
   };
 
@@ -118,8 +160,7 @@ function TicketsContent(): React.JSX.Element | null {
   });
 
   const selectedVisitor = (visitors || recentVisitors)?.find(
-    (visitor: { _id: Id<"visitors">; name?: string; email?: string }) =>
-      visitor._id === selectedVisitorId
+    (visitor) => visitor._id === selectedVisitorId
   );
 
   if (!user || !activeWorkspace) {
@@ -142,7 +183,12 @@ function TicketsContent(): React.JSX.Element | null {
               Manage Forms
             </Button>
           </Link>
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button
+            onClick={() => {
+              resetCreateTicketState();
+              setShowCreateModal(true);
+            }}
+          >
             <Plus className="h-4 w-4 mr-2" />
             New Ticket
           </Button>
@@ -274,7 +320,26 @@ function TicketsContent(): React.JSX.Element | null {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-lg p-6">
             <h2 className="text-lg font-semibold mb-4">Create New Ticket</h2>
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              accept={SUPPORT_ATTACHMENT_ACCEPT}
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                if (files.length > 0) {
+                  void handleUploadAttachments(files);
+                }
+                event.target.value = "";
+              }}
+            />
             <div className="space-y-4">
+              {createTicketError && (
+                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {createTicketError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium mb-1">Subject</label>
                 <Input
@@ -344,12 +409,7 @@ function TicketsContent(): React.JSX.Element | null {
                 (visitorSearchQuery.length >= 2 ? visitors : recentVisitors)?.length ? (
                   <div className="mt-2 border rounded-md max-h-40 overflow-y-auto">
                     {(visitorSearchQuery.length >= 2 ? visitors : recentVisitors)?.map(
-                      (visitor: {
-                        _id: Id<"visitors">;
-                        readableId?: string;
-                        name?: string;
-                        email?: string;
-                      }) => (
+                      (visitor) => (
                         <button
                           key={visitor._id}
                           type="button"
@@ -392,12 +452,65 @@ function TicketsContent(): React.JSX.Element | null {
                   Link this ticket to an existing customer
                 </p>
               </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium">Attachments</label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={isUploadingAttachments}
+                  >
+                    <Paperclip className="mr-2 h-4 w-4" />
+                    {isUploadingAttachments ? "Uploading..." : "Add files"}
+                  </Button>
+                </div>
+                {pendingAttachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingAttachments.map((attachment) => (
+                      <div
+                        key={attachment.attachmentId}
+                        className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        <span className="max-w-[220px] truncate">{attachment.fileName}</span>
+                        <span className="text-muted-foreground">
+                          {formatSupportAttachmentSize(attachment.size)}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            setPendingAttachments((current) =>
+                              current.filter(
+                                (currentAttachment) =>
+                                  currentAttachment.attachmentId !== attachment.attachmentId
+                              )
+                            )
+                          }
+                          aria-label={`Remove ${attachment.fileName}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Add screenshots, PDFs, or logs to help support triage the issue faster.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+              <Button variant="outline" onClick={resetCreateTicketState}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateTicket} disabled={!newTicketSubject.trim()}>
+              <Button
+                onClick={handleCreateTicket}
+                disabled={!newTicketSubject.trim() || isUploadingAttachments}
+              >
                 Create Ticket
               </Button>
             </div>

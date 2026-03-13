@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { Button, Input } from "@opencom/ui";
 import { ChevronDown, Plus, Check, Building2 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWorkspaceSelectorConvex } from "@/components/hooks/useWorkspaceSelectorConvex";
 
 export function WorkspaceSelector(): React.JSX.Element | null {
   const { workspaces, activeWorkspace, switchWorkspace } = useAuth();
@@ -14,8 +13,7 @@ export function WorkspaceSelector(): React.JSX.Element | null {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-
-  const createWorkspace = useMutation(api.workspaces.create);
+  const { createWorkspace } = useWorkspaceSelectorConvex();
   const handleSelect = async (workspaceId: Id<"workspaces">) => {
     if (workspaceId !== activeWorkspace?._id) {
       await switchWorkspace(workspaceId);

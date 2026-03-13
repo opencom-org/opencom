@@ -1,94 +1,100 @@
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { internal, api } from "./_generated/api";
 import { Id, Doc } from "./_generated/dataModel";
 import { evaluateRuleWithSegmentSupport, validateAudienceRule } from "./audienceRules";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
+import { routeEventRef } from "./notifications/functionRefs";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { requirePermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
-import { audienceRulesValidator } from "./validators";
+import { audienceRulesOrSegmentValidator, audienceRulesValidator } from "./validators";
+import {
+  outboundImpressionActionValidator,
+  outboundMessageContentValidator,
+  outboundMessageFrequencyValidator,
+  outboundMessageSchedulingValidator,
+  outboundMessageStatusValidator,
+  outboundMessageTriggerValidator,
+  outboundMessageTypeValidator,
+} from "./outboundContracts";
+
+type ConvexRef<
+  Type extends "query" | "mutation",
+  Visibility extends "internal" | "public",
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<Type, Visibility, Args, Return>;
+
+type GetOutboundMessageArgs = {
+  id: Id<"outboundMessages">;
+};
+
+type GetEligibleVisitorsForPushArgs = {
+  workspaceId: Id<"workspaces">;
+  targeting?: Doc<"outboundMessages">["targeting"];
+};
+
+type EligibleVisitorForPush = {
+  visitorId: Id<"visitors">;
+  token: string;
+};
+
+const GET_OUTBOUND_MESSAGE_REF = makeFunctionReference<
+  "query",
+  GetOutboundMessageArgs,
+  Doc<"outboundMessages"> | null
+>("outboundMessages:get") as unknown as ConvexRef<
+  "query",
+  "public",
+  GetOutboundMessageArgs,
+  Doc<"outboundMessages"> | null
+>;
+
+const GET_ELIGIBLE_VISITORS_FOR_PUSH_REF = makeFunctionReference<
+  "query",
+  GetEligibleVisitorsForPushArgs,
+  EligibleVisitorForPush[]
+>("outboundMessages:getEligibleVisitorsForPush") as unknown as ConvexRef<
+  "query",
+  "public",
+  GetEligibleVisitorsForPushArgs,
+  EligibleVisitorForPush[]
+>;
+
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    queryRef: ConvexRef<"query", Visibility, Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunMutation(ctx: { runMutation: unknown }) {
+  return ctx.runMutation as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return = unknown,
+  >(
+    mutationRef: ConvexRef<"mutation", Visibility, Args, Return>,
+    mutationArgs: Args
+  ) => Promise<Return>;
+}
 
 // Task 2.1: Create outbound message
 export const create = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
-    type: v.union(v.literal("chat"), v.literal("post"), v.literal("banner")),
+    type: outboundMessageTypeValidator,
     name: v.string(),
-    content: v.object({
-      text: v.optional(v.string()),
-      senderId: v.optional(v.id("users")),
-      title: v.optional(v.string()),
-      body: v.optional(v.string()),
-      imageUrl: v.optional(v.string()),
-      videoUrl: v.optional(v.string()),
-      style: v.optional(v.union(v.literal("inline"), v.literal("floating"))),
-      dismissible: v.optional(v.boolean()),
-      buttons: v.optional(
-        v.array(
-          v.object({
-            text: v.string(),
-            action: v.union(
-              v.literal("url"),
-              v.literal("dismiss"),
-              v.literal("tour"),
-              v.literal("open_new_conversation"),
-              v.literal("open_help_article"),
-              v.literal("open_widget_tab")
-            ),
-            url: v.optional(v.string()),
-            tourId: v.optional(v.id("tours")),
-            articleId: v.optional(v.id("articles")),
-            tabId: v.optional(v.string()),
-            prefillMessage: v.optional(v.string()),
-          })
-        )
-      ),
-      clickAction: v.optional(
-        v.object({
-          type: v.union(
-            v.literal("open_messenger"),
-            v.literal("open_new_conversation"),
-            v.literal("open_widget_tab"),
-            v.literal("open_help_article"),
-            v.literal("open_url"),
-            v.literal("dismiss")
-          ),
-          tabId: v.optional(v.string()),
-          articleId: v.optional(v.id("articles")),
-          url: v.optional(v.string()),
-          prefillMessage: v.optional(v.string()),
-        })
-      ),
-    }),
+    content: outboundMessageContentValidator,
     targeting: v.optional(audienceRulesValidator),
-    triggers: v.optional(
-      v.object({
-        type: v.union(
-          v.literal("immediate"),
-          v.literal("page_visit"),
-          v.literal("time_on_page"),
-          v.literal("scroll_depth"),
-          v.literal("event")
-        ),
-        pageUrl: v.optional(v.string()),
-        pageUrlMatch: v.optional(
-          v.union(v.literal("exact"), v.literal("contains"), v.literal("regex"))
-        ),
-        delaySeconds: v.optional(v.number()),
-        scrollPercent: v.optional(v.number()),
-        eventName: v.optional(v.string()),
-      })
-    ),
-    frequency: v.optional(
-      v.union(v.literal("once"), v.literal("once_per_session"), v.literal("always"))
-    ),
-    scheduling: v.optional(
-      v.object({
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-      })
-    ),
+    triggers: v.optional(outboundMessageTriggerValidator),
+    frequency: v.optional(outboundMessageFrequencyValidator),
+    scheduling: v.optional(outboundMessageSchedulingValidator),
     priority: v.optional(v.number()),
   },
   permission: "settings.workspace",
@@ -113,82 +119,11 @@ export const update = authMutation({
   args: {
     id: v.id("outboundMessages"),
     name: v.optional(v.string()),
-    content: v.optional(
-      v.object({
-        text: v.optional(v.string()),
-        senderId: v.optional(v.id("users")),
-        title: v.optional(v.string()),
-        body: v.optional(v.string()),
-        imageUrl: v.optional(v.string()),
-        videoUrl: v.optional(v.string()),
-        style: v.optional(v.union(v.literal("inline"), v.literal("floating"))),
-        dismissible: v.optional(v.boolean()),
-        buttons: v.optional(
-          v.array(
-            v.object({
-              text: v.string(),
-              action: v.union(
-                v.literal("url"),
-                v.literal("dismiss"),
-                v.literal("tour"),
-                v.literal("open_new_conversation"),
-                v.literal("open_help_article"),
-                v.literal("open_widget_tab")
-              ),
-              url: v.optional(v.string()),
-              tourId: v.optional(v.id("tours")),
-              articleId: v.optional(v.id("articles")),
-              tabId: v.optional(v.string()),
-              prefillMessage: v.optional(v.string()),
-            })
-          )
-        ),
-        clickAction: v.optional(
-          v.object({
-            type: v.union(
-              v.literal("open_messenger"),
-              v.literal("open_new_conversation"),
-              v.literal("open_widget_tab"),
-              v.literal("open_help_article"),
-              v.literal("open_url"),
-              v.literal("dismiss")
-            ),
-            tabId: v.optional(v.string()),
-            articleId: v.optional(v.id("articles")),
-            url: v.optional(v.string()),
-            prefillMessage: v.optional(v.string()),
-          })
-        ),
-      })
-    ),
+    content: v.optional(outboundMessageContentValidator),
     targeting: v.optional(audienceRulesValidator),
-    triggers: v.optional(
-      v.object({
-        type: v.union(
-          v.literal("immediate"),
-          v.literal("page_visit"),
-          v.literal("time_on_page"),
-          v.literal("scroll_depth"),
-          v.literal("event")
-        ),
-        pageUrl: v.optional(v.string()),
-        pageUrlMatch: v.optional(
-          v.union(v.literal("exact"), v.literal("contains"), v.literal("regex"))
-        ),
-        delaySeconds: v.optional(v.number()),
-        scrollPercent: v.optional(v.number()),
-        eventName: v.optional(v.string()),
-      })
-    ),
-    frequency: v.optional(
-      v.union(v.literal("once"), v.literal("once_per_session"), v.literal("always"))
-    ),
-    scheduling: v.optional(
-      v.object({
-        startDate: v.optional(v.number()),
-        endDate: v.optional(v.number()),
-      })
-    ),
+    triggers: v.optional(outboundMessageTriggerValidator),
+    frequency: v.optional(outboundMessageFrequencyValidator),
+    scheduling: v.optional(outboundMessageSchedulingValidator),
     priority: v.optional(v.number()),
   },
   permission: "settings.workspace",
@@ -233,10 +168,8 @@ export const remove = authMutation({
 export const list = authQuery({
   args: {
     workspaceId: v.id("workspaces"),
-    type: v.optional(v.union(v.literal("chat"), v.literal("post"), v.literal("banner"))),
-    status: v.optional(
-      v.union(v.literal("draft"), v.literal("active"), v.literal("paused"), v.literal("archived"))
-    ),
+    type: v.optional(outboundMessageTypeValidator),
+    status: v.optional(outboundMessageStatusValidator),
   },
   permission: "settings.workspace",
   handler: async (ctx, args) => {
@@ -435,7 +368,7 @@ export const trackImpression = mutation({
     visitorId: v.optional(v.id("visitors")),
     sessionToken: v.optional(v.string()),
     sessionId: v.optional(v.string()),
-    action: v.union(v.literal("shown"), v.literal("clicked"), v.literal("dismissed")),
+    action: outboundImpressionActionValidator,
     buttonIndex: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -539,7 +472,13 @@ export const sendPushForCampaign = authAction({
     error?: string;
     tickets?: Array<{ status: string; id?: string; error?: string }>;
   }> => {
-    const message = await ctx.runQuery(api.outboundMessages.get, { id: args.messageId });
+    // Keep call signatures shallow to avoid downstream deep type instantiation in app typechecks.
+    const runQuery = getShallowRunQuery(ctx);
+    const runMutation = getShallowRunMutation(ctx);
+
+    const message = await runQuery(GET_OUTBOUND_MESSAGE_REF, {
+      id: args.messageId,
+    });
     if (!message) throw new Error("Message not found");
     if (message.status !== "active") throw new Error("Message must be active to send push");
 
@@ -556,7 +495,7 @@ export const sendPushForCampaign = authAction({
     }
 
     // Get eligible visitors based on targeting
-    const eligibleVisitors = await ctx.runQuery(api.outboundMessages.getEligibleVisitorsForPush, {
+    const eligibleVisitors = await runQuery(GET_ELIGIBLE_VISITORS_FOR_PUSH_REF, {
       workspaceId: message.workspaceId,
       targeting: message.targeting,
     });
@@ -566,9 +505,9 @@ export const sendPushForCampaign = authAction({
     }
 
     const visitorIds = Array.from(
-      new Set(eligibleVisitors.map((visitor: { visitorId: Id<"visitors"> }) => visitor.visitorId))
+      new Set(eligibleVisitors.map((visitor) => visitor.visitorId))
     ) as Id<"visitors">[];
-    const routed = await ctx.runMutation(internal.notifications.routeEvent, {
+    const routed = (await runMutation(routeEventRef, {
       eventType: "outbound_message",
       domain: "outbound",
       audience: "visitor",
@@ -580,11 +519,11 @@ export const sendPushForCampaign = authAction({
       data: {
         type: "outbound_message",
         messageId: args.messageId,
-        imageUrl: message.content.imageUrl,
+        ...(message.content.imageUrl ? { imageUrl: message.content.imageUrl } : {}),
       },
       recipientVisitorIds: visitorIds,
       eventKey: `outbound_message:${args.messageId}:${message.updatedAt}`,
-    });
+    })) as { scheduled: number };
 
     return {
       success: true,
@@ -599,7 +538,7 @@ export const sendPushForCampaign = authAction({
 export const getEligibleVisitorsForPush = authQuery({
   args: {
     workspaceId: v.id("workspaces"),
-    targeting: v.optional(audienceRulesValidator),
+    targeting: v.optional(audienceRulesOrSegmentValidator),
   },
   permission: "settings.workspace",
   handler: async (ctx, args) => {

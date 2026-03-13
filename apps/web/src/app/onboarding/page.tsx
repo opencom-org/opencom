@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Button, Card } from "@opencom/ui";
 import { AppLayout } from "@/components/AppLayout";
 import { WidgetInstallGuide } from "@/components/WidgetInstallGuide";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBackend } from "@/contexts/BackendContext";
+import { useOnboardingConvex } from "./hooks/useOnboardingConvex";
 
 type VerificationStatus = "idle" | "checking" | "success" | "error";
 
@@ -45,19 +44,13 @@ function OnboardingContent(): React.JSX.Element {
   const [tokenModeEnabled, setTokenModeEnabled] = useState(false);
   const startRequestedRef = useRef(false);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const onboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const integrationSignals = useQuery(
-    api.workspaces.getHostedOnboardingIntegrationSignals,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const startHostedOnboarding = useMutation(api.workspaces.startHostedOnboarding);
-  const issueVerificationToken = useMutation(api.workspaces.issueHostedOnboardingVerificationToken);
-  const completeWidgetStep = useMutation(api.workspaces.completeHostedOnboardingWidgetStep);
+  const {
+    completeWidgetStep,
+    integrationSignals,
+    issueVerificationToken,
+    onboardingState,
+    startHostedOnboarding,
+  } = useOnboardingConvex(activeWorkspace?._id);
 
   useEffect(() => {
     if (!onboardingState?.verificationToken) {

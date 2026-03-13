@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Button, Card } from "@opencom/ui";
 import {
   Sparkles,
@@ -15,15 +13,10 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
-
-type Suggestion = {
-  id: string;
-  type: "article" | "internalArticle" | "snippet";
-  title: string;
-  snippet: string;
-  content: string;
-  score: number;
-};
+import {
+  type SuggestionRecord as Suggestion,
+  useSuggestionsPanelConvex,
+} from "@/components/hooks/useSuggestionsPanelConvex";
 
 interface SuggestionsPanelProps {
   conversationId: Id<"conversations">;
@@ -42,11 +35,8 @@ export function SuggestionsPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-
-  const settings = useQuery(api.aiAgent.getSettings, { workspaceId });
-  const getSuggestions = useAction(api.suggestions.getForConversation);
-  const trackUsage = useMutation(api.suggestions.trackUsage);
-  const trackDismissal = useMutation(api.suggestions.trackDismissal);
+  const { settings, getSuggestions, trackUsage, trackDismissal } =
+    useSuggestionsPanelConvex(workspaceId);
 
   const fetchSuggestions = useCallback(async () => {
     if (!settings?.suggestionsEnabled) {
@@ -115,9 +105,9 @@ export function SuggestionsPanel({
 
   const handleViewFull = (suggestion: Suggestion) => {
     if (suggestion.type === "article") {
-      window.open(`/help-center/articles/${suggestion.id}`, "_blank");
+      window.open(`/articles/${suggestion.id}`, "_blank");
     } else if (suggestion.type === "internalArticle") {
-      window.open(`/knowledge/internal/${suggestion.id}`, "_blank");
+      window.open(`/articles/${suggestion.id}`, "_blank");
     }
   };
 

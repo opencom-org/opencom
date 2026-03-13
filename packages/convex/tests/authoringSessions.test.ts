@@ -20,7 +20,7 @@ describe("authoringSessions", () => {
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
     // Create a test tour
-    testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    testTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Authoring Test Tour",
       description: "A tour for testing authoring mode",
@@ -38,7 +38,7 @@ describe("authoringSessions", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -130,7 +130,7 @@ describe("authoringSessions", () => {
 
   it("should reject updateStep for wrong tour", async () => {
     // Create another tour and step
-    const otherTourId = await client.mutation(api.testing.helpers.createTestTour, {
+    const otherTourId = await client.mutation(api.testing_helpers.createTestTour, {
       workspaceId: testWorkspaceId,
       name: "Other Tour",
     });

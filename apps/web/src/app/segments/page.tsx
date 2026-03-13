@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Trash2, Edit2, Users, AlertTriangle, Layers } from "lucide-react";
@@ -14,15 +12,19 @@ import {
   toInlineAudienceRuleFromBuilder,
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
+import {
+  useDeleteSegmentConvex,
+  useSegmentCardConvex,
+  useSegmentModalConvex,
+  useSegmentsListConvex,
+} from "./hooks/useSegmentsPageConvex";
 
-type SegmentAudienceRulesInput = NonNullable<typeof api.segments.update._args.audienceRules>;
+type SegmentAudienceRulesInput = InlineAudienceRule;
 
 function SegmentsContent() {
   const { user } = useAuth();
   const workspaceId = user?.workspaceId as Id<"workspaces"> | undefined;
-
-  const segments = useQuery(api.segments.list, workspaceId ? { workspaceId } : "skip");
-
+  const { segments } = useSegmentsListConvex(workspaceId);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingSegment, setEditingSegment] = useState<Id<"segments"> | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<Id<"segments"> | null>(null);
@@ -109,17 +111,11 @@ function SegmentCard({
   onDelete: () => void;
 }) {
   const parsedAudienceRules = toInlineAudienceRule(segment.audienceRules);
-  const preview = useQuery(
-    api.segments.preview,
-    parsedAudienceRules
-      ? {
-          workspaceId,
-          audienceRules: parsedAudienceRules as SegmentAudienceRulesInput,
-        }
-      : "skip"
+  const { preview, usage } = useSegmentCardConvex(
+    workspaceId,
+    segment._id,
+    parsedAudienceRules as SegmentAudienceRulesInput | null
   );
-
-  const usage = useQuery(api.segments.getUsage, { id: segment._id });
 
   return (
     <div
@@ -175,12 +171,10 @@ function SegmentModal({
   segmentId?: Id<"segments">;
   onClose: () => void;
 }) {
-  const existingSegment = useQuery(api.segments.get, segmentId ? { id: segmentId } : "skip");
-
-  const eventNames = useQuery(api.events.getDistinctNames, { workspaceId });
-
-  const createSegment = useMutation(api.segments.create);
-  const updateSegment = useMutation(api.segments.update);
+  const { createSegment, eventNames, existingSegment, updateSegment } = useSegmentModalConvex(
+    workspaceId,
+    segmentId
+  );
 
   const [name, setName] = useState(existingSegment?.name || "");
   const [description, setDescription] = useState(existingSegment?.description || "");
@@ -305,9 +299,7 @@ function DeleteConfirmModal({
   segmentId: Id<"segments">;
   onClose: () => void;
 }) {
-  const segment = useQuery(api.segments.get, { id: segmentId });
-  const usage = useQuery(api.segments.getUsage, { id: segmentId });
-  const deleteSegment = useMutation(api.segments.remove);
+  const { deleteSegment, segment, usage } = useDeleteSegmentConvex(segmentId);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {

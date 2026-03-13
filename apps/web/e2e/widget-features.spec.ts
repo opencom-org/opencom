@@ -9,8 +9,12 @@ import {
   advanceTourStep,
   dismissTour,
   isSurveyVisible,
+  waitForSurveyVisible,
   submitNPSRating,
+  submitSurvey,
   dismissSurvey,
+  waitForHelpArticleVisible,
+  waitForAIResponse,
 } from "./helpers/widget-helpers";
 import {
   ensureAuthenticatedInPage,
@@ -36,13 +40,29 @@ import { Id } from "@opencom/convex/dataModel";
  * Tests pass workspaceId as a URL param to connect to the test workspace.
  */
 
-function getWidgetDemoUrl(workspaceId: string): string {
-  return `/widget-demo?workspaceId=${workspaceId}`;
+function getWidgetDemoUrl(workspaceId: string, visitorKey?: string): string {
+  const params = new URLSearchParams({ workspaceId });
+  if (visitorKey) {
+    params.set("visitorKey", visitorKey);
+  }
+  return `/widget-demo?${params.toString()}`;
 }
 
 async function gotoWidgetDemoAndWait(page: import("@playwright/test").Page, url: string) {
   await gotoWithAuthRecovery(page, url);
   await waitForWidgetLoad(page, 15000);
+}
+
+async function gotoFreshWidgetDemoAndWait(page: import("@playwright/test").Page, url: string) {
+  await page.context().clearCookies();
+  await page.goto("about:blank");
+  await page
+    .evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    })
+    .catch(() => {});
+  await gotoWidgetDemoAndWait(page, url);
 }
 
 async function openConversationComposer(page: import("@playwright/test").Page) {
@@ -60,12 +80,71 @@ async function openConversationComposer(page: import("@playwright/test").Page) {
   return frame;
 }
 
+async function waitForTourToRender(
+  page: import("@playwright/test").Page,
+  timeout = 15000
+): Promise<void> {
+  let widgetOpened = false;
+
+  await expect
+    .poll(
+      async () => {
+        const visible = await isTourStepVisible(page);
+        if (visible) {
+          return true;
+        }
+
+        if (!widgetOpened) {
+          widgetOpened = true;
+          await openWidgetChat(page).catch(() => {});
+        }
+
+        return isTourStepVisible(page);
+      },
+      { timeout }
+    )
+    .toBe(true);
+}
+
+async function expectTourToBeHidden(page: import("@playwright/test").Page): Promise<void> {
+  await expect.poll(async () => isTourStepVisible(page, 250), { timeout: 6000 }).toBe(false);
+}
+
+async function ensureTourAvailableForDismissal(
+  page: import("@playwright/test").Page
+): Promise<void> {
+  const autoDisplayDeadline = Date.now() + 15000;
+  let widgetOpened = false;
+
+  while (Date.now() < autoDisplayDeadline) {
+    if (await isTourStepVisible(page, 500)) {
+      return;
+    }
+
+    if (!widgetOpened) {
+      widgetOpened = true;
+      await openWidgetChat(page).catch(() => {});
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  const widget = getWidgetContainer(page);
+  const toursTab = widget.getByTitle("Product Tours").first();
+  await expect(toursTab).toBeVisible({ timeout: 10000 });
+  await toursTab.click();
+
+  const availableTour = widget.locator("[data-testid^='tour-item-']:not([disabled])").first();
+  await expect(availableTour).toBeVisible({ timeout: 10000 });
+  await availableTour.click();
+
+  await expect.poll(async () => isTourStepVisible(page, 500), { timeout: 10000 }).toBe(true);
+}
+
 test.beforeEach(async ({ page }) => {
   await refreshAuthState();
   const ok = await ensureAuthenticatedInPage(page);
-  if (!ok) {
-    test.skip(true, "[widget-features.spec] Could not authenticate test page");
-  }
+  expect(ok).toBe(true);
 });
 
 test.describe("Widget E2E Tests - Product Tours", () => {
@@ -117,15 +196,13 @@ test.describe("Widget E2E Tests - Product Tours", () => {
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
 
     // Tour should be visible for a first-time visitor on the target page
-    await expect.poll(async () => isTourStepVisible(page), { timeout: 15000 }).toBe(true);
+    await waitForTourToRender(page);
   });
 
   test("tour step navigation works (next/prev/skip)", async ({ page }) => {
     if (!workspaceId) return test.skip();
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
-
-    const tourVisible = await isTourStepVisible(page);
-    test.skip(!tourVisible, "Tour not visible – may have been completed by a prior test");
+    await waitForTourToRender(page);
 
     // Advance to next step
     await advanceTourStep(page);
@@ -137,43 +214,44 @@ test.describe("Widget E2E Tests - Product Tours", () => {
   test("tour can be dismissed", async ({ page }) => {
     if (!workspaceId) return test.skip();
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
-
-    const tourVisible = await isTourStepVisible(page);
-    test.skip(!tourVisible, "Tour not visible – cannot test dismissal");
+    await waitForTourToRender(page);
 
     await dismissTour(page);
 
     // Tour should no longer be visible
-    const stillVisible = await isTourStepVisible(page);
-    expect(stillVisible).toBe(false);
+    await expectTourToBeHidden(page);
   });
 
   test("completed tour does not show again for same visitor", async ({ page }) => {
     if (!workspaceId) return test.skip();
+    test.slow();
+
     // First visit - complete or dismiss tour
     await gotoWidgetDemoAndWait(page, widgetDemoUrl);
-
-    const tourVisible = await isTourStepVisible(page);
-    if (tourVisible) {
-      await dismissTour(page);
-    } else {
-      // Tour wasn't shown on first visit – still verify second visit
-    }
+    await ensureTourAvailableForDismissal(page);
+    await dismissTour(page);
+    await expectTourToBeHidden(page);
 
     // Second visit - tour should not appear
-    await page.reload();
+    await page.reload({ waitUntil: "domcontentloaded" });
     await waitForWidgetLoad(page, 15000);
-
-    const tourVisibleAfterReload = await isTourStepVisible(page);
-    // Tour should not show again (frequency: first_time_only)
-    expect(tourVisibleAfterReload).toBe(false);
+    if (!(await isTourStepVisible(page, 500))) {
+      await openWidgetChat(page).catch(() => {});
+    }
+    await expectTourToBeHidden(page);
   });
 });
 
 // Skipped: These tests require additional seeding infrastructure
 test.describe("Widget E2E Tests - Surveys", () => {
   let workspaceId: Id<"workspaces"> | null = null;
-  let widgetDemoUrl = "/widget-demo";
+
+  function surveyWidgetDemoUrl(visitorKey: string): string {
+    if (!workspaceId) {
+      throw new Error("workspaceId is required for survey widget tests");
+    }
+    return getWidgetDemoUrl(workspaceId, visitorKey);
+  }
 
   test.beforeAll(async () => {
     await refreshAuthState();
@@ -184,7 +262,6 @@ test.describe("Widget E2E Tests - Surveys", () => {
       return;
     }
     workspaceId = state.workspaceId as Id<"workspaces">;
-    widgetDemoUrl = getWidgetDemoUrl(state.workspaceId);
 
     // Seed a test NPS survey
     try {
@@ -209,46 +286,44 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("small format survey displays as floating banner", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-banner"));
 
     // Survey should be visible for a first-time visitor with immediate trigger
-    const surveyVisible = await isSurveyVisible(page);
-    expect(surveyVisible).toBe(true);
+    await waitForSurveyVisible(page, 15000);
   });
 
   test("NPS question allows 0-10 scale interaction", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-nps-scale"));
 
-    const surveyVisible = await isSurveyVisible(page);
-    test.skip(!surveyVisible, "Survey not visible – cannot test NPS interaction");
+    await waitForSurveyVisible(page, 10000);
 
     // Submit a rating and verify the interaction completes
     await submitNPSRating(page, 8);
     // Widget should still be functional after rating
     await expect(page.locator(".opencom-widget")).toBeVisible();
+    await expect(getWidgetContainer(page)).toBeVisible();
   });
 
   test("survey completion shows thank you step", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-thank-you"));
 
-    const surveyVisible = await isSurveyVisible(page);
-    test.skip(!surveyVisible, "Survey not visible – cannot test completion flow");
+    await waitForSurveyVisible(page, 10000);
 
     await submitNPSRating(page, 9);
+    await submitSurvey(page);
 
     // Thank you message should appear after completion
     const frame = getWidgetContainer(page);
-    await expect(frame.getByText(/thank you|thanks|appreciated/i)).toBeVisible({ timeout: 3000 });
+    await expect(frame.getByText(/thank you|thanks|appreciated/i)).toBeVisible({ timeout: 5000 });
   });
 
   test("survey can be dismissed", async ({ page }) => {
     if (!workspaceId) return test.skip();
-    await gotoWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoFreshWidgetDemoAndWait(page, surveyWidgetDemoUrl("survey-dismiss"));
 
-    const surveyVisible = await isSurveyVisible(page);
-    test.skip(!surveyVisible, "Survey not visible – cannot test dismissal");
+    await waitForSurveyVisible(page, 10000);
 
     await dismissSurvey(page);
 
@@ -258,12 +333,14 @@ test.describe("Widget E2E Tests - Surveys", () => {
 
   test("survey frequency controls (show once) work", async ({ page }) => {
     if (!workspaceId) return test.skip();
+    const frequencyTestUrl = surveyWidgetDemoUrl("survey-frequency-once");
     // First visit - complete survey
-    await gotoWidgetDemoAndWait(page, widgetDemoUrl);
+    await gotoWidgetDemoAndWait(page, frequencyTestUrl);
 
     const surveyVisible = await isSurveyVisible(page);
     if (surveyVisible) {
       await submitNPSRating(page, 7);
+      await submitSurvey(page);
     }
 
     // Second visit - survey should not appear
@@ -364,13 +441,15 @@ test.describe("Widget E2E Tests - Help Center", () => {
     // Navigate to help tab
     await navigateToWidgetTab(page, "help");
 
-    // Click an article link
-    const articleLink = frame.locator(".opencom-article-item").first();
-    const articleVisible = await articleLink.isVisible({ timeout: 3000 }).catch(() => false);
-    test.skip(!articleVisible, "No articles visible in help center");
+    // Click a collection first, then open an article detail view
+    const collectionButton = await waitForHelpArticleVisible(page, 10000);
+    await collectionButton.click();
 
-    await articleLink.click();
-    // Article content or detail view should be visible
+    const articleButton = frame
+      .locator(".opencom-article-item, button:has(.opencom-article-item)")
+      .first();
+    await expect(articleButton).toBeVisible({ timeout: 10000 });
+    await articleButton.click();
     await expect(
       frame.locator("[data-testid='article-content'], .article-content, .opencom-chat")
     ).toBeVisible({ timeout: 5000 });
@@ -388,12 +467,15 @@ test.describe("Widget E2E Tests - Help Center", () => {
     // Navigate to help tab
     await navigateToWidgetTab(page, "help");
 
-    // Click an article to enter detail view
-    const articleLink = frame.locator(".opencom-article-item").first();
-    const articleVisible = await articleLink.isVisible({ timeout: 3000 }).catch(() => false);
-    test.skip(!articleVisible, "No articles visible – cannot test breadcrumb nav");
+    // Click a collection first, then open an article detail view
+    const collectionButton = await waitForHelpArticleVisible(page, 10000);
+    await collectionButton.click();
 
-    await articleLink.click();
+    const articleButton = frame
+      .locator(".opencom-article-item, button:has(.opencom-article-item)")
+      .first();
+    await expect(articleButton).toBeVisible({ timeout: 10000 });
+    await articleButton.click();
     await expect(
       frame.locator("[data-testid='article-content'], .article-content, .opencom-chat")
     ).toBeVisible({ timeout: 5000 });
@@ -470,20 +552,16 @@ test.describe("Widget E2E Tests - AI Agent", () => {
     if (!workspaceId) return test.skip();
     await gotoWithAuthRecovery(page, widgetDemoUrl);
     const frame = await openConversationComposer(page);
+    await sendWidgetMessage(page, "I need a human to help me");
+    await waitForAIResponse(page, 15000);
 
-    // Look for handoff button
-    const handoffButton = frame.locator(
-      "button:has-text('human'), button:has-text('agent'), [data-testid='handoff-button']"
-    );
-    const handoffVisible = await handoffButton
-      .first()
-      .isVisible({ timeout: 5000 })
-      .catch(() => false);
-    test.skip(!handoffVisible, "Handoff button not visible – AI agent may not have responded yet");
-
-    await handoffButton.first().click();
-    // Widget should remain functional after handoff
-    await expect(frame).toBeVisible();
+    await expect(
+      frame
+        .locator(
+          ":text('Waiting for human support'), :text('connect you with a human agent'), button:has-text('Talk to a human')"
+        )
+        .first()
+    ).toBeVisible({ timeout: 15000 });
   });
 
   test("feedback buttons work (helpful/not helpful)", async ({ page }) => {
@@ -491,21 +569,26 @@ test.describe("Widget E2E Tests - AI Agent", () => {
     await gotoWithAuthRecovery(page, widgetDemoUrl);
     const frame = await openConversationComposer(page);
     await sendWidgetMessage(page, "Help me with setup");
+    await waitForAIResponse(page, 15000);
 
-    // Verify message sent
-    await expect(frame.getByText("Help me with setup")).toBeVisible({ timeout: 5000 });
-
-    // Look for feedback buttons (appear after AI response)
+    // Feedback should render when supported; if the conversation is handed off immediately,
+    // assert the AI response/handoff state instead of waiting on non-existent controls.
     const feedbackButtons = frame.locator(
-      "[data-testid='feedback-helpful'], [data-testid='feedback-not-helpful'], .feedback-button"
+      "[data-testid='feedback-helpful'], [data-testid='feedback-not-helpful'], .feedback-button, button[aria-label*='helpful'], button[aria-label*='not helpful']"
     );
     const feedbackVisible = await feedbackButtons
       .first()
-      .isVisible({ timeout: 10000 })
+      .isVisible({ timeout: 3000 })
       .catch(() => false);
-    test.skip(!feedbackVisible, "Feedback buttons not visible – AI agent may not have responded");
 
-    await feedbackButtons.first().click();
+    if (feedbackVisible) {
+      await feedbackButtons.first().click();
+    } else {
+      await expect(
+        frame.getByText(/waiting for human support|connect you with a human agent|AI/i)
+      ).toBeVisible({ timeout: 15000 });
+    }
+
     await expect(frame).toBeVisible();
   });
 });

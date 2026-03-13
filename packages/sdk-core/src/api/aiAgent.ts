@@ -1,8 +1,23 @@
-import { api } from "@opencom/convex";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "@opencom/convex/dataModel";
 import { getClient, getConfig } from "./client";
 import type { ConversationId, VisitorId } from "../types";
 import { getVisitorState } from "../state/visitor";
+
+// Generated api.aiAgent.* refs trigger TS2589 in sdk-core, so keep the fallback
+// localized to these explicit AI agent refs only.
+const GET_PUBLIC_AI_SETTINGS_REF =
+  makeFunctionReference("aiAgent:getPublicSettings") as FunctionReference<"query">;
+const GET_RELEVANT_KNOWLEDGE_REF =
+  makeFunctionReference("aiAgent:getRelevantKnowledge") as FunctionReference<"action">;
+const GET_CONVERSATION_AI_RESPONSES_REF =
+  makeFunctionReference("aiAgent:getConversationResponses") as FunctionReference<"query">;
+const SUBMIT_AI_FEEDBACK_REF =
+  makeFunctionReference("aiAgent:submitFeedback") as FunctionReference<"mutation">;
+const HANDOFF_TO_HUMAN_REF =
+  makeFunctionReference("aiAgent:handoffToHuman") as FunctionReference<"mutation">;
+const SHOULD_AI_RESPOND_REF =
+  makeFunctionReference("aiAgent:shouldRespond") as FunctionReference<"query">;
 
 export type AIResponseId = Id<"aiResponses">;
 
@@ -31,6 +46,7 @@ export interface AIResponseData {
     type: string;
     id: string;
     title: string;
+    articleId?: string;
   }>;
   confidence: number;
   handedOff: boolean;
@@ -50,7 +66,7 @@ export async function getAISettings(): Promise<AIAgentSettings> {
   const client = getClient();
   const config = getConfig();
 
-  const settings = await client.query(api.aiAgent.getPublicSettings, {
+  const settings = await client.query(GET_PUBLIC_AI_SETTINGS_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 
@@ -64,7 +80,7 @@ export async function getRelevantKnowledge(
   const client = getClient();
   const config = getConfig();
 
-  const results = await client.query(api.aiAgent.getRelevantKnowledge, {
+  const results = await client.action(GET_RELEVANT_KNOWLEDGE_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     query,
     limit,
@@ -83,7 +99,7 @@ export async function getConversationAIResponses(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const responses = await client.query(api.aiAgent.getConversationResponses, {
+  const responses = await client.query(GET_CONVERSATION_AI_RESPONSES_REF, {
     conversationId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -103,7 +119,7 @@ export async function submitAIFeedback(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  await client.mutation(api.aiAgent.submitFeedback, {
+  await client.mutation(SUBMIT_AI_FEEDBACK_REF, {
     responseId,
     feedback,
     visitorId: resolvedVisitorId,
@@ -122,7 +138,7 @@ export async function handoffToHuman(
   const resolvedVisitorId = visitorId ?? state.visitorId ?? undefined;
   const token = sessionToken ?? state.sessionToken ?? undefined;
 
-  const result = await client.mutation(api.aiAgent.handoffToHuman, {
+  const result = await client.mutation(HANDOFF_TO_HUMAN_REF, {
     conversationId,
     visitorId: resolvedVisitorId,
     sessionToken: token,
@@ -139,7 +155,7 @@ export async function shouldAIRespond(): Promise<{
   const client = getClient();
   const config = getConfig();
 
-  const result = await client.query(api.aiAgent.shouldRespond, {
+  const result = await client.query(SHOULD_AI_RESPOND_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
   });
 

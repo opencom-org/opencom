@@ -3,7 +3,8 @@ import { ChevronLeft, Maximize2, Minimize2, X } from "../icons";
 import { parseMarkdown } from "../utils/parseMarkdown";
 
 interface ArticleDetailProps {
-  article: { title: string; content: string; renderedContent?: string } | undefined;
+  article: { title: string; content: string; renderedContent?: string } | null | undefined;
+  isLoading: boolean;
   isLargeScreen: boolean;
   isCollapsingLargeScreen: boolean;
   onToggleLargeScreen: () => void;
@@ -14,6 +15,7 @@ interface ArticleDetailProps {
 
 export function ArticleDetail({
   article,
+  isLoading,
   isLargeScreen,
   isCollapsingLargeScreen,
   onToggleLargeScreen,
@@ -67,8 +69,10 @@ export function ArticleDetail({
               </button>
             </div>
           </>
-        ) : (
+        ) : isLoading ? (
           <div className="opencom-article-loading">Loading article...</div>
+        ) : (
+          <div className="opencom-article-loading">Article unavailable</div>
         )}
       </div>
     </div>

@@ -22,6 +22,7 @@ export function TourPicker({ allTours, onSelectTour }: TourPickerProps) {
           return (
             <button
               key={tourData.tour._id}
+              data-testid={`tour-item-${tourData.tour._id}`}
               className={`opencom-tour-item ${!elementsAvailable ? "opencom-tour-item-unavailable" : ""}`}
               onClick={() => elementsAvailable && onSelectTour(tourData.tour._id)}
               disabled={!elementsAvailable}

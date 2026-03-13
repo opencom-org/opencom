@@ -1,7 +1,5 @@
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
-import { useOpencomContext } from "../components/OpencomProvider";
-import type { Id } from "@opencom/convex/dataModel";
+import { sdkQueryRef, useSdkQuery } from "../internal/convex";
+import { useSdkResolvedWorkspaceId } from "../internal/opencomContext";
 
 export interface AutomationSettings {
   suggestArticlesEnabled: boolean;
@@ -17,12 +15,14 @@ const DEFAULT_SETTINGS: AutomationSettings = {
   askForRatingEnabled: false,
 };
 
-export function useAutomationSettings() {
-  const { workspaceId } = useOpencomContext();
+const AUTOMATION_SETTINGS_REF = sdkQueryRef("automationSettings:get");
 
-  const settings = useQuery(
-    api.automationSettings.get,
-    workspaceId ? { workspaceId: workspaceId as Id<"workspaces"> } : "skip"
+export function useAutomationSettings() {
+  const workspaceId = useSdkResolvedWorkspaceId();
+
+  const settings = useSdkQuery<AutomationSettings>(
+    AUTOMATION_SETTINGS_REF,
+    workspaceId ? { workspaceId } : "skip"
   );
 
   return settings ?? DEFAULT_SETTINGS;

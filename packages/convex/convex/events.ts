@@ -1,17 +1,46 @@
 import { v } from "convex/values";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import { mutation, query, MutationCtx } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { resolveVisitorFromSession } from "./widgetSessions";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { hasPermission, requirePermission } from "./permissions";
 import { eventPropertiesValidator } from "./validators";
+import {
+  scheduleSeriesEvaluateEnrollment,
+  scheduleSeriesResumeWaitingForEvent,
+} from "./series/scheduler";
 
 const AUTO_EVENT_TYPES = ["page_view", "screen_view", "session_start", "session_end"] as const;
 type AutoEventType = (typeof AUTO_EVENT_TYPES)[number];
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_EVENTS = 100;
+
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
+
+type CheckAutoCompletionArgs = {
+  visitorId: Id<"visitors">;
+  workspaceId: Id<"workspaces">;
+  eventName: string;
+};
+
+const CHECK_AUTO_COMPLETION_REF = makeFunctionReference<
+  "mutation",
+  CheckAutoCompletionArgs,
+  unknown
+>("checklists:checkAutoCompletion") as unknown as InternalMutationRef<CheckAutoCompletionArgs>;
+
+function getShallowRunAfter(ctx: MutationCtx) {
+  return ctx.scheduler.runAfter as <Args extends Record<string, unknown>, Return = unknown>(
+    delayMs: number,
+    functionRef: InternalMutationRef<Args, Return>,
+    runArgs: Args
+  ) => Promise<unknown>;
+}
 
 async function scheduleSeriesEventRuntime(
   ctx: MutationCtx,
@@ -22,7 +51,7 @@ async function scheduleSeriesEventRuntime(
     eventName: string;
   }
 ): Promise<void> {
-  await ctx.scheduler.runAfter(0, (internal as any).series.evaluateEnrollmentForVisitor, {
+  await scheduleSeriesEvaluateEnrollment(ctx, {
     workspaceId: args.workspaceId,
     visitorId: args.visitorId,
     triggerContext: {
@@ -31,7 +60,7 @@ async function scheduleSeriesEventRuntime(
     },
   });
 
-  await ctx.scheduler.runAfter(0, (internal as any).series.resumeWaitingForEvent, {
+  await scheduleSeriesResumeWaitingForEvent(ctx, {
     workspaceId: args.workspaceId,
     visitorId: args.visitorId,
     eventName: args.eventName,
@@ -75,7 +104,8 @@ export const track = mutation({
     });
 
     // Trigger checklist auto-completion check
-    await ctx.scheduler.runAfter(0, internal.checklists.checkAutoCompletion, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, CHECK_AUTO_COMPLETION_REF, {
       visitorId: resolvedVisitorId,
       workspaceId: args.workspaceId,
       eventName: args.name,

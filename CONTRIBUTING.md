@@ -11,6 +11,7 @@ Thanks for contributing to Opencom. This guide covers everything you need to get
 - [Security & Operations](docs/open-source/security-and-operations.md)
 - [Data Model Reference](docs/data-model.md)
 - [Backend API Reference](docs/api-reference.md)
+- [Convex Type Safety Playbook](docs/convex-type-safety-playbook.md)
 - [Scripts Reference](docs/scripts-reference.md)
 
 ## Development Setup
@@ -87,24 +88,33 @@ opencom/
 - Visitor endpoints require `sessionToken` validated via `resolveVisitorFromSession()`.
 - System/bot actions use `internalMutation` to bypass external auth.
 - Use `v.any()` sparingly and document in `security/convex-v-any-arg-exceptions.json`.
+- Follow `docs/convex-type-safety-playbook.md` for all new Convex boundaries.
+- Default backend-to-backend calls to generated `api` / `internal` refs.
+- If a call site hits `TS2589`, keep the workaround local:
+  - shallow `ctx.runQuery` / `ctx.runMutation` / `ctx.runAction` / `runAfter` helper first
+  - fixed typed `makeFunctionReference("module:function")` only if the generated ref still fails
+- Do not add new generic `get*Ref(name: string)` factories or broad `unsafeApi` / `unsafeInternal` aliases.
 
 ### Frontend (Web / Landing)
 
 - Next.js App Router.
 - Tailwind CSS + Shadcn UI components from `@opencom/ui`.
 - React context for auth (`AuthContext`) and backend connection (`BackendContext`).
-- Convex React hooks for data fetching (real-time subscriptions).
+- Use local Convex wrapper hooks and adapters for data fetching.
+- Do not import `convex/react` directly into feature/runtime UI modules.
 
 ### Widget
 
 - Vite-built IIFE bundle. Target: <50KB gzipped.
 - No external dependencies beyond Convex client.
 - All visitor calls thread `sessionToken`.
+- Use `apps/widget/src/lib/convex/hooks.ts` plus feature-local wrappers instead of direct `convex/react` imports in runtime files.
 
 ### Mobile
 
 - Expo / React Native.
 - Same auth patterns as web (Convex Auth + BackendContext).
+- New mobile Convex usage should follow the same local-wrapper pattern as web/widget instead of adding new direct screen/context-level hook usage.
 
 ## Verification Workflow
 

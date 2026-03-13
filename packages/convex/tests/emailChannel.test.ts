@@ -19,23 +19,23 @@ describe("emailChannel", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const user = await client.mutation(api.testing.helpers.createTestUser, {
+    const user = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       role: "agent",
     });
     testUserId = user.userId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "customer@example.com",
       name: "Test Customer",
     });
     testVisitorId = visitor.visitorId;
 
-    const emailConfig = await client.mutation(api.testing.helpers.createTestEmailConfig, {
+    const emailConfig = await client.mutation(api.testing_helpers.createTestEmailConfig, {
       workspaceId: testWorkspaceId,
       enabled: true,
       fromName: "Support Team",
@@ -48,7 +48,7 @@ describe("emailChannel", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -111,13 +111,13 @@ describe("emailChannel", () => {
   });
 
   it("email thread list stays protected for unauthenticated callers", async () => {
-    const conv = await client.mutation(api.testing.helpers.createTestEmailConversation, {
+    const conv = await client.mutation(api.testing_helpers.createTestEmailConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
       subject: "Thread list test",
     });
 
-    await client.mutation(api.testing.helpers.createTestEmailThread, {
+    await client.mutation(api.testing_helpers.createTestEmailThread, {
       workspaceId: testWorkspaceId,
       conversationId: conv.conversationId,
       messageId: `<thread-${Date.now()}@example.com>`,
@@ -133,7 +133,7 @@ describe("emailChannel", () => {
   });
 
   it("agent reply endpoint requires authentication", async () => {
-    const conv = await client.mutation(api.testing.helpers.createTestEmailConversation, {
+    const conv = await client.mutation(api.testing_helpers.createTestEmailConversation, {
       workspaceId: testWorkspaceId,
       visitorId: testVisitorId,
       subject: "Reply auth test",

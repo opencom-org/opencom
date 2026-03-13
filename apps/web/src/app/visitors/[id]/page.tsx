@@ -1,7 +1,5 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { AppLayout } from "@/components/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, Button } from "@opencom/ui";
@@ -10,6 +8,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
+import { useVisitorDetailConvex } from "../hooks/useVisitorsConvex";
 
 function unknown(value?: string): string {
   const normalized = value?.trim();
@@ -23,11 +22,7 @@ function VisitorDetailContent(): React.JSX.Element | null {
   const { user, activeWorkspace } = useAuth();
   const params = useParams();
   const visitorId = params.id as Id<"visitors">;
-
-  const detail = useQuery(
-    api.visitors.getDirectoryDetail,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, visitorId } : "skip"
-  );
+  const { detail } = useVisitorDetailConvex(activeWorkspace?._id, visitorId);
 
   if (!user || !activeWorkspace) {
     return null;

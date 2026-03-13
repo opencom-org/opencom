@@ -1,6 +1,18 @@
 import { defineConfig } from "vitest/config";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const workspaceRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.resolve(workspaceRoot, "apps/web/src"),
+    },
+  },
+  esbuild: {
+    jsxInject: 'import React from "react"',
+  },
   test: {
     globals: true,
     environment: "jsdom",

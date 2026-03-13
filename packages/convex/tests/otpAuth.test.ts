@@ -16,14 +16,14 @@ describe("OTP Authentication", () => {
     client = new ConvexClient(convexUrl);
 
     // Create a workspace for testing
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -41,7 +41,7 @@ describe("OTP Authentication", () => {
   });
 
   it("should create a user in the workspace", async () => {
-    const user = await client.mutation(api.testing.helpers.createTestUser, {
+    const user = await client.mutation(api.testing_helpers.createTestUser, {
       workspaceId: testWorkspaceId,
       email: testEmail,
       role: "agent",

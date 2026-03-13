@@ -429,7 +429,7 @@ export const checkAutoCompletion = internalMutation({
       }
 
       // Get or create progress
-      let progress = await ctx.db
+      const progress = await ctx.db
         .query("checklistProgress")
         .withIndex("by_visitor_checklist", (q) =>
           q.eq("visitorId", args.visitorId).eq("checklistId", checklist._id)

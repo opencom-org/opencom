@@ -64,10 +64,10 @@ describe("emailChannelE2E", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const emailConfig = await client.mutation(api.testing.helpers.createTestEmailConfig, {
+    const emailConfig = await client.mutation(api.testing_helpers.createTestEmailConfig, {
       workspaceId: testWorkspaceId,
       enabled: true,
       fromName: "E2E Test Support",
@@ -80,7 +80,7 @@ describe("emailChannelE2E", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {

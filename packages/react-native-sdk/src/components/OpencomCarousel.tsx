@@ -12,12 +12,13 @@ import {
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from "react-native";
-import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
-import { OpencomSDK } from "../OpencomSDK";
 import { useMessengerSettings } from "../hooks/useMessengerSettings";
 import type { CarouselScreen, CarouselButton } from "@opencom/sdk-core";
 import type { Id } from "@opencom/convex/dataModel";
+import { sdkMutationRef, useSdkMutation } from "../internal/convex";
+import { getSdkVisitorTransport } from "../internal/runtime";
+
+const RECORD_CAROUSEL_IMPRESSION_REF = sdkMutationRef("carousels:recordImpression");
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -42,7 +43,9 @@ export function OpencomCarousel({
   const effectivePrimaryColor = primaryColor ?? theme.primaryColor;
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  const recordImpression = useMutation(api.carousels.recordImpression);
+  const recordImpression = useSdkMutation<Record<string, unknown>, unknown>(
+    RECORD_CAROUSEL_IMPRESSION_REF
+  );
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / SCREEN_WIDTH);
@@ -60,7 +63,7 @@ export function OpencomCarousel({
   };
 
   const handleComplete = async () => {
-    const state = OpencomSDK.getVisitorState();
+    const state = getSdkVisitorTransport();
     if (state.visitorId && state.sessionToken) {
       await recordImpression({
         carouselId,
@@ -74,7 +77,7 @@ export function OpencomCarousel({
   };
 
   const handleDismiss = async () => {
-    const state = OpencomSDK.getVisitorState();
+    const state = getSdkVisitorTransport();
     if (state.visitorId && state.sessionToken) {
       await recordImpression({
         carouselId,

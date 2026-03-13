@@ -20,7 +20,7 @@ describe("visitor email merge behavior", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -33,40 +33,40 @@ describe("visitor email merge behavior", () => {
   it("merges into a deterministic canonical visitor and persists merge traceability", async () => {
     const email = `merge-canonical-${Date.now()}@test.com`;
 
-    const canonicalFirst = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const canonicalFirst = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email,
       name: "Canonical First",
     });
-    const canonicalFirstBefore = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const canonicalFirstBefore = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: canonicalFirst.visitorId,
     });
 
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const canonicalSecond = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const canonicalSecond = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email,
       name: "Canonical Second",
     });
 
-    const source = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const source = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       name: "Source Visitor",
     });
-    const sourceBefore = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const sourceBefore = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: source.visitorId,
     });
     expect(sourceBefore).not.toBeNull();
 
-    const sourceSession = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const sourceSession = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: source.visitorId,
       workspaceId: testWorkspaceId,
     });
-    const sourcePushToken = await client.mutation(api.testing.helpers.createTestVisitorPushToken, {
+    const sourcePushToken = await client.mutation(api.testing_helpers.createTestVisitorPushToken, {
       visitorId: source.visitorId,
       token: `ExponentPushToken[merge-src-${Date.now()}]`,
     });
-    const sourceConversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const sourceConversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: source.visitorId,
     });
@@ -80,19 +80,19 @@ describe("visitor email merge behavior", () => {
     expect(merged?._id).toBe(canonicalFirst.visitorId);
     expect(merged?._id).not.toBe(canonicalSecond.visitorId);
 
-    const canonicalAfter = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const canonicalAfter = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: canonicalFirst.visitorId,
     });
     expect(canonicalAfter).not.toBeNull();
     expect(canonicalAfter?.name).toBe("Merged Visitor Name");
     expect(canonicalAfter?.readableId).toBe(canonicalFirstBefore?.readableId);
 
-    const deletedSource = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const deletedSource = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: source.visitorId,
     });
     expect(deletedSource).toBeNull();
 
-    const reassignedConversation = await client.mutation(api.testing.helpers.getTestConversation, {
+    const reassignedConversation = await client.mutation(api.testing_helpers.getTestConversation, {
       id: sourceConversation.conversationId,
     });
     expect(reassignedConversation?.visitorId).toBe(canonicalFirst.visitorId);
@@ -107,7 +107,7 @@ describe("visitor email merge behavior", () => {
     });
 
     const replyRecipients = (await client.mutation(
-      api.testing.helpers.getTestVisitorRecipientsForSupportReply,
+      api.testing_helpers.getTestVisitorRecipientsForSupportReply,
       {
         conversationId: sourceConversation.conversationId,
         channel: "chat",
@@ -140,29 +140,29 @@ describe("visitor email merge behavior", () => {
   it("keeps merged conversations visible via canonical identity for the source session", async () => {
     const email = `merge-continuity-${Date.now()}@test.com`;
 
-    const canonical = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const canonical = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email,
       name: "Canonical",
     });
-    const source = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const source = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       name: "Source",
     });
 
     const canonicalConversation = await client.mutation(
-      api.testing.helpers.createTestConversation,
+      api.testing_helpers.createTestConversation,
       {
         workspaceId: testWorkspaceId,
         visitorId: canonical.visitorId,
       }
     );
-    const sourceConversation = await client.mutation(api.testing.helpers.createTestConversation, {
+    const sourceConversation = await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: source.visitorId,
     });
 
-    const sourceSession = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const sourceSession = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: source.visitorId,
       workspaceId: testWorkspaceId,
     });

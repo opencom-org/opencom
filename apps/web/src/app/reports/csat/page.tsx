@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { Star, Download, ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+import { useCsatReportConvex } from "../hooks/useReportsConvex";
 
 function CsatReportContent() {
   const { activeWorkspace } = useAuth();
@@ -17,17 +16,11 @@ function CsatReportContent() {
   const now = useMemo(() => Date.now(), []);
   const startDate =
     now - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
-
-  const csatMetrics = useQuery(
-    api.reporting.getCsatMetrics,
-    activeWorkspace?._id
-      ? { workspaceId: activeWorkspace._id, startDate, endDate: now, granularity }
-      : "skip"
-  );
-
-  const csatByAgent = useQuery(
-    api.reporting.getCsatByAgent,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
+  const { csatByAgent, csatMetrics } = useCsatReportConvex(
+    activeWorkspace?._id,
+    startDate,
+    now,
+    granularity
   );
 
   const handleExportCSV = () => {

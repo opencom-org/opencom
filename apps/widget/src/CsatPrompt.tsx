@@ -1,8 +1,18 @@
 import { useState } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { X } from "./icons";
 import type { Id } from "@opencom/convex/dataModel";
+import { useWidgetMutation, widgetMutationRef } from "./lib/convex/hooks";
+
+const submitCsatResponseMutationRef = widgetMutationRef<
+  {
+    conversationId: Id<"conversations">;
+    rating: number;
+    feedback?: string;
+    visitorId?: Id<"visitors">;
+    sessionToken?: string;
+  },
+  null
+>("reporting:submitCsatResponse");
 
 interface CsatPromptProps {
   conversationId: Id<"conversations">;
@@ -25,7 +35,7 @@ export function CsatPrompt({
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submitCsat = useMutation(api.reporting.submitCsatResponse);
+  const submitCsat = useWidgetMutation(submitCsatResponseMutationRef);
 
   const handleSubmit = async () => {
     if (rating === null) return;

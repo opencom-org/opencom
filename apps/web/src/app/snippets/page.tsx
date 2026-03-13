@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, MessageSquare, Search } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
+import { useSnippetsPageConvex } from "./hooks/useSnippetsPageConvex";
 
 interface SnippetFormData {
   name: string;
@@ -26,15 +25,8 @@ function SnippetsContent() {
     content: "",
     shortcut: "",
   });
-
-  const snippets = useQuery(
-    api.snippets.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createSnippet = useMutation(api.snippets.create);
-  const updateSnippet = useMutation(api.snippets.update);
-  const deleteSnippet = useMutation(api.snippets.remove);
+  const { createSnippet, deleteSnippet, snippets, updateSnippet } =
+    useSnippetsPageConvex(activeWorkspace?._id);
 
   const handleOpenModal = (snippet?: NonNullable<typeof snippets>[number]) => {
     if (snippet) {
@@ -90,7 +82,7 @@ function SnippetsContent() {
   };
 
   const filteredSnippets = snippets?.filter(
-    (snippet: NonNullable<typeof snippets>[number]) =>
+    (snippet) =>
       snippet.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       snippet.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (snippet.shortcut && snippet.shortcut.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -133,7 +125,7 @@ function SnippetsContent() {
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {filteredSnippets?.map((snippet: NonNullable<typeof snippets>[number]) => (
+          {filteredSnippets?.map((snippet) => (
             <div
               key={snippet._id}
               className="bg-white border rounded-lg p-4 hover:shadow-md transition-shadow"

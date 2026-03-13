@@ -1,13 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { MessageSquare, Clock, CheckCircle, Download, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+import { useConversationsReportConvex } from "../hooks/useReportsConvex";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -27,40 +26,13 @@ function ConversationsReportContent() {
     const startDate = endDate - days * 24 * 60 * 60 * 1000;
     return { startDate, endDate };
   }, [dateRange]);
-
-  const conversationMetrics = useQuery(
-    api.reporting.getConversationMetrics,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          startDate: dateWindow.startDate,
-          endDate: dateWindow.endDate,
-          granularity,
-        }
-      : "skip"
-  );
-
-  const responseTimeMetrics = useQuery(
-    api.reporting.getResponseTimeMetrics,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          startDate: dateWindow.startDate,
-          endDate: dateWindow.endDate,
-        }
-      : "skip"
-  );
-
-  const resolutionTimeMetrics = useQuery(
-    api.reporting.getResolutionTimeMetrics,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          startDate: dateWindow.startDate,
-          endDate: dateWindow.endDate,
-        }
-      : "skip"
-  );
+  const { conversationMetrics, resolutionTimeMetrics, responseTimeMetrics } =
+    useConversationsReportConvex(
+      activeWorkspace?._id,
+      dateWindow.startDate,
+      dateWindow.endDate,
+      granularity
+    );
 
   const handleExportCSV = () => {
     if (!conversationMetrics) return;

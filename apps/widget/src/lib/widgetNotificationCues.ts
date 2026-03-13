@@ -1,3 +1,11 @@
+import {
+  buildUnreadSnapshot,
+  getUnreadIncreases,
+  loadCuePreferences,
+  shouldSuppressUnreadAttentionCue,
+  type CuePreferenceAdapter,
+} from "@opencom/web-shared";
+
 export interface WidgetCuePreferences {
   browserNotifications: boolean;
   sound: boolean;
@@ -9,53 +17,36 @@ const DEFAULT_PREFERENCES: WidgetCuePreferences = {
   sound: false,
 };
 
+const WIDGET_CUE_PREFERENCES_ADAPTER: CuePreferenceAdapter = {
+  storageKey: STORAGE_KEY,
+  defaults: DEFAULT_PREFERENCES,
+  missingFieldBehavior: "defaultValue",
+};
+
 type StorageLike = Pick<Storage, "getItem">;
 
 export function loadWidgetCuePreferences(storage?: StorageLike): WidgetCuePreferences {
-  if (!storage) {
-    return { ...DEFAULT_PREFERENCES };
-  }
-
-  const raw = storage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return { ...DEFAULT_PREFERENCES };
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<WidgetCuePreferences>;
-    return {
-      browserNotifications:
-        parsed.browserNotifications !== undefined
-          ? parsed.browserNotifications === true
-          : DEFAULT_PREFERENCES.browserNotifications,
-      sound: parsed.sound !== undefined ? parsed.sound === true : DEFAULT_PREFERENCES.sound,
-    };
-  } catch {
-    return { ...DEFAULT_PREFERENCES };
-  }
+  return loadCuePreferences(WIDGET_CUE_PREFERENCES_ADAPTER, storage);
 }
 
 export function buildWidgetUnreadSnapshot(
   conversations: Array<{ _id: string; unreadByVisitor?: number }>
 ): Record<string, number> {
-  return Object.fromEntries(
-    conversations.map((conversation) => [conversation._id, conversation.unreadByVisitor ?? 0])
-  );
+  return buildUnreadSnapshot({
+    conversations,
+    getUnreadCount: (conversation) => conversation.unreadByVisitor,
+  });
 }
 
 export function getWidgetUnreadIncreases(args: {
   previous: Record<string, number>;
   conversations: Array<{ _id: string; unreadByVisitor?: number }>;
 }): string[] {
-  const increasedConversationIds: string[] = [];
-  for (const conversation of args.conversations) {
-    const previousUnread = args.previous[conversation._id] ?? 0;
-    const nextUnread = conversation.unreadByVisitor ?? 0;
-    if (nextUnread > previousUnread) {
-      increasedConversationIds.push(conversation._id);
-    }
-  }
-  return increasedConversationIds;
+  return getUnreadIncreases({
+    previous: args.previous,
+    conversations: args.conversations,
+    getUnreadCount: (conversation) => conversation.unreadByVisitor,
+  });
 }
 
 export function shouldSuppressWidgetCue(args: {
@@ -65,10 +56,11 @@ export function shouldSuppressWidgetCue(args: {
   isDocumentVisible: boolean;
   hasWindowFocus: boolean;
 }): boolean {
-  return (
-    args.widgetView === "conversation" &&
-    args.activeConversationId === args.conversationId &&
-    args.isDocumentVisible &&
-    args.hasWindowFocus
-  );
+  return shouldSuppressUnreadAttentionCue({
+    conversationId: args.conversationId,
+    activeConversationId: args.activeConversationId,
+    isActiveConversationView: args.widgetView === "conversation",
+    isDocumentVisible: args.isDocumentVisible,
+    hasWindowFocus: args.hasWindowFocus,
+  });
 }

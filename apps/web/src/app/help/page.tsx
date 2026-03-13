@@ -1,37 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { Input } from "@opencom/ui";
 import { Search, FileText, FolderOpen } from "lucide-react";
 import Link from "next/link";
+import {
+  useHelpCenterPageConvex,
+  useHelpWorkspaceContextConvex,
+} from "./hooks/useHelpCenterConvex";
 
 export default function HelpCenterPage() {
   const auth = useAuthOptional();
-  const workspaceContext = useQuery(api.workspaces.getPublicWorkspaceContext, {});
   const [searchQuery, setSearchQuery] = useState("");
+  const { workspaceContext } = useHelpWorkspaceContextConvex();
   const isAuthenticated = auth?.isAuthenticated ?? false;
   const workspaceId = auth?.activeWorkspace?._id ?? workspaceContext?._id;
   const isRestricted =
     !isAuthenticated && workspaceContext?.helpCenterAccessPolicy === "restricted";
-
-  const collections = useQuery(
-    api.collections.listHierarchy,
-    workspaceId ? { workspaceId } : "skip"
-  );
-
-  const searchResults = useQuery(
-    api.articles.search,
-    workspaceId && searchQuery.length >= 2
-      ? { workspaceId, query: searchQuery, publishedOnly: true }
-      : "skip"
-  );
-
-  const publishedArticles = useQuery(
-    api.articles.list,
-    workspaceId ? { workspaceId, status: "published" } : "skip"
+  const { collections, publishedArticles, searchResults } = useHelpCenterPageConvex(
+    workspaceId,
+    searchQuery
   );
 
   const collectionsWithArticles = collections?.filter(

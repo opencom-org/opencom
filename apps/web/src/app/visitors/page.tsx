@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, Input, Button } from "@opencom/ui";
 import { Search, UserRound, Circle } from "lucide-react";
 import Link from "next/link";
 import { formatVisitorEmailLabel, formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
+import { useVisitorsPageConvex } from "./hooks/useVisitorsConvex";
 
 const PAGE_SIZE = 20;
 
@@ -38,18 +37,12 @@ function VisitorsContent(): React.JSX.Element | null {
   useEffect(() => {
     setOffset(0);
   }, [debouncedSearch, presenceFilter, activeWorkspace?._id]);
-
-  const directoryResult = useQuery(
-    api.visitors.listDirectory,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          search: debouncedSearch.length > 0 ? debouncedSearch : undefined,
-          presence: presenceFilter,
-          limit: PAGE_SIZE,
-          offset,
-        }
-      : "skip"
+  const { directoryResult } = useVisitorsPageConvex(
+    activeWorkspace?._id,
+    debouncedSearch,
+    presenceFilter,
+    offset,
+    PAGE_SIZE
   );
 
   const pageMeta = useMemo(() => {

@@ -9,12 +9,11 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { useMutation, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { useAuthConvex, useAuthHomeRouteConvex } from "./hooks/useAuthConvex";
 
-interface User {
+export interface User {
   _id: Id<"users">;
   email: string;
   name?: string;
@@ -22,7 +21,7 @@ interface User {
   role: "owner" | "admin" | "agent" | "viewer";
 }
 
-interface Workspace {
+export interface Workspace {
   _id: Id<"workspaces">;
   name: string;
   role: "owner" | "admin" | "agent" | "viewer";
@@ -58,13 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
 
   // Convex Auth hooks
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
-
-  // Query current user from Convex Auth session
-  const convexAuthUser = useQuery(api.auth.currentUser);
-
-  // Workspace mutation
-  const switchWorkspaceMutation = useMutation(api.auth.switchWorkspace);
-  const completeSignupProfileMutation = useMutation(api.auth.completeSignupProfile);
+  const { completeSignupProfileMutation, convexAuthUser, switchWorkspaceMutation } =
+    useAuthConvex();
 
   // Derive state from query
   const user = useMemo(() => (convexAuthUser?.user as User | null) ?? null, [convexAuthUser]);
@@ -75,10 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
   const isLoading = convexAuthUser === undefined;
   const isAuthenticated = !!user;
   const workspaceIdForHomeRouting = activeWorkspace?._id ?? user?.workspaceId ?? null;
-  const hostedOnboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
-    workspaceIdForHomeRouting ? { workspaceId: workspaceIdForHomeRouting } : "skip"
-  );
+  const { hostedOnboardingState } = useAuthHomeRouteConvex(workspaceIdForHomeRouting);
   const isHomeRouteLoading =
     isAuthenticated && !!workspaceIdForHomeRouting && hostedOnboardingState === undefined;
   const defaultHomePath: "/onboarding" | "/inbox" =

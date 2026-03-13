@@ -15,12 +15,12 @@ describe("signup settings - invite-only mode", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
     testUserId = workspace.userId;
 
     // Set workspace to invite-only mode
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
       authMethods: ["password", "otp"],
@@ -30,7 +30,7 @@ describe("signup settings - invite-only mode", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -41,7 +41,7 @@ describe("signup settings - invite-only mode", () => {
   });
 
   it("should set workspace to invite-only mode", async () => {
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -52,7 +52,7 @@ describe("signup settings - invite-only mode", () => {
     const inviteEmail = `invited-${Date.now()}@test.opencom.dev`;
 
     // Create invitation via test helper (bypasses email sending)
-    const inviteResult = await client.mutation(api.testing.helpers.createTestInvitation, {
+    const inviteResult = await client.mutation(api.testing_helpers.createTestInvitation, {
       workspaceId: testWorkspaceId,
       email: inviteEmail,
       role: "agent",
@@ -74,14 +74,14 @@ describe("signup settings - domain allowlist mode", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -94,14 +94,14 @@ describe("signup settings - domain allowlist mode", () => {
   it("should set workspace to domain-allowlist mode", async () => {
     const allowedDomains = ["company.com", "partner.org"];
 
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains,
       authMethods: ["otp"],
     });
 
-    const ws = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const ws = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -112,13 +112,13 @@ describe("signup settings - domain allowlist mode", () => {
   it("should store allowed domains correctly", async () => {
     const allowedDomains = ["acme.com", "widgets.io"];
 
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains,
     });
 
-    const ws = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const ws = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -128,19 +128,19 @@ describe("signup settings - domain allowlist mode", () => {
 
   it("should clear allowed domains when switching to invite-only", async () => {
     // First set domain-allowlist with domains
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains: ["test.com"],
     });
 
     // Then switch to invite-only
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
     });
 
-    const ws = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const ws = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -160,14 +160,14 @@ describe("auth method visibility", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
   });
 
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -178,13 +178,13 @@ describe("auth method visibility", () => {
   });
 
   it("should set auth methods to password only", async () => {
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
       authMethods: ["password"],
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -192,13 +192,13 @@ describe("auth method visibility", () => {
   });
 
   it("should set auth methods to OTP only", async () => {
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
       authMethods: ["otp"],
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -206,13 +206,13 @@ describe("auth method visibility", () => {
   });
 
   it("should set auth methods to both password and OTP", async () => {
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "invite-only",
       authMethods: ["password", "otp"],
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -221,7 +221,7 @@ describe("auth method visibility", () => {
   });
 
   it("should redact auth methods in unauthenticated discovery metadata", async () => {
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains: ["test.com"],

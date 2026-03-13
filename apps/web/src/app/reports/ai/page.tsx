@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { Bot, Download, ArrowLeft, TrendingUp, Clock, AlertTriangle, Zap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+import { useAiReportConvex } from "../hooks/useReportsConvex";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -26,24 +25,11 @@ function AiReportContent() {
     const s = n - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
     return { now: n, startDate: s };
   }, [dateRange]);
-
-  const aiMetrics = useQuery(
-    api.reporting.getAiAgentMetrics,
-    activeWorkspace?._id
-      ? { workspaceId: activeWorkspace._id, startDate, endDate: now, granularity }
-      : "skip"
-  );
-
-  const comparison = useQuery(
-    api.reporting.getAiVsHumanComparison,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
-  );
-
-  const knowledgeGaps = useQuery(
-    api.reporting.getKnowledgeGaps,
-    activeWorkspace?._id
-      ? { workspaceId: activeWorkspace._id, startDate, endDate: now, limit: 20 }
-      : "skip"
+  const { aiMetrics, comparison, knowledgeGaps } = useAiReportConvex(
+    activeWorkspace?._id,
+    startDate,
+    now,
+    granularity
   );
 
   const handleExportCSV = () => {
@@ -310,7 +296,7 @@ function AiReportContent() {
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Avg Confidence</span>
                 <span className="font-medium">
-                  {aiMetrics ? `${(aiMetrics.avgConfidence * 100).toFixed(0)}%` : "-"}
+                  {aiMetrics ? `${((aiMetrics.avgConfidence ?? 0) * 100).toFixed(0)}%` : "-"}
                 </span>
               </div>
               <div className="flex justify-between items-center">

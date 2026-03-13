@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -13,21 +11,15 @@ import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
 import { sanitizeHtml } from "@/lib/sanitizeHtml";
+import { useEmailCampaignEditorConvex } from "../../hooks/useEmailCampaignEditorConvex";
 
 function EmailCampaignEditor() {
   const params = useParams();
   const router = useRouter();
   const campaignId = params.id as Id<"emailCampaigns">;
   const { activeWorkspace } = useAuth();
-
-  const campaign = useQuery(api.emailCampaigns.get, { id: campaignId });
-  const stats = useQuery(api.emailCampaigns.getStats, { id: campaignId });
-  const eventNames = useQuery(
-    api.events.getDistinctNames,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const updateCampaign = useMutation(api.emailCampaigns.update);
-  const sendCampaign = useMutation(api.emailCampaigns.send);
+  const { campaign, eventNames, sendCampaign, stats, updateCampaign } =
+    useEmailCampaignEditorConvex(campaignId, activeWorkspace?._id);
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
@@ -221,19 +213,19 @@ function EmailCampaignEditor() {
                 </h3>
                 <div className="grid grid-cols-4 gap-4">
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.total}</div>
+                    <div className="text-2xl font-bold">{stats.total ?? 0}</div>
                     <div className="text-sm text-gray-500">Recipients</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.openRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.openRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Open Rate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.clickRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.clickRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Click Rate</div>
                   </div>
                   <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold">{stats.bounceRate.toFixed(1)}%</div>
+                    <div className="text-2xl font-bold">{(stats.bounceRate ?? 0).toFixed(1)}%</div>
                     <div className="text-sm text-gray-500">Bounce Rate</div>
                   </div>
                 </div>

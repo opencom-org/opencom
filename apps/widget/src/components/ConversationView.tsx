@@ -1,53 +1,24 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
-import { ChevronLeft, X, Send, Bot, ThumbsUp, ThumbsDown, User, Book } from "../icons";
-import { CsatPrompt } from "../CsatPrompt";
-import { formatTime } from "../utils/format";
+import {
+  normalizeUnknownError,
+  uploadSupportAttachments,
+  type StagedSupportAttachment,
+} from "@opencom/web-shared";
+import { ChevronLeft, X, User } from "../icons";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
+import { useConversationViewConvex } from "../hooks/convex/useConversationViewConvex";
 import { parseMarkdown } from "../utils/parseMarkdown";
-
-const DEFAULT_HUMAN_AGENT_NAME = "Support";
-const MANUAL_HANDOFF_REASON = "Visitor clicked Talk to human button";
-
-function resolveHumanAgentName(senderName?: string): string {
-  const normalized = senderName?.trim();
-  return normalized && normalized.length > 0 ? normalized : DEFAULT_HUMAN_AGENT_NAME;
-}
-
-interface ConversationViewProps {
-  conversationId: Id<"conversations">;
-  visitorId: Id<"visitors">;
-  conversationStatus: "open" | "closed" | "snoozed";
-  activeWorkspaceId: string;
-  sessionId: string;
-  sessionTokenRef: React.MutableRefObject<string | null>;
-  sessionToken: string | null;
-  userInfo: { email?: string } | undefined;
-  automationSettings:
-    | {
-        suggestArticlesEnabled?: boolean;
-        collectEmailEnabled?: boolean;
-        showReplyTimeEnabled?: boolean;
-        askForRatingEnabled?: boolean;
-      }
-    | undefined;
-  officeHoursStatus: { isOpen: boolean; offlineMessage?: string } | undefined;
-  expectedReplyTime: string | undefined;
-  commonIssueButtons:
-    | Array<{
-        _id: string;
-        label: string;
-        action: string;
-        articleId?: Id<"articles">;
-        conversationStarter?: string;
-      }>
-    | undefined;
-  onBack: () => void;
-  onClose: () => void;
-  onSelectArticle: (id: Id<"articles">) => void;
-}
+import { MANUAL_HANDOFF_REASON } from "./conversationView/constants";
+import { ConversationFooter } from "./conversationView/Footer";
+import { ConversationMessageList } from "./conversationView/MessageList";
+import type {
+  AiFeedback,
+  AiResponseData,
+  ArticleSuggestion,
+  ConversationMessage,
+  ConversationViewProps,
+} from "./conversationView/types";
 
 export function ConversationView({
   conversationId,
@@ -68,22 +39,23 @@ export function ConversationView({
 }: ConversationViewProps) {
   const [inputValue, setInputValue] = useState("");
   const [isAiTyping, setIsAiTyping] = useState(false);
-  const [aiResponseFeedback, setAiResponseFeedback] = useState<
-    Record<string, "helpful" | "not_helpful">
-  >({});
+  const [aiResponseFeedback, setAiResponseFeedback] = useState<Record<string, AiFeedback>>({});
   const [showEmailCapture, setShowEmailCapture] = useState(false);
   const [emailCapturedOrDismissed, setEmailCapturedOrDismissed] = useState(() => {
     return sessionStorage.getItem("opencom_email_dismissed") === "true";
   });
   const [emailCapturedThisSession, setEmailCapturedThisSession] = useState(false);
-  const [hasVisitorSentMessage, setHasVisitorSentMessage] = useState(false);
+  // const [hasVisitorSentMessage, setHasVisitorSentMessage] = useState(false);
   const [lastAgentMessageCount, setLastAgentMessageCount] = useState(0);
   const [emailInput, setEmailInput] = useState("");
   const [showArticleSuggestions, setShowArticleSuggestions] = useState(false);
-  const [articleSuggestions, setArticleSuggestions] = useState<
-    Array<{ id: string; title: string; snippet: string; score: number }>
-  >([]);
+  const [articleSuggestions, setArticleSuggestions] = useState<ArticleSuggestion[]>([]);
   const [, setIsLoadingSuggestions] = useState(false);
+  const [composerError, setComposerError] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    StagedSupportAttachment<Id<"supportAttachments">>[]
+  >([]);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [csatPromptVisible, setCsatPromptVisible] = useState(false);
   const [dismissedCsatByConversation, setDismissedCsatByConversation] = useState<
     Record<string, true>
@@ -96,27 +68,30 @@ export function ConversationView({
 
   const debouncedInputValue = useDebouncedValue(inputValue, 300);
 
-  const sendMessageMutation = useMutation(api.messages.send);
-  const identifyVisitor = useMutation(api.visitors.identify);
-  const generateAiResponse = useAction(api.aiAgentActions.generateResponse);
-  const submitAiFeedback = useMutation(api.aiAgent.submitFeedback);
-  const handoffToHuman = useMutation(api.aiAgent.handoffToHuman);
-  const searchArticleSuggestions = useAction(api.suggestions.searchForWidget);
+  const {
+    aiResponses,
+    aiSettings,
+    conversationData,
+    csatEligibility,
+    finalizeSupportAttachmentUpload,
+    generateAiResponse,
+    generateSupportAttachmentUploadUrl,
+    handoffToHuman,
+    identifyVisitor,
+    messages,
+    persistedVisitorProfile,
+    searchArticleSuggestions,
+    sendMessageMutation,
+    submitAiFeedback,
+  } = useConversationViewConvex({
+    conversationId,
+    visitorId,
+    activeWorkspaceId,
+    sessionId,
+    sessionToken,
+    shouldEvaluateCsat,
+  });
 
-  const messages = useQuery(
-    api.messages.list,
-    conversationId
-      ? {
-          conversationId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  );
-  const persistedVisitorProfile = useQuery(
-    api.visitors.getBySession,
-    sessionId ? { sessionId } : "skip"
-  );
   const isVisitorAlreadyIdentified = Boolean(
     emailCapturedThisSession ||
     userInfo?.email ||
@@ -126,44 +101,13 @@ export function ConversationView({
   const agentMessageCount =
     messages?.filter((m: { senderType: string }) => m.senderType !== "visitor").length ?? 0;
 
-  const aiSettings = useQuery(api.aiAgent.getPublicSettings, {
-    workspaceId: activeWorkspaceId as Id<"workspaces">,
-  });
-
-  const aiResponses = useQuery(
-    api.aiAgent.getConversationResponses,
-    conversationId
-      ? {
-          conversationId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  );
-  const conversationData = useQuery(
-    api.conversations.get,
-    conversationId
-      ? {
-          id: conversationId,
-          visitorId: visitorId ?? undefined,
-        }
-      : "skip"
-  );
-
-  const csatEligibility = useQuery(
-    api.reporting.getCsatEligibility,
-    shouldEvaluateCsat
-      ? {
-          conversationId,
-          visitorId: visitorId ?? undefined,
-          sessionToken: sessionToken ?? undefined,
-        }
-      : "skip"
-  );
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    setPendingAttachments([]);
+  }, [conversationId]);
 
   useEffect(() => {
     const dismissed = dismissedCsatByConversation[conversationKey];
@@ -229,7 +173,7 @@ export function ConversationView({
       setShowEmailCapture(false);
       return;
     }
-    if (!hasVisitorSentMessage) return;
+    // if (!hasVisitorSentMessage) return;
     if (!automationSettings?.collectEmailEnabled) return;
 
     const agentCount = agentMessageCount;
@@ -247,7 +191,7 @@ export function ConversationView({
   }, [
     visitorId,
     isVisitorAlreadyIdentified,
-    hasVisitorSentMessage,
+    // hasVisitorSentMessage,
     agentMessageCount,
     emailCapturedOrDismissed,
     lastAgentMessageCount,
@@ -256,7 +200,7 @@ export function ConversationView({
 
   const sendMessage = async () => {
     if (
-      !inputValue.trim() ||
+      (!inputValue.trim() && pendingAttachments.length === 0) ||
       !conversationId ||
       !visitorId ||
       !activeWorkspaceId ||
@@ -269,17 +213,20 @@ export function ConversationView({
     setInputValue("");
 
     try {
+      setComposerError(null);
       await sendMessageMutation({
         conversationId,
         senderId: visitorId,
         senderType: "visitor",
         content,
+        attachmentIds: pendingAttachments.map((attachment) => attachment.attachmentId),
         visitorId,
         sessionToken: sessionTokenRef.current ?? undefined,
       });
-      if (!hasVisitorSentMessage) {
-        setHasVisitorSentMessage(true);
-      }
+      setPendingAttachments([]);
+      // if (!hasVisitorSentMessage) {
+      //   setHasVisitorSentMessage(true);
+      // }
 
       if (aiSettings?.enabled !== false) {
         setIsAiTyping(true);
@@ -317,10 +264,46 @@ export function ConversationView({
     } catch (error) {
       console.error("Failed to send message:", error);
       setInputValue(content);
+      setComposerError(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to send message.",
+          nextAction: "Please try again.",
+        }).message
+      );
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleUploadAttachments = async (files: File[]) => {
+    if (!activeWorkspaceId || !visitorId || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingAttachments(true);
+    try {
+      setComposerError(null);
+      const uploadedAttachments = await uploadSupportAttachments({
+        files,
+        currentCount: pendingAttachments.length,
+        workspaceId: activeWorkspaceId as Id<"workspaces">,
+        visitorId,
+        sessionToken: sessionTokenRef.current ?? undefined,
+        generateUploadUrl: generateSupportAttachmentUploadUrl,
+        finalizeUpload: finalizeSupportAttachmentUpload,
+      });
+      setPendingAttachments((current) => [...current, ...uploadedAttachments]);
+    } catch (error) {
+      const normalizedError = normalizeUnknownError(error, {
+        fallbackMessage: "Failed to upload attachment.",
+        nextAction: "Try again with a supported file.",
+      });
+      console.error("Failed to upload widget attachment:", normalizedError.message);
+      setComposerError(normalizedError.message);
+    } finally {
+      setIsUploadingAttachments(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -354,7 +337,7 @@ export function ConversationView({
     sessionStorage.setItem("opencom_email_dismissed", "true");
   };
 
-  const isAiMessage = (message: { _id: string; senderType: string; senderId: string }) => {
+  const isAiMessage = (message: ConversationMessage) => {
     if (message.senderType !== "bot") {
       return false;
     }
@@ -363,16 +346,16 @@ export function ConversationView({
       return true;
     }
 
-    return aiResponses?.some((r: { messageId: string }) => r.messageId === message._id) ?? false;
+    return aiResponses?.some((response: { messageId: string }) => response.messageId === message._id) ?? false;
   };
 
-  const getAiResponseData = (messageId: string) => {
+  const getAiResponseData = (messageId: string): AiResponseData | undefined => {
     return aiResponses?.find(
-      (r: { messageId: string; _id: string; feedback?: string }) => r.messageId === messageId
-    );
+      (response: { messageId: string }) => response.messageId === messageId
+    ) as AiResponseData | undefined;
   };
 
-  const handleAiFeedback = async (responseId: string, feedback: "helpful" | "not_helpful") => {
+  const handleAiFeedback = async (responseId: string, feedback: AiFeedback) => {
     try {
       await submitAiFeedback({
         responseId: responseId as Id<"aiResponses">,
@@ -457,7 +440,7 @@ export function ConversationView({
     }
 
     return new Map(
-      messages.map((message: { _id: string; content: string }) => [
+      (messages as ConversationMessage[]).map((message) => [
         message._id,
         parseMarkdown(message.content),
       ])
@@ -499,293 +482,66 @@ export function ConversationView({
         </div>
       </div>
 
-      <div className="opencom-messages" data-testid="widget-message-list">
-        {!messages || messages.length === 0 ? (
-          <div className="opencom-message opencom-message-agent opencom-message-animated">
-            {aiSettings?.enabled ? (
-              <>
-                <span className="opencom-ai-badge">
-                  <Bot /> AI
-                </span>
-                Hi! I&apos;m an AI assistant. How can I help you today?
-              </>
-            ) : (
-              "Hi! How can we help you today?"
-            )}
-          </div>
-        ) : (
-          messages.map(
-            (
-              msg: {
-                _id: string;
-                _creationTime: number;
-                senderType: string;
-                senderId: string;
-                content: string;
-                senderName?: string;
-              },
-              index: number
-            ) => {
-              const showTimestamp =
-                index === 0 ||
-                (messages[index - 1] &&
-                  msg._creationTime - messages[index - 1]._creationTime > 5 * 60 * 1000);
-              const isAi = isAiMessage(msg);
-              const isHumanAgent = (msg.senderType === "agent" || msg.senderType === "user") && !isAi;
-              const humanAgentName = isHumanAgent
-                ? resolveHumanAgentName(msg.senderName)
-                : null;
-              const aiData = isAi ? getAiResponseData(msg._id) : null;
-              const feedbackGiven = aiData
-                ? aiResponseFeedback[aiData._id] || aiData.feedback
-                : null;
+      <ConversationMessageList
+        messages={messages}
+        aiSettingsEnabled={Boolean(aiSettings?.enabled)}
+        isAiMessage={isAiMessage}
+        getAiResponseData={getAiResponseData}
+        aiResponseFeedback={aiResponseFeedback}
+        onAiFeedback={handleAiFeedback}
+        onSelectArticle={onSelectArticle}
+        showWaitingForHumanSupport={showWaitingForHumanSupport}
+        isAiTyping={isAiTyping}
+        renderedMessages={renderedMessages}
+        messagesEndRef={messagesEndRef}
+      />
 
-              return (
-                <div key={msg._id} className="opencom-message-wrapper">
-                  {showTimestamp && (
-                    <div className="opencom-message-timestamp">{formatTime(msg._creationTime)}</div>
-                  )}
-                  <div
-                    className={`opencom-message opencom-message-${
-                      msg.senderType === "visitor" ? "user" : "agent"
-                    } ${isAi ? "opencom-message-ai" : ""} opencom-message-animated`}
-                    title={new Date(msg._creationTime).toLocaleString()}
-                  >
-                    {isAi && (
-                      <span className="opencom-ai-badge">
-                        <Bot /> AI
-                      </span>
-                    )}
-                    {isHumanAgent && (
-                      <span
-                        className="opencom-human-badge"
-                        data-testid={`widget-human-agent-badge-${msg._id}`}
-                      >
-                        <User /> {humanAgentName}
-                      </span>
-                    )}
-                    <div
-                      className="opencom-message-content"
-                      dangerouslySetInnerHTML={{
-                        __html: renderedMessages.get(msg._id) ?? "",
-                      }}
-                    />
-                    {isAi && aiData && (
-                      <div className="opencom-ai-feedback">
-                        {aiData.sources && aiData.sources.length > 0 && (
-                          <div className="opencom-ai-sources">
-                            Sources:{" "}
-                            {aiData.sources
-                              .map((s: { type: string; id: string; title: string }) => s.title)
-                              .join(", ")}
-                          </div>
-                        )}
-                        {!feedbackGiven ? (
-                          <div className="opencom-ai-feedback-buttons">
-                            <span>Was this helpful?</span>
-                            <button
-                              onClick={() => handleAiFeedback(aiData._id, "helpful")}
-                              className="opencom-feedback-btn opencom-feedback-helpful"
-                              title="Helpful"
-                              type="button"
-                            >
-                              <ThumbsUp />
-                            </button>
-                            <button
-                              onClick={() => handleAiFeedback(aiData._id, "not_helpful")}
-                              className="opencom-feedback-btn opencom-feedback-not-helpful"
-                              title="Not helpful"
-                              type="button"
-                            >
-                              <ThumbsDown />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="opencom-ai-feedback-given">
-                            {feedbackGiven === "helpful"
-                              ? "Thanks for your feedback!"
-                              : "Sorry to hear that. A human agent will follow up."}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            }
-          )
-        )}
-        {showWaitingForHumanSupport && (
-          <div className="opencom-status-divider" data-testid="widget-waiting-human-divider">
-            Waiting for human support
-          </div>
-        )}
-        {isAiTyping && (
-          <div className="opencom-message opencom-message-agent opencom-message-ai opencom-typing">
-            <span className="opencom-ai-badge">
-              <Bot /> AI
-            </span>
-            <span className="opencom-typing-dots">
-              <span>.</span>
-              <span>.</span>
-              <span>.</span>
-            </span>
-          </div>
-        )}
-        <div className="opencom-typing-indicator-area" />
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="opencom-conversation-footer" data-testid="widget-conversation-footer">
-        {csatPromptVisible && shouldEvaluateCsat && (
-          <CsatPrompt
-            conversationId={conversationId}
-            visitorId={visitorId}
-            sessionToken={sessionTokenRef.current ?? undefined}
-            onClose={dismissCsatPrompt}
-            onSubmitted={handleCsatSubmitted}
-          />
-        )}
-
-        {isConversationResolved ? (
-          <div className="opencom-conversation-status" data-testid="widget-conversation-status">
-            <p className="opencom-conversation-status-title">This conversation is resolved.</p>
-            {!automationSettings?.askForRatingEnabled && (
-              <p className="opencom-conversation-status-body">
-                Rating prompts are disabled for this workspace.
-              </p>
-            )}
-            {automationSettings?.askForRatingEnabled &&
-              csatEligibility?.reason === "already_submitted" && (
-                <p className="opencom-conversation-status-body">
-                  Thanks, your rating has already been recorded.
-                </p>
-              )}
-            {automationSettings?.askForRatingEnabled &&
-              csatEligibility?.reason !== "already_submitted" &&
-              !csatPromptVisible && (
-                <p className="opencom-conversation-status-body">
-                  You can open a new conversation from the Messages tab if you still need help.
-                </p>
-              )}
-          </div>
-        ) : (
-          <>
-            {showEmailCapture && (
-              <div className="opencom-email-capture">
-                <p>Get notified when we reply:</p>
-                <div className="opencom-email-input-row">
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleEmailSubmit();
-                      }
-                    }}
-                    placeholder="Enter your email..."
-                    className="opencom-email-input"
-                  />
-                  <button
-                    onClick={handleEmailSubmit}
-                    className="opencom-email-submit"
-                    type="button"
-                  >
-                    Save
-                  </button>
-                </div>
-                <button onClick={handleEmailDismiss} className="opencom-email-skip" type="button">
-                  Skip
-                </button>
-              </div>
-            )}
-
-            {automationSettings?.showReplyTimeEnabled && officeHoursStatus && (
-              <div className="opencom-reply-time">
-                {officeHoursStatus.isOpen ? (
-                  expectedReplyTime && <span>Typically replies in {expectedReplyTime}</span>
-                ) : (
-                  <span>{officeHoursStatus.offlineMessage || "We're currently offline"}</span>
-                )}
-              </div>
-            )}
-
-            {commonIssueButtons && commonIssueButtons.length > 0 && !messages?.length && (
-              <div className="opencom-common-issues">
-                <p className="opencom-common-issues-label">Common questions:</p>
-                <div className="opencom-common-issues-grid">
-                  {commonIssueButtons.map((button) => (
-                    <button
-                      key={button._id}
-                      className="opencom-common-issue-btn"
-                      onClick={() => {
-                        if (button.action === "article" && button.articleId) {
-                          onSelectArticle(button.articleId);
-                        } else if (
-                          button.action === "start_conversation" &&
-                          button.conversationStarter
-                        ) {
-                          setInputValue(button.conversationStarter);
-                        }
-                      }}
-                      type="button"
-                    >
-                      {button.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {showArticleSuggestions && articleSuggestions.length > 0 && (
-              <div className="opencom-article-suggestions">
-                <p className="opencom-suggestions-label">
-                  <Book /> Suggested articles:
-                </p>
-                <div className="opencom-suggestions-list">
-                  {articleSuggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.id}
-                      className="opencom-suggestion-item"
-                      onClick={() => {
-                        onSelectArticle(suggestion.id as Id<"articles">);
-                        setShowArticleSuggestions(false);
-                      }}
-                      type="button"
-                    >
-                      <span className="opencom-suggestion-title">{suggestion.title}</span>
-                      <span className="opencom-suggestion-snippet">{suggestion.snippet}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="opencom-input-container" data-testid="widget-chat-controls">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
-                className="opencom-input"
-                data-testid="widget-message-input"
-              />
-              <button
-                onClick={sendMessage}
-                className="opencom-send"
-                data-testid="widget-send-button"
-                type="button"
-                disabled={!inputValue.trim()}
-              >
-                <Send />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      <ConversationFooter
+        conversationId={conversationId}
+        visitorId={visitorId}
+        sessionToken={sessionTokenRef.current ?? undefined}
+        csatPromptVisible={csatPromptVisible}
+        shouldEvaluateCsat={shouldEvaluateCsat}
+        onDismissCsatPrompt={dismissCsatPrompt}
+        onCsatSubmitted={handleCsatSubmitted}
+        isConversationResolved={isConversationResolved}
+        automationSettings={automationSettings}
+        csatEligibility={csatEligibility}
+        showEmailCapture={showEmailCapture}
+        emailInput={emailInput}
+        onEmailInputChange={setEmailInput}
+        onEmailSubmit={handleEmailSubmit}
+        onEmailDismiss={handleEmailDismiss}
+        officeHoursStatus={officeHoursStatus}
+        expectedReplyTime={expectedReplyTime}
+        commonIssueButtons={commonIssueButtons}
+        hasMessages={Boolean(messages?.length)}
+        onSelectArticle={onSelectArticle}
+        onApplyConversationStarter={setInputValue}
+        showArticleSuggestions={showArticleSuggestions}
+        articleSuggestions={articleSuggestions}
+        onSelectSuggestionArticle={(id) => {
+          onSelectArticle(id as Id<"articles">);
+          setShowArticleSuggestions(false);
+        }}
+        inputValue={inputValue}
+        composerError={composerError}
+        pendingAttachments={pendingAttachments}
+        isUploadingAttachments={isUploadingAttachments}
+        onInputChange={(value) => {
+          setComposerError(null);
+          setInputValue(value);
+        }}
+        onInputKeyDown={handleKeyDown}
+        onSendMessage={sendMessage}
+        onUploadAttachments={handleUploadAttachments}
+        onRemovePendingAttachment={(attachmentId) => {
+          setComposerError(null);
+          setPendingAttachments((current) =>
+            current.filter((attachment) => attachment.attachmentId !== attachmentId)
+          );
+        }}
+      />
     </div>
   );
 }

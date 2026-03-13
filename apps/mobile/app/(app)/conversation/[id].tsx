@@ -11,17 +11,9 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { useAuth } from "../../../src/contexts/AuthContext";
-import type { Id } from "@opencom/convex/dataModel";
-
-interface Message {
-  _id: string;
-  content: string;
-  senderType: "user" | "visitor" | "agent" | "bot";
-  createdAt: number;
-}
+import { useConversationConvex } from "../../../src/hooks/convex/useConversationConvex";
+import type { MobileConversationMessage as Message } from "../../../src/hooks/convex/types";
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
@@ -35,32 +27,22 @@ export default function ConversationScreen() {
   const { user } = useAuth();
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
-
-  const conversation = useQuery(
-    api.conversations.get,
-    id ? { id: id as Id<"conversations"> } : "skip"
-  );
-
-  const visitor = useQuery(
-    api.visitors.get,
-    conversation?.visitorId ? { id: conversation.visitorId } : "skip"
-  );
-
-  const messages = useQuery(
-    api.messages.list,
-    id ? { conversationId: id as Id<"conversations"> } : "skip"
-  );
-
-  const sendMessage = useMutation(api.messages.send);
-  const updateStatus = useMutation(api.conversations.updateStatus);
-  const markAsRead = useMutation(api.conversations.markAsRead);
+  const {
+    resolvedConversationId,
+    conversation,
+    visitor,
+    messages,
+    sendMessage,
+    updateConversationStatus: updateStatus,
+    markConversationRead: markAsRead,
+  } = useConversationConvex(id);
 
   // Mark conversation as read when viewing
   useEffect(() => {
-    if (id && conversation) {
-      markAsRead({ id: id as Id<"conversations">, readerType: "agent" }).catch(console.error);
+    if (resolvedConversationId && conversation) {
+      markAsRead({ id: resolvedConversationId, readerType: "agent" }).catch(console.error);
     }
-  }, [id, conversation, markAsRead]);
+  }, [conversation, markAsRead, resolvedConversationId]);
 
   useEffect(() => {
     if (messages && messages.length > 0) {
@@ -71,14 +53,14 @@ export default function ConversationScreen() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!inputText.trim() || !id || !user) return;
+    if (!inputText.trim() || !resolvedConversationId || !user) return;
 
     const content = inputText.trim();
     setInputText("");
 
     try {
       await sendMessage({
-        conversationId: id as Id<"conversations">,
+        conversationId: resolvedConversationId,
         senderId: user._id,
         senderType: "agent",
         content,
@@ -90,10 +72,10 @@ export default function ConversationScreen() {
   };
 
   const handleStatusChange = async (status: "open" | "closed" | "snoozed") => {
-    if (!id) return;
+    if (!resolvedConversationId) return;
     try {
       await updateStatus({
-        id: id as Id<"conversations">,
+        id: resolvedConversationId,
         status,
       });
     } catch (error) {

@@ -28,12 +28,7 @@ describe("OutboundOverlay", () => {
     const mockedUseMutation = useMutation as unknown as ReturnType<typeof vi.fn>;
 
     mockedUseQuery.mockReturnValue(messages);
-    mockedUseMutation.mockImplementation((mutationRef: unknown) => {
-      if (mutationRef === "outboundMessages.trackImpression") {
-        return trackImpressionMock;
-      }
-      return vi.fn();
-    });
+    mockedUseMutation.mockImplementation(() => trackImpressionMock);
 
     return { trackImpressionMock };
   }

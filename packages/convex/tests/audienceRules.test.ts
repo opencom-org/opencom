@@ -17,10 +17,10 @@ describe("audienceRules", () => {
     }
     client = new ConvexClient(convexUrl);
 
-    const workspace = await client.mutation(api.testing.helpers.createTestWorkspace, {});
+    const workspace = await client.mutation(api.testing_helpers.createTestWorkspace, {});
     testWorkspaceId = workspace.workspaceId;
 
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email: "test@example.com",
       name: "Test User",
@@ -31,7 +31,7 @@ describe("audienceRules", () => {
     });
     testVisitorId = visitor.visitorId;
 
-    const session = await client.mutation(api.testing.helpers.createTestSessionToken, {
+    const session = await client.mutation(api.testing_helpers.createTestSessionToken, {
       visitorId: testVisitorId,
       workspaceId: testWorkspaceId,
     });
@@ -41,7 +41,7 @@ describe("audienceRules", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -53,7 +53,7 @@ describe("audienceRules", () => {
 
   describe("tour with system property rules", () => {
     it("should match tour when email is set", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Email Required Tour",
         audienceRules: {
@@ -69,7 +69,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -79,11 +79,11 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
 
     it("should not match tour when email equals different value", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Specific Email Tour",
         audienceRules: {
@@ -100,7 +100,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -110,11 +110,11 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(false);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
 
     it("should match tour when email contains domain", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Domain Match Tour",
         audienceRules: {
@@ -131,7 +131,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -141,13 +141,13 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
   });
 
   describe("tour with custom attribute rules", () => {
     it("should match tour when custom attribute equals value", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Pro Plan Tour",
         audienceRules: {
@@ -164,7 +164,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -174,11 +174,11 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
 
     it("should not match tour when custom attribute not set", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Enterprise Tour",
         audienceRules: {
@@ -194,7 +194,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -204,13 +204,13 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(false);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
   });
 
   describe("tour with OR conditions", () => {
     it("should match tour when any condition is true", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "OR Conditions Tour",
         audienceRules: {
@@ -231,7 +231,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -241,13 +241,13 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
   });
 
   describe("tour with nested groups", () => {
     it("should match tour with nested AND/OR groups", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "Nested Groups Tour",
         audienceRules: {
@@ -281,7 +281,7 @@ describe("audienceRules", () => {
         },
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -291,18 +291,18 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
   });
 
   describe("tour with no audience rules", () => {
     it("should match tour when no audienceRules defined", async () => {
-      testTourId = await client.mutation(api.testing.helpers.createTestTour, {
+      testTourId = await client.mutation(api.testing_helpers.createTestTour, {
         workspaceId: testWorkspaceId,
         name: "No Rules Tour",
       });
 
-      await client.mutation(api.testing.helpers.activateTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.activateTestTour, { id: testTourId });
 
       const availableTours = await client.query(api.tourProgress.getAvailableTours, {
         visitorId: testVisitorId,
@@ -312,7 +312,7 @@ describe("audienceRules", () => {
 
       expect(availableTours.some((t) => t.tour._id === testTourId)).toBe(true);
 
-      await client.mutation(api.testing.helpers.removeTestTour, { id: testTourId });
+      await client.mutation(api.testing_helpers.removeTestTour, { id: testTourId });
     });
   });
 });

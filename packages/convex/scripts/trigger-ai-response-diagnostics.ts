@@ -13,7 +13,7 @@ type TriggerSummary = {
     confidence: number;
     handoff: boolean;
     handoffReason: string | null;
-    messageId: string | null;
+    messageId: Id<"messages"> | null;
     lastConfigError: unknown;
   }>;
   responseCount: number;

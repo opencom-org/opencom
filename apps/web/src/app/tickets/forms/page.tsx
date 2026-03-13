@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -23,6 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useTicketFormEditorConvex, useTicketFormsPageConvex } from "../hooks/useTicketsConvex";
 
 type FieldType = "text" | "textarea" | "select" | "multi-select" | "number" | "date";
 
@@ -52,14 +51,7 @@ function TicketFormsContent(): React.JSX.Element | null {
   const { user, activeWorkspace } = useAuth();
   const [selectedFormId, setSelectedFormId] = useState<Id<"ticketForms"> | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-
-  const forms = useQuery(
-    api.ticketForms.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const createForm = useMutation(api.ticketForms.create);
-  const deleteForm = useMutation(api.ticketForms.remove);
+  const { createForm, deleteForm, forms } = useTicketFormsPageConvex(activeWorkspace?._id);
 
   const handleCreateForm = async () => {
     if (!activeWorkspace?._id) return;
@@ -194,8 +186,7 @@ function FormEditor({
   formId: Id<"ticketForms">;
   onDelete: () => void;
 }): React.JSX.Element | null {
-  const form = useQuery(api.ticketForms.get, { id: formId });
-  const updateForm = useMutation(api.ticketForms.update);
+  const { form, updateForm } = useTicketFormEditorConvex(formId);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");

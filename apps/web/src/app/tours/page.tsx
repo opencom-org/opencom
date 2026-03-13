@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,28 +9,26 @@ import { Button, Input } from "@opencom/ui";
 import { Plus, Pencil, Trash2, Copy, Play, Pause, Search, Route } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
+import { useToursPageConvex } from "./hooks/useToursConvex";
+
+type TourRecord = {
+  _id: Id<"tours">;
+  name: string;
+  description?: string;
+  status: "draft" | "active" | "archived";
+  createdAt: number;
+};
 
 function ToursContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "active" | "archived">("all");
-
-  const tours = useQuery(
-    api.tours.list,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        }
-      : "skip"
-  );
-
-  const createTour = useMutation(api.tours.create);
-  const deleteTour = useMutation(api.tours.remove);
-  const activateTour = useMutation(api.tours.activate);
-  const deactivateTour = useMutation(api.tours.deactivate);
-  const duplicateTour = useMutation(api.tours.duplicate);
+  const { activateTour, createTour, deactivateTour, deleteTour, duplicateTour, tours } =
+    useToursPageConvex(
+      activeWorkspace?._id,
+      statusFilter === "all" ? undefined : statusFilter
+    );
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;
@@ -53,7 +49,7 @@ function ToursContent() {
     }
   };
 
-  const handleToggleStatus = async (tour: NonNullable<typeof tours>[number]) => {
+  const handleToggleStatus = async (tour: TourRecord) => {
     if (tour.status === "active") {
       await deactivateTour({ id: tour._id });
     } else {
@@ -66,7 +62,7 @@ function ToursContent() {
   };
 
   const filteredTours = tours?.filter(
-    (tour: NonNullable<typeof tours>[number]) =>
+    (tour: TourRecord) =>
       tour.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (tour.description && tour.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -145,7 +141,7 @@ function ToursContent() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredTours?.map((tour: NonNullable<typeof tours>[number]) => (
+              {filteredTours?.map((tour: TourRecord) => (
                 <tr key={tour._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4">
                     <Link href={`/tours/${tour._id}`} className="hover:text-primary">

@@ -6,8 +6,6 @@ import { roleHasPermission, ROLE_PERMISSIONS, Role, Permission } from "../convex
 
 describe("Role Management", () => {
   describe("Role hierarchy", () => {
-    const roles: Role[] = ["owner", "admin", "agent", "viewer"];
-
     it("owner has strictly more permissions than admin", () => {
       const ownerPerms = new Set(ROLE_PERMISSIONS.owner);
       const adminPerms = new Set(ROLE_PERMISSIONS.admin);
@@ -101,7 +99,7 @@ describe("Role Management", () => {
 
   describe("Privilege escalation prevention", () => {
     // Helper to check if promoting to a role would be escalation
-    function isPrivilegeEscalation(actorRole: Role, currentRole: Role, newRole: Role): boolean {
+    function isPrivilegeEscalation(actorRole: Role, newRole: Role): boolean {
       const roleRank: Record<Role, number> = {
         viewer: 0,
         agent: 1,
@@ -118,19 +116,18 @@ describe("Role Management", () => {
     }
 
     it("admin cannot promote to admin or owner", () => {
-      expect(isPrivilegeEscalation("admin", "agent", "admin")).toBe(true);
-      expect(isPrivilegeEscalation("admin", "viewer", "owner")).toBe(true);
+      expect(isPrivilegeEscalation("admin", "admin")).toBe(true);
+      expect(isPrivilegeEscalation("admin", "owner")).toBe(true);
     });
 
     it("admin can demote or promote within allowed range", () => {
-      expect(isPrivilegeEscalation("admin", "viewer", "agent")).toBe(false);
-      expect(isPrivilegeEscalation("admin", "agent", "viewer")).toBe(false);
+      expect(isPrivilegeEscalation("admin", "agent")).toBe(false);
+      expect(isPrivilegeEscalation("admin", "viewer")).toBe(false);
     });
 
     it("owner can promote to any role", () => {
-      expect(isPrivilegeEscalation("owner", "viewer", "admin")).toBe(false);
-      expect(isPrivilegeEscalation("owner", "agent", "admin")).toBe(false);
-      expect(isPrivilegeEscalation("owner", "admin", "owner")).toBe(false);
+      expect(isPrivilegeEscalation("owner", "admin")).toBe(false);
+      expect(isPrivilegeEscalation("owner", "owner")).toBe(false);
     });
   });
 

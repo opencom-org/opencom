@@ -20,7 +20,7 @@ describe("visitors - advanced", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -31,7 +31,7 @@ describe("visitors - advanced", () => {
   });
 
   it("should update location for visitor", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
@@ -43,7 +43,7 @@ describe("visitors - advanced", () => {
       },
     });
 
-    const updated = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const updated = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: visitor.visitorId,
     });
 
@@ -54,20 +54,20 @@ describe("visitors - advanced", () => {
     const email = `merge-test-${Date.now()}@test.com`;
 
     // Create first visitor with email
-    const visitor1 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor1 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
       email,
       name: "Original Visitor",
     });
 
     // Create a conversation for visitor1
-    await client.mutation(api.testing.helpers.createTestConversation, {
+    await client.mutation(api.testing_helpers.createTestConversation, {
       workspaceId: testWorkspaceId,
       visitorId: visitor1.visitorId,
     });
 
     // Create second visitor without email
-    const visitor2 = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor2 = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
@@ -83,14 +83,14 @@ describe("visitors - advanced", () => {
     expect(merged?.name).toBe("Updated Name");
 
     // Visitor2 should be deleted
-    const deletedVisitor = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const deletedVisitor = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: visitor2.visitorId,
     });
     expect(deletedVisitor).toBeNull();
   });
 
   it("should identify visitor and merge custom attributes", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
@@ -102,7 +102,7 @@ describe("visitors - advanced", () => {
       },
     });
 
-    const updated = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const updated = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: visitor.visitorId,
     });
 
@@ -111,11 +111,11 @@ describe("visitors - advanced", () => {
   });
 
   it("should track firstSeenAt and lastSeenAt", async () => {
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
 
-    const initial = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const initial = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: visitor.visitorId,
     });
 
@@ -132,7 +132,7 @@ describe("visitors - advanced", () => {
       visitorId: visitor.visitorId,
     });
 
-    const updated = await client.mutation(api.testing.helpers.getTestVisitor, {
+    const updated = await client.mutation(api.testing_helpers.getTestVisitor, {
       id: visitor.visitorId,
     });
 

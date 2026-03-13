@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { Doc } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
-import { hasPermission, requirePermission } from "./permissions";
+import { hasPermission } from "./permissions";
+import { authMutation } from "./lib/authWrappers";
 
 const conditionValidator = v.object({
   field: v.union(
@@ -80,7 +81,7 @@ export const get = query({
   },
 });
 
-export const create = mutation({
+export const create = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     name: v.string(),
@@ -89,13 +90,8 @@ export const create = mutation({
     conditions: v.array(conditionValidator),
     action: actionValidator,
   },
+  permission: "conversations.assign",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "conversations.assign");
-
     const now = Date.now();
     return await ctx.db.insert("assignmentRules", {
       workspaceId: args.workspaceId,
@@ -110,7 +106,7 @@ export const create = mutation({
   },
 });
 
-export const update = mutation({
+export const update = authMutation({
   args: {
     id: v.id("assignmentRules"),
     name: v.optional(v.string()),
@@ -119,18 +115,15 @@ export const update = mutation({
     conditions: v.optional(v.array(conditionValidator)),
     action: v.optional(actionValidator),
   },
-  handler: async (ctx, args) => {
+  permission: "conversations.assign",
+  resolveWorkspaceId: async (ctx, args) => {
     const rule = (await ctx.db.get(args.id)) as Doc<"assignmentRules"> | null;
     if (!rule) {
       throw new Error("Assignment rule not found");
     }
-
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, rule.workspaceId, "conversations.assign");
-
+    return rule.workspaceId;
+  },
+  handler: async (ctx, args) => {
     await ctx.db.patch(args.id, {
       ...(args.name !== undefined && { name: args.name }),
       ...(args.priority !== undefined && { priority: args.priority }),
@@ -144,38 +137,30 @@ export const update = mutation({
   },
 });
 
-export const remove = mutation({
+export const remove = authMutation({
   args: {
     id: v.id("assignmentRules"),
   },
-  handler: async (ctx, args) => {
+  permission: "conversations.assign",
+  resolveWorkspaceId: async (ctx, args) => {
     const rule = (await ctx.db.get(args.id)) as Doc<"assignmentRules"> | null;
     if (!rule) {
       throw new Error("Assignment rule not found");
     }
-
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, rule.workspaceId, "conversations.assign");
-
+    return rule.workspaceId;
+  },
+  handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
   },
 });
 
-export const reorder = mutation({
+export const reorder = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     ruleIds: v.array(v.id("assignmentRules")),
   },
+  permission: "conversations.assign",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Not authenticated");
-    }
-    await requirePermission(ctx, user._id, args.workspaceId, "conversations.assign");
-
     for (const ruleId of args.ruleIds) {
       const rule = (await ctx.db.get(ruleId)) as Doc<"assignmentRules"> | null;
       if (!rule || rule.workspaceId !== args.workspaceId) {

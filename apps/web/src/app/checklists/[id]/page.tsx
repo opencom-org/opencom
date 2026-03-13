@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
@@ -25,29 +23,8 @@ import {
   toInlineAudienceRuleFromBuilder,
   type InlineAudienceRule,
 } from "@/lib/audienceRules";
-
-type JsonPrimitive = string | number | boolean | null;
-type JsonObject = Record<string, JsonPrimitive>;
-type JsonValue = JsonPrimitive | JsonPrimitive[] | JsonObject;
-
-interface ChecklistTask {
-  id: string;
-  title: string;
-  description?: string;
-  action?: {
-    type: "tour" | "url" | "event";
-    tourId?: Id<"tours">;
-    url?: string;
-    eventName?: string;
-  };
-  completionType: "manual" | "auto_event" | "auto_attribute";
-  completionEvent?: string;
-  completionAttribute?: {
-    key: string;
-    operator: string;
-    value?: JsonValue;
-  };
-}
+import type { ChecklistTask } from "../checklistTypes";
+import { useChecklistBuilderConvex } from "../hooks/useChecklistBuilderConvex";
 
 function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
@@ -61,18 +38,10 @@ function ChecklistBuilderContent() {
   const params = useParams();
   const checklistId = params.id as Id<"checklists">;
   const { activeWorkspace } = useAuth();
-
-  const checklist = useQuery(api.checklists.get, { id: checklistId });
-  const tours = useQuery(
-    api.tours.list,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const eventNames = useQuery(
-    api.events.getDistinctNames,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const updateChecklist = useMutation(api.checklists.update);
+  const { checklist, eventNames, tours, updateChecklist } = useChecklistBuilderConvex({
+    checklistId,
+    workspaceId: activeWorkspace?._id,
+  });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -86,24 +55,20 @@ function ChecklistBuilderContent() {
     if (checklist) {
       setName(checklist.name);
       setDescription(checklist.description || "");
-      setTasks(checklist.tasks as ChecklistTask[]);
+      setTasks(checklist.tasks);
       setAudienceRules(toInlineAudienceRule(checklist.audienceRules ?? checklist.targeting));
     }
   }, [checklist]);
 
   const handleSave = async () => {
     setSaveError(null);
-    const mutationTargeting = audienceRules
-      ? (audienceRules as Parameters<typeof updateChecklist>[0]["targeting"])
-      : undefined;
-
     try {
       await updateChecklist({
         id: checklistId,
         name,
         description: description || undefined,
         tasks,
-        ...(mutationTargeting ? { targeting: mutationTargeting } : {}),
+        ...(audienceRules ? { targeting: audienceRules } : {}),
       });
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Failed to save checklist");

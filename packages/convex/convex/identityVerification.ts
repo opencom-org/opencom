@@ -1,8 +1,9 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { requirePermission } from "./permissions";
 import { logAudit } from "./auditLogs";
+import { authMutation, authQuery } from "./lib/authWrappers";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
 // HMAC secret generation (task 5.1)
@@ -46,19 +47,13 @@ export const getSettings = query({
 });
 
 // Enable identity verification and generate secret (task 5.2)
-export const enable = mutation({
+export const enable = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     mode: v.optional(v.union(v.literal("optional"), v.literal("required"))),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -77,7 +72,7 @@ export const enable = mutation({
     // Log the action
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "widget.identity.enabled",
       resourceType: "workspace",
@@ -97,22 +92,16 @@ export const enable = mutation({
 });
 
 // Disable identity verification (task 5.3)
-export const disable = mutation({
+export const disable = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     confirmDisable: v.boolean(),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
     if (!args.confirmDisable) {
       throw new Error("Confirmation required to disable identity verification");
     }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
 
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
@@ -126,7 +115,7 @@ export const disable = mutation({
     // Log the action
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "widget.identity.disabled",
       resourceType: "workspace",
@@ -138,19 +127,13 @@ export const disable = mutation({
 });
 
 // Update identity verification mode (task 5.8)
-export const updateMode = mutation({
+export const updateMode = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
     mode: v.union(v.literal("optional"), v.literal("required")),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -169,7 +152,7 @@ export const updateMode = mutation({
     // Log the action
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "workspace.security.changed",
       resourceType: "workspace",
@@ -186,18 +169,12 @@ export const updateMode = mutation({
 });
 
 // Rotate HMAC secret with grace period (task 5.7)
-export const rotateSecret = mutation({
+export const rotateSecret = authMutation({
   args: {
     workspaceId: v.id("workspaces"),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");
@@ -217,7 +194,7 @@ export const rotateSecret = mutation({
     // Log the action
     await logAudit(ctx, {
       workspaceId: args.workspaceId,
-      actorId: user._id,
+      actorId: ctx.user._id,
       actorType: "user",
       action: "widget.identity.secret.rotated",
       resourceType: "workspace",
@@ -232,18 +209,12 @@ export const rotateSecret = mutation({
 });
 
 // Get the current secret (for displaying in settings, shown once)
-export const getSecret = query({
+export const getSecret = authQuery({
   args: {
     workspaceId: v.id("workspaces"),
   },
+  permission: "settings.security",
   handler: async (ctx, args) => {
-    const user = await getAuthenticatedUserFromSession(ctx);
-    if (!user) {
-      throw new Error("Unauthorized");
-    }
-
-    await requirePermission(ctx, user._id, args.workspaceId, "settings.security");
-
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
       throw new Error("Workspace not found");

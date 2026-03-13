@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { makeFunctionReference, type FunctionReference } from "convex/server";
 import {
   mutation,
   query,
@@ -6,16 +7,66 @@ import {
   internalMutation,
   internalAction,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { Resend } from "resend";
 import { getAuthenticatedUserFromSession } from "./auth";
+import {
+  getShallowRunAfter,
+  getShallowRunMutation,
+  notifyNewConversationRef,
+  notifyNewMessageRef,
+} from "./notifications/functionRefs";
 import { hasPermission, requirePermission } from "./permissions";
 import { formatReadableVisitorId } from "./visitorReadableId";
 
 const WEBHOOK_INTERNAL_SECRET =
   process.env.EMAIL_WEBHOOK_INTERNAL_SECRET ?? process.env.RESEND_WEBHOOK_SECRET ?? "";
 const ENFORCE_WEBHOOK_INTERNAL_SECRET = process.env.ENFORCE_WEBHOOK_SIGNATURES !== "false";
+
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
+
+type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "action",
+  "internal",
+  Args,
+  Return
+>;
+
+type SendEmailViaProviderArgs = {
+  messageId: Id<"messages">;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  htmlBody: string;
+  textBody?: string;
+  fromName: string;
+  fromEmail: string;
+  emailMessageId: string;
+  inReplyTo?: string;
+  references?: string[];
+  signature?: string;
+};
+
+type UpdateDeliveryStatusArgs = {
+  messageId: Id<"messages">;
+  status: "sent" | "delivered" | "bounced" | "failed";
+};
+
+const SEND_EMAIL_VIA_PROVIDER_REF = makeFunctionReference<
+  "action",
+  SendEmailViaProviderArgs,
+  unknown
+>("emailChannel:sendEmailViaProvider") as unknown as InternalActionRef<SendEmailViaProviderArgs>;
+
+const UPDATE_DELIVERY_STATUS_REF = makeFunctionReference<
+  "mutation",
+  UpdateDeliveryStatusArgs,
+  unknown
+>("emailChannel:updateDeliveryStatus") as unknown as InternalMutationRef<UpdateDeliveryStatusArgs>;
 
 function assertWebhookInternalAccess(providedSecret?: string): void {
   if (!WEBHOOK_INTERNAL_SECRET) {
@@ -370,7 +421,8 @@ export const processInboundEmail = mutation({
     });
 
     // Notify about new message
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewMessage, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, notifyNewMessageRef, {
       conversationId,
       messageContent: content,
       senderType: "visitor",
@@ -487,7 +539,8 @@ export const processForwardedEmail = mutation({
     });
 
     // Notify about new conversation
-    await ctx.scheduler.runAfter(0, internal.notifications.notifyNewConversation, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, notifyNewConversationRef, {
       conversationId,
     });
 
@@ -662,7 +715,8 @@ export const sendEmailReply = mutation({
     });
 
     // Schedule email sending (will be handled by action)
-    await ctx.scheduler.runAfter(0, internal.emailChannel.sendEmailViaProvider, {
+    const runAfter = getShallowRunAfter(ctx);
+    await runAfter(0, SEND_EMAIL_VIA_PROVIDER_REF, {
       messageId: dbMessageId,
       to: args.to,
       cc: args.cc,
@@ -756,7 +810,8 @@ export const sendEmailViaProvider = internalAction({
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
       console.error("RESEND_API_KEY not configured");
-      await ctx.runMutation(internal.emailChannel.updateDeliveryStatus, {
+      const runMutation = getShallowRunMutation(ctx);
+      await runMutation(UPDATE_DELIVERY_STATUS_REF, {
         messageId: args.messageId,
         status: "failed",
       });
@@ -794,7 +849,8 @@ export const sendEmailViaProvider = internalAction({
         headers,
       });
 
-      await ctx.runMutation(internal.emailChannel.updateDeliveryStatus, {
+      const runMutation = getShallowRunMutation(ctx);
+      await runMutation(UPDATE_DELIVERY_STATUS_REF, {
         messageId: args.messageId,
         status: "sent",
       });
@@ -802,7 +858,8 @@ export const sendEmailViaProvider = internalAction({
       return { success: true };
     } catch (error) {
       console.error("Failed to send email:", error);
-      await ctx.runMutation(internal.emailChannel.updateDeliveryStatus, {
+      const runMutation = getShallowRunMutation(ctx);
+      await runMutation(UPDATE_DELIVERY_STATUS_REF, {
         messageId: args.messageId,
         status: "failed",
       });

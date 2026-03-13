@@ -1,23 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { Button, Card } from "@opencom/ui";
 import { Zap } from "lucide-react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { useAutomationSettingsSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function AutomationSettingsSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const automationSettings = useQuery(
-    api.automationSettings.get,
-    workspaceId ? { workspaceId } : "skip"
-  );
-
-  const upsertSettings = useMutation(api.automationSettings.upsert);
+  const { automationSettings, upsertSettings } =
+    useAutomationSettingsSectionConvex(workspaceId);
 
   const [suggestArticlesEnabled, setSuggestArticlesEnabled] = useState(false);
   const [showReplyTimeEnabled, setShowReplyTimeEnabled] = useState(false);

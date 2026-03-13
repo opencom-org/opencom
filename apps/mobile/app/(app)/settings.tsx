@@ -14,8 +14,7 @@ import { router } from "expo-router";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useBackend } from "../../src/contexts/BackendContext";
 import { useNotifications } from "../../src/contexts/NotificationContext";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@opencom/convex";
+import { useSettingsConvex } from "../../src/hooks/convex/useSettingsConvex";
 import { useEffect, useState } from "react";
 import type { Id } from "@opencom/convex/dataModel";
 
@@ -40,31 +39,21 @@ export default function SettingsScreen() {
   const [signupModalVisible, setSignupModalVisible] = useState(false);
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false);
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<Id<"workspaces"> | null>(null);
-  const myNotificationPreferences = useQuery(
-    api.notificationSettings.getMyPreferences,
-    activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip"
-  );
-
-  const workspace = useQuery(
-    api.workspaces.get,
-    activeWorkspaceId ? { id: activeWorkspaceId } : "skip"
-  );
-
-  const members = useQuery(
-    api.workspaceMembers.listByWorkspace,
-    activeWorkspaceId ? { workspaceId: activeWorkspaceId } : "skip"
-  );
-  const pushTokens = useQuery(
-    api.pushTokens.getByUser,
-    user?._id ? { userId: user._id as Id<"users"> } : "skip"
-  );
-
-  const updateAllowedOrigins = useMutation(api.workspaces.updateAllowedOrigins);
-  const inviteToWorkspace = useAction(api.workspaceMembers.inviteToWorkspace);
-  const updateRole = useMutation(api.workspaceMembers.updateRole);
-  const removeMember = useMutation(api.workspaceMembers.remove);
-  const updateSignupSettings = useMutation(api.workspaces.updateSignupSettings);
-  const updateMyNotificationPreferences = useMutation(api.notificationSettings.updateMyPreferences);
+  const {
+    myNotificationPreferences,
+    workspace,
+    members,
+    pushTokens,
+    updateAllowedOrigins,
+    inviteToWorkspace,
+    updateRole,
+    removeMember,
+    updateSignupSettings,
+    updateMyNotificationPreferences,
+  } = useSettingsConvex({
+    workspaceId: activeWorkspaceId,
+    userId: user?._id,
+  });
 
   const isAdmin = activeWorkspace?.role === "admin" || activeWorkspace?.role === "owner";
 

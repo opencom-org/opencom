@@ -1,6 +1,4 @@
 import { useCallback, useEffect } from "react";
-import { useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   setIdentifyCallback,
@@ -8,6 +6,7 @@ import {
   type UserIdentification,
   type EventProperties,
 } from "../main";
+import { useWidgetMutation, widgetMutationRef } from "../lib/convex/hooks";
 
 interface UseEventTrackingOptions {
   visitorId: Id<"visitors"> | null;
@@ -21,6 +20,33 @@ interface UseEventTrackingOptions {
 
 type WidgetEventPropertyValue = string | number | boolean | null | Array<string | number>;
 type WidgetEventProperties = Record<string, WidgetEventPropertyValue>;
+
+const identifyVisitorMutationRef = widgetMutationRef<
+  {
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    email?: string;
+    name?: string;
+    externalUserId?: string;
+    userHash?: string;
+    customAttributes?: Record<string, unknown>;
+    origin: string;
+  },
+  null
+>("visitors:identify");
+
+const trackEventMutationRef = widgetMutationRef<
+  {
+    workspaceId: Id<"workspaces">;
+    visitorId: Id<"visitors">;
+    sessionToken?: string;
+    name: string;
+    properties?: WidgetEventProperties;
+    url: string;
+    sessionId: string;
+  },
+  null
+>("events:track");
 
 function normalizeEventProperties(
   properties: EventProperties | undefined
@@ -61,8 +87,8 @@ export function useEventTracking({
   setUserInfo,
   onTrackEventName,
 }: UseEventTrackingOptions) {
-  const identifyVisitor = useMutation(api.visitors.identify);
-  const trackEventMutation = useMutation(api.events.track);
+  const identifyVisitor = useWidgetMutation(identifyVisitorMutationRef);
+  const trackEventMutation = useWidgetMutation(trackEventMutationRef);
 
   // Identification callback
   const handleIdentify = useCallback(

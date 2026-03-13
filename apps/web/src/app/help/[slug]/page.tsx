@@ -1,19 +1,21 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { useAuthOptional } from "@/contexts/AuthContext";
 import { Button } from "@opencom/ui";
 import { ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { parseMarkdown } from "@/lib/parseMarkdown";
+import {
+  useHelpArticlePageConvex,
+  useHelpWorkspaceContextConvex,
+} from "../hooks/useHelpCenterConvex";
 
 export default function ArticlePage() {
   const params = useParams();
   const auth = useAuthOptional();
-  const workspaceContext = useQuery(api.workspaces.getPublicWorkspaceContext, {});
+  const { workspaceContext } = useHelpWorkspaceContextConvex();
   const slug = params.slug as string;
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [renderedContent, setRenderedContent] = useState("");
@@ -23,27 +25,16 @@ export default function ArticlePage() {
   const isRestricted =
     !isAuthenticated && workspaceContext?.helpCenterAccessPolicy === "restricted";
   const shouldFetchArticle = Boolean(workspaceId && !isRestricted);
-
-  const article = useQuery(
-    api.articles.get,
-    shouldFetchArticle && workspaceId ? { slug, workspaceId } : "skip"
+  const { article, collection, feedbackStats, submitFeedback } = useHelpArticlePageConvex(
+    slug,
+    shouldFetchArticle && workspaceId ? workspaceId : undefined
   );
-
-  const collection = useQuery(
-    api.collections.get,
-    article?.collectionId ? { id: article.collectionId } : "skip"
-  );
-
-  const feedbackStats = useQuery(
-    api.articles.getFeedbackStats,
-    article?._id ? { articleId: article._id } : "skip"
-  );
-
-  const submitFeedback = useMutation(api.articles.submitFeedback);
+  const publicArticleId =
+    article && article.visibility !== "internal" ? article._id : null;
 
   const handleFeedback = async (helpful: boolean) => {
-    if (!article?._id || feedbackSubmitted) return;
-    await submitFeedback({ articleId: article._id, helpful });
+    if (!publicArticleId || feedbackSubmitted) return;
+    await submitFeedback({ articleId: publicArticleId, helpful });
     setFeedbackSubmitted(true);
   };
 

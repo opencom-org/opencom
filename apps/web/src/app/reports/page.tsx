@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@opencom/ui";
 import {
   MessageSquare,
@@ -17,6 +15,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout, AppPageShell } from "@/components/AppLayout";
 import Link from "next/link";
+import { useReportsPageConvex } from "./hooks/useReportsConvex";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -81,20 +80,10 @@ function ReportsContent() {
   const now = useMemo(() => Date.now(), []);
   const startDate =
     now - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
-
-  const summary = useQuery(
-    api.reporting.getDashboardSummary,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
-  );
-
-  const csatMetrics = useQuery(
-    api.reporting.getCsatMetrics,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
-  );
-
-  const aiMetrics = useQuery(
-    api.reporting.getAiAgentMetrics,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
+  const { aiMetrics, csatMetrics, summary } = useReportsPageConvex(
+    activeWorkspace?._id,
+    startDate,
+    now
   );
 
   if (!activeWorkspace) {

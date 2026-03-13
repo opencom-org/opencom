@@ -18,7 +18,7 @@ describe("workspaces", () => {
   afterAll(async () => {
     if (testWorkspaceId) {
       try {
-        await client.mutation(api.testing.helpers.cleanupTestData, {
+        await client.mutation(api.testing_helpers.cleanupTestData, {
           workspaceId: testWorkspaceId,
         });
       } catch (e) {
@@ -29,7 +29,7 @@ describe("workspaces", () => {
   });
 
   it("should create a workspace", async () => {
-    const result = await client.mutation(api.testing.helpers.createTestWorkspace, {
+    const result = await client.mutation(api.testing_helpers.createTestWorkspace, {
       name: `test-workspace-${Date.now()}`,
     });
 
@@ -39,7 +39,7 @@ describe("workspaces", () => {
   });
 
   it("should get a workspace by id", async () => {
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -48,7 +48,7 @@ describe("workspaces", () => {
   });
 
   it("should not return a workspace by name for unauthenticated callers", async () => {
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -62,12 +62,12 @@ describe("workspaces", () => {
   it("should update allowed origins", async () => {
     const origins = ["https://example.com", "https://app.example.com"];
 
-    await client.mutation(api.testing.helpers.updateTestAllowedOrigins, {
+    await client.mutation(api.testing_helpers.updateTestAllowedOrigins, {
       workspaceId: testWorkspaceId,
       allowedOrigins: origins,
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 
@@ -76,7 +76,7 @@ describe("workspaces", () => {
 
   it("should validate origin correctly", async () => {
     // First ensure origins are set
-    await client.mutation(api.testing.helpers.updateTestAllowedOrigins, {
+    await client.mutation(api.testing_helpers.updateTestAllowedOrigins, {
       workspaceId: testWorkspaceId,
       allowedOrigins: ["https://example.com", "https://app.example.com"],
     });
@@ -97,14 +97,14 @@ describe("workspaces", () => {
   });
 
   it("should update signup settings", async () => {
-    await client.mutation(api.testing.helpers.updateTestSignupSettings, {
+    await client.mutation(api.testing_helpers.updateTestSignupSettings, {
       workspaceId: testWorkspaceId,
       signupMode: "domain-allowlist",
       allowedDomains: ["example.com"],
       authMethods: ["password"],
     });
 
-    const workspace = await client.mutation(api.testing.helpers.getTestWorkspaceFull, {
+    const workspace = await client.mutation(api.testing_helpers.getTestWorkspaceFull, {
       id: testWorkspaceId,
     });
 

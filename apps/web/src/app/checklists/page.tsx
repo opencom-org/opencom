@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { useRouter } from "next/navigation";
-import { api } from "@opencom/convex";
 import { appConfirm } from "@/lib/appConfirm";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
@@ -11,28 +9,19 @@ import { Button, Input } from "@opencom/ui";
 import { Pencil, Trash2, Play, Pause, Search, CheckSquare } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
-
-type ChecklistStatus = "draft" | "active" | "archived";
+import type { ChecklistStatus } from "./checklistTypes";
+import { useChecklistsPageConvex } from "./hooks/useChecklistsPageConvex";
 
 function ChecklistsContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ChecklistStatus>("all");
-
-  const checklists = useQuery(
-    api.checklists.list,
-    activeWorkspace?._id
-      ? {
-          workspaceId: activeWorkspace._id,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        }
-      : "skip"
-  );
-
-  const createChecklist = useMutation(api.checklists.create);
-  const deleteChecklist = useMutation(api.checklists.remove);
-  const updateChecklist = useMutation(api.checklists.update);
+  const { checklists, createChecklist, deleteChecklist, updateChecklist } =
+    useChecklistsPageConvex({
+      workspaceId: activeWorkspace?._id,
+      statusFilter,
+    });
 
   const handleCreate = async () => {
     if (!activeWorkspace?._id) return;

@@ -236,14 +236,14 @@ The CI pipeline runs two jobs:
 **1. Checks job:**
 
 - Install dependencies (`pnpm install --frozen-lockfile`)
-- Lint (`pnpm lint`)
-- Typecheck (`pnpm typecheck`)
+- Standardized lint gates (`pnpm quality:lint`)
+- Standardized typecheck gates (`pnpm quality:typecheck`)
 - Security gates:
   - `pnpm security:convex-auth-guard` — unguarded handler detection
   - `pnpm security:convex-any-args-gate` — `v.any()` usage scanning
   - `pnpm security:secret-scan` — committed secret detection
   - `pnpm security:headers-check` — security header validation
-- Convex tests (`pnpm --filter @opencom/convex test`)
+- Convex tests (`pnpm test:convex`)
 - Web build (`pnpm --filter @opencom/web build`)
 - Dependency audit gate
 
@@ -256,13 +256,13 @@ The CI pipeline runs two jobs:
 ### CI-Equivalent Local Run
 
 ```bash
-pnpm lint
-pnpm typecheck
+pnpm quality:lint
+pnpm quality:typecheck
 pnpm security:convex-auth-guard
 pnpm security:convex-any-args-gate
 pnpm security:secret-scan
 pnpm security:headers-check
-pnpm --filter @opencom/convex test
+pnpm test:convex
 pnpm --filter @opencom/web build
 bash scripts/build-widget-for-tests.sh
 pnpm web:test:e2e
@@ -301,7 +301,7 @@ E2E test runs are logged to `test-run-log.jsonl` for reliability analysis.
 ```bash
 pnpm test:summary       # Show recent run summary
 pnpm test:clear          # Clear run history
-pnpm test:e2e:prod       # Run E2E against production build
+pnpm test:e2e:prod       # Run E2E against production build path
 ```
 
 Reliability budgets (`security/e2e-reliability-budget.json`):

@@ -21,23 +21,23 @@ describe("aiAgent", () => {
     testWorkspaceId = (await authenticateClientForWorkspace(client)).workspaceId;
 
     // Create test article for knowledge retrieval
-    testArticleId = await client.mutation(api.testing.helpers.createTestArticle, {
+    testArticleId = await client.mutation(api.testing_helpers.createTestArticle, {
       workspaceId: testWorkspaceId,
       title: "How to reset your password",
       content:
         "To reset your password, go to Settings > Security > Reset Password. Click the reset button and follow the instructions sent to your email.",
     });
-    await client.mutation(api.testing.helpers.publishTestArticle, { id: testArticleId });
+    await client.mutation(api.testing_helpers.publishTestArticle, { id: testArticleId });
 
     // Create test visitor
-    const visitor = await client.mutation(api.testing.helpers.createTestVisitor, {
+    const visitor = await client.mutation(api.testing_helpers.createTestVisitor, {
       workspaceId: testWorkspaceId,
     });
     testVisitorId = visitor.visitorId;
 
     // Create test conversation
     const conversation = await client.mutation(
-      api.testing.helpers.createTestConversationForVisitor,
+      api.testing_helpers.createTestConversationForVisitor,
       {
         workspaceId: testWorkspaceId,
         visitorId: testVisitorId,
@@ -46,7 +46,7 @@ describe("aiAgent", () => {
     testConversationId = conversation!._id;
 
     // Create test message
-    testMessageId = await client.mutation(api.testing.helpers.sendTestMessageDirect, {
+    testMessageId = await client.mutation(api.testing_helpers.sendTestMessageDirect, {
       conversationId: testConversationId,
       senderId: testVisitorId,
       senderType: "visitor",
@@ -56,7 +56,7 @@ describe("aiAgent", () => {
 
   afterAll(async () => {
     if (client) {
-      await client.mutation(api.testing.helpers.cleanupTestData, {
+      await client.mutation(api.testing_helpers.cleanupTestData, {
         workspaceId: testWorkspaceId,
       });
       await client.close();
@@ -65,7 +65,7 @@ describe("aiAgent", () => {
 
   describe("getSettings", () => {
     it("should return default settings for new workspace", async () => {
-      const settings = await client.mutation(api.testing.helpers.getTestAISettings, {
+      const settings = await client.mutation(api.testing_helpers.getTestAISettings, {
         workspaceId: testWorkspaceId,
       });
 
@@ -78,7 +78,7 @@ describe("aiAgent", () => {
 
   describe("updateSettings", () => {
     it("should create settings if none exist", async () => {
-      await client.mutation(api.testing.helpers.updateTestAISettings, {
+      await client.mutation(api.testing_helpers.updateTestAISettings, {
         workspaceId: testWorkspaceId,
         enabled: true,
         model: "openai/gpt-5-nano",
@@ -86,7 +86,7 @@ describe("aiAgent", () => {
         knowledgeSources: ["articles", "snippets"],
       });
 
-      const settings = await client.mutation(api.testing.helpers.getTestAISettings, {
+      const settings = await client.mutation(api.testing_helpers.getTestAISettings, {
         workspaceId: testWorkspaceId,
       });
 
@@ -98,14 +98,14 @@ describe("aiAgent", () => {
     });
 
     it("should update existing settings", async () => {
-      await client.mutation(api.testing.helpers.updateTestAISettings, {
+      await client.mutation(api.testing_helpers.updateTestAISettings, {
         workspaceId: testWorkspaceId,
         enabled: false,
         personality: "Be friendly and helpful",
         handoffMessage: "Connecting you to a human now...",
       });
 
-      const settings = await client.mutation(api.testing.helpers.getTestAISettings, {
+      const settings = await client.mutation(api.testing_helpers.getTestAISettings, {
         workspaceId: testWorkspaceId,
       });
 
@@ -206,7 +206,7 @@ describe("aiAgent", () => {
   describe("handoffToHuman", () => {
     it("should create handoff message and update conversation", async () => {
       // First enable AI agent with custom handoff message
-      await client.mutation(api.testing.helpers.updateTestAISettings, {
+      await client.mutation(api.testing_helpers.updateTestAISettings, {
         workspaceId: testWorkspaceId,
         handoffMessage: "Let me get a human to help you.",
       });
@@ -220,7 +220,7 @@ describe("aiAgent", () => {
       expect(result.handoffMessage).toBe("Let me get a human to help you.");
 
       // Verify conversation is open
-      const messages = await client.mutation(api.testing.helpers.listTestMessages, {
+      const messages = await client.mutation(api.testing_helpers.listTestMessages, {
         conversationId: testConversationId,
       });
 
@@ -231,7 +231,7 @@ describe("aiAgent", () => {
 
   describe("shouldRespond", () => {
     it("should return false when AI is disabled", async () => {
-      await client.mutation(api.testing.helpers.updateTestAISettings, {
+      await client.mutation(api.testing_helpers.updateTestAISettings, {
         workspaceId: testWorkspaceId,
         enabled: false,
       });
@@ -245,7 +245,7 @@ describe("aiAgent", () => {
     });
 
     it("should return true when AI is enabled", async () => {
-      await client.mutation(api.testing.helpers.updateTestAISettings, {
+      await client.mutation(api.testing_helpers.updateTestAISettings, {
         workspaceId: testWorkspaceId,
         enabled: true,
       });

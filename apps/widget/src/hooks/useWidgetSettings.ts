@@ -1,48 +1,21 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import {
+  getDefaultPublicMessengerSettings,
+  normalizePublicMessengerSettings,
+  type PublicMessengerSettings,
+} from "@opencom/types";
 import { getThemeRoot } from "../portal";
+import { useWidgetQuery, widgetQueryRef } from "../lib/convex/hooks";
 
-export interface MessengerSettings {
-  primaryColor: string;
-  backgroundColor: string;
-  themeMode: "light" | "dark" | "system";
-  launcherPosition: "left" | "right";
-  launcherSideSpacing: number;
-  launcherBottomSpacing: number;
-  showLauncher: boolean;
-  welcomeMessage: string;
-  teamIntroduction: string | null;
-  showTeammateAvatars: boolean;
-  supportedLanguages: string[];
-  defaultLanguage: string;
-  mobileEnabled: boolean;
-  logo: string | null;
-  launcherIconUrl: string | null;
-  privacyPolicyUrl: string | null;
-  launcherAudienceRules: unknown;
-}
+export type MessengerSettings = PublicMessengerSettings;
 
-const DEFAULT_SETTINGS: MessengerSettings = {
-  primaryColor: "#792cd4",
-  backgroundColor: "#792cd4",
-  themeMode: "system",
-  launcherPosition: "right",
-  launcherSideSpacing: 20,
-  launcherBottomSpacing: 20,
-  showLauncher: true,
-  welcomeMessage: "Hi there! How can we help you today?",
-  teamIntroduction: null,
-  showTeammateAvatars: true,
-  supportedLanguages: ["en"],
-  defaultLanguage: "en",
-  mobileEnabled: true,
-  logo: null,
-  launcherIconUrl: null,
-  privacyPolicyUrl: null,
-  launcherAudienceRules: null,
-};
+const DEFAULT_SETTINGS: MessengerSettings = getDefaultPublicMessengerSettings();
+
+const publicMessengerSettingsQueryRef = widgetQueryRef<
+  { workspaceId: Id<"workspaces"> },
+  Partial<PublicMessengerSettings> | null
+>("messengerSettings:getPublicSettings");
 
 function getEffectiveTheme(themeMode: "light" | "dark" | "system"): "light" | "dark" {
   if (themeMode === "system") {
@@ -58,33 +31,39 @@ function settingsCacheKey(workspaceId: string): string {
 
 export function useWidgetSettings(activeWorkspaceId: string | undefined, isValidIdFormat: boolean) {
   // Messenger customization settings
-  const messengerSettingsData = useQuery(
-    api.messengerSettings.getPublicSettings,
+  const messengerSettingsData = useWidgetQuery(
+    publicMessengerSettingsQueryRef,
     isValidIdFormat ? { workspaceId: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as Partial<PublicMessengerSettings> | null | undefined;
 
   // Merge fetched settings with defaults, cache in localStorage scoped by workspace
   const messengerSettings = useMemo<MessengerSettings>(() => {
     if (messengerSettingsData) {
+      const normalizedSettings = normalizePublicMessengerSettings(
+        messengerSettingsData as Partial<PublicMessengerSettings>
+      );
+
       // Cache settings for faster initial render next time (scoped per workspace)
       try {
         if (activeWorkspaceId) {
           localStorage.setItem(
             settingsCacheKey(activeWorkspaceId),
-            JSON.stringify(messengerSettingsData)
+            JSON.stringify(normalizedSettings)
           );
         }
       } catch {
         // Ignore localStorage errors
       }
-      return messengerSettingsData as MessengerSettings;
+      return normalizedSettings;
     }
     // Try to load cached settings scoped to this workspace
     try {
       if (activeWorkspaceId) {
         const cached = localStorage.getItem(settingsCacheKey(activeWorkspaceId));
         if (cached) {
-          return JSON.parse(cached) as MessengerSettings;
+          return normalizePublicMessengerSettings(
+            JSON.parse(cached) as Partial<PublicMessengerSettings>
+          );
         }
       }
     } catch {

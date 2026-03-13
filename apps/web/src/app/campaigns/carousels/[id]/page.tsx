@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@opencom/convex";
 import { AppLayout } from "@/components/AppLayout";
 import { Button, Input } from "@opencom/ui";
 import {
@@ -21,19 +19,12 @@ import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAuth } from "@/contexts/AuthContext";
 import { AudienceRuleBuilder, type AudienceRule } from "@/components/AudienceRuleBuilder";
+import {
+  type CarouselScreenRecord,
+  useCarouselEditorConvex,
+} from "../../hooks/useCarouselEditorConvex";
 
-interface CarouselScreen {
-  id: string;
-  title?: string;
-  body?: string;
-  imageUrl?: string;
-  buttons?: Array<{
-    text: string;
-    action: "url" | "dismiss" | "next" | "deeplink";
-    url?: string;
-    deepLink?: string;
-  }>;
-}
+type CarouselScreen = CarouselScreenRecord;
 
 function isValidHttpUrl(value: string): boolean {
   try {
@@ -52,16 +43,11 @@ function CarouselEditor() {
   const params = useParams();
   const carouselId = params.id as Id<"carousels">;
   const { activeWorkspace } = useAuth();
-
-  const carousel = useQuery(api.carousels.get, { id: carouselId });
-  const stats = useQuery(api.carousels.getStats, { id: carouselId });
-  const eventNames = useQuery(
-    api.events.getDistinctNames,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-  const updateCarousel = useMutation(api.carousels.update);
-  const activateCarousel = useMutation(api.carousels.activate);
-  const pauseCarousel = useMutation(api.carousels.pause);
+  const { activateCarousel, carousel, eventNames, pauseCarousel, stats, updateCarousel } =
+    useCarouselEditorConvex({
+      carouselId,
+      workspaceId: activeWorkspace?._id,
+    });
 
   const [name, setName] = useState("");
   const [screens, setScreens] = useState<CarouselScreen[]>([]);
@@ -74,8 +60,8 @@ function CarouselEditor() {
   useEffect(() => {
     if (carousel) {
       setName(carousel.name);
-      setScreens(carousel.screens as CarouselScreen[]);
-      setAudienceRules((carousel.audienceRules ?? carousel.targeting) as AudienceRule | null);
+      setScreens(carousel.screens);
+      setAudienceRules(carousel.audienceRules ?? carousel.targeting ?? null);
       setValidationErrors([]);
       setFormError(null);
     }
@@ -524,15 +510,15 @@ function CarouselEditor() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Shown</span>
-                  <span className="font-medium">{stats.shown}</span>
+                  <span className="font-medium">{stats.shown ?? 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Completed</span>
-                  <span className="font-medium">{stats.completed}</span>
+                  <span className="font-medium">{stats.completed ?? 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">Completion Rate</span>
-                  <span className="font-medium">{stats.completionRate.toFixed(1)}%</span>
+                  <span className="font-medium">{(stats.completionRate ?? 0).toFixed(1)}%</span>
                 </div>
               </div>
             </div>

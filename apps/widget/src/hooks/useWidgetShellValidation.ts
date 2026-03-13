@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { useWidgetQuery, widgetQueryRef } from "../lib/convex/hooks";
+
+type WorkspaceRecord = {
+  _id: Id<"workspaces">;
+} | null;
 
 type OriginValidationResult = {
   valid: boolean;
   reason?: string;
 } | null;
+
+const workspaceGetQueryRef = widgetQueryRef<
+  { id: Id<"workspaces"> },
+  WorkspaceRecord
+>("workspaces:get");
+
+const workspaceValidateOriginQueryRef = widgetQueryRef<
+  { workspaceId: Id<"workspaces">; origin: string },
+  OriginValidationResult
+>("workspaces:validateOrigin");
 
 export function useWidgetShellValidation(activeWorkspaceId: string | undefined) {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -17,13 +30,13 @@ export function useWidgetShellValidation(activeWorkspaceId: string | undefined) 
     [activeWorkspaceId]
   );
 
-  const workspaceValidation = useQuery(
-    api.workspaces.get,
+  const workspaceValidation = useWidgetQuery(
+    workspaceGetQueryRef,
     isValidIdFormat ? { id: activeWorkspaceId as Id<"workspaces"> } : "skip"
-  );
+  ) as WorkspaceRecord | undefined;
 
-  const originValidation = useQuery(
-    api.workspaces.validateOrigin,
+  const originValidation = useWidgetQuery(
+    workspaceValidateOriginQueryRef,
     isValidIdFormat
       ? {
           workspaceId: activeWorkspaceId as Id<"workspaces">,

@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Button } from "@opencom/ui";
 import { Users, Clock, CheckCircle, Download, ArrowLeft } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Link from "next/link";
+import { useTeamReportConvex } from "../hooks/useReportsConvex";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -23,20 +22,10 @@ function TeamReportContent() {
   const now = Date.now();
   const startDate =
     now - (dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : 90) * 24 * 60 * 60 * 1000;
-
-  const agentMetrics = useQuery(
-    api.reporting.getAgentMetrics,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
-  );
-
-  const workloadDistribution = useQuery(
-    api.reporting.getAgentWorkloadDistribution,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id } : "skip"
-  );
-
-  const csatByAgent = useQuery(
-    api.reporting.getCsatByAgent,
-    activeWorkspace?._id ? { workspaceId: activeWorkspace._id, startDate, endDate: now } : "skip"
+  const { agentMetrics, csatByAgent, workloadDistribution } = useTeamReportConvex(
+    activeWorkspace?._id,
+    startDate,
+    now
   );
 
   const handleExportCSV = () => {

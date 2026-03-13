@@ -1,22 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
 import { Button, Card, Input } from "@opencom/ui";
 import { AlertTriangle, Bot } from "lucide-react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
+import { useAIAgentSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function AIAgentSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const aiSettings = useQuery(api.aiAgent.getSettings, workspaceId ? { workspaceId } : "skip");
-
-  const availableModels = useQuery(api.aiAgent.listAvailableModels, {});
-
-  const updateSettings = useMutation(api.aiAgent.updateSettings);
+  const { aiSettings, availableModels, updateSettings } = useAIAgentSectionConvex(workspaceId);
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("openai/gpt-5-nano");
@@ -156,8 +151,8 @@ export function AIAgentSection({
               <label className="text-sm font-medium">Knowledge Sources</label>
               <div className="flex flex-wrap gap-2">
                 {[
-                  { id: "articles", label: "Help Articles" },
-                  { id: "internalArticles", label: "Internal Docs" },
+                  { id: "articles", label: "Public Articles" },
+                  { id: "internalArticles", label: "Internal Articles" },
                   { id: "snippets", label: "Snippets" },
                 ].map((source) => (
                   <button

@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
 import { Bell } from "lucide-react";
 import { Button, Card } from "@opencom/ui";
-import { api } from "@opencom/convex";
+import { normalizeUnknownError, type ErrorFeedbackMessage } from "@opencom/web-shared";
 import type { Id } from "@opencom/convex/dataModel";
 import {
   broadcastInboxCuePreferencesUpdated,
   loadInboxCuePreferences,
   saveInboxCuePreferences,
 } from "@/lib/inboxNotificationCues";
+import { ErrorFeedbackBanner } from "@/components/ErrorFeedbackBanner";
+import { useNotificationSettingsSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 interface NotificationSettingsSectionProps {
   workspaceId?: Id<"workspaces">;
@@ -21,18 +22,8 @@ export function NotificationSettingsSection({
   workspaceId,
   isAdmin,
 }: NotificationSettingsSectionProps): React.JSX.Element | null {
-  const myPreferences = useQuery(
-    api.notificationSettings.getMyPreferences,
-    workspaceId ? { workspaceId } : "skip"
-  );
-
-  const workspaceDefaults = useQuery(
-    api.notificationSettings.getWorkspaceDefaults,
-    workspaceId && isAdmin ? { workspaceId } : "skip"
-  );
-
-  const updateMyPreferences = useMutation(api.notificationSettings.updateMyPreferences);
-  const updateWorkspaceDefaults = useMutation(api.notificationSettings.updateWorkspaceDefaults);
+  const { myPreferences, updateMyPreferences, updateWorkspaceDefaults, workspaceDefaults } =
+    useNotificationSettingsSectionConvex(workspaceId, isAdmin);
 
   const [myEmailEnabled, setMyEmailEnabled] = useState(true);
   const [myPushEnabled, setMyPushEnabled] = useState(true);
@@ -44,6 +35,7 @@ export function NotificationSettingsSection({
   const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [savingCues, setSavingCues] = useState(false);
+  const [errorFeedback, setErrorFeedback] = useState<ErrorFeedbackMessage | null>(null);
 
   useEffect(() => {
     if (myPreferences) {
@@ -76,6 +68,7 @@ export function NotificationSettingsSection({
     if (!workspaceId) {
       return;
     }
+    setErrorFeedback(null);
 
     setSavingMine(true);
     try {
@@ -85,7 +78,12 @@ export function NotificationSettingsSection({
         newVisitorMessagePush: myPushEnabled,
       });
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Failed to save notification preferences");
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save notification preferences",
+          nextAction: "Review preference toggles and try again.",
+        })
+      );
     } finally {
       setSavingMine(false);
     }
@@ -95,6 +93,7 @@ export function NotificationSettingsSection({
     if (!workspaceId) {
       return;
     }
+    setErrorFeedback(null);
 
     setSavingDefaults(true);
     try {
@@ -104,8 +103,11 @@ export function NotificationSettingsSection({
         newVisitorMessagePush: defaultPushEnabled,
       });
     } catch (error) {
-      alert(
-        error instanceof Error ? error.message : "Failed to save workspace notification defaults"
+      setErrorFeedback(
+        normalizeUnknownError(error, {
+          fallbackMessage: "Failed to save workspace notification defaults",
+          nextAction: "Review workspace defaults and try again.",
+        })
       );
     } finally {
       setSavingDefaults(false);
@@ -149,6 +151,7 @@ export function NotificationSettingsSection({
       <p className="text-sm text-muted-foreground mb-4">
         Configure which message events notify you and which channels are used.
       </p>
+      {errorFeedback && <ErrorFeedbackBanner feedback={errorFeedback} className="mb-4" />}
 
       <div className="space-y-3">
         <h3 className="text-sm font-medium">My Message Notifications</h3>

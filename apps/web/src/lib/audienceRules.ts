@@ -1,6 +1,7 @@
-import type { AudienceRule } from "@/components/AudienceRuleBuilder";
+import { isAudienceSegmentReference } from "@opencom/types";
+import type { AudienceRule, SegmentReference } from "@/components/AudienceRuleBuilder";
 
-export type InlineAudienceRule = Exclude<AudienceRule, { type: "segment" }>;
+export type InlineAudienceRule = Exclude<AudienceRule, SegmentReference>;
 
 export function toInlineAudienceRule(rule: unknown): InlineAudienceRule | null {
   if (!rule || typeof rule !== "object") {
@@ -8,11 +9,7 @@ export function toInlineAudienceRule(rule: unknown): InlineAudienceRule | null {
   }
 
   const candidate = rule as Record<string, unknown>;
-  if (candidate.type === "segment") {
-    return null;
-  }
-
-  if ("segmentId" in candidate && candidate.type === undefined) {
+  if (isAudienceSegmentReference(candidate)) {
     return null;
   }
 
@@ -22,7 +19,7 @@ export function toInlineAudienceRule(rule: unknown): InlineAudienceRule | null {
 export function toInlineAudienceRuleFromBuilder(
   rule: AudienceRule | null
 ): InlineAudienceRule | null {
-  if (!rule || rule.type === "segment") {
+  if (!rule || isAudienceSegmentReference(rule)) {
     return null;
   }
 

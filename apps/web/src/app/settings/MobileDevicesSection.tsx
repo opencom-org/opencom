@@ -1,23 +1,17 @@
 "use client";
 
-import { useQuery } from "convex/react";
 import { Card } from "@opencom/ui";
 import { Smartphone } from "lucide-react";
-import { api } from "@opencom/convex";
 import type { Id } from "@opencom/convex/dataModel";
 import { formatVisitorIdentityLabel } from "@/lib/visitorIdentity";
+import { useMobileDevicesSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
 export function MobileDevicesSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const stats = useQuery(api.visitorPushTokens.getStats, workspaceId ? { workspaceId } : "skip");
-
-  const devices = useQuery(
-    api.visitorPushTokens.listWithVisitorInfo,
-    workspaceId ? { workspaceId } : "skip"
-  );
+  const { devices, stats } = useMobileDevicesSectionConvex(workspaceId);
 
   if (!workspaceId) return null;
 

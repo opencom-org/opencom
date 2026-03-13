@@ -1,37 +1,70 @@
 import { test, expect } from "./fixtures";
-import {
-  ensureAuthenticatedInPage,
-  gotoWithAuthRecovery,
-  refreshAuthState,
-} from "./helpers/auth-refresh";
+import { ensureAuthenticatedInPage, gotoWithAuthRecovery } from "./helpers/auth-refresh";
 
 async function openSettings(page: import("@playwright/test").Page): Promise<void> {
   await gotoWithAuthRecovery(page, "/settings");
   await page.waitForLoadState("networkidle").catch(() => {});
+
+  const sectionToggle = page.getByTestId("settings-section-toggle-messenger-home");
+  const isExpanded = (await sectionToggle.getAttribute("aria-expanded")) === "true";
+  if (!isExpanded) {
+    await sectionToggle.click({ timeout: 5000 });
+  }
 }
 
 async function expectHomeSection(page: import("@playwright/test").Page): Promise<void> {
-  const messengerHome = page.getByRole("heading", { name: "Messenger Home" });
+  const sectionToggle = page.getByTestId("settings-section-toggle-messenger-home");
+  await sectionToggle.scrollIntoViewIfNeeded().catch(() => {});
+  await expect(sectionToggle).toHaveAttribute("aria-expanded", "true", { timeout: 10000 });
+  await expect(page.locator("#messenger-home-content")).toBeVisible({ timeout: 10000 });
+}
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    await messengerHome.scrollIntoViewIfNeeded().catch(() => {});
-    const isVisible = await messengerHome.isVisible({ timeout: 8000 }).catch(() => false);
-    if (isVisible) {
-      await expect(messengerHome).toBeVisible({ timeout: 5000 });
-      return;
-    }
+function getHomeEnabledToggle(page: import("@playwright/test").Page) {
+  return page.locator("#messenger-home-content button").first();
+}
 
-    if (attempt === 0) {
-      await openSettings(page);
-    }
+async function expectHomeEnabled(page: import("@playwright/test").Page): Promise<void> {
+  await expect(page.getByRole("button", { name: /add card/i })).toBeVisible({ timeout: 10000 });
+}
+
+async function isHomeEnabled(page: import("@playwright/test").Page): Promise<boolean> {
+  return page
+    .getByRole("button", { name: /add card/i })
+    .isVisible({ timeout: 500 })
+    .catch(() => false);
+}
+
+async function expectHomeDisabled(page: import("@playwright/test").Page): Promise<void> {
+  await expect(page.getByText("Enable Messenger Home to configure cards")).toBeVisible({
+    timeout: 10000,
+  });
+}
+
+async function ensureHomeEnabled(page: import("@playwright/test").Page): Promise<void> {
+  if (await isHomeEnabled(page)) {
+    return;
   }
 
-  test.skip(true, "Messenger Home section not visible after retry");
+  const toggleButton = getHomeEnabledToggle(page);
+  await expect(toggleButton).toBeVisible({ timeout: 5000 });
+  await toggleButton.click();
+  await expectHomeEnabled(page);
+}
+
+async function ensureHomeDisabled(page: import("@playwright/test").Page): Promise<void> {
+  if (!(await isHomeEnabled(page))) {
+    await expectHomeDisabled(page);
+    return;
+  }
+
+  const toggleButton = getHomeEnabledToggle(page);
+  await expect(toggleButton).toBeVisible({ timeout: 5000 });
+  await toggleButton.click();
+  await expectHomeDisabled(page);
 }
 
 test.describe("Web Admin - Home Settings", () => {
   test.beforeEach(async ({ page }) => {
-    await refreshAuthState();
     const ok = await ensureAuthenticatedInPage(page);
     if (!ok) {
       test.skip(true, "[home-settings.spec] Could not authenticate test page");
@@ -46,46 +79,18 @@ test.describe("Web Admin - Home Settings", () => {
   test("should toggle home enabled/disabled", async ({ page }) => {
     await openSettings(page);
     await expectHomeSection(page);
-
-    // Find toggle using role-based selector (switch or checkbox role)
-    const toggleButton = page
-      .getByRole("switch", { name: /home|messenger/i })
-      .or(
-        page
-          .locator(
-            "[aria-label*='home' i][role='switch'], [aria-label*='messenger' i][role='switch']"
-          )
-          .first()
-      )
-      .or(page.locator("text=Messenger Home").locator("..").getByRole("button").first());
-
-    if (await toggleButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Click toggle to enable
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-
-      // Wait for toggle effect — "Add Card" button confirms home is enabled
-      const addCardButton = page.getByRole("button", { name: /add card/i });
-      await expect(addCardButton).toBeVisible({ timeout: 5000 });
-    }
+    await ensureHomeDisabled(page);
+    await ensureHomeEnabled(page);
   });
 
   test("should add a card to home configuration", async ({ page }) => {
     await openSettings(page);
     await expectHomeSection(page);
+    await ensureHomeEnabled(page);
+    await expectHomeEnabled(page);
 
-    // Enable home if needed
-    const toggleButton = page
-      .getByRole("switch", { name: /home|messenger/i })
-      .or(page.locator("text=Messenger Home").locator("..").getByRole("button").first());
-    if (await toggleButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Wait for toggle effect — "Add Card" button confirms home is enabled
     const addCardButton = page.getByRole("button", { name: /add card/i });
-    if (await addCardButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    if (await addCardButton.isVisible({ timeout: 3000 }).catch(() => false)) {
       await addCardButton.click();
       await page.waitForTimeout(300);
 
@@ -101,21 +106,8 @@ test.describe("Web Admin - Home Settings", () => {
   test("should change card visibility setting", async ({ page }) => {
     await openSettings(page);
     await expectHomeSection(page);
-
-    // Enable home
-    const toggleButton = page
-      .getByRole("switch", { name: /home|messenger/i })
-      .or(page.locator("text=Messenger Home").locator("..").getByRole("button").first());
-    if (await toggleButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Wait for "Add Card" to confirm toggle took effect
-    await page
-      .getByRole("button", { name: /add card/i })
-      .isVisible({ timeout: 5000 })
-      .catch(() => {});
+    await ensureHomeEnabled(page);
+    await expectHomeEnabled(page);
 
     // Find visibility dropdown for any card
     const visibilitySelect = page
@@ -131,21 +123,8 @@ test.describe("Web Admin - Home Settings", () => {
   test("should save home settings", async ({ page }) => {
     await openSettings(page);
     await expectHomeSection(page);
-
-    // Enable home
-    const toggleButton = page
-      .getByRole("switch", { name: /home|messenger/i })
-      .or(page.locator("text=Messenger Home").locator("..").getByRole("button").first());
-    if (await toggleButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Wait for "Add Card" to confirm toggle took effect
-    await page
-      .getByRole("button", { name: /add card/i })
-      .isVisible({ timeout: 5000 })
-      .catch(() => {});
+    await ensureHomeEnabled(page);
+    await expectHomeEnabled(page);
 
     // Find save button for home settings
     const saveButton = page.getByRole("button", { name: /save home settings/i });
@@ -160,21 +139,8 @@ test.describe("Web Admin - Home Settings", () => {
   test("should show home preview when cards are added", async ({ page }) => {
     await openSettings(page);
     await expectHomeSection(page);
-
-    // Enable home
-    const toggleButton = page
-      .getByRole("switch", { name: /home|messenger/i })
-      .or(page.locator("text=Messenger Home").locator("..").getByRole("button").first());
-    if (await toggleButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Wait for "Add Card" to confirm toggle took effect
-    await page
-      .getByRole("button", { name: /add card/i })
-      .isVisible({ timeout: 5000 })
-      .catch(() => {});
+    await ensureHomeEnabled(page);
+    await expectHomeEnabled(page);
 
     // Check for preview section
     const previewSection = page.getByText("Home Preview");

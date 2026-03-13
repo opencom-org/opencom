@@ -5,12 +5,45 @@ vi.mock("convex/react", () => ({
   ConvexReactClient: vi.fn().mockImplementation(() => ({
     query: vi.fn(),
     mutation: vi.fn(),
+    action: vi.fn(),
   })),
 }));
 
 // Mock the @opencom/convex module
 vi.mock("@opencom/convex", () => ({
   api: {
+    articles: {
+      searchForVisitor: "articles:searchForVisitor",
+      listForVisitor: "articles:listForVisitor",
+      get: "articles:get",
+    },
+    carousels: {
+      get: "carousels:get",
+      recordImpression: "carousels:recordImpression",
+      listActive: "carousels:listActive",
+    },
+    checklists: {
+      getEligible: "checklists:getEligible",
+      getProgress: "checklists:getProgress",
+      completeTask: "checklists:completeTask",
+    },
+    commonIssueButtons: {
+      list: "commonIssueButtons:list",
+    },
+    conversations: {
+      createForVisitor: "conversations:createForVisitor",
+      getOrCreateForVisitor: "conversations:getOrCreateForVisitor",
+      listByVisitor: "conversations:listByVisitor",
+      markAsRead: "conversations:markAsRead",
+    },
+    events: {
+      track: "events:track",
+      trackAutoEvent: "events:trackAutoEvent",
+    },
+    messages: {
+      list: "messages:list",
+      send: "messages:send",
+    },
     tickets: {
       create: "tickets:create",
       listByVisitor: "tickets:listByVisitor",
@@ -31,18 +64,15 @@ vi.mock("@opencom/convex", () => ({
       getEligible: "outboundMessages:getEligible",
       trackImpression: "outboundMessages:trackImpression",
     },
-    checklists: {
-      getEligible: "checklists:getEligible",
-      getProgress: "checklists:getProgress",
-      completeTask: "checklists:completeTask",
-    },
     officeHours: {
       isCurrentlyOpen: "officeHours:isCurrentlyOpen",
       getExpectedReplyTime: "officeHours:getExpectedReplyTime",
       getOrDefault: "officeHours:getOrDefault",
     },
-    commonIssueButtons: {
-      list: "commonIssueButtons:list",
+    visitors: {
+      identify: "visitors:identify",
+      heartbeat: "visitors:heartbeat",
+      updateLocation: "visitors:updateLocation",
     },
     widgetSessions: {
       boot: "widgetSessions:boot",

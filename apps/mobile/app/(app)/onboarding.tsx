@@ -10,10 +10,9 @@ import {
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "@opencom/convex";
 import { useAuth } from "../../src/contexts/AuthContext";
 import { useBackend } from "../../src/contexts/BackendContext";
+import { useOnboardingConvex } from "../../src/hooks/convex/useOnboardingConvex";
 
 type VerificationStatus = "idle" | "checking" | "success" | "error";
 
@@ -52,19 +51,13 @@ export default function OnboardingScreen() {
   const startRequestedRef = useRef(false);
   const tokenRequestedRef = useRef(false);
   const verifyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const onboardingState = useQuery(
-    api.workspaces.getHostedOnboardingState,
-    workspaceId ? { workspaceId } : "skip"
-  );
-  const integrationSignals = useQuery(
-    api.workspaces.getHostedOnboardingIntegrationSignals,
-    workspaceId ? { workspaceId } : "skip"
-  );
-
-  const startHostedOnboarding = useMutation(api.workspaces.startHostedOnboarding);
-  const issueVerificationToken = useMutation(api.workspaces.issueHostedOnboardingVerificationToken);
-  const completeWidgetStep = useMutation(api.workspaces.completeHostedOnboardingWidgetStep);
+  const {
+    onboardingState,
+    integrationSignals,
+    startHostedOnboarding,
+    issueVerificationToken,
+    completeWidgetStep,
+  } = useOnboardingConvex(workspaceId);
 
   useEffect(() => {
     if (!onboardingState?.verificationToken) {
@@ -331,7 +324,10 @@ await OpencomSDK.initialize({
                     </View>
                   </View>
                   <Text style={styles.integrationMeta} numberOfLines={2}>
-                    {signal.origin ?? signal.currentUrl ?? signal.clientIdentifier ?? "Unknown source"}
+                    {signal.origin ??
+                      signal.currentUrl ??
+                      signal.clientIdentifier ??
+                      "Unknown source"}
                     {" · Last seen "}
                     {formatTimestamp(signal.lastSeenAt)}
                     {" · Active sessions "}
