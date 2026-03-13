@@ -8,6 +8,24 @@ function catchToResponse(error: unknown): Response {
   if (msg.includes("is not a valid ID") || msg.includes("Unable to parse")) {
     return errorResponse("Invalid resource ID", 400);
   }
+  // Convex validator errors (bad enum values, wrong types, missing fields)
+  if (
+    msg.includes("is not a valid value") ||
+    msg.includes("Validator error") ||
+    msg.includes("did not match any variant")
+  ) {
+    return errorResponse(msg, 400);
+  }
+  // Business logic errors from helpers (not found, guards, cycles)
+  if (
+    msg.includes("not found") ||
+    msg.includes("Cannot delete") ||
+    msg.includes("cannot be") ||
+    msg.includes("Collection not found") ||
+    msg.includes("Parent collection not found")
+  ) {
+    return errorResponse(msg, 400);
+  }
   return errorResponse(msg, 500);
 }
 
@@ -32,6 +50,16 @@ const sendMessageIdempotentRef = fn("automationApiInternals:sendMessageIdempoten
 const claimConversationRef = fn("automationConversationClaims:claimConversation");
 const releaseConversationRef = fn("automationConversationClaims:releaseConversation");
 const escalateConversationRef = fn("automationConversationClaims:escalateConversation");
+const listArticlesRef = fn("automationApiInternals:listArticlesForAutomation");
+const getArticleRef = fn("automationApiInternals:getArticleForAutomation");
+const createArticleRef = fn("automationApiInternals:createArticleForAutomation");
+const updateArticleRef = fn("automationApiInternals:updateArticleForAutomation");
+const deleteArticleRef = fn("automationApiInternals:deleteArticleForAutomation");
+const listCollectionsRef = fn("automationApiInternals:listCollectionsForAutomation");
+const getCollectionRef = fn("automationApiInternals:getCollectionForAutomation");
+const createCollectionRef = fn("automationApiInternals:createCollectionForAutomation");
+const updateCollectionRef = fn("automationApiInternals:updateCollectionForAutomation");
+const deleteCollectionRef = fn("automationApiInternals:deleteCollectionForAutomation");
 const listEventsRef = fn("automationEvents:listEvents");
 const replayDeliveryRef = fn("automationWebhookWorker:replayDelivery");
 
@@ -451,6 +479,236 @@ export const replayWebhookDelivery = httpAction(async (ctx, request) => {
       workspaceId: authResult.workspaceId,
     });
     return jsonResponse(result, 201);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Articles: list ─────────────────────────────────────────────────
+export const listArticles = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "articles.read");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const url = new URL(request.url);
+    const { cursor, limit, updatedSince } = parsePaginationParams(url);
+    const status = url.searchParams.get("status");
+    const collectionId = url.searchParams.get("collectionId");
+
+    const result = await ctx.runQuery(listArticlesRef, {
+      workspaceId: authResult.workspaceId,
+      cursor: cursor ?? undefined,
+      limit,
+      updatedSince: updatedSince ?? undefined,
+      status: status ?? undefined,
+      collectionId: collectionId ?? undefined,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Articles: get ──────────────────────────────────────────────────
+export const getArticle = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "articles.read");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (!id) return errorResponse("Missing id parameter", 400);
+    if (!isPlausibleConvexId(id)) return errorResponse("Invalid id format", 400);
+
+    const result = await ctx.runQuery(getArticleRef, {
+      workspaceId: authResult.workspaceId,
+      articleId: id,
+    });
+    if (!result) return errorResponse("Article not found", 404);
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Articles: create ───────────────────────────────────────────────
+export const createArticle = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "articles.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.title) return errorResponse("Missing title", 400);
+    if (!body.content) return errorResponse("Missing content", 400);
+
+    const result = await ctx.runMutation(createArticleRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      title: body.title,
+      content: body.content,
+      collectionId: body.collectionId,
+      visibility: body.visibility,
+      tags: body.tags,
+    });
+    return jsonResponse(result, 201);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Articles: update ───────────────────────────────────────────────
+export const updateArticle = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "articles.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.articleId) return errorResponse("Missing articleId", 400);
+
+    const result = await ctx.runMutation(updateArticleRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      articleId: body.articleId,
+      title: body.title,
+      content: body.content,
+      collectionId: body.collectionId,
+      visibility: body.visibility,
+      tags: body.tags,
+      status: body.status,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Articles: delete ───────────────────────────────────────────────
+export const deleteArticle = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "articles.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.articleId) return errorResponse("Missing articleId", 400);
+
+    const result = await ctx.runMutation(deleteArticleRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      articleId: body.articleId,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Collections: list ──────────────────────────────────────────────
+export const listCollections = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "collections.read");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const url = new URL(request.url);
+    const { cursor, limit, updatedSince } = parsePaginationParams(url);
+    const parentId = url.searchParams.get("parentId");
+
+    const result = await ctx.runQuery(listCollectionsRef, {
+      workspaceId: authResult.workspaceId,
+      cursor: cursor ?? undefined,
+      limit,
+      updatedSince: updatedSince ?? undefined,
+      parentId: parentId ?? undefined,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Collections: get ───────────────────────────────────────────────
+export const getCollection = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "collections.read");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (!id) return errorResponse("Missing id parameter", 400);
+    if (!isPlausibleConvexId(id)) return errorResponse("Invalid id format", 400);
+
+    const result = await ctx.runQuery(getCollectionRef, {
+      workspaceId: authResult.workspaceId,
+      collectionId: id,
+    });
+    if (!result) return errorResponse("Collection not found", 404);
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Collections: create ────────────────────────────────────────────
+export const createCollection = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "collections.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.name) return errorResponse("Missing name", 400);
+
+    const result = await ctx.runMutation(createCollectionRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      name: body.name,
+      description: body.description,
+      icon: body.icon,
+      parentId: body.parentId,
+    });
+    return jsonResponse(result, 201);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Collections: update ────────────────────────────────────────────
+export const updateCollection = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "collections.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.collectionId) return errorResponse("Missing collectionId", 400);
+
+    const result = await ctx.runMutation(updateCollectionRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      collectionId: body.collectionId,
+      name: body.name,
+      description: body.description,
+      icon: body.icon,
+      parentId: body.parentId,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Collections: delete ────────────────────────────────────────────
+export const deleteCollection = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "collections.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.collectionId) return errorResponse("Missing collectionId", 400);
+
+    const result = await ctx.runMutation(deleteCollectionRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      collectionId: body.collectionId,
+    });
+    return jsonResponse(result);
   } catch (error) {
     return catchToResponse(error);
   }

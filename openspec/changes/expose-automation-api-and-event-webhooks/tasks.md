@@ -7,7 +7,8 @@
 ## 2. Resource API Surface
 
 - [x] 2.1 Implement versioned HTTP endpoints for v1 core resources: conversations, messages, visitors, and tickets.
-- [ ] 2.1b Extend API to remaining resources: ticket comments, articles, collections, outbound messages, and custom events.
+- [x] 2.1b Extend API to knowledge resources: articles and collections.
+- [ ] 2.1c Extend API to follow-on inbox resources: ticket comments and outbound messages.
 - [x] 2.2 Add cursor pagination, updated-since sync, and server-side filters for v1 resources.
 - [ ] 2.2b Add external reference support and custom-attribute-aware lookups.
 - [x] 2.3 Implement idempotent mutation handling for message send path via Idempotency-Key header.

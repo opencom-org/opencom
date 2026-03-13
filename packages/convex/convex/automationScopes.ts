@@ -11,6 +11,10 @@ export const AUTOMATION_SCOPES = [
   "tickets.write",
   "events.read",
   "events.write",
+  "articles.read",
+  "articles.write",
+  "collections.read",
+  "collections.write",
   "webhooks.manage",
   "claims.manage",
 ] as const;
@@ -28,6 +32,10 @@ export const automationScopeValidator = v.union(
   v.literal("tickets.write"),
   v.literal("events.read"),
   v.literal("events.write"),
+  v.literal("articles.read"),
+  v.literal("articles.write"),
+  v.literal("collections.read"),
+  v.literal("collections.write"),
   v.literal("webhooks.manage"),
   v.literal("claims.manage")
 );

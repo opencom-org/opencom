@@ -43,7 +43,13 @@ export type AuditAction =
   | "automation.ticket.updated"
   | "automation.conversation.claimed"
   | "automation.conversation.released"
-  | "automation.conversation.escalated";
+  | "automation.conversation.escalated"
+  | "automation.article.created"
+  | "automation.article.updated"
+  | "automation.article.deleted"
+  | "automation.collection.created"
+  | "automation.collection.updated"
+  | "automation.collection.deleted";
 
 export type ActorType = "user" | "system" | "api";
 

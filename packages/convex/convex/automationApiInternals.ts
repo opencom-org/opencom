@@ -3,6 +3,20 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { logAudit } from "./auditLogs";
 import { encodeCursor, decodeCursor } from "./lib/apiHelpers";
+import {
+  articleStatusValidator,
+  articleVisibilityValidator,
+} from "./lib/unifiedArticles";
+import {
+  createArticleCore,
+  updateArticleCore,
+  deleteArticleCore,
+} from "./lib/articleWriteHelpers";
+import {
+  createCollectionCore,
+  updateCollectionCore,
+  deleteCollectionCore,
+} from "./lib/collectionWriteHelpers";
 
 const DEFAULT_SCAN_BATCH_SIZE = 200;
 
@@ -1015,5 +1029,401 @@ export const updateTicketForAutomation = internalMutation({
     });
 
     return { id: args.ticketId };
+  },
+});
+
+// ── Articles ───────────────────────────────────────────────────────
+
+export const listArticlesForAutomation = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    cursor: v.optional(v.string()),
+    limit: v.number(),
+    updatedSince: v.optional(v.number()),
+    status: v.optional(articleStatusValidator),
+    collectionId: v.optional(v.id("collections")),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit, 100);
+    const cursor = decodeDescCursor(args.cursor);
+
+    const articles = await collectDescendingPage<Doc<"articles">>({
+      limit,
+      cursor,
+      getSortValue: (article) => article.updatedAt,
+      fetchBatch: async (upperBound, take) => {
+        let query = ctx.db
+          .query("articles")
+          .withIndex("by_workspace_updated_at", (q) => {
+            if (args.updatedSince !== undefined && upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .gt("updatedAt", args.updatedSince)
+                .lte("updatedAt", upperBound);
+            }
+            if (args.updatedSince !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).gt("updatedAt", args.updatedSince);
+            }
+            if (upperBound !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).lte("updatedAt", upperBound);
+            }
+            return q.eq("workspaceId", args.workspaceId);
+          });
+
+        if (args.status) {
+          query = query.filter((q2) => q2.eq(q2.field("status"), args.status!));
+        }
+        if (args.collectionId) {
+          query = query.filter((q2) => q2.eq(q2.field("collectionId"), args.collectionId!));
+        }
+
+        return query.order("desc").take(take);
+      },
+    });
+
+    const hasMore = articles.length > limit;
+    const data = hasMore ? articles.slice(0, limit) : articles;
+
+    return {
+      data: data.map((a) => ({
+        id: a._id,
+        workspaceId: a.workspaceId,
+        collectionId: a.collectionId,
+        title: a.title,
+        slug: a.slug,
+        content: a.content,
+        visibility: a.visibility,
+        status: a.status,
+        order: a.order,
+        tags: a.tags,
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+        publishedAt: a.publishedAt,
+      })),
+      nextCursor:
+        hasMore && data.length > 0
+          ? encodeCursor(data[data.length - 1].updatedAt, data[data.length - 1]._id)
+          : null,
+      hasMore,
+    };
+  },
+});
+
+export const getArticleForAutomation = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    articleId: v.id("articles"),
+  },
+  handler: async (ctx, args) => {
+    const article = await ctx.db.get(args.articleId);
+    if (!article || article.workspaceId !== args.workspaceId) {
+      return null;
+    }
+
+    return {
+      id: article._id,
+      workspaceId: article.workspaceId,
+      collectionId: article.collectionId,
+      title: article.title,
+      slug: article.slug,
+      content: article.content,
+      visibility: article.visibility,
+      status: article.status,
+      order: article.order,
+      tags: article.tags,
+      createdAt: article.createdAt,
+      updatedAt: article.updatedAt,
+      publishedAt: article.publishedAt,
+    };
+  },
+});
+
+export const createArticleForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    title: v.string(),
+    content: v.string(),
+    collectionId: v.optional(v.id("collections")),
+    visibility: v.optional(articleVisibilityValidator),
+    tags: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const id = await createArticleCore(ctx, {
+      workspaceId: args.workspaceId,
+      title: args.title,
+      content: args.content,
+      collectionId: args.collectionId,
+      visibility: args.visibility,
+      tags: args.tags,
+    });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.article.created",
+      resourceType: "article",
+      resourceId: String(id),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    return { id };
+  },
+});
+
+export const updateArticleForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    articleId: v.id("articles"),
+    title: v.optional(v.string()),
+    content: v.optional(v.string()),
+    collectionId: v.optional(v.id("collections")),
+    visibility: v.optional(articleVisibilityValidator),
+    tags: v.optional(v.array(v.string())),
+    status: v.optional(articleStatusValidator),
+  },
+  handler: async (ctx, args) => {
+    const article = await ctx.db.get(args.articleId);
+    if (!article || article.workspaceId !== args.workspaceId) {
+      throw new Error("Article not found");
+    }
+
+    await updateArticleCore(ctx, article, {
+      title: args.title,
+      content: args.content,
+      collectionId: args.collectionId,
+      visibility: args.visibility,
+      tags: args.tags,
+      status: args.status,
+    });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.article.updated",
+      resourceType: "article",
+      resourceId: String(args.articleId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    return { id: args.articleId };
+  },
+});
+
+export const deleteArticleForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    articleId: v.id("articles"),
+  },
+  handler: async (ctx, args) => {
+    const article = await ctx.db.get(args.articleId);
+    if (!article || article.workspaceId !== args.workspaceId) {
+      throw new Error("Article not found");
+    }
+
+    await deleteArticleCore(ctx, article);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.article.deleted",
+      resourceType: "article",
+      resourceId: String(args.articleId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    return { id: args.articleId };
+  },
+});
+
+// ── Collections ────────────────────────────────────────────────────
+
+export const listCollectionsForAutomation = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    cursor: v.optional(v.string()),
+    limit: v.number(),
+    updatedSince: v.optional(v.number()),
+    parentId: v.optional(v.id("collections")),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit, 100);
+    const cursor = decodeDescCursor(args.cursor);
+
+    const collections = await collectDescendingPage<Doc<"collections">>({
+      limit,
+      cursor,
+      getSortValue: (collection) => collection.updatedAt,
+      fetchBatch: async (upperBound, take) => {
+        let query = ctx.db
+          .query("collections")
+          .withIndex("by_workspace_updated_at", (q) => {
+            if (args.updatedSince !== undefined && upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .gt("updatedAt", args.updatedSince)
+                .lte("updatedAt", upperBound);
+            }
+            if (args.updatedSince !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).gt("updatedAt", args.updatedSince);
+            }
+            if (upperBound !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).lte("updatedAt", upperBound);
+            }
+            return q.eq("workspaceId", args.workspaceId);
+          });
+
+        if (args.parentId) {
+          query = query.filter((q2) => q2.eq(q2.field("parentId"), args.parentId!));
+        }
+
+        return query.order("desc").take(take);
+      },
+    });
+
+    const hasMore = collections.length > limit;
+    const data = hasMore ? collections.slice(0, limit) : collections;
+
+    return {
+      data: data.map((c) => ({
+        id: c._id,
+        workspaceId: c.workspaceId,
+        name: c.name,
+        slug: c.slug,
+        description: c.description,
+        icon: c.icon,
+        parentId: c.parentId,
+        order: c.order,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })),
+      nextCursor:
+        hasMore && data.length > 0
+          ? encodeCursor(data[data.length - 1].updatedAt, data[data.length - 1]._id)
+          : null,
+      hasMore,
+    };
+  },
+});
+
+export const getCollectionForAutomation = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    collectionId: v.id("collections"),
+  },
+  handler: async (ctx, args) => {
+    const collection = await ctx.db.get(args.collectionId);
+    if (!collection || collection.workspaceId !== args.workspaceId) {
+      return null;
+    }
+
+    return {
+      id: collection._id,
+      workspaceId: collection.workspaceId,
+      name: collection.name,
+      slug: collection.slug,
+      description: collection.description,
+      icon: collection.icon,
+      parentId: collection.parentId,
+      order: collection.order,
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+    };
+  },
+});
+
+export const createCollectionForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    name: v.string(),
+    description: v.optional(v.string()),
+    icon: v.optional(v.string()),
+    parentId: v.optional(v.id("collections")),
+  },
+  handler: async (ctx, args) => {
+    const id = await createCollectionCore(ctx, {
+      workspaceId: args.workspaceId,
+      name: args.name,
+      description: args.description,
+      icon: args.icon,
+      parentId: args.parentId,
+    });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.collection.created",
+      resourceType: "collection",
+      resourceId: String(id),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    return { id };
+  },
+});
+
+export const updateCollectionForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    collectionId: v.id("collections"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    icon: v.optional(v.string()),
+    parentId: v.optional(v.union(v.id("collections"), v.null())),
+  },
+  handler: async (ctx, args) => {
+    const collection = await ctx.db.get(args.collectionId);
+    if (!collection || collection.workspaceId !== args.workspaceId) {
+      throw new Error("Collection not found");
+    }
+
+    await updateCollectionCore(ctx, collection, {
+      name: args.name,
+      description: args.description,
+      icon: args.icon,
+      parentId: args.parentId,
+    });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.collection.updated",
+      resourceType: "collection",
+      resourceId: String(args.collectionId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    return { id: args.collectionId };
+  },
+});
+
+export const deleteCollectionForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    collectionId: v.id("collections"),
+  },
+  handler: async (ctx, args) => {
+    const collection = await ctx.db.get(args.collectionId);
+    if (!collection || collection.workspaceId !== args.workspaceId) {
+      throw new Error("Collection not found");
+    }
+
+    await deleteCollectionCore(ctx, collection);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.collection.deleted",
+      resourceType: "collection",
+      resourceId: String(args.collectionId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    return { id: args.collectionId };
   },
 });

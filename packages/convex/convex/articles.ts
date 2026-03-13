@@ -19,6 +19,13 @@ import { resolveVisitorFromSession } from "./widgetSessions";
 import { generateSlug, ensureUniqueSlug } from "./utils/strings";
 import { throwNotAuthenticated, createError } from "./utils/errors";
 import {
+  createArticleCore,
+  deleteArticleCore,
+  publishArticleCore,
+  unpublishArticleCore,
+  archiveArticleCore,
+} from "./lib/articleWriteHelpers";
+import {
   articleOrLegacyInternalArticleIdValidator,
   articleStatusValidator,
   articleVisibilityValidator,
@@ -337,35 +344,15 @@ export const create = mutation({
     }
     await requirePermission(ctx, user._id, args.workspaceId, "articles.create");
 
-    const now = Date.now();
-    const baseSlug = generateSlug(args.title);
-    const slug = await ensureUniqueSlug(ctx.db, "articles", args.workspaceId, baseSlug);
-
-    // Get max order for the collection
-    const articles = await ctx.db
-      .query("articles")
-      .withIndex("by_collection", (q) => q.eq("collectionId", args.collectionId))
-      .collect();
-    const maxOrder = articles.reduce((max, a) => Math.max(max, a.order), 0);
-
-    const articleId = await ctx.db.insert("articles", {
+    return await createArticleCore(ctx, {
       workspaceId: args.workspaceId,
-      collectionId: args.collectionId,
-      folderId: undefined,
       title: args.title,
-      slug,
       content: args.content,
-      widgetLargeScreen: false,
-      visibility: args.visibility ?? "public",
-      status: "draft",
-      order: maxOrder + 1,
-      createdAt: now,
-      updatedAt: now,
+      collectionId: args.collectionId,
+      visibility: args.visibility,
       tags: args.tags,
       authorId: args.authorId,
     });
-
-    return articleId;
   },
 });
 
@@ -539,12 +526,7 @@ export const remove = mutation({
       return { success: true };
     }
 
-    await ctx.db.delete(resolved.article._id);
-    const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, removeEmbeddingRef, {
-      contentType: getArticleContentType(resolved.article),
-      contentId: resolved.article._id,
-    });
+    await deleteArticleCore(ctx, resolved.article);
     return { success: true };
   },
 });
@@ -709,23 +691,23 @@ export const publish = authMutation({
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await ctx.db.patch(resolved.article._id, {
-      status: "published",
-      publishedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, generateInternalEmbeddingRef, {
-      workspaceId: resolved.article.workspaceId,
-      contentType:
-        resolved.kind === "legacyInternal"
-          ? "internalArticle"
-          : getArticleContentType(resolved.article),
-      contentId: resolved.article._id,
-      title: resolved.article.title,
-      content: resolved.article.content,
-    });
+    if (resolved.kind === "legacyInternal") {
+      await ctx.db.patch(resolved.article._id, {
+        status: "published",
+        publishedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, generateInternalEmbeddingRef, {
+        workspaceId: resolved.article.workspaceId,
+        contentType: "internalArticle",
+        contentId: resolved.article._id,
+        title: resolved.article.title,
+        content: resolved.article.content,
+      });
+    } else {
+      await publishArticleCore(ctx, resolved.article);
+    }
 
     return resolved.article._id;
   },
@@ -746,20 +728,20 @@ export const unpublish = authMutation({
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await ctx.db.patch(resolved.article._id, {
-      status: "draft",
-      publishedAt: undefined,
-      updatedAt: Date.now(),
-    });
-
-    const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, removeEmbeddingRef, {
-      contentType:
-        resolved.kind === "legacyInternal"
-          ? "internalArticle"
-          : getArticleContentType(resolved.article),
-      contentId: resolved.article._id,
-    });
+    if (resolved.kind === "legacyInternal") {
+      await ctx.db.patch(resolved.article._id, {
+        status: "draft",
+        publishedAt: undefined,
+        updatedAt: Date.now(),
+      });
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, removeEmbeddingRef, {
+        contentType: "internalArticle",
+        contentId: resolved.article._id,
+      });
+    } else {
+      await unpublishArticleCore(ctx, resolved.article);
+    }
 
     return resolved.article._id;
   },
@@ -780,19 +762,19 @@ export const archive = authMutation({
       throw createError("NOT_FOUND", "Article not found");
     }
 
-    await ctx.db.patch(resolved.article._id, {
-      status: "archived",
-      updatedAt: Date.now(),
-    });
-
-    const runAfter = getShallowRunAfter(ctx);
-    await runAfter(0, removeEmbeddingRef, {
-      contentType:
-        resolved.kind === "legacyInternal"
-          ? "internalArticle"
-          : getArticleContentType(resolved.article),
-      contentId: resolved.article._id,
-    });
+    if (resolved.kind === "legacyInternal") {
+      await ctx.db.patch(resolved.article._id, {
+        status: "archived",
+        updatedAt: Date.now(),
+      });
+      const runAfter = getShallowRunAfter(ctx);
+      await runAfter(0, removeEmbeddingRef, {
+        contentType: "internalArticle",
+        contentId: resolved.article._id,
+      });
+    } else {
+      await archiveArticleCore(ctx, resolved.article);
+    }
 
     return resolved.article._id;
   },

@@ -1801,4 +1801,659 @@ describe("automation fixes", () => {
       expect(blocked.allowed).toBe(false);
     });
   });
+
+  // ── 2.1b: Articles & Collections CRUD ────────────────────────────────
+  describe("2.1b: Articles & Collections CRUD", () => {
+    async function seedWorkspaceWithArticleScopes() {
+      return t.run(async (ctx) => {
+        const now = Date.now();
+        const workspaceId = await ctx.db.insert("workspaces", {
+          name: "Article Test Workspace",
+          automationApiEnabled: true,
+          createdAt: now,
+        });
+        const userId = await ctx.db.insert("users", {
+          email: "admin@test.com",
+          workspaceId,
+          role: "admin",
+          createdAt: now,
+        });
+        const credentialId = await ctx.db.insert("automationCredentials", {
+          workspaceId,
+          name: "Full Key",
+          secretHash: "testhash456",
+          secretPrefix: "osk_full",
+          scopes: [
+            "articles.read",
+            "articles.write",
+            "collections.read",
+            "collections.write",
+          ],
+          status: "active",
+          actorName: "test-bot",
+          createdBy: userId,
+          createdAt: now,
+        });
+        return { workspaceId, userId, credentialId };
+      });
+    }
+
+    it("article CRUD happy path", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      // Create
+      const { id: articleId } = await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "Getting Started",
+          content: "Welcome to the guide.",
+        }
+      );
+      expect(articleId).toBeTruthy();
+
+      // Get
+      const article = await t.query(
+        internal.automationApiInternals.getArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          articleId,
+        }
+      );
+      expect(article).not.toBeNull();
+      expect(article!.title).toBe("Getting Started");
+      expect(article!.status).toBe("draft");
+      expect(article!.slug).toBe("getting-started");
+
+      // Update (title changes slug)
+      await t.mutation(
+        internal.automationApiInternals.updateArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          articleId,
+          title: "Quick Start Guide",
+          content: "Updated content.",
+        }
+      );
+
+      const updated = await t.query(
+        internal.automationApiInternals.getArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          articleId,
+        }
+      );
+      expect(updated!.title).toBe("Quick Start Guide");
+      expect(updated!.slug).toBe("quick-start-guide");
+      expect(updated!.content).toBe("Updated content.");
+
+      // List
+      const listResult = await t.query(
+        internal.automationApiInternals.listArticlesForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          limit: 10,
+        }
+      );
+      expect(listResult.data.length).toBe(1);
+      expect(listResult.data[0].id).toBe(articleId);
+
+      // Delete
+      await t.mutation(
+        internal.automationApiInternals.deleteArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          articleId,
+        }
+      );
+
+      const deleted = await t.query(
+        internal.automationApiInternals.getArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          articleId,
+        }
+      );
+      expect(deleted).toBeNull();
+    });
+
+    it("collection CRUD happy path", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      // Create
+      const { id: collectionId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "FAQ",
+          description: "Frequently asked questions",
+        }
+      );
+      expect(collectionId).toBeTruthy();
+
+      // Get
+      const collection = await t.query(
+        internal.automationApiInternals.getCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          collectionId,
+        }
+      );
+      expect(collection).not.toBeNull();
+      expect(collection!.name).toBe("FAQ");
+      expect(collection!.slug).toBe("faq");
+
+      // Update
+      await t.mutation(
+        internal.automationApiInternals.updateCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          collectionId,
+          name: "Help Center FAQ",
+          description: "Updated description",
+        }
+      );
+
+      const updated = await t.query(
+        internal.automationApiInternals.getCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          collectionId,
+        }
+      );
+      expect(updated!.name).toBe("Help Center FAQ");
+      expect(updated!.slug).toBe("help-center-faq");
+
+      // List
+      const listResult = await t.query(
+        internal.automationApiInternals.listCollectionsForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          limit: 10,
+        }
+      );
+      expect(listResult.data.length).toBe(1);
+      expect(listResult.data[0].id).toBe(collectionId);
+
+      // Delete
+      await t.mutation(
+        internal.automationApiInternals.deleteCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          collectionId,
+        }
+      );
+
+      const deleted = await t.query(
+        internal.automationApiInternals.getCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          collectionId,
+        }
+      );
+      expect(deleted).toBeNull();
+    });
+
+    it("rejects cross-workspace foreign IDs", async () => {
+      const wsA = await seedWorkspaceWithArticleScopes();
+      const wsB = await t.run(async (ctx) => {
+        const now = Date.now();
+        const workspaceId = await ctx.db.insert("workspaces", {
+          name: "Workspace B",
+          automationApiEnabled: true,
+          createdAt: now,
+        });
+        const userId = await ctx.db.insert("users", {
+          email: "admin-b@test.com",
+          workspaceId,
+          role: "admin",
+          createdAt: now,
+        });
+        const credentialId = await ctx.db.insert("automationCredentials", {
+          workspaceId,
+          name: "B Key",
+          secretHash: "testhash789",
+          secretPrefix: "osk_b",
+          scopes: ["articles.read", "articles.write", "collections.read", "collections.write"],
+          status: "active",
+          actorName: "test-bot-b",
+          createdBy: userId,
+          createdAt: now,
+        });
+        return { workspaceId, userId, credentialId };
+      });
+
+      // Create collection in workspace B
+      const { id: collectionB } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: wsB.workspaceId,
+          credentialId: wsB.credentialId,
+          name: "B Collection",
+        }
+      );
+
+      // Create article in workspace A with workspace B's collection → error
+      await expect(
+        t.mutation(
+          internal.automationApiInternals.createArticleForAutomation,
+          {
+            workspaceId: wsA.workspaceId,
+            credentialId: wsA.credentialId,
+            title: "Cross workspace test",
+            content: "Should fail",
+            collectionId: collectionB,
+          }
+        )
+      ).rejects.toThrow("Collection not found");
+
+      // Create collection in workspace A with workspace B's collection as parent → error
+      await expect(
+        t.mutation(
+          internal.automationApiInternals.createCollectionForAutomation,
+          {
+            workspaceId: wsA.workspaceId,
+            credentialId: wsA.credentialId,
+            name: "Cross workspace child",
+            parentId: collectionB,
+          }
+        )
+      ).rejects.toThrow("Parent collection not found");
+    });
+
+    it("rejects collection cycle", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      // Create A, then B as child of A
+      const { id: collA } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Collection A",
+        }
+      );
+      const { id: collB } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Collection B",
+          parentId: collA,
+        }
+      );
+
+      // Try to set A.parentId = B (creates cycle)
+      await expect(
+        t.mutation(
+          internal.automationApiInternals.updateCollectionForAutomation,
+          {
+            workspaceId: ws.workspaceId,
+            credentialId: ws.credentialId,
+            collectionId: collA,
+            parentId: collB,
+          }
+        )
+      ).rejects.toThrow("Collection cannot be moved into its own descendant");
+    });
+
+    it("enforces collection deletion guards", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      // Create parent collection
+      const { id: parentId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Parent",
+        }
+      );
+
+      // Create child collection
+      const { id: childId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Child",
+          parentId,
+        }
+      );
+
+      // Can't delete parent with children
+      await expect(
+        t.mutation(
+          internal.automationApiInternals.deleteCollectionForAutomation,
+          {
+            workspaceId: ws.workspaceId,
+            credentialId: ws.credentialId,
+            collectionId: parentId,
+          }
+        )
+      ).rejects.toThrow("Cannot delete collection with child collections");
+
+      // Delete child, then create article in parent
+      await t.mutation(
+        internal.automationApiInternals.deleteCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          collectionId: childId,
+        }
+      );
+
+      await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "Article in parent",
+          content: "Content",
+          collectionId: parentId,
+        }
+      );
+
+      // Can't delete collection with articles
+      await expect(
+        t.mutation(
+          internal.automationApiInternals.deleteCollectionForAutomation,
+          {
+            workspaceId: ws.workspaceId,
+            credentialId: ws.credentialId,
+            collectionId: parentId,
+          }
+        )
+      ).rejects.toThrow("Cannot delete collection with articles");
+    });
+
+    it("audit logging records credentialId and actorType", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      const { id: articleId } = await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "Audit test article",
+          content: "Content",
+        }
+      );
+
+      // Verify audit log entry
+      const auditEntries = await t.run(async (ctx) => {
+        return await ctx.db
+          .query("auditLogs")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", ws.workspaceId))
+          .collect();
+      });
+
+      const articleCreated = auditEntries.find(
+        (entry) => entry.action === "automation.article.created"
+      );
+      expect(articleCreated).toBeTruthy();
+      expect(articleCreated!.actorType).toBe("api");
+      expect(articleCreated!.resourceId).toBe(String(articleId));
+      expect((articleCreated!.metadata as any).credentialId).toBe(
+        String(ws.credentialId)
+      );
+    });
+
+    it("article status update to published schedules embedding", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      // Create draft article
+      const { id: articleId } = await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "Embed Test",
+          content: "Should get embedding on publish.",
+        }
+      );
+
+      // Publish via status update (no title/content/visibility change)
+      await t.mutation(
+        internal.automationApiInternals.updateArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          articleId,
+          status: "published",
+        }
+      );
+
+      const published = await t.query(
+        internal.automationApiInternals.getArticleForAutomation,
+        { workspaceId: ws.workspaceId, articleId }
+      );
+      expect(published!.status).toBe("published");
+      expect(published!.publishedAt).toBeTruthy();
+    });
+
+    it("article status update to archived preserves publishedAt", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      const { id: articleId } = await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "Archive Test",
+          content: "Content",
+        }
+      );
+
+      // Publish then archive
+      await t.mutation(
+        internal.automationApiInternals.updateArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          articleId,
+          status: "published",
+        }
+      );
+
+      const published = await t.query(
+        internal.automationApiInternals.getArticleForAutomation,
+        { workspaceId: ws.workspaceId, articleId }
+      );
+      const publishedAt = published!.publishedAt;
+      expect(publishedAt).toBeTruthy();
+
+      await t.mutation(
+        internal.automationApiInternals.updateArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          articleId,
+          status: "archived",
+        }
+      );
+
+      const archived = await t.query(
+        internal.automationApiInternals.getArticleForAutomation,
+        { workspaceId: ws.workspaceId, articleId }
+      );
+      expect(archived!.status).toBe("archived");
+      // Archiving preserves publishedAt (matches dedicated archiveArticleCore behavior)
+      expect(archived!.publishedAt).toBe(publishedAt);
+    });
+
+    it("article list filters by status and collectionId", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      const { id: collectionId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Filter Test Collection",
+        }
+      );
+
+      // Create two articles: one in collection (published), one without (draft)
+      const { id: articleInCollection } = await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "In Collection",
+          content: "Content A",
+          collectionId,
+        }
+      );
+      await t.mutation(
+        internal.automationApiInternals.updateArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          articleId: articleInCollection,
+          status: "published",
+        }
+      );
+
+      await t.mutation(
+        internal.automationApiInternals.createArticleForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          title: "No Collection",
+          content: "Content B",
+        }
+      );
+
+      // Filter by status
+      const publishedOnly = await t.query(
+        internal.automationApiInternals.listArticlesForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          limit: 10,
+          status: "published",
+        }
+      );
+      expect(publishedOnly.data.length).toBe(1);
+      expect(publishedOnly.data[0].title).toBe("In Collection");
+
+      // Filter by collectionId
+      const inColl = await t.query(
+        internal.automationApiInternals.listArticlesForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          limit: 10,
+          collectionId,
+        }
+      );
+      expect(inColl.data.length).toBe(1);
+      expect(inColl.data[0].id).toBe(articleInCollection);
+
+      // Both filters combined
+      const draftInCollection = await t.query(
+        internal.automationApiInternals.listArticlesForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          limit: 10,
+          status: "draft",
+          collectionId,
+        }
+      );
+      expect(draftInCollection.data.length).toBe(0);
+    });
+
+    it("collection list filters by parentId", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      const { id: parentId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Parent",
+        }
+      );
+      await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Child",
+          parentId,
+        }
+      );
+      await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Root Sibling",
+        }
+      );
+
+      // Filter by parentId
+      const children = await t.query(
+        internal.automationApiInternals.listCollectionsForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          limit: 10,
+          parentId,
+        }
+      );
+      expect(children.data.length).toBe(1);
+      expect(children.data[0].name).toBe("Child");
+    });
+
+    it("collection unparenting with parentId: null", async () => {
+      const ws = await seedWorkspaceWithArticleScopes();
+
+      const { id: parentId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Parent",
+        }
+      );
+      const { id: childId } = await t.mutation(
+        internal.automationApiInternals.createCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          name: "Child",
+          parentId,
+        }
+      );
+
+      // Verify it has a parent
+      const before = await t.query(
+        internal.automationApiInternals.getCollectionForAutomation,
+        { workspaceId: ws.workspaceId, collectionId: childId }
+      );
+      expect(before!.parentId).toBe(parentId);
+
+      // Unparent with null
+      await t.mutation(
+        internal.automationApiInternals.updateCollectionForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          collectionId: childId,
+          parentId: null,
+        }
+      );
+
+      const after = await t.query(
+        internal.automationApiInternals.getCollectionForAutomation,
+        { workspaceId: ws.workspaceId, collectionId: childId }
+      );
+      expect(after!.parentId).toBeUndefined();
+    });
+  });
 });

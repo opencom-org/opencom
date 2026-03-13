@@ -710,6 +710,16 @@ import {
   getTicket,
   createTicket,
   updateTicket,
+  listArticles,
+  getArticle,
+  createArticle,
+  updateArticle,
+  deleteArticle,
+  listCollections,
+  getCollection,
+  createCollection,
+  updateCollection,
+  deleteCollection,
   eventsFeed,
   replayWebhookDelivery,
 } from "./automationHttpRoutes";
@@ -730,6 +740,16 @@ http.route({ path: "/api/v1/tickets", method: "GET", handler: listTickets });
 http.route({ path: "/api/v1/tickets/get", method: "GET", handler: getTicket });
 http.route({ path: "/api/v1/tickets/create", method: "POST", handler: createTicket });
 http.route({ path: "/api/v1/tickets/update", method: "POST", handler: updateTicket });
+http.route({ path: "/api/v1/articles", method: "GET", handler: listArticles });
+http.route({ path: "/api/v1/articles/get", method: "GET", handler: getArticle });
+http.route({ path: "/api/v1/articles/create", method: "POST", handler: createArticle });
+http.route({ path: "/api/v1/articles/update", method: "POST", handler: updateArticle });
+http.route({ path: "/api/v1/articles/delete", method: "POST", handler: deleteArticle });
+http.route({ path: "/api/v1/collections", method: "GET", handler: listCollections });
+http.route({ path: "/api/v1/collections/get", method: "GET", handler: getCollection });
+http.route({ path: "/api/v1/collections/create", method: "POST", handler: createCollection });
+http.route({ path: "/api/v1/collections/update", method: "POST", handler: updateCollection });
+http.route({ path: "/api/v1/collections/delete", method: "POST", handler: deleteCollection });
 http.route({ path: "/api/v1/events/feed", method: "GET", handler: eventsFeed });
 http.route({ path: "/api/v1/webhooks/replay", method: "POST", handler: replayWebhookDelivery });
 
