@@ -48,6 +48,8 @@
     "security:convex-any-args-gate": "node scripts/ci-convex-any-args-gate.js",
     "security:secret-scan": "node scripts/ci-secret-scan.js",
     "security:headers-check": "node scripts/ci-security-headers-check.js",
+    "security:audit-gate": "node scripts/ci-audit-gate.js",
+    "ci:check": "pnpm lint && pnpm typecheck && pnpm security:convex-auth-guard && pnpm security:convex-any-args-gate && pnpm security:secret-scan && pnpm security:headers-check && pnpm security:audit-gate && pnpm test:convex && pnpm --filter @opencom/web build",
     "test:summary": "node scripts/test-summary.js",
     "test:clear": "node scripts/test-summary.js clear",
     "test:timeout": "node scripts/run-with-timeout.js",
