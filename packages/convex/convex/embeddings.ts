@@ -276,12 +276,10 @@ async function runWithConcurrency<T, R>(
 
   await Promise.all(
     Array.from({ length: maxWorkers }, async () => {
-      while (true) {
-        const currentIndex = nextIndex++;
-        if (currentIndex >= items.length) {
-          return;
-        }
+      let currentIndex = nextIndex++;
+      while (currentIndex < items.length) {
         results[currentIndex] = await worker(items[currentIndex], currentIndex);
+        currentIndex = nextIndex++;
       }
     })
   );
