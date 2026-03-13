@@ -72,8 +72,15 @@ export function ConversationMessageList({
   messagesEndRef,
 }: ConversationMessageListProps) {
   const handleMessageClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    const articleLink = target.closest("[data-article-id]");
+    const target = event.target;
+    if (!target) {
+      return;
+    }
+    const element = target instanceof Element ? target : (target as Text).parentElement;
+    if (!element) {
+      return;
+    }
+    const articleLink = element.closest("[data-article-id]");
     if (articleLink) {
       event.preventDefault();
       event.stopPropagation();
