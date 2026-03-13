@@ -384,7 +384,7 @@ function InboxContent(): React.JSX.Element | null {
     if (item.type === "snippet") {
       setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}${item.content}`);
       setLastInsertedSnippetId(item.id as Id<"snippets">);
-    } else if (action === "link" && (item.type === "article" || item.type === "internalArticle")) {
+    } else if (action === "link" && item.type === "article") {
       setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}[${item.title}](article:${item.id})`);
     } else {
       setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}${item.content}`);

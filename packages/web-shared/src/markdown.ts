@@ -77,7 +77,7 @@ function hasDisallowedAbsoluteProtocol(rawUrl: string): boolean {
     return false;
   }
   const protocol = match[1].toLowerCase();
-  return protocol !== "http" && protocol !== "https" && protocol !== "article";
+  return protocol !== "http" && protocol !== "https";
 }
 
 function isArticleLink(href: string): boolean {
@@ -107,7 +107,7 @@ function enforceSafeLinksAndMedia(html: string, options: ResolvedParseMarkdownOp
       if (articleId) {
         anchor.setAttribute("data-article-id", articleId);
         anchor.setAttribute("class", "opencom-article-link");
-        anchor.removeAttribute("href");
+        anchor.setAttribute("href", `article:${articleId}`);
         anchor.removeAttribute("target");
         anchor.removeAttribute("rel");
       } else {

@@ -190,22 +190,24 @@ export function useInboxConvex({
     }
 
     let cancelled = false;
-
-    searchKnowledge({ workspaceId, query: knowledgeSearch, limit: 20 })
-      .then((results) => {
-        if (!cancelled) {
-          setKnowledgeResults(results);
-        }
-      })
-      .catch((error) => {
-        console.error("Knowledge search failed:", error);
-        if (!cancelled) {
-          setKnowledgeResults(undefined);
-        }
-      });
+    const timeoutId = setTimeout(() => {
+      searchKnowledge({ workspaceId, query: knowledgeSearch, limit: 20 })
+        .then((results) => {
+          if (!cancelled) {
+            setKnowledgeResults(results);
+          }
+        })
+        .catch((error) => {
+          console.error("Knowledge search failed:", error);
+          if (!cancelled) {
+            setKnowledgeResults(undefined);
+          }
+        });
+    }, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, [workspaceId, knowledgeSearch, searchKnowledge]);
 

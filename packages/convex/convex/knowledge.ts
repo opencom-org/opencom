@@ -255,8 +255,6 @@ const GET_EMBEDDING_BY_ID_REF: EmbeddingQueryRef<
 type ContentRecord = {
   content: string;
   title: string;
-  slug?: string;
-  tags?: string[];
 } | null;
 
 const GET_CONTENT_BY_ID_REF: EmbeddingQueryRef<
@@ -301,7 +299,7 @@ export const searchWithEmbeddings = authAction({
       value: args.query,
     });
 
-    const results = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
+    const vectorResults = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
       vector: embedding,
       limit: limit * 8,
       filter: (q) => q.eq("workspaceId", args.workspaceId),
@@ -310,55 +308,71 @@ export const searchWithEmbeddings = authAction({
     const contentTypeSet =
       args.contentTypes && args.contentTypes.length > 0 ? new Set(args.contentTypes) : null;
 
-    const enrichedResults: (KnowledgeSearchResult | null)[] = await Promise.all(
-      results.map(
-        async (result: {
-          _id: Id<"contentEmbeddings">;
-          _score: number;
-        }): Promise<KnowledgeSearchResult | null> => {
-          const doc = await runQuery(GET_EMBEDDING_BY_ID_REF, {
-            id: result._id,
-          });
-          if (!doc) return null;
-          if (contentTypeSet && !contentTypeSet.has(doc.contentType)) return null;
-
-          const contentRecord = await runQuery(GET_CONTENT_BY_ID_REF, {
-            contentType: doc.contentType,
-            contentId: doc.contentId,
-          });
-          if (!contentRecord) return null;
-
-          return {
-            id: doc.contentId,
-            type: doc.contentType,
-            title: doc.title,
-            content: contentRecord.content,
-            snippet: doc.snippet,
-            slug: contentRecord.slug,
-            tags: contentRecord.tags,
-            relevanceScore: result._score,
-            updatedAt: doc.updatedAt,
-          };
-        }
+    const embeddingDocs = await Promise.all(
+      vectorResults.map((result) =>
+        runQuery(GET_EMBEDDING_BY_ID_REF, { id: result._id }).then((doc) =>
+          doc ? { ...doc, _score: result._score } : null
+        )
       )
     );
 
-    const filtered = enrichedResults.filter((r): r is KnowledgeSearchResult => r !== null);
-    const deduped: KnowledgeSearchResult[] = [];
     const seen = new Set<string>();
-    for (const result of filtered) {
-      const key = `${result.type}:${result.id}`;
-      if (seen.has(key)) {
-        continue;
-      }
+    const dedupedEmbeddingDocs: {
+      contentId: string;
+      contentType: KnowledgeContentType;
+      title: string;
+      snippet: string;
+      updatedAt: number;
+      _score: number;
+    }[] = [];
+
+    for (const doc of embeddingDocs) {
+      if (!doc) continue;
+      if (contentTypeSet && !contentTypeSet.has(doc.contentType)) continue;
+
+      const key = `${doc.contentType}:${doc.contentId}`;
+      if (seen.has(key)) continue;
       seen.add(key);
-      deduped.push(result);
-      if (deduped.length >= limit) {
-        break;
-      }
+
+      dedupedEmbeddingDocs.push({
+        contentId: doc.contentId,
+        contentType: doc.contentType,
+        title: doc.title,
+        snippet: doc.snippet,
+        updatedAt: doc.updatedAt,
+        _score: doc._score,
+      });
+
+      if (dedupedEmbeddingDocs.length >= limit) break;
     }
 
-    return deduped;
+    const contentRecords = await Promise.all(
+      dedupedEmbeddingDocs.map((doc) =>
+        runQuery(GET_CONTENT_BY_ID_REF, {
+          contentType: doc.contentType,
+          contentId: doc.contentId,
+        })
+      )
+    );
+
+    const results: KnowledgeSearchResult[] = [];
+    for (let i = 0; i < dedupedEmbeddingDocs.length; i++) {
+      const doc = dedupedEmbeddingDocs[i];
+      const content = contentRecords[i];
+      if (!doc || !content) continue;
+
+      results.push({
+        id: doc.contentId,
+        type: doc.contentType,
+        title: doc.title,
+        content: content.content,
+        snippet: doc.snippet,
+        relevanceScore: doc._score,
+        updatedAt: doc.updatedAt,
+      });
+    }
+
+    return results;
   },
 });
 

@@ -37,7 +37,7 @@ describe("parseMarkdown", () => {
   it("detects article links and adds data-article-id attribute", () => {
     const html = parseMarkdown("[Read more](article:k57f8d9g2h3j4k5l)");
     expect(html).toContain('data-article-id="k57f8d9g2h3j4k5l"');
-    expect(html).not.toContain("href=");
+    expect(html).toContain('href="article:k57f8d9g2h3j4k5l"');
     expect(html).not.toContain("target=");
     expect(html).not.toContain("rel=");
   });
@@ -51,6 +51,12 @@ describe("parseMarkdown", () => {
     const html = parseMarkdown("[Invalid](article:)");
     expect(html).not.toContain("data-article-id");
     expect(html).not.toContain("href=");
+  });
+
+  it("does not allow article protocol in image src", () => {
+    const html = parseMarkdown("![alt](article:abc123)");
+    expect(html).not.toContain("article:");
+    expect(html).not.toContain('src="article:');
   });
 });
 
