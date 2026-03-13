@@ -296,14 +296,14 @@ const UPDATE_DELIVERY_STATUS_BY_EXTERNAL_ID_REF = makeFunctionReference<
 >;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runQuery as <Args extends Record<string, unknown>, Return>(
     query: PublicQueryRef<Args, Return>,
     args: Args
   ) => Promise<Return>;
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <
+  return ctx.runMutation as <
     Visibility extends "public" | "internal",
     Args extends Record<string, unknown>,
     Return,

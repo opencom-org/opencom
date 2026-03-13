@@ -37,7 +37,7 @@ export const removeEmbeddingRef = makeFunctionReference<"mutation", RemoveEmbedd
 ) as unknown as InternalSchedulableRef<"mutation", RemoveEmbeddingArgs>;
 
 export function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as <
+  return ctx.scheduler.runAfter as <
     Type extends "action" | "mutation",
     Args extends Record<string, unknown>,
     Return = unknown,

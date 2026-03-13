@@ -63,7 +63,7 @@ const GET_ELIGIBLE_VISITORS_FOR_PUSH_REF = makeFunctionReference<
 >;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <
+  return ctx.runQuery as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return,
@@ -74,7 +74,7 @@ function getShallowRunQuery(ctx: { runQuery: unknown }) {
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <
+  return ctx.runMutation as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return = unknown,

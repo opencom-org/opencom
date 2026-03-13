@@ -11,8 +11,10 @@ export type SeriesEvaluateEntryResult = {
   progressId?: Id<"seriesProgress">;
 };
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type SeriesEvaluateEnrollmentArgs = {
   workspaceId: Id<"workspaces">;
@@ -46,17 +48,17 @@ const EVALUATE_ENROLLMENT_FOR_VISITOR_REF = makeFunctionReference<
   "mutation",
   SeriesEvaluateEnrollmentArgs,
   unknown
->("series:evaluateEnrollmentForVisitor") as unknown as InternalMutationRef<
-  SeriesEvaluateEnrollmentArgs
->;
+>(
+  "series:evaluateEnrollmentForVisitor"
+) as unknown as InternalMutationRef<SeriesEvaluateEnrollmentArgs>;
 
 const RESUME_WAITING_FOR_EVENT_REF = makeFunctionReference<
   "mutation",
   SeriesResumeWaitingForEventArgs,
   unknown
->("series:resumeWaitingForEvent") as unknown as InternalMutationRef<
-  SeriesResumeWaitingForEventArgs
->;
+>(
+  "series:resumeWaitingForEvent"
+) as unknown as InternalMutationRef<SeriesResumeWaitingForEventArgs>;
 
 const PROCESS_PROGRESS_REF = makeFunctionReference<"mutation", SeriesProcessProgressArgs, unknown>(
   "series:processProgress"
@@ -75,12 +77,12 @@ const PROCESS_WAITING_PROGRESS_REF = makeFunctionReference<
   "mutation",
   SeriesProcessWaitingProgressArgs,
   unknown
->("series:processWaitingProgress") as unknown as InternalMutationRef<
-  SeriesProcessWaitingProgressArgs
->;
+>(
+  "series:processWaitingProgress"
+) as unknown as InternalMutationRef<SeriesProcessWaitingProgressArgs>;
 
 function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.scheduler.runAfter as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
     functionRef: InternalMutationRef<Args, Return>,
     runArgs: Args
@@ -88,7 +90,7 @@ function getShallowRunAfter(ctx: MutationCtx) {
 }
 
 function getShallowRunMutation(ctx: MutationCtx) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return = unknown>(
     mutationRef: InternalMutationRef<Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;

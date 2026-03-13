@@ -23,11 +23,17 @@ const WEBHOOK_INTERNAL_SECRET =
   process.env.EMAIL_WEBHOOK_INTERNAL_SECRET ?? process.env.RESEND_WEBHOOK_SECRET ?? "";
 const ENFORCE_WEBHOOK_INTERNAL_SECRET = process.env.ENFORCE_WEBHOOK_SIGNATURES !== "false";
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
-type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"action", "internal", Args, Return>;
+type InternalActionRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
+  "action",
+  "internal",
+  Args,
+  Return
+>;
 
 type SendEmailViaProviderArgs = {
   messageId: Id<"messages">;

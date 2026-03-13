@@ -17,8 +17,10 @@ type AutoEventType = (typeof AUTO_EVENT_TYPES)[number];
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_EVENTS = 100;
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type CheckAutoCompletionArgs = {
   visitorId: Id<"visitors">;
@@ -30,12 +32,10 @@ const CHECK_AUTO_COMPLETION_REF = makeFunctionReference<
   "mutation",
   CheckAutoCompletionArgs,
   unknown
->("checklists:checkAutoCompletion") as unknown as InternalMutationRef<
-  CheckAutoCompletionArgs
->;
+>("checklists:checkAutoCompletion") as unknown as InternalMutationRef<CheckAutoCompletionArgs>;
 
 function getShallowRunAfter(ctx: MutationCtx) {
-  return ctx.scheduler.runAfter as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.scheduler.runAfter as <Args extends Record<string, unknown>, Return = unknown>(
     delayMs: number,
     functionRef: InternalMutationRef<Args, Return>,
     runArgs: Args

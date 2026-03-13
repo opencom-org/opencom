@@ -90,6 +90,48 @@ describe("runtime type hardening guards", () => {
     }
   });
 
+  it("keeps covered backend ref modules off generic selector helpers", () => {
+    const coveredFiles = [
+      "../convex/aiAgent.ts",
+      "../convex/aiAgentActions.ts",
+      "../convex/aiAgentActionsKnowledge.ts",
+      "../convex/embeddings.ts",
+      "../convex/embeddings/functionRefs.ts",
+      "../convex/notifications/functionRefs.ts",
+      "../convex/push/functionRefs.ts",
+      "../convex/supportAttachmentFunctionRefs.ts",
+      "../convex/http.ts",
+      "../convex/emailChannel.ts",
+      "../convex/outboundMessages.ts",
+      "../convex/snippets.ts",
+      "../convex/events.ts",
+      "../convex/series/scheduler.ts",
+      "../convex/pushCampaigns.ts",
+      "../convex/carousels/triggering.ts",
+      "../convex/widgetSessions.ts",
+      "../convex/workspaceMembers.ts",
+      "../convex/visitors/mutations.ts",
+      "../convex/testing/helpers/notifications.ts",
+      "../convex/tickets.ts",
+    ];
+    const forbiddenHelperPatterns = [
+      "function makeQueryRef",
+      "function makeInternalQueryRef",
+      "function makeInternalMutationRef",
+      "function makeInternalActionRef",
+      "function makePublicQueryRef",
+      "function makePublicMutationRef",
+      "function makeTicketNotificationRef",
+    ];
+
+    for (const relativePath of coveredFiles) {
+      const source = readFileSync(new URL(relativePath, import.meta.url), "utf8");
+      for (const pattern of forbiddenHelperPatterns) {
+        expect(source).not.toContain(pattern);
+      }
+    }
+  });
+
   it("routes series runtime internal calls through typed adapters", () => {
     const eventsSource = readFileSync(new URL("../convex/events.ts", import.meta.url), "utf8");
     const seriesRuntimeSource = readFileSync(
@@ -128,7 +170,10 @@ describe("runtime type hardening guards", () => {
   });
 
   it("uses fixed typed refs for suggestion cross-function calls", () => {
-    const suggestionsSource = readFileSync(new URL("../convex/suggestions.ts", import.meta.url), "utf8");
+    const suggestionsSource = readFileSync(
+      new URL("../convex/suggestions.ts", import.meta.url),
+      "utf8"
+    );
 
     expect(suggestionsSource).not.toContain("function getApiRef(name: string)");
     expect(suggestionsSource).toContain("GET_EMBEDDING_BY_ID_REF");
@@ -181,17 +226,20 @@ describe("runtime type hardening guards", () => {
   });
 
   it("uses fixed typed refs for embedding self-dispatch and permission checks", () => {
-    const embeddingsSource = readFileSync(new URL("../convex/embeddings.ts", import.meta.url), "utf8");
+    const embeddingsSource = readFileSync(
+      new URL("../convex/embeddings.ts", import.meta.url),
+      "utf8"
+    );
 
     expect(embeddingsSource).not.toContain("function getInternalRef(name: string)");
-    expect(embeddingsSource).toContain("GET_BY_CONTENT_REF");
-    expect(embeddingsSource).toContain("UPDATE_EMBEDDING_REF");
+    expect(embeddingsSource).toContain("LIST_BY_CONTENT_REF");
     expect(embeddingsSource).toContain("INSERT_EMBEDDING_REF");
     expect(embeddingsSource).toContain("GENERATE_INTERNAL_REF");
     expect(embeddingsSource).toContain("REQUIRE_PERMISSION_FOR_ACTION_REF");
     expect(embeddingsSource).toContain("LIST_ARTICLES_REF");
     expect(embeddingsSource).toContain("LIST_INTERNAL_ARTICLES_REF");
     expect(embeddingsSource).toContain("LIST_SNIPPETS_REF");
+    expect(embeddingsSource).toContain("REMOVE_EMBEDDINGS_BY_IDS_REF");
     expect(embeddingsSource).toContain("GENERATE_BATCH_INTERNAL_REF");
     expect(embeddingsSource).toContain("getShallowRunQuery");
     expect(embeddingsSource).toContain("getShallowRunMutation");
@@ -389,7 +437,10 @@ describe("runtime type hardening guards", () => {
   });
 
   it("keeps the dynamic test admin gateway scoped to test-only modules", () => {
-    const testAdminSource = readFileSync(new URL("../convex/testAdmin.ts", import.meta.url), "utf8");
+    const testAdminSource = readFileSync(
+      new URL("../convex/testAdmin.ts", import.meta.url),
+      "utf8"
+    );
 
     expect(testAdminSource).toContain('const ALLOWED_MODULE_PREFIXES = ["testData", "testing"]');
     expect(testAdminSource).toContain("if (!ALLOWED_MODULE_PREFIXES.includes(topModule))");

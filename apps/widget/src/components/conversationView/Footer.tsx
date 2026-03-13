@@ -204,7 +204,7 @@ export function ConversationFooter({
                     type="button"
                   >
                     <span className="opencom-suggestion-title">{suggestion.title}</span>
-                    <span className="opencom-suggestion-snippet">{suggestion.snippet}</span>
+                    {/* <span className="opencom-suggestion-snippet">{suggestion.snippet}</span> */}
                   </button>
                 ))}
               </div>

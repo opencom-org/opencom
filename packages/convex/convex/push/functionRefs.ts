@@ -139,21 +139,21 @@ export const GET_ELIGIBLE_VISITORS_REF = makeFunctionReference<
 >;
 
 export function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runQuery as <Args extends Record<string, unknown>, Return>(
     queryRef: InternalFunctionRef<"query", Args, Return>,
     queryArgs: Args
   ) => Promise<Return>;
 }
 
 export function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runAction as <Args extends Record<string, unknown>, Return>(
     actionRef: InternalFunctionRef<"action", Args, Return>,
     actionArgs: Args
   ) => Promise<Return>;
 }
 
 export function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return = unknown>(
     mutationRef: InternalFunctionRef<"mutation", Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;

@@ -15,7 +15,7 @@ type AIConfigurationDiagnostic = {
 };
 
 type ConvexRef<
-  Type extends "query" | "mutation",
+  Type extends "query" | "mutation" | "action",
   Visibility extends "internal" | "public",
   Args extends Record<string, unknown>,
   Return = unknown,
@@ -41,6 +41,7 @@ type RuntimeSettings = {
   enabled: boolean;
   model: string;
   knowledgeSources?: KnowledgeSource[];
+  embeddingModel?: string;
   personality?: string | null;
   confidenceThreshold?: number;
 };
@@ -53,12 +54,24 @@ type RuntimeDiagnosticArgs = {
   model?: string;
 };
 
+type WorkspaceIdArgs = {
+  workspaceId: Id<"workspaces">;
+};
+
 type RelevantKnowledgeResult = {
   type: string;
   id: string;
   title: string;
   content: string;
   relevanceScore: number;
+};
+
+type GetRelevantKnowledgeForRuntimeActionArgs = {
+  workspaceId: Id<"workspaces">;
+  query: string;
+  knowledgeSources?: KnowledgeSource[];
+  limit?: number;
+  embeddingModel?: string;
 };
 
 type HandoffToHumanArgs = {
@@ -128,12 +141,12 @@ const AUTHORIZE_CONVERSATION_ACCESS_REF = makeFunctionReference<
 
 const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeFunctionReference<
   "query",
-  { workspaceId: Id<"workspaces"> },
+  WorkspaceIdArgs,
   RuntimeSettings
 >("aiAgent:getRuntimeSettingsForWorkspace") as unknown as ConvexRef<
   "query",
   "internal",
-  { workspaceId: Id<"workspaces"> },
+  WorkspaceIdArgs,
   RuntimeSettings
 >;
 
@@ -144,38 +157,29 @@ const RECORD_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
 >("aiAgent:recordRuntimeDiagnostic") as unknown as ConvexRef<
   "mutation",
   "internal",
-  RuntimeDiagnosticArgs
+  RuntimeDiagnosticArgs,
+  unknown
 >;
 
 const CLEAR_RUNTIME_DIAGNOSTIC_REF = makeFunctionReference<
   "mutation",
-  { workspaceId: Id<"workspaces"> },
+  WorkspaceIdArgs,
   Id<"aiAgentSettings"> | null
 >("aiAgent:clearRuntimeDiagnostic") as unknown as ConvexRef<
   "mutation",
   "internal",
-  { workspaceId: Id<"workspaces"> },
+  WorkspaceIdArgs,
   Id<"aiAgentSettings"> | null
 >;
 
-const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_REF = makeFunctionReference<
-  "query",
-  {
-    workspaceId: Id<"workspaces">;
-    query: string;
-    knowledgeSources?: KnowledgeSource[];
-    limit?: number;
-  },
+const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
+  "action",
+  GetRelevantKnowledgeForRuntimeActionArgs,
   RelevantKnowledgeResult[]
->("aiAgent:getRelevantKnowledgeForRuntime") as unknown as ConvexRef<
-  "query",
+>("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
+  "action",
   "internal",
-  {
-    workspaceId: Id<"workspaces">;
-    query: string;
-    knowledgeSources?: KnowledgeSource[];
-    limit?: number;
-  },
+  GetRelevantKnowledgeForRuntimeActionArgs,
   RelevantKnowledgeResult[]
 >;
 
@@ -206,7 +210,7 @@ const INTERNAL_SEND_BOT_MESSAGE_REF = makeFunctionReference<
 >;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <
+  return ctx.runQuery as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return,
@@ -217,13 +221,24 @@ function getShallowRunQuery(ctx: { runQuery: unknown }) {
 }
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <
+  return ctx.runMutation as <
     Visibility extends "internal" | "public",
     Args extends Record<string, unknown>,
     Return = unknown,
   >(
     mutationRef: ConvexRef<"mutation", Visibility, Args, Return>,
     mutationArgs: Args
+  ) => Promise<Return>;
+}
+
+function getShallowRunAction(ctx: { runAction: unknown }) {
+  return ctx.runAction as <
+    Visibility extends "internal" | "public",
+    Args extends Record<string, unknown>,
+    Return,
+  >(
+    actionRef: ConvexRef<"action", Visibility, Args, Return>,
+    actionArgs: Args
   ) => Promise<Return>;
 }
 
@@ -453,15 +468,12 @@ export const generateResponse = action({
       )
     ),
   },
-  handler: async (
-    ctx,
-    args
-  ): Promise<GenerateResponseResult> => {
+  handler: async (ctx, args): Promise<GenerateResponseResult> => {
     const startTime = Date.now();
 
     const runQuery = getShallowRunQuery(ctx);
     const runMutation = getShallowRunMutation(ctx);
-
+    const runAction = getShallowRunAction(ctx);
     const access = await runQuery(AUTHORIZE_CONVERSATION_ACCESS_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -563,12 +575,21 @@ export const generateResponse = action({
     });
 
     // Get relevant knowledge
-    const knowledgeResults = await runQuery(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_REF, {
-      workspaceId: args.workspaceId,
-      query: args.query,
-      knowledgeSources: settings.knowledgeSources,
-      limit: 5,
-    });
+    let knowledgeResults: RelevantKnowledgeResult[] = [];
+    try {
+      knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
+        workspaceId: args.workspaceId,
+        query: args.query,
+        knowledgeSources: settings.knowledgeSources,
+        limit: 5,
+        embeddingModel: settings.embeddingModel,
+      });
+    } catch (retrievalError) {
+      console.error(
+        "Knowledge retrieval failed; continuing without knowledge context:",
+        retrievalError
+      );
+    }
 
     // Build knowledge context for prompt
     const knowledgeContext = knowledgeResults

@@ -14,12 +14,10 @@ const MIN_SESSION_LIFETIME_MS = 1 * 60 * 60 * 1000; // 1 hour
 const MAX_SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const REFRESH_THRESHOLD = 0.25; // Refresh when <25% lifetime remains
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> = FunctionReference<
-  "mutation",
-  "internal",
-  Args,
-  Return
->;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type VerifyIdentityArgs = {
   workspaceId: Id<"workspaces">;
@@ -43,7 +41,7 @@ const VERIFY_IDENTITY_INTERNAL_REF = makeFunctionReference<
 >;
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return>(
     mutationRef: InternalMutationRef<Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;

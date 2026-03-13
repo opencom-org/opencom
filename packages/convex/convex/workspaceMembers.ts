@@ -15,8 +15,10 @@ import {
 } from "./permissions";
 import { logAudit } from "./auditLogs";
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type CreateInvitationArgs = {
   inviterId: Id<"users">;
@@ -42,7 +44,7 @@ const CREATE_INVITATION_REF = makeFunctionReference<
 >;
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return>(
     mutationRef: InternalMutationRef<Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;

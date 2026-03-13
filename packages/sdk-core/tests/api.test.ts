@@ -5,6 +5,7 @@ vi.mock("convex/react", () => ({
   ConvexReactClient: vi.fn().mockImplementation(() => ({
     query: vi.fn(),
     mutation: vi.fn(),
+    action: vi.fn(),
   })),
 }));
 

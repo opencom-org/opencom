@@ -9,7 +9,7 @@ import { getVisitorState } from "../state/visitor";
 const GET_PUBLIC_AI_SETTINGS_REF =
   makeFunctionReference("aiAgent:getPublicSettings") as FunctionReference<"query">;
 const GET_RELEVANT_KNOWLEDGE_REF =
-  makeFunctionReference("aiAgent:getRelevantKnowledge") as FunctionReference<"query">;
+  makeFunctionReference("aiAgent:getRelevantKnowledge") as FunctionReference<"action">;
 const GET_CONVERSATION_AI_RESPONSES_REF =
   makeFunctionReference("aiAgent:getConversationResponses") as FunctionReference<"query">;
 const SUBMIT_AI_FEEDBACK_REF =
@@ -80,7 +80,7 @@ export async function getRelevantKnowledge(
   const client = getClient();
   const config = getConfig();
 
-  const results = await client.query(GET_RELEVANT_KNOWLEDGE_REF, {
+  const results = await client.action(GET_RELEVANT_KNOWLEDGE_REF, {
     workspaceId: config.workspaceId as Id<"workspaces">,
     query,
     limit,

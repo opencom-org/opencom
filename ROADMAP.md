@@ -49,6 +49,7 @@ Goal: ship a professional open-source customer messaging platform with strong de
   - [ ] allow customising the agent's system prompt? 
 - [p] a CI AI agent to check for any doc drift and update docs based on the latest code
 - [ ] convert supportAttachments.finalizeUpload into an action + internal mutation pipeline so we can add real signature checks too. The current finalizeUpload boundary is a Convex mutation and ctx.storage.get() is only available in actions. Doing true magic-byte validation would need a larger refactor of that finalize flow.
+- [ ] add URL param deep links for the widget - Go to a url like ?open-widget-tab=home to open the widget to that tab, etc. 
 
 
   apps/web/src/app/outbound/[id]/OutboundTriggerPanel.tsx
@@ -210,3 +211,80 @@ Legend: `[x]` complete, `[~]` present but still maturing, `[ ]` not yet implemen
 - [ ] Should OTP be the only default path for new users, with password optional?
 - [ ] How strict should hosted-tier limits be for email campaigns and push usage?
 - [ ] What is required for Production Readiness, vs nice-to-haves?
+
+
+
+
+I followed the AGENTS.md memory/instructions (focused, repo-scoped audit with PNPM-era conventions) and used jcodemunch + repo grep to map this.
+
+1) Manual makeFunctionReference hotspots
+
+RAG-follow-up critical
+
+packages/convex/convex/aiAgentActionsKnowledge.ts:45 (GET_CONTENT_BY_ID_REF)
+packages/convex/convex/aiAgentActionsKnowledge.ts:54 (GET_EMBEDDING_BY_ID_REF)
+packages/convex/convex/aiAgentActions.ts:162 (GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF)
+packages/convex/convex/embeddings.ts:172 (GENERATE_BATCH_INTERNAL_REF)
+packages/convex/convex/embeddings.ts:137 (LIST_BY_CONTENT_REF) and adjacent refs used in embedding pipeline
+Broader repo hotspots (same pattern)
+
+packages/convex/convex/notifications/functionRefs.ts
+packages/convex/convex/push/functionRefs.ts
+packages/convex/convex/series/scheduler.ts
+packages/convex/convex/pushCampaigns.ts
+packages/convex/convex/testing/helpers/notifications.ts
+packages/convex/convex/emailChannel.ts
+packages/convex/convex/embeddings/functionRefs.ts
+packages/convex/convex/carousels/triggering.ts
+packages/convex/convex/events.ts
+packages/convex/convex/http.ts
+packages/convex/convex/outboundMessages.ts
+packages/convex/convex/snippets.ts
+packages/convex/convex/testAdmin.ts
+packages/convex/convex/visitors/mutations.ts
+packages/convex/convex/widgetSessions.ts
+packages/convex/convex/workspaceMembers.ts
+packages/convex/convex/tickets.ts
+2) as unknown as reduction targets
+
+Immediate (RAG path)
+
+packages/convex/convex/aiAgentActionsKnowledge.ts:39
+packages/convex/convex/aiAgentActionsKnowledge.ts:49
+packages/convex/convex/aiAgentActionsKnowledge.ts:58
+packages/convex/convex/aiAgentActions.ts:123
+packages/convex/convex/aiAgentActions.ts:155
+packages/convex/convex/aiAgentActions.ts:172
+packages/convex/convex/aiAgentActions.ts:189
+packages/convex/convex/embeddings.ts:30
+packages/convex/convex/embeddings.ts:37
+packages/convex/convex/embeddings.ts:44
+packages/convex/convex/embeddings.ts:123
+packages/convex/convex/embeddings.ts:176
+Full broader set
+
+Same file list as section 1 (19 Convex files matched for makeFunctionReference ... as unknown as).
+3) Batching/perf refactor sites
+
+packages/convex/convex/embeddings.ts:371 (generateBatch loops serially over args.items)
+packages/convex/convex/embeddings.ts:465 (backfillExisting runs batch chunks sequentially)
+packages/convex/convex/embeddings.ts:509 (generateBatchInternal loops serially over args.items)
+These are the concrete places to introduce concurrency-limited parallelism / true batched embedding work.
+
+4) SDK route migration sites (getRelevantKnowledge old query path)
+
+Source
+
+packages/sdk-core/src/api/aiAgent.ts:12 (aiAgent:getRelevantKnowledge ref)
+packages/sdk-core/src/api/aiAgent.ts:76 (getRelevantKnowledge exported function)
+packages/sdk-core/src/api/aiAgent.ts:83 (client.query(GET_RELEVANT_KNOWLEDGE_REF, ...))
+Tests/contracts expecting old route
+
+packages/sdk-core/tests/contracts.test.ts:478
+packages/sdk-core/tests/api.test.ts:56
+packages/sdk-core/tests/api.test.ts:150
+Backend fallback currently kept for compatibility
+
+packages/convex/convex/aiAgent.ts:318 (getRelevantKnowledge public query)
+If you want, I can turn this into a prioritized migration checklist (P0/P1/P2) with exact replacement strategy per file.
+

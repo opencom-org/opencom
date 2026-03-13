@@ -32,8 +32,10 @@ type InternalQueryRef<Args extends Record<string, unknown>, Return = unknown> = 
   Return
 >;
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type GetInternalArgs = {
   id: Id<"pushCampaigns">;
@@ -56,9 +58,14 @@ type UpdateStatsArgs = {
   failed: number;
 };
 
-const GET_INTERNAL_REF = makeFunctionReference<"query", GetInternalArgs, Doc<"pushCampaigns"> | null>(
-  "pushCampaigns:getInternal"
-) as unknown as InternalQueryRef<GetInternalArgs, Doc<"pushCampaigns"> | null>;
+const GET_INTERNAL_REF = makeFunctionReference<
+  "query",
+  GetInternalArgs,
+  Doc<"pushCampaigns"> | null
+>("pushCampaigns:getInternal") as unknown as InternalQueryRef<
+  GetInternalArgs,
+  Doc<"pushCampaigns"> | null
+>;
 
 const GET_PENDING_RECIPIENTS_REF = makeFunctionReference<
   "query",
@@ -73,9 +80,9 @@ const UPDATE_RECIPIENT_STATUS_REF = makeFunctionReference<
   "mutation",
   UpdateRecipientStatusArgs,
   unknown
->("pushCampaigns:updateRecipientStatus") as unknown as InternalMutationRef<
-  UpdateRecipientStatusArgs
->;
+>(
+  "pushCampaigns:updateRecipientStatus"
+) as unknown as InternalMutationRef<UpdateRecipientStatusArgs>;
 
 const UPDATE_STATS_REF = makeFunctionReference<"mutation", UpdateStatsArgs, unknown>(
   "pushCampaigns:updateStats"

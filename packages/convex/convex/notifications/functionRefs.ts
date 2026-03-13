@@ -1,6 +1,10 @@
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "../_generated/dataModel";
-import type { NotificationPushAttempt, NotificationRecipientType, NotifyNewMessageMode } from "./contracts";
+import type {
+  NotificationPushAttempt,
+  NotificationRecipientType,
+  NotifyNewMessageMode,
+} from "./contracts";
 
 type InternalFunctionRef<
   Type extends "query" | "mutation" | "action",
@@ -140,15 +144,25 @@ type PushTokenDeliveryFailureArgs = {
   removeToken: boolean;
 };
 
-export const getMemberRecipientsForNewVisitorMessageRef =
-  makeFunctionReference<"query", MemberRecipientArgs, MemberRecipientResult>(
-    "notifications:getMemberRecipientsForNewVisitorMessage"
-  ) as unknown as InternalFunctionRef<"query", MemberRecipientArgs, MemberRecipientResult>;
+export const getMemberRecipientsForNewVisitorMessageRef = makeFunctionReference<
+  "query",
+  MemberRecipientArgs,
+  MemberRecipientResult
+>("notifications:getMemberRecipientsForNewVisitorMessage") as unknown as InternalFunctionRef<
+  "query",
+  MemberRecipientArgs,
+  MemberRecipientResult
+>;
 
-export const getVisitorRecipientsForSupportReplyRef =
-  makeFunctionReference<"query", VisitorReplyRecipientArgs, VisitorReplyRecipientResult>(
-    "notifications:getVisitorRecipientsForSupportReply"
-  ) as unknown as InternalFunctionRef<"query", VisitorReplyRecipientArgs, VisitorReplyRecipientResult>;
+export const getVisitorRecipientsForSupportReplyRef = makeFunctionReference<
+  "query",
+  VisitorReplyRecipientArgs,
+  VisitorReplyRecipientResult
+>("notifications:getVisitorRecipientsForSupportReply") as unknown as InternalFunctionRef<
+  "query",
+  VisitorReplyRecipientArgs,
+  VisitorReplyRecipientResult
+>;
 
 export const routeEventRef = makeFunctionReference<"mutation", RouteEventArgs, unknown>(
   "notifications:routeEvent"
@@ -167,14 +181,9 @@ export const notifyNewConversationRef = makeFunctionReference<
   NotifyNewConversationArgs
 >;
 
-export const notifyAssignmentRef = makeFunctionReference<
-  "mutation",
-  NotifyAssignmentArgs,
-  unknown
->("notifications:notifyAssignment") as unknown as InternalFunctionRef<
-  "mutation",
-  NotifyAssignmentArgs
->;
+export const notifyAssignmentRef = makeFunctionReference<"mutation", NotifyAssignmentArgs, unknown>(
+  "notifications:notifyAssignment"
+) as unknown as InternalFunctionRef<"mutation", NotifyAssignmentArgs>;
 
 export const sendNotificationEmailRef = makeFunctionReference<
   "action",
@@ -182,7 +191,8 @@ export const sendNotificationEmailRef = makeFunctionReference<
   unknown
 >("notifications:sendNotificationEmail") as unknown as InternalFunctionRef<
   "action",
-  SendNotificationEmailArgs
+  SendNotificationEmailArgs,
+  unknown
 >;
 
 export const dispatchPushAttemptsRef = makeFunctionReference<
@@ -191,7 +201,8 @@ export const dispatchPushAttemptsRef = makeFunctionReference<
   unknown
 >("notifications:dispatchPushAttempts") as unknown as InternalFunctionRef<
   "action",
-  DispatchPushAttemptsArgs
+  DispatchPushAttemptsArgs,
+  unknown
 >;
 
 export const logDeliveryOutcomeRef = makeFunctionReference<
@@ -226,28 +237,28 @@ export const recordVisitorPushTokenDeliveryFailureRef = makeFunctionReference<
 >;
 
 export function getShallowRunQuery(ctx: { runQuery: unknown }) {
-  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runQuery as <Args extends Record<string, unknown>, Return>(
     queryRef: InternalFunctionRef<"query", Args, Return>,
     queryArgs: Args
   ) => Promise<Return>;
 }
 
 export function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return = unknown>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return = unknown>(
     mutationRef: InternalFunctionRef<"mutation", Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;
 }
 
 export function getShallowRunAction(ctx: { runAction: unknown }) {
-  return ctx.runAction as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runAction as <Args extends Record<string, unknown>, Return>(
     actionRef: InternalFunctionRef<"action", Args, Return>,
     actionArgs: Args
   ) => Promise<Return>;
 }
 
 export function getShallowRunAfter(ctx: { scheduler: { runAfter: unknown } }) {
-  return ctx.scheduler.runAfter as unknown as <
+  return ctx.scheduler.runAfter as <
     Type extends "mutation" | "action",
     Args extends Record<string, unknown>,
     Return = unknown,

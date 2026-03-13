@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const clientMocks = vi.hoisted(() => {
   const query = vi.fn();
   const mutation = vi.fn();
+  const action = vi.fn();
   const constructor = vi.fn().mockImplementation(function MockConvexReactClient() {
-    return { query, mutation };
+    return { query, mutation, action };
   });
-  return { query, mutation, constructor };
+  return { query, mutation, action, constructor };
 });
 
 vi.mock("convex/react", () => ({

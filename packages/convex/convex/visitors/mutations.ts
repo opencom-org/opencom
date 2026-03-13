@@ -20,8 +20,10 @@ import {
   scheduleSeriesTriggerChanges,
 } from "./helpers";
 
-type InternalMutationRef<Args extends Record<string, unknown>, Return = unknown> =
-  FunctionReference<"mutation", "internal", Args, Return>;
+type InternalMutationRef<
+  Args extends Record<string, unknown>,
+  Return = unknown,
+> = FunctionReference<"mutation", "internal", Args, Return>;
 
 type VerifyIdentityArgs = {
   workspaceId: Id<"workspaces">;
@@ -45,7 +47,7 @@ const VERIFY_IDENTITY_REF = makeFunctionReference<
 >;
 
 function getShallowRunMutation(ctx: { runMutation: unknown }) {
-  return ctx.runMutation as unknown as <Args extends Record<string, unknown>, Return>(
+  return ctx.runMutation as <Args extends Record<string, unknown>, Return>(
     mutationRef: InternalMutationRef<Args, Return>,
     mutationArgs: Args
   ) => Promise<Return>;
