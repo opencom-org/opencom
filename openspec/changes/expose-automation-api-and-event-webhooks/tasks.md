@@ -25,7 +25,7 @@
 - [x] 4.1 Expose automation-relevant conversation metadata including AI workflow state, handoff reason, claim state, and automation eligibility.
 - [x] 4.2 Implement claim, release, and escalate flows for automation-managed conversations with bounded lease semantics.
 - [x] 4.3 Enforce conflict protection: claimed conversations require active claim for automation message send.
-- [ ] 4.3b Modify AI agent response path to check for active automation claim before posting AI response.
+- [x] 4.3b Modify AI agent response path to check for active automation claim before posting AI response.
 
 ## 5. Admin Experience And Documentation
 

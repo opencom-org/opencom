@@ -28,6 +28,30 @@ export function buildPaginatedResponse<T>(
   return { data, nextCursor, hasMore };
 }
 
+export function isPlausibleConvexId(id: string): boolean {
+  return typeof id === "string" && id.length > 0 && /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
+export function encodeCursor(sortValue: number, id: string): string {
+  return btoa(JSON.stringify([sortValue, id]));
+}
+
+export function decodeCursor(cursor: string): { sortValue: number; id: string } | null {
+  try {
+    const parsed = JSON.parse(atob(cursor));
+    if (
+      Array.isArray(parsed) &&
+      typeof parsed[0] === "number" &&
+      typeof parsed[1] === "string"
+    ) {
+      return { sortValue: parsed[0], id: parsed[1] };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,

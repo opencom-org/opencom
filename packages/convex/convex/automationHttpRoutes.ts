@@ -1,7 +1,15 @@
 import { makeFunctionReference } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { withAutomationAuth } from "./lib/automationAuth";
-import { jsonResponse, errorResponse, parsePaginationParams } from "./lib/apiHelpers";
+import { jsonResponse, errorResponse, parsePaginationParams, isPlausibleConvexId } from "./lib/apiHelpers";
+
+function catchToResponse(error: unknown): Response {
+  const msg = String(error);
+  if (msg.includes("is not a valid ID") || msg.includes("Unable to parse")) {
+    return errorResponse("Invalid resource ID", 400);
+  }
+  return errorResponse(msg, 500);
+}
 
 // Use makeFunctionReference for cross-module references (no codegen dependency).
 // Args/return types are untyped since codegen hasn't run; runtime validation
@@ -45,6 +53,11 @@ export const listConversations = httpAction(async (ctx, request) => {
     const { cursor, limit, updatedSince } = parsePaginationParams(url);
     const status = url.searchParams.get("status");
     const assignee = url.searchParams.get("assignee");
+    const channel = url.searchParams.get("channel");
+    const email = url.searchParams.get("email");
+    const externalUserId = url.searchParams.get("externalUserId");
+    const customAttributeKey = url.searchParams.get("customAttribute.key");
+    const customAttributeValue = url.searchParams.get("customAttribute.value");
 
     const result = await ctx.runQuery(listConversationsRef, {
       workspaceId: authResult.workspaceId,
@@ -53,10 +66,15 @@ export const listConversations = httpAction(async (ctx, request) => {
       updatedSince: updatedSince ?? undefined,
       status: status ?? undefined,
       assigneeId: assignee ?? undefined,
+      channel: channel ?? undefined,
+      email: email ?? undefined,
+      externalUserId: externalUserId ?? undefined,
+      customAttributeKey: customAttributeKey ?? undefined,
+      customAttributeValue: customAttributeValue ?? undefined,
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -69,6 +87,7 @@ export const getConversation = httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return errorResponse("Missing id parameter", 400);
+    if (!isPlausibleConvexId(id)) return errorResponse("Invalid id format", 400);
 
     const result = await ctx.runQuery(getConversationRef, {
       workspaceId: authResult.workspaceId,
@@ -77,7 +96,7 @@ export const getConversation = httpAction(async (ctx, request) => {
     if (!result) return errorResponse("Conversation not found", 404);
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -100,7 +119,7 @@ export const updateConversation = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -123,7 +142,7 @@ export const listMessages = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -154,7 +173,7 @@ export const sendMessage = httpAction(async (ctx, request) => {
     }
     return jsonResponse(result.result, 201);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -175,7 +194,7 @@ export const claimConversation = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result, 201);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -196,7 +215,7 @@ export const releaseConversation = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -217,7 +236,7 @@ export const escalateConversation = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -231,6 +250,8 @@ export const listVisitors = httpAction(async (ctx, request) => {
     const { cursor, limit, updatedSince } = parsePaginationParams(url);
     const email = url.searchParams.get("email");
     const externalUserId = url.searchParams.get("externalUserId");
+    const customAttributeKey = url.searchParams.get("customAttribute.key");
+    const customAttributeValue = url.searchParams.get("customAttribute.value");
 
     const result = await ctx.runQuery(listVisitorsRef, {
       workspaceId: authResult.workspaceId,
@@ -239,10 +260,12 @@ export const listVisitors = httpAction(async (ctx, request) => {
       updatedSince: updatedSince ?? undefined,
       email: email ?? undefined,
       externalUserId: externalUserId ?? undefined,
+      customAttributeKey: customAttributeKey ?? undefined,
+      customAttributeValue: customAttributeValue ?? undefined,
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -255,6 +278,7 @@ export const getVisitor = httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return errorResponse("Missing id parameter", 400);
+    if (!isPlausibleConvexId(id)) return errorResponse("Invalid id format", 400);
 
     const result = await ctx.runQuery(getVisitorRef, {
       workspaceId: authResult.workspaceId,
@@ -263,7 +287,7 @@ export const getVisitor = httpAction(async (ctx, request) => {
     if (!result) return errorResponse("Visitor not found", 404);
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -284,7 +308,7 @@ export const createVisitor = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result, 201);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -309,7 +333,7 @@ export const updateVisitor = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -320,7 +344,7 @@ export const listTickets = httpAction(async (ctx, request) => {
 
   try {
     const url = new URL(request.url);
-    const { cursor, limit } = parsePaginationParams(url);
+    const { cursor, limit, updatedSince } = parsePaginationParams(url);
     const status = url.searchParams.get("status");
     const priority = url.searchParams.get("priority");
     const assignee = url.searchParams.get("assignee");
@@ -329,13 +353,14 @@ export const listTickets = httpAction(async (ctx, request) => {
       workspaceId: authResult.workspaceId,
       cursor: cursor ?? undefined,
       limit,
+      updatedSince: updatedSince ?? undefined,
       status: status ?? undefined,
       priority: priority ?? undefined,
       assigneeId: assignee ?? undefined,
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -348,6 +373,7 @@ export const getTicket = httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
     if (!id) return errorResponse("Missing id parameter", 400);
+    if (!isPlausibleConvexId(id)) return errorResponse("Invalid id format", 400);
 
     const result = await ctx.runQuery(getTicketRef, {
       workspaceId: authResult.workspaceId,
@@ -356,7 +382,7 @@ export const getTicket = httpAction(async (ctx, request) => {
     if (!result) return errorResponse("Ticket not found", 404);
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -381,7 +407,7 @@ export const createTicket = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result, 201);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -406,7 +432,7 @@ export const updateTicket = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -426,7 +452,7 @@ export const replayWebhookDelivery = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result, 201);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });
 
@@ -446,6 +472,6 @@ export const eventsFeed = httpAction(async (ctx, request) => {
     });
     return jsonResponse(result);
   } catch (error) {
-    return errorResponse(String(error), 500);
+    return catchToResponse(error);
   }
 });

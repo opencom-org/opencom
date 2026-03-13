@@ -1,6 +1,7 @@
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { authMutation, authQuery } from "./lib/authWrappers";
+import { encryptWebhookSecret } from "./lib/automationWebhookSecrets";
 
 const emitEventRef = makeFunctionReference<"mutation">("automationEvents:emitEvent");
 
@@ -27,16 +28,23 @@ export const createSubscription = authMutation({
   },
   permission: "settings.integrations",
   handler: async (ctx, args) => {
-    // The signing secret is stored in plaintext in the DB (server-side only).
-    // It's returned once to the admin on creation, never retrievable again.
     const signingSecret = generateSigningSecret();
     const signingSecretPrefix = signingSecret.slice(0, 14); // "whsec_" + 8 chars
+
+    let signingSecretCiphertext: string;
+    try {
+      signingSecretCiphertext = await encryptWebhookSecret(signingSecret);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown encryption failure";
+      throw new Error(`Webhook secret encryption is not configured: ${message}`);
+    }
 
     const now = Date.now();
     const id = await ctx.db.insert("automationWebhookSubscriptions", {
       workspaceId: args.workspaceId,
       url: args.url,
-      signingSecret,
+      signingSecretCiphertext,
       signingSecretPrefix,
       eventTypes: args.eventTypes,
       resourceTypes: args.resourceTypes,
@@ -47,6 +55,7 @@ export const createSubscription = authMutation({
       createdAt: now,
     });
 
+    // Return the plaintext secret once — it's the only time the caller sees it.
     return { subscriptionId: id, signingSecret };
   },
 });

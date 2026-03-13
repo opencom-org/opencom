@@ -276,6 +276,19 @@ export const internalSendBotMessage = internalMutation({
 
     const now = Date.now();
 
+    if (args.senderId === "ai-agent") {
+      const activeClaim = await ctx.db
+        .query("automationConversationClaims")
+        .withIndex("by_conversation_status", (q) =>
+          q.eq("conversationId", args.conversationId).eq("status", "active")
+        )
+        .first();
+
+      if (activeClaim && activeClaim.expiresAt > now) {
+        throw new Error("Conversation is currently claimed by external automation");
+      }
+    }
+
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: args.senderId ?? "system",

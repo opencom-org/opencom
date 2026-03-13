@@ -1,6 +1,7 @@
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
+import { encodeCursor, decodeCursor } from "./lib/apiHelpers";
 
 const deliverWebhookRef = makeFunctionReference<"action">(
   "automationWebhookWorker:deliverWebhook"
@@ -81,18 +82,50 @@ export const listEvents = internalQuery({
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
 
-    const eventsQuery = ctx.db
-      .query("automationEvents")
-      .withIndex("by_workspace_timestamp", (q2) =>
-        args.cursor
-          ? q2.eq("workspaceId", args.workspaceId).lt("timestamp", Number.parseFloat(args.cursor))
-          : q2.eq("workspaceId", args.workspaceId)
+    // Decode compound cursor; fall back to bare number for backward compat
+    let cursorTs: number | undefined;
+    let cursorId: string | undefined;
+    if (args.cursor) {
+      const decoded = decodeCursor(args.cursor);
+      if (decoded) {
+        cursorTs = decoded.sortValue;
+        cursorId = decoded.id;
+      } else {
+        cursorTs = Number.parseFloat(args.cursor);
+      }
+    }
+
+    const loadRawEvents = (take: number) =>
+      ctx.db
+        .query("automationEvents")
+        .withIndex("by_workspace_timestamp", (q2) =>
+          cursorTs !== undefined
+            ? q2.eq("workspaceId", args.workspaceId).lte("timestamp", cursorTs)
+            : q2.eq("workspaceId", args.workspaceId)
+        )
+        .order("desc")
+        .take(take);
+
+    // Keep expanding the fetch window until cursor filtering leaves enough rows
+    // to answer this page or the index is exhausted.
+    let fetchSize = cursorId ? Math.max(limit * 3, 200) : limit + 1;
+    let rawEvents = await loadRawEvents(fetchSize);
+    let events = cursorId
+      ? rawEvents.filter((e) => !(e.timestamp === cursorTs && e._id >= cursorId!))
+      : rawEvents;
+
+    while (cursorId && events.length <= limit && rawEvents.length === fetchSize) {
+      fetchSize *= 2;
+      rawEvents = await loadRawEvents(fetchSize);
+      events = rawEvents.filter(
+        (e) => !(e.timestamp === cursorTs && e._id >= cursorId!)
       );
-    const events = await eventsQuery.order("desc").take(limit + 1);
+    }
 
     const hasMore = events.length > limit;
     const data = hasMore ? events.slice(0, limit) : events;
 
+    const lastItem = data[data.length - 1];
     return {
       data: data.map((e) => ({
         id: e._id,
@@ -103,8 +136,8 @@ export const listEvents = internalQuery({
         timestamp: e.timestamp,
       })),
       nextCursor:
-        hasMore && data.length > 0
-          ? String(data[data.length - 1].timestamp)
+        hasMore && lastItem
+          ? encodeCursor(lastItem.timestamp, lastItem._id)
           : null,
       hasMore,
     };

@@ -139,7 +139,8 @@ export const lookupCredential = internalQuery({
 });
 
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX_REQUESTS = 60; // 60 requests per minute
+const CREDENTIAL_RATE_LIMIT = 60; // 60 requests per minute per credential
+const WORKSPACE_RATE_LIMIT = 120; // 120 requests per minute per workspace
 
 // Internal mutation to check rate limit and update lastUsedAt.
 export const checkRateLimit = internalMutation({
@@ -149,6 +150,31 @@ export const checkRateLimit = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+
+    // 1. Check workspace-level rate limit first (120 req/min)
+    const wsRateLimit = await ctx.db
+      .query("automationWorkspaceRateLimits")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .first();
+
+    if (wsRateLimit) {
+      if (now > wsRateLimit.windowStart + RATE_LIMIT_WINDOW_MS) {
+        await ctx.db.patch(wsRateLimit._id, { windowStart: now, count: 1 });
+      } else if (wsRateLimit.count >= WORKSPACE_RATE_LIMIT) {
+        const retryAfter = Math.ceil((wsRateLimit.windowStart + RATE_LIMIT_WINDOW_MS - now) / 1000);
+        return { allowed: false, retryAfter };
+      } else {
+        await ctx.db.patch(wsRateLimit._id, { count: wsRateLimit.count + 1 });
+      }
+    } else {
+      await ctx.db.insert("automationWorkspaceRateLimits", {
+        workspaceId: args.workspaceId,
+        windowStart: now,
+        count: 1,
+      });
+    }
+
+    // 2. Check credential-level rate limit (60 req/min)
     const credential = await ctx.db.get(args.credentialId);
     if (!credential) {
       return { allowed: false, retryAfter: 60 };
@@ -167,7 +193,7 @@ export const checkRateLimit = internalMutation({
       return { allowed: true };
     }
 
-    if (count >= RATE_LIMIT_MAX_REQUESTS) {
+    if (count >= CREDENTIAL_RATE_LIMIT) {
       const retryAfter = Math.ceil((windowStart + RATE_LIMIT_WINDOW_MS - now) / 1000);
       return { allowed: false, retryAfter };
     }

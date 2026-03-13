@@ -1,6 +1,7 @@
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { decryptWebhookSecret } from "./lib/automationWebhookSecrets";
 
 // Self-references via makeFunctionReference
 const deliverWebhookRef = makeFunctionReference<"action">(
@@ -48,6 +49,8 @@ export const deliverWebhook = internalAction({
     deliveryId: v.id("automationWebhookDeliveries"),
   },
   handler: async (ctx, args) => {
+    const runMutation = ctx.runMutation as unknown as RunMutation;
+
     // Load delivery, subscription, and event data
     const deliveryData = (await ctx.runQuery(getDeliveryDataRef, {
       deliveryId: args.deliveryId,
@@ -61,7 +64,8 @@ export const deliverWebhook = internalAction({
       };
       subscription: {
         url: string;
-        signingSecret: string;
+        signingSecret?: string;
+        signingSecretCiphertext?: string;
       };
       event: {
         eventType: string;
@@ -73,6 +77,11 @@ export const deliverWebhook = internalAction({
     } | null;
 
     if (!deliveryData) {
+      await runMutation(updateDeliveryStatusRef, {
+        deliveryId: args.deliveryId,
+        status: "failed",
+        error: "Subscription or event no longer exists",
+      });
       return;
     }
 
@@ -88,10 +97,36 @@ export const deliverWebhook = internalAction({
 
     const timestamp = Math.floor(Date.now() / 1000);
     const signedPayload = `${timestamp}.${body}`;
+    let signature: string;
 
-    const signature = await hmacSign(subscription.signingSecret, signedPayload);
+    try {
+      // Resolve signing secret before attempting network delivery so preparation
+      // failures are persisted instead of leaving the delivery stuck pending.
+      let signingSecret: string;
+      if (subscription.signingSecretCiphertext) {
+        signingSecret = await decryptWebhookSecret(subscription.signingSecretCiphertext);
+      } else if (subscription.signingSecret) {
+        signingSecret = subscription.signingSecret;
+      } else {
+        await runMutation(updateDeliveryStatusRef, {
+          deliveryId: args.deliveryId,
+          status: "failed",
+          error: "No signing secret available",
+        });
+        return;
+      }
 
-    const runMutation = ctx.runMutation as unknown as RunMutation;
+      signature = await hmacSign(signingSecret, signedPayload);
+    } catch (error) {
+      await runMutation(updateDeliveryStatusRef, {
+        deliveryId: args.deliveryId,
+        status: "failed",
+        error: `Failed to prepare webhook delivery: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+      return;
+    }
 
     try {
       const response = await fetch(subscription.url, {
@@ -100,6 +135,7 @@ export const deliverWebhook = internalAction({
           "Content-Type": "application/json",
           "X-Opencom-Signature": `t=${timestamp},v1=${signature}`,
           "X-Opencom-Event-Id": delivery.eventId,
+          "X-Opencom-Delivery-Id": delivery._id,
           "X-Opencom-Timestamp": String(timestamp),
         },
         body,
@@ -243,6 +279,12 @@ export const replayDelivery = internalMutation({
     if (delivery.workspaceId !== args.workspaceId) {
       throw new Error("Delivery does not belong to this workspace");
     }
+
+    // Validate that subscription and event still exist
+    const subscription = await ctx.db.get(delivery.subscriptionId);
+    if (!subscription) throw new Error("Webhook subscription no longer exists");
+    const event = await ctx.db.get(delivery.eventId);
+    if (!event) throw new Error("Event no longer exists");
 
     // Create a new delivery row for the replay
     const now = Date.now();

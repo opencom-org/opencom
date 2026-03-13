@@ -1,6 +1,162 @@
 import { v } from "convex/values";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import { encodeCursor, decodeCursor } from "./lib/apiHelpers";
+
+const DEFAULT_SCAN_BATCH_SIZE = 200;
+
+type DescCursor = {
+  sortValue?: number;
+  id?: string;
+};
+
+type VisitorFilterOptions = {
+  email?: string;
+  externalUserId?: string;
+  customAttributeKey?: string;
+  customAttributeValue?: string;
+};
+
+function decodeDescCursor(cursor?: string): DescCursor {
+  if (!cursor) {
+    return {};
+  }
+
+  const decoded = decodeCursor(cursor);
+  if (decoded) {
+    return { sortValue: decoded.sortValue, id: decoded.id };
+  }
+
+  const fallbackSortValue = Number.parseFloat(cursor);
+  return Number.isFinite(fallbackSortValue) ? { sortValue: fallbackSortValue } : {};
+}
+
+function isAtOrPastCursor(
+  sortValue: number | undefined,
+  id: string,
+  cursor: DescCursor
+): boolean {
+  return (
+    cursor.sortValue !== undefined &&
+    cursor.id !== undefined &&
+    sortValue === cursor.sortValue &&
+    id >= cursor.id
+  );
+}
+
+async function collectDescendingPage<T extends { _id: string }>(options: {
+  limit: number;
+  cursor: DescCursor;
+  getSortValue: (item: T) => number | undefined;
+  fetchBatch: (upperBound: number | undefined, take: number) => Promise<T[]>;
+  filterBatch?: (batch: T[]) => Promise<T[]> | T[];
+}): Promise<T[]> {
+  const results: T[] = [];
+  let scanCursor = options.cursor;
+  let batchSize = Math.max(options.limit * 3, DEFAULT_SCAN_BATCH_SIZE);
+
+  while (results.length < options.limit + 1) {
+    const batch = await options.fetchBatch(scanCursor.sortValue, batchSize);
+    if (batch.length === 0) {
+      break;
+    }
+
+    const visibleBatch = scanCursor.id
+      ? batch.filter(
+          (item) => !isAtOrPastCursor(options.getSortValue(item), item._id, scanCursor)
+        )
+      : batch;
+
+    if (scanCursor.id && visibleBatch.length === 0 && batch.length === batchSize) {
+      // The current window hasn't scanned far enough to move past the cursor
+      // within a large same-timestamp tie. Expand and retry from the same
+      // cursor instead of rewinding scanCursor to an earlier batch boundary.
+      batchSize *= 2;
+      continue;
+    }
+
+    const filteredBatch = options.filterBatch
+      ? await options.filterBatch(visibleBatch)
+      : visibleBatch;
+
+    for (const item of filteredBatch) {
+      results.push(item);
+      if (results.length >= options.limit + 1) {
+        return results;
+      }
+    }
+
+    if (batch.length < batchSize) {
+      break;
+    }
+
+    const lastBatchItem = batch[batch.length - 1];
+    const nextCursor = {
+      sortValue: options.getSortValue(lastBatchItem),
+      id: lastBatchItem._id,
+    };
+
+    if (
+      nextCursor.sortValue === scanCursor.sortValue &&
+      nextCursor.id === scanCursor.id
+    ) {
+      // Keep expanding the fetch window until we move past the current tie on
+      // the indexed sort value. Capping this causes large same-timestamp groups
+      // to become unpageable.
+      batchSize *= 2;
+      continue;
+    }
+
+    scanCursor = nextCursor;
+  }
+
+  return results;
+}
+
+async function loadVisitorsById(
+  ctx: any,
+  visitorIds: Array<Id<"visitors"> | undefined>
+): Promise<Map<string, Doc<"visitors">>> {
+  const uniqueVisitorIds = Array.from(
+    new Set(visitorIds.filter((visitorId): visitorId is Id<"visitors"> => !!visitorId))
+  );
+
+  const visitors = await Promise.all(
+    uniqueVisitorIds.map(async (visitorId) => {
+      const visitor = await ctx.db.get(visitorId);
+      return visitor ? ([String(visitorId), visitor] as const) : null;
+    })
+  );
+
+  return new Map(
+    visitors.filter(
+      (entry): entry is readonly [string, Doc<"visitors">] => entry !== null
+    )
+  );
+}
+
+function matchesVisitorFilters(
+  visitor: Doc<"visitors"> | undefined,
+  filters: VisitorFilterOptions
+): boolean {
+  if (filters.email && visitor?.email !== filters.email) {
+    return false;
+  }
+  if (filters.externalUserId && visitor?.externalUserId !== filters.externalUserId) {
+    return false;
+  }
+  if (
+    filters.customAttributeKey &&
+    filters.customAttributeValue !== undefined &&
+    (visitor?.customAttributes as Record<string, unknown> | undefined)?.[
+      filters.customAttributeKey
+    ] !== filters.customAttributeValue
+  ) {
+    return false;
+  }
+  return true;
+}
 
 // ── Conversations ──────────────────────────────────────────────────
 
@@ -12,36 +168,82 @@ export const listConversationsForAutomation = internalQuery({
     updatedSince: v.optional(v.number()),
     status: v.optional(v.string()),
     assigneeId: v.optional(v.string()),
+    channel: v.optional(v.string()),
+    email: v.optional(v.string()),
+    externalUserId: v.optional(v.string()),
+    customAttributeKey: v.optional(v.string()),
+    customAttributeValue: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
-    let query;
+    const cursor = decodeDescCursor(args.cursor);
+    const needsVisitorFilters = Boolean(
+      args.email ||
+        args.externalUserId ||
+        (args.customAttributeKey && args.customAttributeValue !== undefined)
+    );
+    const visitorFilters: VisitorFilterOptions = {
+      email: args.email ?? undefined,
+      externalUserId: args.externalUserId ?? undefined,
+      customAttributeKey: args.customAttributeKey ?? undefined,
+      customAttributeValue: args.customAttributeValue ?? undefined,
+    };
 
-    if (args.status) {
-      query = ctx.db
-        .query("conversations")
-        .withIndex("by_status", (q) =>
-          q
-            .eq("workspaceId", args.workspaceId)
-            .eq("status", args.status as "open" | "closed" | "snoozed")
+    const conversations = await collectDescendingPage<Doc<"conversations">>({
+      limit,
+      cursor,
+      getSortValue: (conversation) => conversation.updatedAt,
+      fetchBatch: async (upperBound, take) => {
+        let query = ctx.db
+          .query("conversations")
+          .withIndex("by_workspace_updated_at", (q) => {
+            if (args.updatedSince !== undefined && upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .gt("updatedAt", args.updatedSince)
+                .lte("updatedAt", upperBound);
+            }
+            if (args.updatedSince !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).gt("updatedAt", args.updatedSince);
+            }
+            if (upperBound !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).lte("updatedAt", upperBound);
+            }
+            return q.eq("workspaceId", args.workspaceId);
+          });
+
+        if (args.status) {
+          query = query.filter((q2) => q2.eq(q2.field("status"), args.status!));
+        }
+        if (args.channel) {
+          query = query.filter((q2) => q2.eq(q2.field("channel"), args.channel!));
+        }
+        if (args.assigneeId) {
+          query = query.filter((q2) => q2.eq(q2.field("assignedAgentId"), args.assigneeId!));
+        }
+
+        return query.order("desc").take(take);
+      },
+      filterBatch: async (batch) => {
+        if (!needsVisitorFilters) {
+          return batch;
+        }
+
+        const visitorMap = await loadVisitorsById(
+          ctx,
+          batch.map((conversation) => conversation.visitorId)
         );
-    } else {
-      query = ctx.db
-        .query("conversations")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId));
-    }
 
-    if (args.cursor) {
-      const cursorTime = Number.parseFloat(args.cursor);
-      query = query.filter((q2) => q2.lt(q2.field("_creationTime"), cursorTime));
-    }
-    if (args.updatedSince) {
-      query = query.filter((q2) => q2.gte(q2.field("updatedAt"), args.updatedSince!));
-    }
-    if (args.assigneeId) {
-      query = query.filter((q2) => q2.eq(q2.field("assignedAgentId"), args.assigneeId!));
-    }
-    const conversations = await query.order("desc").take(limit + 1);
+        return batch.filter((conversation) =>
+          matchesVisitorFilters(
+            conversation.visitorId
+              ? visitorMap.get(String(conversation.visitorId))
+              : undefined,
+            visitorFilters
+          )
+        );
+      },
+    });
 
     const hasMore = conversations.length > limit;
     const data = hasMore ? conversations.slice(0, limit) : conversations;
@@ -90,6 +292,7 @@ export const listConversationsForAutomation = internalQuery({
           channel: c.channel,
           subject: c.subject,
           aiWorkflowState: c.aiWorkflowState,
+          aiHandoffReason: c.aiHandoffReason,
           automationEligible: c.status === "open" && !activeClaim && c.aiWorkflowState !== "ai_handled",
           createdAt: c.createdAt,
           updatedAt: c.updatedAt,
@@ -101,7 +304,7 @@ export const listConversationsForAutomation = internalQuery({
       }),
       nextCursor:
         hasMore && data.length > 0
-          ? String(data[data.length - 1]._creationTime)
+          ? encodeCursor(data[data.length - 1].updatedAt, data[data.length - 1]._id)
           : null,
       hasMore,
     };
@@ -222,11 +425,31 @@ export const listMessagesForAutomation = internalQuery({
       .query("messages")
       .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId));
 
+    // Decode compound cursor; fall back to bare number for backward compat
+    let cursorTs: number | undefined;
+    let cursorId: string | undefined;
     if (args.cursor) {
-      const cursorTime = Number.parseFloat(args.cursor);
-      messagesQuery = messagesQuery.filter((q2) => q2.gt(q2.field("_creationTime"), cursorTime));
+      const decoded = decodeCursor(args.cursor);
+      if (decoded) {
+        cursorTs = decoded.sortValue;
+        cursorId = decoded.id;
+      } else {
+        cursorTs = Number.parseFloat(args.cursor);
+      }
     }
-    const messages = await messagesQuery.order("asc").take(limit + 1);
+
+    if (cursorTs !== undefined) {
+      messagesQuery = messagesQuery.filter((q2) => q2.gte(q2.field("_creationTime"), cursorTs!));
+    }
+    const fetchSize = cursorId ? limit + 50 : limit + 1;
+    let messages = await messagesQuery.order("asc").take(fetchSize);
+
+    // For ascending: skip items at cursor timestamp with _id <= cursorId
+    if (cursorId) {
+      messages = messages.filter(
+        (m) => !(m._creationTime === cursorTs && m._id <= cursorId!)
+      );
+    }
 
     const hasMore = messages.length > limit;
     const data = hasMore ? messages.slice(0, limit) : messages;
@@ -242,7 +465,7 @@ export const listMessagesForAutomation = internalQuery({
       })),
       nextCursor:
         hasMore && data.length > 0
-          ? String(data[data.length - 1]._creationTime)
+          ? encodeCursor(data[data.length - 1]._creationTime, data[data.length - 1]._id)
           : null,
       hasMore,
     };
@@ -418,32 +641,58 @@ export const listVisitorsForAutomation = internalQuery({
     updatedSince: v.optional(v.number()),
     email: v.optional(v.string()),
     externalUserId: v.optional(v.string()),
+    customAttributeKey: v.optional(v.string()),
+    customAttributeValue: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
-    let visitorsQuery = ctx.db
-      .query("visitors")
-      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId));
+    const cursor = decodeDescCursor(args.cursor);
 
-    if (args.cursor) {
-      const cursorTime = Number.parseFloat(args.cursor);
-      visitorsQuery = visitorsQuery.filter((q2) => q2.lt(q2.field("_creationTime"), cursorTime));
-    }
-    // Note: updatedSince filters on lastSeenAt only. Visitors without lastSeenAt
-    // (created outside automation) won't match. This is acceptable since automation-
-    // created visitors always have lastSeenAt set.
-    if (args.updatedSince) {
-      visitorsQuery = visitorsQuery.filter((q2) =>
-        q2.gte(q2.field("lastSeenAt"), args.updatedSince!)
-      );
-    }
-    if (args.email) {
-      visitorsQuery = visitorsQuery.filter((q2) => q2.eq(q2.field("email"), args.email!));
-    }
-    if (args.externalUserId) {
-      visitorsQuery = visitorsQuery.filter((q2) => q2.eq(q2.field("externalUserId"), args.externalUserId!));
-    }
-    const visitors = await visitorsQuery.order("desc").take(limit + 1);
+    const visitors = await collectDescendingPage<Doc<"visitors">>({
+      limit,
+      cursor,
+      getSortValue: (visitor) => visitor.lastSeenAt,
+      fetchBatch: async (upperBound, take) => {
+        let query = ctx.db
+          .query("visitors")
+          .withIndex("by_workspace_last_seen", (q) => {
+            if (args.updatedSince !== undefined && upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .gt("lastSeenAt", args.updatedSince)
+                .lte("lastSeenAt", upperBound);
+            }
+            if (args.updatedSince !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).gt("lastSeenAt", args.updatedSince);
+            }
+            if (upperBound !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).lte("lastSeenAt", upperBound);
+            }
+            return q.eq("workspaceId", args.workspaceId);
+          });
+
+        if (args.email) {
+          query = query.filter((q2) => q2.eq(q2.field("email"), args.email!));
+        }
+        if (args.externalUserId) {
+          query = query.filter((q2) => q2.eq(q2.field("externalUserId"), args.externalUserId!));
+        }
+
+        return query.order("desc").take(take);
+      },
+      filterBatch: (batch) => {
+        if (!args.customAttributeKey || args.customAttributeValue === undefined) {
+          return batch;
+        }
+
+        return batch.filter(
+          (visitor) =>
+            (visitor.customAttributes as Record<string, unknown> | undefined)?.[
+              args.customAttributeKey!
+            ] === args.customAttributeValue
+        );
+      },
+    });
 
     const hasMore = visitors.length > limit;
     const data = hasMore ? visitors.slice(0, limit) : visitors;
@@ -463,7 +712,10 @@ export const listVisitorsForAutomation = internalQuery({
       })),
       nextCursor:
         hasMore && data.length > 0
-          ? String(data[data.length - 1]._creationTime)
+          ? encodeCursor(
+              data[data.length - 1].lastSeenAt ?? data[data.length - 1].createdAt,
+              data[data.length - 1]._id
+            )
           : null,
       hasMore,
     };
@@ -581,46 +833,51 @@ export const listTicketsForAutomation = internalQuery({
     workspaceId: v.id("workspaces"),
     cursor: v.optional(v.string()),
     limit: v.number(),
+    updatedSince: v.optional(v.number()),
     status: v.optional(v.string()),
     priority: v.optional(v.string()),
     assigneeId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit, 100);
-    let query;
+    const cursor = decodeDescCursor(args.cursor);
 
-    if (args.status) {
-      query = ctx.db
-        .query("tickets")
-        .withIndex("by_status", (q) =>
-          q
-            .eq("workspaceId", args.workspaceId)
-            .eq(
-              "status",
-              args.status as
-                | "submitted"
-                | "in_progress"
-                | "waiting_on_customer"
-                | "resolved"
-            )
-        );
-    } else {
-      query = ctx.db
-        .query("tickets")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId));
-    }
+    const tickets = await collectDescendingPage<Doc<"tickets">>({
+      limit,
+      cursor,
+      getSortValue: (ticket) => ticket.updatedAt,
+      fetchBatch: async (upperBound, take) => {
+        let query = ctx.db
+          .query("tickets")
+          .withIndex("by_workspace_updated_at", (q) => {
+            if (args.updatedSince !== undefined && upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .gt("updatedAt", args.updatedSince)
+                .lte("updatedAt", upperBound);
+            }
+            if (args.updatedSince !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).gt("updatedAt", args.updatedSince);
+            }
+            if (upperBound !== undefined) {
+              return q.eq("workspaceId", args.workspaceId).lte("updatedAt", upperBound);
+            }
+            return q.eq("workspaceId", args.workspaceId);
+          });
 
-    if (args.cursor) {
-      const cursorTime = Number.parseFloat(args.cursor);
-      query = query.filter((q2) => q2.lt(q2.field("_creationTime"), cursorTime));
-    }
-    if (args.priority) {
-      query = query.filter((q2) => q2.eq(q2.field("priority"), args.priority!));
-    }
-    if (args.assigneeId) {
-      query = query.filter((q2) => q2.eq(q2.field("assigneeId"), args.assigneeId!));
-    }
-    const tickets = await query.order("desc").take(limit + 1);
+        if (args.status) {
+          query = query.filter((q2) => q2.eq(q2.field("status"), args.status!));
+        }
+        if (args.priority) {
+          query = query.filter((q2) => q2.eq(q2.field("priority"), args.priority!));
+        }
+        if (args.assigneeId) {
+          query = query.filter((q2) => q2.eq(q2.field("assigneeId"), args.assigneeId!));
+        }
+
+        return query.order("desc").take(take);
+      },
+    });
 
     const hasMore = tickets.length > limit;
     const data = hasMore ? tickets.slice(0, limit) : tickets;
@@ -642,7 +899,7 @@ export const listTicketsForAutomation = internalQuery({
       })),
       nextCursor:
         hasMore && data.length > 0
-          ? String(data[data.length - 1]._creationTime)
+          ? encodeCursor(data[data.length - 1].updatedAt, data[data.length - 1]._id)
           : null,
       hasMore,
     };

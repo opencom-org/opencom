@@ -165,40 +165,6 @@ export const escalateConversation = internalMutation({
   },
 });
 
-export const renewLease = internalMutation({
-  args: {
-    workspaceId: v.id("workspaces"),
-    conversationId: v.id("conversations"),
-    credentialId: v.id("automationCredentials"),
-  },
-  handler: async (ctx, args) => {
-    const claim = await ctx.db
-      .query("automationConversationClaims")
-      .withIndex("by_conversation_status", (q) =>
-        q.eq("conversationId", args.conversationId).eq("status", "active")
-      )
-      .first();
-
-    if (!claim) {
-      throw new Error("No active claim found");
-    }
-
-    if (claim.credentialId !== args.credentialId) {
-      throw new Error("Claim belongs to a different credential");
-    }
-
-    if (claim.expiresAt < Date.now()) {
-      throw new Error("Claim has already expired");
-    }
-
-    await ctx.db.patch(claim._id, {
-      expiresAt: Date.now() + CLAIM_LEASE_MS,
-    });
-
-    return { success: true, expiresAt: Date.now() + CLAIM_LEASE_MS };
-  },
-});
-
 export const getActiveClaim = internalQuery({
   args: {
     conversationId: v.id("conversations"),

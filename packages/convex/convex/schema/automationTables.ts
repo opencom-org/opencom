@@ -35,10 +35,8 @@ export const automationTables = {
   automationWebhookSubscriptions: defineTable({
     workspaceId: v.id("workspaces"),
     url: v.string(),
-    // Stored in plaintext. Convex DB is server-side trusted infrastructure.
-    // The secret is returned to the admin once on creation, then only used
-    // server-side for HMAC signing. Same trust model as Stripe/GitHub webhooks.
-    signingSecret: v.string(),
+    signingSecret: v.optional(v.string()), // legacy plaintext retained only for backfill compatibility
+    signingSecretCiphertext: v.optional(v.string()), // AES-GCM encrypted at rest
     signingSecretPrefix: v.string(),
     eventTypes: v.optional(v.array(v.string())),
     resourceTypes: v.optional(v.array(v.string())),
@@ -103,4 +101,10 @@ export const automationTables = {
   })
     .index("by_workspace_key", ["workspaceId", "key"])
     .index("by_expires", ["expiresAt"]),
+
+  automationWorkspaceRateLimits: defineTable({
+    workspaceId: v.id("workspaces"),
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_workspace", ["workspaceId"]),
 };

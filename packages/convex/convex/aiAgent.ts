@@ -640,6 +640,17 @@ export const handoffToHuman = mutation({
 
     const now = Date.now();
 
+    const activeClaim = await ctx.db
+      .query("automationConversationClaims")
+      .withIndex("by_conversation_status", (q) =>
+        q.eq("conversationId", args.conversationId).eq("status", "active")
+      )
+      .first();
+
+    if (activeClaim && activeClaim.expiresAt > now) {
+      throw new Error("Conversation is currently claimed by external automation");
+    }
+
     const messageId: Id<"messages"> = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: "ai-agent",
