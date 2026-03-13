@@ -41,6 +41,7 @@ type RuntimeSettings = {
   enabled: boolean;
   model: string;
   knowledgeSources?: KnowledgeSource[];
+  embeddingModel?: string;
   personality?: string | null;
   confidenceThreshold?: number;
 };
@@ -165,6 +166,7 @@ const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
     query: string;
     knowledgeSources?: KnowledgeSource[];
     limit?: number;
+    embeddingModel?: string;
   },
   RelevantKnowledgeResult[]
 >("aiAgentActionsKnowledge:getRelevantKnowledgeForRuntimeAction") as unknown as ConvexRef<
@@ -175,6 +177,7 @@ const GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF = makeFunctionReference<
     query: string;
     knowledgeSources?: KnowledgeSource[];
     limit?: number;
+    embeddingModel?: string;
   },
   RelevantKnowledgeResult[]
 >;
@@ -574,12 +577,18 @@ export const generateResponse = action({
     });
 
     // Get relevant knowledge
-    const knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
-      workspaceId: args.workspaceId,
-      query: args.query,
-      knowledgeSources: settings.knowledgeSources,
-      limit: 5,
-    });
+    let knowledgeResults: RelevantKnowledgeResult[] = [];
+    try {
+      knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
+        workspaceId: args.workspaceId,
+        query: args.query,
+        knowledgeSources: settings.knowledgeSources,
+        limit: 5,
+        embeddingModel: settings.embeddingModel,
+      });
+    } catch (retrievalError) {
+      console.error("Knowledge retrieval failed; continuing without knowledge context:", retrievalError);
+    }
 
     // Build knowledge context for prompt
     const knowledgeContext = knowledgeResults

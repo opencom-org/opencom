@@ -6,6 +6,8 @@ import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+const RUNTIME_KNOWLEDGE_DEFAULT_LIMIT = 5;
+const RUNTIME_KNOWLEDGE_MAX_LIMIT = 20;
 
 export const knowledgeSourceValidator = v.union(
   v.literal("articles"),
@@ -64,18 +66,24 @@ export const getRelevantKnowledgeForRuntimeAction = internalAction({
     query: v.string(),
     knowledgeSources: v.optional(v.array(knowledgeSourceValidator)),
     limit: v.optional(v.number()),
+    embeddingModel: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<RuntimeKnowledgeResult[]> => {
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
 
+    const embeddingModel = args.embeddingModel?.trim() || DEFAULT_EMBEDDING_MODEL;
+
     // 1. Embed the query
     const { embedding } = await embed({
-      model: aiClient.embedding(DEFAULT_EMBEDDING_MODEL),
+      model: aiClient.embedding(embeddingModel),
       value: args.query,
     });
 
-    const limit = args.limit ?? 5;
+    const limit = Math.max(
+      1,
+      Math.min(args.limit ?? RUNTIME_KNOWLEDGE_DEFAULT_LIMIT, RUNTIME_KNOWLEDGE_MAX_LIMIT)
+    );
 
     // 2. Vector search
     const results = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {

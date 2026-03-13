@@ -161,13 +161,12 @@ const LIST_SNIPPETS_REF = makeFunctionReference<"query", WorkspaceArgs, ListedSn
   "embeddings:listSnippets"
 ) as unknown as InternalQueryRef<WorkspaceArgs, ListedSnippet[]>;
 
-const REMOVE_EMBEDDINGS_REF = makeFunctionReference<
+const REMOVE_EMBEDDINGS_BY_IDS_REF = makeFunctionReference<
   "mutation",
-  { contentType: BatchItem["contentType"]; contentId: string },
+  { ids: Id<"contentEmbeddings">[] },
   unknown
->("embeddings:remove") as unknown as InternalMutationRef<{
-  contentType: BatchItem["contentType"];
-  contentId: string;
+>("embeddings:removeByIds") as unknown as InternalMutationRef<{
+  ids: Id<"contentEmbeddings">[];
 }>;
 
 const GENERATE_BATCH_INTERNAL_REF = makeFunctionReference<
@@ -280,13 +279,6 @@ export const generateInternal = internalAction({
     });
 
     const runMutation = getShallowRunMutation(ctx);
-    if (existing.length > 0) {
-      await runMutation(REMOVE_EMBEDDINGS_REF, {
-        contentType: args.contentType,
-        contentId: args.contentId,
-      });
-    }
-
     const insertedIds: Id<"contentEmbeddings">[] = [];
     for (let index = 0; index < embeddings.length; index += 1) {
       const embedding = embeddings[index];
@@ -305,6 +297,12 @@ export const generateInternal = internalAction({
 
     if (insertedIds.length === 0) {
       throw new Error("Failed to generate embeddings: no chunks were inserted");
+    }
+
+    if (existing.length > 0) {
+      await runMutation(REMOVE_EMBEDDINGS_BY_IDS_REF, {
+        ids: existing.map((embeddingDoc) => embeddingDoc._id),
+      });
     }
 
     return { id: insertedIds[0], skipped: false };
@@ -543,6 +541,17 @@ export const remove = internalMutation({
 
     for (const embeddingDoc of existing) {
       await ctx.db.delete(embeddingDoc._id);
+    }
+  },
+});
+
+export const removeByIds = internalMutation({
+  args: {
+    ids: v.array(v.id("contentEmbeddings")),
+  },
+  handler: async (ctx, args) => {
+    for (const id of args.ids) {
+      await ctx.db.delete(id);
     }
   },
 });

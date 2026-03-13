@@ -11,6 +11,8 @@ import type { Permission } from "./permissions";
 const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
 const FEEDBACK_STATS_MAX_LIMIT = 20000;
+const SUGGESTIONS_DEFAULT_LIMIT = 10;
+const SUGGESTIONS_MAX_LIMIT = 20;
 const WIDGET_QUERY_MAX_LENGTH = 200;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
@@ -244,7 +246,10 @@ export const searchSimilar = authAction({
   },
   permission: "articles.read",
   handler: async (ctx, args): Promise<SuggestionResult[]> => {
-    const limit = args.limit || 10;
+    const limit = Math.max(
+      1,
+      Math.min(args.limit ?? SUGGESTIONS_DEFAULT_LIMIT, SUGGESTIONS_MAX_LIMIT)
+    );
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
@@ -386,7 +391,10 @@ export const searchSimilarInternal = internalAction({
       score: number;
     }>
   > => {
-    const limit = args.limit || 10;
+    const limit = Math.max(
+      1,
+      Math.min(args.limit ?? SUGGESTIONS_DEFAULT_LIMIT, SUGGESTIONS_MAX_LIMIT)
+    );
     const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);

@@ -13,6 +13,7 @@ import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authMutation, authQuery } from "./lib/authWrappers";
 import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
 import { resolveVisitorFromSession } from "./widgetSessions";
+import { isInternalArticle, isPublicArticle, listUnifiedArticlesWithLegacyFallback } from "./lib/unifiedArticles";
 
 const knowledgeSourceValidator = v.union(
   v.literal("articles"),
@@ -322,11 +323,97 @@ export const getRelevantKnowledge = authQuery({
     limit: v.optional(v.number()),
   },
   permission: "articles.read",
-  handler: async () => {
-    // Note: getRelevantKnowledge should ideally also use vector search, but since it is a query, we'd need a client-side action call instead for UI.
-    // However, it is not used in the runtime flow (which uses getRelevantKnowledgeForRuntimeAction).
-    // Let's return empty or throw to enforce migration, or simply deprecate. 
-    throw new Error("getRelevantKnowledge query is deprecated. Use vector search action instead.");
+  handler: async (ctx, args) => {
+    const normalizedQuery = args.query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const limit = Math.max(1, Math.min(args.limit ?? 5, 20));
+    const requestedSources = new Set(args.knowledgeSources ?? ["articles"]);
+    const queryTerms = normalizedQuery
+      .split(/[^a-z0-9]+/g)
+      .map((term) => term.trim())
+      .filter((term) => term.length >= 3);
+
+    const scoreText = (title: string, content: string): number => {
+      const titleLower = title.toLowerCase();
+      const contentLower = content.toLowerCase();
+      let score = 0;
+
+      if (titleLower.includes(normalizedQuery)) score += 8;
+      if (contentLower.includes(normalizedQuery)) score += 4;
+
+      for (const term of queryTerms) {
+        if (titleLower.includes(term)) score += 3;
+        if (contentLower.includes(term)) score += 1;
+      }
+
+      return score;
+    };
+
+    const candidates: Array<{
+      id: string;
+      type: "article" | "internalArticle" | "snippet";
+      title: string;
+      content: string;
+      relevanceScore: number;
+    }> = [];
+
+    if (requestedSources.has("articles") || requestedSources.has("internalArticles")) {
+      const articles = await listUnifiedArticlesWithLegacyFallback(ctx.db, args.workspaceId);
+      for (const article of articles) {
+        if (article.status !== "published") {
+          continue;
+        }
+        if (isPublicArticle(article) && requestedSources.has("articles")) {
+          const score = scoreText(article.title, article.content);
+          if (score > 0) {
+            candidates.push({
+              id: article._id,
+              type: "article",
+              title: article.title,
+              content: article.content,
+              relevanceScore: Math.min(100, score * 10),
+            });
+          }
+        }
+        if (isInternalArticle(article) && requestedSources.has("internalArticles")) {
+          const score = scoreText(article.title, article.content);
+          if (score > 0) {
+            candidates.push({
+              id: article._id,
+              type: "internalArticle",
+              title: article.title,
+              content: article.content,
+              relevanceScore: Math.min(100, score * 10),
+            });
+          }
+        }
+      }
+    }
+
+    if (requestedSources.has("snippets")) {
+      const snippets = (await ctx.db
+        .query("snippets")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+        .collect()) as Doc<"snippets">[];
+      for (const snippet of snippets) {
+        const score = scoreText(snippet.name, snippet.content);
+        if (score > 0) {
+          candidates.push({
+            id: snippet._id,
+            type: "snippet",
+            title: snippet.name,
+            content: snippet.content,
+            relevanceScore: Math.min(100, score * 10),
+          });
+        }
+      }
+    }
+
+    candidates.sort((a, b) => b.relevanceScore - a.relevanceScore);
+    return candidates.slice(0, limit);
   },
 });
 
@@ -338,7 +425,7 @@ export const getRelevantKnowledgeForRuntime = internalQuery({
     limit: v.optional(v.number()),
   },
   handler: async () => {
-    throw new Error("getRelevantKnowledgeForRuntime query is deprecated. Use getRelevantKnowledgeForRuntimeAction instead.");
+    return [];
   },
 });
 
