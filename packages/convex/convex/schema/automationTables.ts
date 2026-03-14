@@ -68,6 +68,7 @@ export const automationTables = {
     .index("by_subscription", ["subscriptionId"])
     .index("by_subscription_event", ["subscriptionId", "eventId"])
     .index("by_event", ["eventId"])
+    .index("by_workspace", ["workspaceId", "createdAt"])
     .index("by_status", ["status"])
     .index("by_next_retry", ["status", "nextRetryAt"]),
 

@@ -4,6 +4,9 @@ import { authMutation, authQuery } from "./lib/authWrappers";
 import { encryptWebhookSecret } from "./lib/automationWebhookSecrets";
 
 const emitEventRef = makeFunctionReference<"mutation">("automationEvents:emitEvent");
+const replayDeliveryInternalRef = makeFunctionReference<"mutation">(
+  "automationWebhookWorker:replayDelivery"
+);
 
 function generateSigningSecret(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -157,5 +160,66 @@ export const testSubscription = authMutation({
     });
 
     return { success: true, message: "Test event queued" };
+  },
+});
+
+export const listDeliveries = authQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    subscriptionId: v.optional(v.id("automationWebhookSubscriptions")),
+    status: v.optional(
+      v.union(v.literal("pending"), v.literal("success"), v.literal("failed"), v.literal("retrying"))
+    ),
+    limit: v.optional(v.number()),
+  },
+  permission: "settings.integrations",
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
+
+    const deliveries = await ctx.db
+      .query("automationWebhookDeliveries")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .order("desc")
+      .collect();
+
+    const filtered = deliveries
+      .filter((d) => {
+        if (args.subscriptionId && d.subscriptionId !== args.subscriptionId) return false;
+        if (args.status && d.status !== args.status) return false;
+        return true;
+      })
+      .slice(0, limit);
+
+    return filtered.map((d) => ({
+      _id: d._id,
+      subscriptionId: d.subscriptionId,
+      eventId: d.eventId,
+      attemptNumber: d.attemptNumber,
+      status: d.status,
+      httpStatus: d.httpStatus,
+      error: d.error,
+      createdAt: d.createdAt,
+    }));
+  },
+});
+
+export const replayDelivery = authMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    deliveryId: v.id("automationWebhookDeliveries"),
+  },
+  permission: "settings.integrations",
+  handler: async (ctx, args) => {
+    const delivery = await ctx.db.get(args.deliveryId);
+    if (!delivery || delivery.workspaceId !== args.workspaceId) {
+      throw new Error("Delivery not found");
+    }
+
+    await ctx.scheduler.runAfter(0, replayDeliveryInternalRef as any, {
+      deliveryId: args.deliveryId,
+      workspaceId: args.workspaceId,
+    });
+
+    return { success: true };
   },
 });
