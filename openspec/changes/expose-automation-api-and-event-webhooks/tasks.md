@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add persistence and shared services for automation credentials, automation actors, conversation claims, automation events, webhook subscriptions, and delivery attempts.
 - [x] 1.2 Implement HTTP auth, scope enforcement, secret hashing, one-time secret reveal, rate limiting, and idempotency middleware for automation routes.
-- [ ] 1.3 Define the v1 resource and event coverage matrix used by implementation, docs, and rollout gating.
+- [x] 1.3 Define the v1 resource and event coverage matrix used by implementation, docs, and rollout gating.
 
 ## 2. Resource API Surface
 
@@ -17,7 +17,7 @@
 ## 3. Event Feed And Webhook Delivery
 
 - [x] 3.1 Implement a canonical automation event ledger with emitEvent internal mutation.
-- [ ] 3.1b Wire emitEvent calls into existing domain files (conversations, messages, tickets, visitors) so events are actually emitted on resource changes.
+- [x] 3.1b Wire emitEvent calls into existing domain files (conversations, messages, tickets, visitors) so events are actually emitted on resource changes.
 - [x] 3.2 Expose a polling endpoint that reads the canonical event stream.
 - [x] 3.3 Implement webhook subscription management, HMAC signatures, retry/backoff scheduling, delivery attempt storage, and manual replay.
 
@@ -30,7 +30,7 @@
 
 ## 5. Admin Experience And Documentation
 
-- [ ] 5.1 Build admin settings UI for credential management, scope review, webhook endpoints, delivery logs, and replay actions.
+- [x] 5.1 Build admin settings UI for credential management, scope review, webhook endpoints, delivery logs, and replay actions.
 - [ ] 5.2 Update developer and security docs for authentication, scopes, rate limits, idempotency, webhook verification, event semantics, and rollout limitations.
 - [x] 5.3 Gate the feature behind workspace flags (`automationApiEnabled` on workspaces table).
 - [ ] 5.3b Add rollout instrumentation for request volume, webhook failures, and automation conflict rates.
