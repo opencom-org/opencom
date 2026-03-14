@@ -19,6 +19,7 @@ export type WorkspaceSettingsRecord = {
   allowedDomains?: string[];
   helpCenterAccessPolicy?: "public" | "restricted";
   authMethods?: Array<"password" | "otp">;
+  automationApiEnabled?: boolean;
 } | null;
 
 export type EmailConfigRecord = {

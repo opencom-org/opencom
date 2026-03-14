@@ -9,6 +9,7 @@ import { ticketTestHelpers } from "./helpers/tickets";
 import { aiTestHelpers } from "./helpers/ai";
 import { cleanupTestHelpers } from "./helpers/cleanup";
 import { supportAttachmentTestHelpers } from "./helpers/supportAttachments";
+import { automationTestHelpers } from "./helpers/automation";
 
 export const createTestWorkspace: ReturnType<typeof internalMutation> = workspaceTestHelpers.createTestWorkspace;
 export const updateTestHelpCenterAccessPolicy: ReturnType<typeof internalMutation> = workspaceTestHelpers.updateTestHelpCenterAccessPolicy;
@@ -97,3 +98,5 @@ export const cleanupExpiredSupportAttachments: ReturnType<typeof internalMutatio
 export const expireTestSupportAttachment: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.expireTestSupportAttachment;
 export const getTestSupportAttachment: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.getTestSupportAttachment;
 export const hasTestStoredFile: ReturnType<typeof internalMutation> = supportAttachmentTestHelpers.hasTestStoredFile;
+export const enableAutomationApi: ReturnType<typeof internalMutation> = automationTestHelpers.enableAutomationApi;
+export const createTestAutomationCredential: ReturnType<typeof internalMutation> = automationTestHelpers.createTestAutomationCredential;

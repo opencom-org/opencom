@@ -27,6 +27,10 @@ type ConversationAccessArgs = {
   sessionToken?: string;
 };
 
+type ActiveAutomationClaimArgs = {
+  conversationId: Id<"conversations">;
+};
+
 type ConversationAccessResult = {
   conversationId: Id<"conversations">;
   workspaceId: Id<"workspaces">;
@@ -34,6 +38,12 @@ type ConversationAccessResult = {
   aiWorkflowState?: string | null;
   hasHumanAgentResponse: boolean;
 };
+
+type ActiveAutomationClaimResult = {
+  claimId: Id<"automationConversationClaims">;
+  credentialId: Id<"automationCredentials">;
+  expiresAt: number;
+} | null;
 
 type KnowledgeSource = "articles" | "internalArticles" | "snippets";
 
@@ -137,6 +147,17 @@ const AUTHORIZE_CONVERSATION_ACCESS_REF = makeFunctionReference<
   "internal",
   ConversationAccessArgs,
   ConversationAccessResult
+>;
+
+const GET_ACTIVE_AUTOMATION_CLAIM_REF = makeFunctionReference<
+  "query",
+  ActiveAutomationClaimArgs,
+  ActiveAutomationClaimResult
+>("automationConversationClaims:getActiveClaim") as unknown as ConvexRef<
+  "query",
+  "internal",
+  ActiveAutomationClaimArgs,
+  ActiveAutomationClaimResult
 >;
 
 const GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF = makeFunctionReference<
@@ -249,6 +270,8 @@ const EMPTY_RESPONSE_RETRY_LIMIT = 1;
 const MAX_DIAGNOSTIC_MESSAGE_LENGTH = 2000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 2000;
 const GPT5_REASONING_MAX_OUTPUT_TOKENS = 10000;
+const ACTIVE_AUTOMATION_CLAIM_REASON =
+  "Conversation is currently claimed by external automation";
 
 const supportsTemperatureControl = (provider: string, model: string): boolean => {
   // OpenAI GPT-5 reasoning models reject temperature and emit warnings.
@@ -500,6 +523,79 @@ export const generateResponse = action({
       };
     }
 
+    const buildAutomationClaimSuppressionResult = (): GenerateResponseResult => ({
+      response: "",
+      confidence: 0,
+      sources: [],
+      handoff: true,
+      handoffReason: ACTIVE_AUTOMATION_CLAIM_REASON,
+      messageId: null,
+    });
+
+    const hasActiveAutomationClaim = (
+      value: ActiveAutomationClaimResult | unknown
+    ): value is Exclude<ActiveAutomationClaimResult, null> =>
+      !!value && typeof value === "object" && "claimId" in value;
+
+    const getAutomationClaimSuppression = async (): Promise<GenerateResponseResult | null> => {
+      const activeClaim = await runQuery(GET_ACTIVE_AUTOMATION_CLAIM_REF, {
+        conversationId: args.conversationId,
+      });
+      return hasActiveAutomationClaim(activeClaim)
+        ? buildAutomationClaimSuppressionResult()
+        : null;
+    };
+
+    const runClaimSafeHandoff = async (
+      reason: string
+    ): Promise<HandoffToHumanResult | GenerateResponseResult> => {
+      const claimSuppression = await getAutomationClaimSuppression();
+      if (claimSuppression) {
+        return claimSuppression;
+      }
+
+      try {
+        return await runMutation(HANDOFF_TO_HUMAN_REF, {
+          conversationId: args.conversationId,
+          visitorId: args.visitorId,
+          sessionToken: args.sessionToken,
+          reason,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === ACTIVE_AUTOMATION_CLAIM_REASON) {
+          return buildAutomationClaimSuppressionResult();
+        }
+        throw error;
+      }
+    };
+
+    const runClaimSafeBotMessage = async (
+      content: string
+    ): Promise<Id<"messages"> | GenerateResponseResult> => {
+      const claimSuppression = await getAutomationClaimSuppression();
+      if (claimSuppression) {
+        return claimSuppression;
+      }
+
+      try {
+        return await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
+          conversationId: args.conversationId,
+          senderId: "ai-agent",
+          content,
+        });
+      } catch (error) {
+        if (error instanceof Error && error.message === ACTIVE_AUTOMATION_CLAIM_REASON) {
+          return buildAutomationClaimSuppressionResult();
+        }
+        throw error;
+      }
+    };
+
+    const initialClaimSuppression = await getAutomationClaimSuppression();
+    if (initialClaimSuppression) {
+      return initialClaimSuppression;
+    }
+
     // Get AI settings
     const settings = await runQuery(GET_RUNTIME_SETTINGS_FOR_WORKSPACE_REF, {
       workspaceId: args.workspaceId,
@@ -508,12 +604,10 @@ export const generateResponse = action({
     if (!settings.enabled) {
       const reason = "AI Agent is disabled";
       try {
-        const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
-          conversationId: args.conversationId,
-          visitorId: args.visitorId,
-          sessionToken: args.sessionToken,
-          reason,
-        });
+        const handoff = await runClaimSafeHandoff(reason);
+        if ("handoff" in handoff) {
+          return handoff;
+        }
 
         return {
           response: handoff.handoffMessage,
@@ -527,11 +621,10 @@ export const generateResponse = action({
         console.error("Failed to handoff when AI Agent is disabled:", handoffError);
       }
 
-      const messageId = await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
-        conversationId: args.conversationId,
-        senderId: "ai-agent",
-        content: GENERATION_FAILURE_FALLBACK_RESPONSE,
-      });
+      const messageId = await runClaimSafeBotMessage(GENERATION_FAILURE_FALLBACK_RESPONSE);
+      if (typeof messageId !== "string") {
+        return messageId;
+      }
 
       return {
         response: GENERATION_FAILURE_FALLBACK_RESPONSE,
@@ -553,12 +646,10 @@ export const generateResponse = action({
         model: configurationDiagnostic.model,
       });
 
-      const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
-        conversationId: args.conversationId,
-        visitorId: args.visitorId,
-        sessionToken: args.sessionToken,
-        reason: configurationDiagnostic.message,
-      });
+      const handoff = await runClaimSafeHandoff(configurationDiagnostic.message);
+      if ("handoff" in handoff) {
+        return handoff;
+      }
 
       return {
         response: handoff.handoffMessage,
@@ -628,12 +719,10 @@ export const generateResponse = action({
       }
 
       try {
-        const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
-          conversationId: args.conversationId,
-          visitorId: args.visitorId,
-          sessionToken: args.sessionToken,
-          reason,
-        });
+        const handoff = await runClaimSafeHandoff(reason);
+        if ("handoff" in handoff) {
+          return handoff;
+        }
 
         try {
           await runMutation(STORE_RESPONSE_REF, {
@@ -671,11 +760,10 @@ export const generateResponse = action({
         console.error("Failed to handoff after AI generation error:", handoffError);
       }
 
-      const messageId = await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
-        conversationId: args.conversationId,
-        senderId: "ai-agent",
-        content: GENERATION_FAILURE_FALLBACK_RESPONSE,
-      });
+      const messageId = await runClaimSafeBotMessage(GENERATION_FAILURE_FALLBACK_RESPONSE);
+      if (typeof messageId !== "string") {
+        return messageId;
+      }
 
       try {
         await runMutation(STORE_RESPONSE_REF, {
@@ -864,12 +952,10 @@ export const generateResponse = action({
 
     if (handoff) {
       // Preserve both generated and delivered contexts while keeping one visitor-facing handoff message.
-      const handoffResult = await runMutation(HANDOFF_TO_HUMAN_REF, {
-        conversationId: args.conversationId,
-        visitorId: args.visitorId,
-        sessionToken: args.sessionToken,
-        reason: handoffReason ?? undefined,
-      });
+      const handoffResult = await runClaimSafeHandoff(handoffReason ?? "AI indicated handoff needed");
+      if ("handoff" in handoffResult) {
+        return handoffResult;
+      }
 
       await runMutation(STORE_RESPONSE_REF, {
         conversationId: args.conversationId,
@@ -902,11 +988,10 @@ export const generateResponse = action({
     }
 
     // Create the AI message via the internal bot-only path.
-    const messageId = await runMutation(INTERNAL_SEND_BOT_MESSAGE_REF, {
-      conversationId: args.conversationId,
-      senderId: "ai-agent",
-      content: responseText,
-    });
+    const messageId = await runClaimSafeBotMessage(responseText);
+    if (typeof messageId !== "string") {
+      return messageId;
+    }
 
     // Store the AI response for analytics
     await runMutation(STORE_RESPONSE_REF, {

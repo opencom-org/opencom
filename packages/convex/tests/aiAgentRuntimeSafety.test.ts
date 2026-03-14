@@ -588,6 +588,91 @@ describe("aiAgentActions runtime safety", () => {
     );
   });
 
+  it("suppresses a generated AI reply when an automation claim becomes active before persistence", async () => {
+    mockGenerateText.mockResolvedValue({
+      text: "Here is the answer.",
+      usage: { totalTokens: 42 },
+    } as any);
+
+    let claimChecks = 0;
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "conversationId" in args) {
+        claimChecks += 1;
+        return claimChecks === 1
+          ? null
+          : {
+              claimId: "claim_1",
+              credentialId: "credential_1",
+              expiresAt: Date.now() + 60_000,
+            };
+      }
+      if ("query" in args) {
+        return [];
+      }
+      if ("workspaceId" in args && "conversationId" in args === false) {
+        return {
+          enabled: true,
+          model: "openai/gpt-5-nano",
+          confidenceThreshold: 0.2,
+          knowledgeSources: ["articles"],
+          personality: null,
+        };
+      }
+      return {
+        conversationId: "conversation_1",
+        workspaceId: "workspace_1",
+        visitorId: "visitor_1",
+        aiWorkflowState: "none",
+        hasHumanAgentResponse: false,
+      };
+    });
+
+    const runMutation = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 1 && "workspaceId" in args) {
+        return "cleared";
+      }
+      throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
+    });
+
+    const result = await generateResponse._handler(
+      {
+        runQuery,
+        runMutation,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        conversationId: "conversation_1" as any,
+        query: "What can you do?",
+      }
+    );
+
+    expect(result.handoff).toBe(true);
+    expect(result.handoffReason).toBe(
+      "Conversation is currently claimed by external automation"
+    );
+    expect(result.messageId).toBeNull();
+    expect(result.response).toBe("");
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    expect(runMutation).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        senderId: "ai-agent",
+      })
+    );
+    expect(runMutation).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        reason: expect.any(String),
+      })
+    );
+    expect(runMutation).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        query: "What can you do?",
+      })
+    );
+  });
+
   it("persists a handoff message when generation fails", async () => {
     mockGenerateText.mockRejectedValue(new Error("gateway timeout"));
 

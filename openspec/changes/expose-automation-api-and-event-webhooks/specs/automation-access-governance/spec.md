@@ -22,7 +22,7 @@ Actions performed through the automation API or webhook-triggered flows SHALL be
 - **AND** audit logs SHALL record the workspace, credential, action, and target resource
 
 ### Requirement: Automation platform MUST enforce secret-handling and rate-limit safeguards
-Automation credentials and webhook secrets SHALL use least-privilege security controls including hashed secret storage, one-time secret reveal, and per-workspace rate limiting for public automation traffic.
+Automation credentials and webhook secrets SHALL use least-privilege security controls including one-time secret reveal and per-workspace rate limiting for public automation traffic. API credential secrets are stored as one-way SHA-256 hashes. Webhook signing secrets are stored encrypted server-side, are only returned once on creation, and list and get endpoints expose only a prefix.
 
 #### Scenario: Existing credentials do not expose recoverable secrets
 - **WHEN** an admin views an existing automation credential after its initial creation
