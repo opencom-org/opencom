@@ -50,7 +50,7 @@ Goal: ship a professional open-source customer messaging platform with strong de
 - [p] a CI AI agent to check for any doc drift and update docs based on the latest code
 - [ ] convert supportAttachments.finalizeUpload into an action + internal mutation pipeline so we can add real signature checks too. The current finalizeUpload boundary is a Convex mutation and ctx.storage.get() is only available in actions. Doing true magic-byte validation would need a larger refactor of that finalize flow.
 - [ ] add URL param deep links for the widget - Go to a url like ?open-widget-tab=home to open the widget to that tab, etc. 
-
+- [ ] make web admin chat input field multi line, with scrollbar when needed (currently single line max)
 
   apps/web/src/app/outbound/[id]/OutboundTriggerPanel.tsx
 Comment on lines +67 to 71

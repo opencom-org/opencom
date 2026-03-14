@@ -31,7 +31,7 @@ const ALLOWED_TAGS = [
   "img",
 ];
 
-const ALLOWED_ATTR = ["href", "target", "rel", "src", "alt", "title", "class"];
+const ALLOWED_ATTR = ["href", "target", "rel", "src", "alt", "title", "class", "data-article-id"];
 const FRONTMATTER_BLOCK_REGEX = /^\uFEFF?---\s*\r?\n[\s\S]*?\r?\n---(?:\s*\r?\n)?/;
 
 type ResolvedParseMarkdownOptions = {
@@ -80,16 +80,45 @@ function hasDisallowedAbsoluteProtocol(rawUrl: string): boolean {
   return protocol !== "http" && protocol !== "https";
 }
 
-function enforceSafeLinksAndMedia(
-  html: string,
-  options: ResolvedParseMarkdownOptions
-): string {
+function isArticleLink(href: string): boolean {
+  return href.trim().toLowerCase().startsWith("article:");
+}
+
+function extractArticleId(href: string): string | null {
+  const match = href.trim().match(/^article:([a-zA-Z0-9]+)$/i);
+  return match ? match[1] : null;
+}
+
+function enforceSafeLinksAndMedia(html: string, options: ResolvedParseMarkdownOptions): string {
   const container = document.createElement("div");
   container.innerHTML = html;
 
   container.querySelectorAll("a").forEach((anchor) => {
     const href = anchor.getAttribute("href");
-    if (!href || hasBlockedProtocol(href) || hasDisallowedAbsoluteProtocol(href)) {
+    if (!href || hasBlockedProtocol(href)) {
+      anchor.removeAttribute("href");
+      anchor.removeAttribute("target");
+      anchor.removeAttribute("rel");
+      return;
+    }
+
+    if (isArticleLink(href)) {
+      const articleId = extractArticleId(href);
+      if (articleId) {
+        anchor.setAttribute("data-article-id", articleId);
+        anchor.setAttribute("class", "opencom-article-link");
+        anchor.setAttribute("href", `article:${articleId}`);
+        anchor.removeAttribute("target");
+        anchor.removeAttribute("rel");
+      } else {
+        anchor.removeAttribute("href");
+        anchor.removeAttribute("target");
+        anchor.removeAttribute("rel");
+      }
+      return;
+    }
+
+    if (hasDisallowedAbsoluteProtocol(href)) {
       anchor.removeAttribute("href");
       anchor.removeAttribute("target");
       anchor.removeAttribute("rel");
@@ -149,16 +178,15 @@ export function toPlainTextExcerpt(markdownInput: string, maxLength = 100): stri
   return `${normalizedText.slice(0, safeMaxLength).trimEnd()}...`;
 }
 
-export function parseMarkdown(
-  markdownInput: string,
-  options?: ParseMarkdownOptions
-): string {
+export function parseMarkdown(markdownInput: string, options?: ParseMarkdownOptions): string {
   const contentWithoutFrontmatter = stripMarkdownFrontmatter(markdownInput);
   const rendered = markdown.render(contentWithoutFrontmatter);
   const sanitized = DOMPurify.sanitize(rendered, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     FORBID_ATTR: ["style"],
+    ALLOWED_URI_REGEXP:
+      /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|article):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
   });
 
   return enforceSafeLinksAndMedia(sanitized, resolveParseMarkdownOptions(options));

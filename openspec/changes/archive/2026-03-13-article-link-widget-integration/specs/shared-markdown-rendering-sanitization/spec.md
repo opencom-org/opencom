@@ -1,10 +1,4 @@
-# shared-markdown-rendering-sanitization Specification
-
-## Purpose
-
-TBD - created by archiving change unify-markdown-rendering-utility. Update Purpose after archive.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Web and widget MUST consume a shared markdown rendering implementation
 
@@ -31,14 +25,7 @@ The shared utility MUST apply one canonical sanitization and link-hardening poli
 - **WHEN** markdown includes allowed link and image content
 - **THEN** rendering SHALL preserve allowed elements and attributes according to the shared policy
 
-### Requirement: Shared utility MUST preserve frontmatter stripping and excerpt helper behavior
-
-The shared utility SHALL support frontmatter stripping and plain-text excerpt helpers used by consuming surfaces.
-
-#### Scenario: Markdown includes YAML frontmatter
-
-- **WHEN** input markdown begins with frontmatter metadata
-- **THEN** rendered output and excerpt generation SHALL ignore the frontmatter block
+## ADDED Requirements
 
 ### Requirement: Shared markdown utility MUST detect article links for in-widget navigation
 

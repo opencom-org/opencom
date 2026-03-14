@@ -1,6 +1,7 @@
 # ai-help-center-linked-sources Specification
 
 ## Purpose
+
 TBD - created by archiving change add-help-center-links-in-ai-responses. Update Purpose after archive.
 
 ## Requirements
@@ -31,3 +32,13 @@ Sources without linkable article targets SHALL remain visible as attribution tex
 
 - **WHEN** AI response includes a non-article source
 - **THEN** UI SHALL display source attribution without invalid navigation affordances
+
+### Requirement: Article links in messages MUST use consistent format with AI sources
+
+Article links inserted by agents SHALL use the same article ID-based format as AI response sources for consistent widget navigation.
+
+#### Scenario: Agent-inserted article link opens in widget
+
+- **WHEN** a visitor clicks an article link in a message from an agent
+- **THEN** the widget SHALL open the article view using the same navigation as AI sources
+- **AND** the article SHALL be identified by its ID, not slug
