@@ -9,6 +9,27 @@ import type { useAutomationApiConvex, SubscriptionRecord } from "../hooks/useAut
 
 type Api = ReturnType<typeof useAutomationApiConvex>;
 
+const KNOWN_EVENT_TYPES = [
+  "conversation.created",
+  "conversation.updated",
+  "message.created",
+  "visitor.updated",
+  "ticket.created",
+  "ticket.updated",
+  "ticket.comment_added",
+  "test.ping",
+];
+
+const KNOWN_RESOURCE_TYPES = [
+  "conversation",
+  "message",
+  "visitor",
+  "ticket",
+  "article",
+  "collection",
+  "webhook",
+];
+
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
@@ -56,30 +77,93 @@ function StatusBadge({ status }: { status: string }): React.JSX.Element {
   );
 }
 
+function MultiCheckboxField({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+}): React.JSX.Element {
+  const selectedSet = new Set(selected);
+  const toggle = (value: string) => {
+    const next = new Set(selectedSet);
+    if (next.has(value)) {
+      next.delete(value);
+    } else {
+      next.add(value);
+    }
+    onChange(Array.from(next));
+  };
+
+  return (
+    <div>
+      <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => (
+          <label key={opt} className="flex items-center gap-1 cursor-pointer text-xs">
+            <input
+              type="checkbox"
+              checked={selectedSet.has(opt)}
+              onChange={() => toggle(opt)}
+              className="rounded border-gray-300"
+            />
+            {opt}
+          </label>
+        ))}
+      </div>
+      {selected.length > 0 && (
+        <button
+          type="button"
+          onClick={() => onChange([])}
+          className="text-xs text-muted-foreground hover:underline mt-1"
+        >
+          Clear all
+        </button>
+      )}
+    </div>
+  );
+}
+
 function WebhookRow({
   sub,
   workspaceId,
   api,
+  onError,
 }: {
   sub: SubscriptionRecord;
   workspaceId: Id<"workspaces">;
   api: Api;
+  onError: (msg: string) => void;
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const [editUrl, setEditUrl] = useState(sub.url);
+  const [editEventTypes, setEditEventTypes] = useState<string[]>(sub.eventTypes ?? []);
+  const [editResourceTypes, setEditResourceTypes] = useState<string[]>(sub.resourceTypes ?? []);
   const [isSaving, setIsSaving] = useState(false);
 
   const handlePauseResume = async () => {
-    const newStatus = sub.status === "active" ? "paused" : "active";
-    await api.updateSubscription({
-      workspaceId,
-      subscriptionId: sub._id,
-      status: newStatus,
-    });
+    try {
+      const newStatus = sub.status === "active" ? "paused" : "active";
+      await api.updateSubscription({
+        workspaceId,
+        subscriptionId: sub._id,
+        status: newStatus,
+      });
+    } catch (error) {
+      onError(`Failed to ${sub.status === "active" ? "pause" : "resume"} webhook: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   };
 
   const handleTest = async () => {
-    await api.testSubscription({ workspaceId, subscriptionId: sub._id });
+    try {
+      await api.testSubscription({ workspaceId, subscriptionId: sub._id });
+    } catch (error) {
+      onError(`Failed to send test: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   };
 
   const handleDelete = async () => {
@@ -89,22 +173,41 @@ function WebhookRow({
       confirmText: "Delete",
       destructive: true,
     }))) return;
-    await api.deleteSubscription({ workspaceId, subscriptionId: sub._id });
+    try {
+      await api.deleteSubscription({ workspaceId, subscriptionId: sub._id });
+    } catch (error) {
+      onError(`Failed to delete webhook: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
   };
 
   const handleSaveEdit = async () => {
     if (!editUrl.trim()) return;
+    if (!editUrl.trim().startsWith("https://")) {
+      onError("Webhook URL must use HTTPS");
+      return;
+    }
     setIsSaving(true);
     try {
       await api.updateSubscription({
         workspaceId,
         subscriptionId: sub._id,
         url: editUrl.trim(),
+        eventTypes: editEventTypes.length > 0 ? editEventTypes : undefined,
+        resourceTypes: editResourceTypes.length > 0 ? editResourceTypes : undefined,
       });
       setEditing(false);
+    } catch (error) {
+      onError(`Failed to save webhook: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setEditUrl(sub.url);
+    setEditEventTypes(sub.eventTypes ?? []);
+    setEditResourceTypes(sub.resourceTypes ?? []);
   };
 
   const filterSummary = [
@@ -143,16 +246,28 @@ function WebhookRow({
       </div>
 
       {editing && (
-        <div className="mt-3 border-t pt-3 space-y-2">
+        <div className="mt-3 border-t pt-3 space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">URL</label>
             <Input value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />
           </div>
+          <MultiCheckboxField
+            label="Event types (leave empty for all)"
+            options={KNOWN_EVENT_TYPES}
+            selected={editEventTypes}
+            onChange={setEditEventTypes}
+          />
+          <MultiCheckboxField
+            label="Resource types (leave empty for all)"
+            options={KNOWN_RESOURCE_TYPES}
+            selected={editResourceTypes}
+            onChange={setEditResourceTypes}
+          />
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleSaveEdit} disabled={isSaving}>
+            <Button size="sm" onClick={handleSaveEdit} disabled={isSaving || !editUrl.trim()}>
               {isSaving ? "Saving..." : "Save"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => { setEditing(false); setEditUrl(sub.url); }}>
+            <Button size="sm" variant="outline" onClick={handleCancelEdit}>
               Cancel
             </Button>
           </div>
@@ -171,28 +286,44 @@ export function WebhooksPanel({
 }): React.JSX.Element {
   const [showCreate, setShowCreate] = useState(false);
   const [url, setUrl] = useState("");
+  const [createEventTypes, setCreateEventTypes] = useState<string[]>([]);
+  const [createResourceTypes, setCreateResourceTypes] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const subscriptions = api.subscriptions ?? [];
+  const subscriptions = api.subscriptions;
 
   const handleCreate = async () => {
     if (!url.trim()) return;
+    if (!url.trim().startsWith("https://")) {
+      setErrorMessage("Webhook URL must use HTTPS");
+      return;
+    }
+    setErrorMessage(null);
     setIsCreating(true);
     try {
       const result = await api.createSubscription({
         workspaceId,
         url: url.trim(),
+        eventTypes: createEventTypes.length > 0 ? createEventTypes : undefined,
+        resourceTypes: createResourceTypes.length > 0 ? createResourceTypes : undefined,
       });
       setNewSecret(result.signingSecret);
       setUrl("");
+      setCreateEventTypes([]);
+      setCreateResourceTypes([]);
       setShowCreate(false);
     } catch (error) {
-      console.error("Failed to create webhook:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create webhook");
     } finally {
       setIsCreating(false);
     }
   };
+
+  if (subscriptions === undefined) {
+    return <p className="text-sm text-muted-foreground py-4">Loading webhooks...</p>;
+  }
 
   if (subscriptions.length === 0 && !showCreate && !newSecret) {
     return (
@@ -208,6 +339,13 @@ export function WebhooksPanel({
 
   return (
     <div className="space-y-4">
+      {errorMessage && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errorMessage}
+          <button type="button" onClick={() => setErrorMessage(null)} className="ml-2 font-medium hover:underline">Dismiss</button>
+        </div>
+      )}
+
       {newSecret && <SecretDisplay secret={newSecret} />}
 
       <div className="flex justify-end">
@@ -225,18 +363,30 @@ export function WebhooksPanel({
             <label className="text-xs text-muted-foreground">Endpoint URL</label>
             <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/webhooks" />
           </div>
+          <MultiCheckboxField
+            label="Event types (leave empty for all)"
+            options={KNOWN_EVENT_TYPES}
+            selected={createEventTypes}
+            onChange={setCreateEventTypes}
+          />
+          <MultiCheckboxField
+            label="Resource types (leave empty for all)"
+            options={KNOWN_RESOURCE_TYPES}
+            selected={createResourceTypes}
+            onChange={setCreateResourceTypes}
+          />
           <div className="flex gap-2">
             <Button size="sm" onClick={handleCreate} disabled={isCreating || !url.trim()}>
               {isCreating ? "Creating..." : "Create"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button size="sm" variant="outline" onClick={() => { setShowCreate(false); setUrl(""); setCreateEventTypes([]); setCreateResourceTypes([]); }}>Cancel</Button>
           </div>
         </div>
       )}
 
       <div className="space-y-2">
         {subscriptions.map((sub) => (
-          <WebhookRow key={sub._id} sub={sub} workspaceId={workspaceId} api={api} />
+          <WebhookRow key={sub._id} sub={sub} workspaceId={workspaceId} api={api} onError={setErrorMessage} />
         ))}
       </div>
     </div>

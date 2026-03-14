@@ -154,4 +154,4 @@ export function useAutomationApiConvex(workspaceId?: Id<"workspaces">) {
   };
 }
 
-export type { CredentialRecord, SubscriptionRecord, DeliveryRecord };
+export type { CredentialRecord, SubscriptionRecord, DeliveryRecord, ListDeliveriesArgs };

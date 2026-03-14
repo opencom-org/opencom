@@ -73,11 +73,13 @@ export function CredentialsPanel({
   const [isCreating, setIsCreating] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [rotatedSecret, setRotatedSecret] = useState<{ id: string; secret: string } | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const credentials = api.credentials ?? [];
+  const credentials = api.credentials;
 
   const handleCreate = async () => {
     if (!name.trim() || !actorName.trim() || scopes.length === 0) return;
+    setErrorMessage(null);
     setIsCreating(true);
     try {
       const result = await api.createCredential({
@@ -92,7 +94,7 @@ export function CredentialsPanel({
       setScopes([]);
       setShowCreate(false);
     } catch (error) {
-      console.error("Failed to create credential:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to create API key");
     } finally {
       setIsCreating(false);
     }
@@ -106,19 +108,25 @@ export function CredentialsPanel({
       destructive: true,
     }))) return;
 
+    setErrorMessage(null);
     try {
       const result = await api.rotateCredential({ workspaceId, credentialId });
       setRotatedSecret({ id: credentialId, secret: result.secret });
     } catch (error) {
-      console.error("Failed to rotate:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to rotate key");
     }
   };
 
   const handleToggle = async (credentialId: Id<"automationCredentials">, currentStatus: string) => {
-    if (currentStatus === "active") {
-      await api.disableCredential({ workspaceId, credentialId });
-    } else {
-      await api.enableCredential({ workspaceId, credentialId });
+    setErrorMessage(null);
+    try {
+      if (currentStatus === "active") {
+        await api.disableCredential({ workspaceId, credentialId });
+      } else {
+        await api.enableCredential({ workspaceId, credentialId });
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to update key status");
     }
   };
 
@@ -130,8 +138,17 @@ export function CredentialsPanel({
       destructive: true,
     }))) return;
 
-    await api.removeCredential({ workspaceId, credentialId });
+    setErrorMessage(null);
+    try {
+      await api.removeCredential({ workspaceId, credentialId });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Failed to delete key");
+    }
   };
+
+  if (credentials === undefined) {
+    return <p className="text-sm text-muted-foreground py-4">Loading API keys...</p>;
+  }
 
   if (credentials.length === 0 && !showCreate && !newSecret) {
     return (
@@ -147,6 +164,13 @@ export function CredentialsPanel({
 
   return (
     <div className="space-y-4">
+      {errorMessage && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errorMessage}
+          <button type="button" onClick={() => setErrorMessage(null)} className="ml-2 font-medium hover:underline">Dismiss</button>
+        </div>
+      )}
+
       {newSecret && <SecretDisplay secret={newSecret} />}
 
       <div className="flex justify-end">

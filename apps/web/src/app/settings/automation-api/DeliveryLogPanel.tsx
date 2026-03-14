@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@opencom/ui";
 import { Package } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useWebQuery } from "@/lib/convex/hooks";
 import { appConfirm } from "@/lib/appConfirm";
 import type { useAutomationApiConvex } from "../hooks/useAutomationApiConvex";
+import type { ListDeliveriesArgs } from "../hooks/useAutomationApiConvex";
 
 type Api = ReturnType<typeof useAutomationApiConvex>;
 
@@ -43,21 +44,26 @@ export function DeliveryLogPanel({
 }): React.JSX.Element {
   const [filterSubscriptionId, setFilterSubscriptionId] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const subscriptions = api.subscriptions ?? [];
 
-  const deliveryArgs: Record<string, unknown> = { workspaceId };
-  if (filterSubscriptionId) {
-    deliveryArgs.subscriptionId = filterSubscriptionId;
-  }
-  if (filterStatus) {
-    deliveryArgs.status = filterStatus;
-  }
+  const deliveryArgs = useMemo((): ListDeliveriesArgs => {
+    const args: ListDeliveriesArgs = { workspaceId };
+    if (filterSubscriptionId) {
+      args.subscriptionId = filterSubscriptionId as Id<"automationWebhookSubscriptions">;
+    }
+    if (filterStatus) {
+      args.status = filterStatus as ListDeliveriesArgs["status"];
+    }
+    return args;
+  }, [workspaceId, filterSubscriptionId, filterStatus]);
 
-  const deliveries = useWebQuery(api.deliveriesListRef, deliveryArgs as any);
+  const deliveries = useWebQuery(api.deliveriesListRef, deliveryArgs);
 
-  const subscriptionUrlMap = new Map(
-    subscriptions.map((s) => [s._id, s.url])
+  const subscriptionUrlMap = useMemo(
+    () => new Map(subscriptions.map((s) => [s._id, s.url])),
+    [subscriptions]
   );
 
   const handleReplay = async (deliveryId: Id<"automationWebhookDeliveries">) => {
@@ -67,15 +73,23 @@ export function DeliveryLogPanel({
       confirmText: "Replay",
     }))) return;
 
+    setErrorMessage(null);
     try {
       await api.replayDelivery({ workspaceId, deliveryId });
     } catch (error) {
-      console.error("Failed to replay delivery:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to replay delivery");
     }
   };
 
   return (
     <div className="space-y-4">
+      {errorMessage && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {errorMessage}
+          <button type="button" onClick={() => setErrorMessage(null)} className="ml-2 font-medium hover:underline">Dismiss</button>
+        </div>
+      )}
+
       <div className="flex gap-3">
         <select
           value={filterSubscriptionId}
@@ -104,7 +118,7 @@ export function DeliveryLogPanel({
       </div>
 
       {deliveries === undefined ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">Loading deliveries...</p>
       ) : deliveries.length === 0 ? (
         <div className="text-center py-8">
           <Package className="h-8 w-8 mx-auto text-muted-foreground mb-2" />

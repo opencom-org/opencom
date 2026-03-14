@@ -31,6 +31,10 @@ export const createSubscription = authMutation({
   },
   permission: "settings.integrations",
   handler: async (ctx, args) => {
+    if (!args.url.startsWith("https://")) {
+      throw new Error("Webhook URL must use HTTPS");
+    }
+
     const signingSecret = generateSigningSecret();
     const signingSecretPrefix = signingSecret.slice(0, 14); // "whsec_" + 8 chars
 
@@ -108,6 +112,10 @@ export const updateSubscription = authMutation({
       throw new Error("Subscription not found");
     }
 
+    if (args.url !== undefined && !args.url.startsWith("https://")) {
+      throw new Error("Webhook URL must use HTTPS");
+    }
+
     const updates: Record<string, unknown> = {};
     if (args.url !== undefined) updates.url = args.url;
     if (args.eventTypes !== undefined) updates.eventTypes = args.eventTypes;
@@ -175,20 +183,27 @@ export const listDeliveries = authQuery({
   permission: "settings.integrations",
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
+    const hasFilters = args.subscriptionId !== undefined || args.status !== undefined;
 
-    const deliveries = await ctx.db
+    // When no filters, take exactly what we need. When filtering, scan a
+    // bounded window (10x limit) so we never pull the entire table into memory.
+    const scanCap = hasFilters ? limit * 10 : limit;
+
+    const scanned = await ctx.db
       .query("automationWebhookDeliveries")
       .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
       .order("desc")
-      .collect();
+      .take(scanCap);
 
-    const filtered = deliveries
-      .filter((d) => {
-        if (args.subscriptionId && d.subscriptionId !== args.subscriptionId) return false;
-        if (args.status && d.status !== args.status) return false;
-        return true;
-      })
-      .slice(0, limit);
+    const filtered = hasFilters
+      ? scanned
+          .filter((d) => {
+            if (args.subscriptionId && d.subscriptionId !== args.subscriptionId) return false;
+            if (args.status && d.status !== args.status) return false;
+            return true;
+          })
+          .slice(0, limit)
+      : scanned;
 
     return filtered.map((d) => ({
       _id: d._id,
@@ -213,6 +228,13 @@ export const replayDelivery = authMutation({
     const delivery = await ctx.db.get(args.deliveryId);
     if (!delivery || delivery.workspaceId !== args.workspaceId) {
       throw new Error("Delivery not found");
+    }
+
+    if (delivery.status === "success") {
+      throw new Error("Cannot replay a successful delivery");
+    }
+    if (delivery.status === "pending") {
+      throw new Error("Cannot replay a pending delivery");
     }
 
     await ctx.scheduler.runAfter(0, replayDeliveryInternalRef as any, {
