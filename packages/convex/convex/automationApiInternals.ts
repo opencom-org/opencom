@@ -870,11 +870,7 @@ export const updateVisitorForAutomation = internalMutation({
       eventType: "visitor.updated",
       resourceType: "visitor",
       resourceId: args.visitorId,
-      data: {
-        email: args.email ?? visitor.email,
-        name: args.name ?? visitor.name,
-        externalUserId: args.externalUserId ?? visitor.externalUserId,
-      },
+      data: { visitorId: args.visitorId },
     });
 
     return { id: args.visitorId };

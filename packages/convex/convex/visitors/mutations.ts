@@ -253,7 +253,7 @@ export const identify = mutation({
           eventType: "visitor.updated",
           resourceType: "visitor",
           resourceId: canonicalByEmail._id,
-          data: { email: args.email, name: args.name ?? canonicalByEmail.name ?? visitor.name, externalUserId: args.externalUserId ?? canonicalByEmail.externalUserId ?? visitor.externalUserId },
+          data: { visitorId: canonicalByEmail._id },
         });
 
         return await ctx.db.get(canonicalByEmail._id);
@@ -312,7 +312,7 @@ export const identify = mutation({
       eventType: "visitor.updated",
       resourceType: "visitor",
       resourceId: resolvedVisitorId,
-      data: { email: args.email ?? visitor.email, name: args.name ?? visitor.name, externalUserId: args.externalUserId ?? visitor.externalUserId },
+      data: { visitorId: resolvedVisitorId },
     });
 
     return await ctx.db.get(resolvedVisitorId);

@@ -13,7 +13,7 @@
 
 ## Event Details
 
-Events are emitted by both UI/domain mutations and automation API mutations.
+Events are emitted by UI/domain mutations and most automation API write mutations. Not all API writes emit events — notably, `createVisitor` via the API does not emit `visitor.created`.
 
 ### conversation.created
 - **Triggered by:** `conversations.create`, `conversations.getOrCreateForVisitor` (new branch), `conversations.createForVisitor`
@@ -30,8 +30,8 @@ Events are emitted by both UI/domain mutations and automation API mutations.
 
 ### visitor.updated
 - **Triggered by:** `visitors.identify` (direct update and merge branches), `automationApi.updateVisitor`
-- **Data payload:** `{ email, name, externalUserId }`
-- **Note:** Payload may include visitor identity fields (email, name, externalUserId)
+- **Data payload:** `{ visitorId }`
+- **Note:** The event signals that a visitor was updated. To retrieve updated fields, use the visitors GET endpoint with the `visitorId` from the payload.
 
 ### ticket.created
 - **Triggered by:** `tickets.create`, `tickets.convertFromConversation`, `automationApi.createTicket`
@@ -40,10 +40,12 @@ Events are emitted by both UI/domain mutations and automation API mutations.
 ### ticket.updated
 - **Triggered by:** `tickets.update`, `tickets.resolve`, `automationApi.updateTicket`
 - **Data payload:** `{ channel: "support_ticket", status, priority, assigneeId }`
+- **Note:** This is a coarse event, not a field-level diff. All listed fields are included regardless of which field changed. Fields like `teamId` and `resolutionSummary` are not included in the event payload.
 
 ### ticket.comment_added
-- **Triggered by:** `tickets.addComment`
-- **Data payload:** `{ channel: "support_ticket", commentId, authorType, isInternal }`
+- **Triggered by:** `tickets.addComment` (external comments only)
+- **Data payload:** `{ channel: "support_ticket", commentId, authorType }`
+- **Note:** Internal notes do not trigger this event.
 
 ## Authentication & Authorization
 
@@ -80,3 +82,4 @@ Events are emitted by both UI/domain mutations and automation API mutations.
 - **No fine-grained event types** — status changes, assignments, etc. are communicated via the `data` payload on broad event types (`*.updated`) rather than separate event types
 - **Noisy mutations excluded:** `visitors.updateLocation` and `visitors.heartbeat` do not emit events
 - **`aiWorkflowStates` webhook filter:** Reserved for future use; no production mutations currently populate this field in event data
+- **`ticket.updated` payload is coarse** — includes status, priority, assigneeId on every emit regardless of what changed; does not include teamId or resolutionSummary

@@ -2456,4 +2456,362 @@ describe("automation fixes", () => {
       expect(after!.parentId).toBeUndefined();
     });
   });
+
+  // ── Event emission: emitEvent handler ────────────────────────────────
+  describe("emitEvent handler", () => {
+    it("creates an automationEvent row when automation is enabled", async () => {
+      const ws = await seedWorkspace();
+
+      await t.mutation(internal.automationEvents.emitEvent, {
+        workspaceId: ws.workspaceId,
+        eventType: "ticket.created",
+        resourceType: "ticket",
+        resourceId: "t123",
+        data: { channel: "support_ticket", status: "submitted", priority: "normal" },
+      });
+
+      const events = await t.run(async (ctx) => {
+        return ctx.db
+          .query("automationEvents")
+          .withIndex("by_workspace_timestamp", (q) =>
+            q.eq("workspaceId", ws.workspaceId)
+          )
+          .collect();
+      });
+
+      const ticketEvents = events.filter((e) => e.eventType === "ticket.created");
+      expect(ticketEvents).toHaveLength(1);
+      expect(ticketEvents[0].data).toEqual({
+        channel: "support_ticket",
+        status: "submitted",
+        priority: "normal",
+      });
+    });
+
+    it("no-ops when automation is disabled", async () => {
+      const ws = await t.run(async (ctx) => {
+        const now = Date.now();
+        const workspaceId = await ctx.db.insert("workspaces", {
+          name: "No Automation",
+          createdAt: now,
+        });
+        return { workspaceId };
+      });
+
+      const result = await t.mutation(internal.automationEvents.emitEvent, {
+        workspaceId: ws.workspaceId,
+        eventType: "ticket.created",
+        resourceType: "ticket",
+        resourceId: "t456",
+        data: {},
+      });
+
+      expect(result).toEqual({ eventId: null });
+
+      const events = await t.run(async (ctx) => {
+        return ctx.db
+          .query("automationEvents")
+          .withIndex("by_workspace_timestamp", (q) =>
+            q.eq("workspaceId", ws.workspaceId)
+          )
+          .collect();
+      });
+      expect(events).toHaveLength(0);
+    });
+  });
+
+  // ── Event emission: automation API write paths ─────────────────────
+  describe("automation API write mutations emit events", () => {
+    // Helper: collect automation events for a workspace after running scheduled functions
+    async function collectEvents(workspaceId: string) {
+      await t.finishAllScheduledFunctions(() => {
+        vi.runAllTimers();
+      });
+      return t.run(async (ctx) => {
+        return ctx.db
+          .query("automationEvents")
+          .withIndex("by_workspace_timestamp", (q) =>
+            q.eq("workspaceId", workspaceId as any)
+          )
+          .collect();
+      });
+    }
+
+    it("updateConversationForAutomation emits conversation.updated", async () => {
+      const ws = await seedWorkspace();
+
+      const { conversationId } = await t.run(async (ctx) => {
+        const now = Date.now();
+        const visitorId = await ctx.db.insert("visitors", {
+          workspaceId: ws.workspaceId,
+          sessionId: "v-session",
+          createdAt: now,
+        });
+        const conversationId = await ctx.db.insert("conversations", {
+          workspaceId: ws.workspaceId,
+          visitorId,
+          status: "open",
+          createdAt: now,
+          updatedAt: now,
+        });
+        return { conversationId };
+      });
+
+      await t.mutation(
+        internal.automationApiInternals.updateConversationForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          conversationId,
+          credentialId: ws.credentialId,
+          status: "closed",
+        }
+      );
+
+      const events = await collectEvents(ws.workspaceId);
+      const convEvents = events.filter((e) => e.eventType === "conversation.updated");
+      expect(convEvents).toHaveLength(1);
+      expect(convEvents[0].resourceId).toBe(conversationId);
+      expect(convEvents[0].data).toHaveProperty("status", "closed");
+    });
+
+    it("sendMessageIdempotent emits message.created on fresh write", async () => {
+      const ws = await seedWorkspace();
+
+      const { conversationId } = await t.run(async (ctx) => {
+        const now = Date.now();
+        const visitorId = await ctx.db.insert("visitors", {
+          workspaceId: ws.workspaceId,
+          sessionId: "v-session",
+          createdAt: now,
+        });
+        const conversationId = await ctx.db.insert("conversations", {
+          workspaceId: ws.workspaceId,
+          visitorId,
+          status: "open",
+          channel: "email",
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.insert("automationConversationClaims", {
+          workspaceId: ws.workspaceId,
+          conversationId,
+          credentialId: ws.credentialId,
+          status: "active",
+          expiresAt: now + 5 * 60 * 1000,
+          createdAt: now,
+        });
+        return { conversationId };
+      });
+
+      await t.mutation(
+        internal.automationApiInternals.sendMessageIdempotent,
+        {
+          workspaceId: ws.workspaceId,
+          conversationId,
+          credentialId: ws.credentialId,
+          actorName: "test-bot",
+          content: "Hello!",
+          idempotencyKey: "fresh-key",
+        }
+      );
+
+      const events = await collectEvents(ws.workspaceId);
+      const msgEvents = events.filter((e) => e.eventType === "message.created");
+      expect(msgEvents).toHaveLength(1);
+      expect(msgEvents[0].data).toEqual({
+        conversationId,
+        senderType: "bot",
+        channel: "email",
+      });
+    });
+
+    it("sendMessageIdempotent does not emit on cached replay", async () => {
+      const ws = await seedWorkspace();
+
+      const { conversationId } = await t.run(async (ctx) => {
+        const now = Date.now();
+        const visitorId = await ctx.db.insert("visitors", {
+          workspaceId: ws.workspaceId,
+          sessionId: "v-session",
+          createdAt: now,
+        });
+        const conversationId = await ctx.db.insert("conversations", {
+          workspaceId: ws.workspaceId,
+          visitorId,
+          status: "open",
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.insert("automationConversationClaims", {
+          workspaceId: ws.workspaceId,
+          conversationId,
+          credentialId: ws.credentialId,
+          status: "active",
+          expiresAt: now + 5 * 60 * 1000,
+          createdAt: now,
+        });
+        return { conversationId };
+      });
+
+      const idempotencyKey = "replay-key";
+
+      // First call — fresh
+      await t.mutation(
+        internal.automationApiInternals.sendMessageIdempotent,
+        {
+          workspaceId: ws.workspaceId,
+          conversationId,
+          credentialId: ws.credentialId,
+          actorName: "test-bot",
+          content: "Hello!",
+          idempotencyKey,
+        }
+      );
+      await t.finishAllScheduledFunctions(() => { vi.runAllTimers(); });
+
+      // Count events after first call
+      const eventsAfterFirst = await t.run(async (ctx) => {
+        return ctx.db
+          .query("automationEvents")
+          .withIndex("by_workspace_timestamp", (q) =>
+            q.eq("workspaceId", ws.workspaceId)
+          )
+          .collect();
+      });
+      const firstCount = eventsAfterFirst.filter(
+        (e) => e.eventType === "message.created"
+      ).length;
+      expect(firstCount).toBe(1);
+
+      // Second call — cached replay
+      const result2 = await t.mutation(
+        internal.automationApiInternals.sendMessageIdempotent,
+        {
+          workspaceId: ws.workspaceId,
+          conversationId,
+          credentialId: ws.credentialId,
+          actorName: "test-bot",
+          content: "Hello!",
+          idempotencyKey,
+        }
+      );
+      expect(result2.cached).toBe(true);
+      await t.finishAllScheduledFunctions(() => { vi.runAllTimers(); });
+
+      // Count events after replay — should still be 1
+      const eventsAfterReplay = await t.run(async (ctx) => {
+        return ctx.db
+          .query("automationEvents")
+          .withIndex("by_workspace_timestamp", (q) =>
+            q.eq("workspaceId", ws.workspaceId)
+          )
+          .collect();
+      });
+      const replayCount = eventsAfterReplay.filter(
+        (e) => e.eventType === "message.created"
+      ).length;
+      expect(replayCount).toBe(1);
+    });
+
+    it("updateVisitorForAutomation emits visitor.updated without PII", async () => {
+      const ws = await seedWorkspace();
+
+      const { visitorId } = await t.run(async (ctx) => {
+        const now = Date.now();
+        const visitorId = await ctx.db.insert("visitors", {
+          workspaceId: ws.workspaceId,
+          sessionId: "v-session",
+          email: "secret@example.com",
+          name: "Secret Name",
+          externalUserId: "ext-123",
+          createdAt: now,
+          firstSeenAt: now,
+          lastSeenAt: now,
+        });
+        return { visitorId };
+      });
+
+      await t.mutation(
+        internal.automationApiInternals.updateVisitorForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          visitorId,
+          name: "Updated Name",
+        }
+      );
+
+      const events = await collectEvents(ws.workspaceId);
+      const visitorEvents = events.filter((e) => e.eventType === "visitor.updated");
+      expect(visitorEvents).toHaveLength(1);
+      expect(visitorEvents[0].resourceId).toBe(visitorId);
+      expect(visitorEvents[0].data).toEqual({ visitorId });
+      expect(visitorEvents[0].data).not.toHaveProperty("email");
+      expect(visitorEvents[0].data).not.toHaveProperty("name");
+      expect(visitorEvents[0].data).not.toHaveProperty("externalUserId");
+    });
+
+    it("createTicketForAutomation emits ticket.created", async () => {
+      const ws = await seedWorkspace();
+
+      const result = await t.mutation(
+        internal.automationApiInternals.createTicketForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          subject: "Test ticket",
+          priority: "high",
+        }
+      );
+
+      const events = await collectEvents(ws.workspaceId);
+      const ticketEvents = events.filter((e) => e.eventType === "ticket.created");
+      expect(ticketEvents).toHaveLength(1);
+      expect(ticketEvents[0].resourceId).toBe(result.id);
+      expect(ticketEvents[0].data).toEqual({
+        channel: "support_ticket",
+        status: "submitted",
+        priority: "high",
+      });
+    });
+
+    it("updateTicketForAutomation emits ticket.updated", async () => {
+      const ws = await seedWorkspace();
+
+      const { ticketId } = await t.run(async (ctx) => {
+        const now = Date.now();
+        const ticketId = await ctx.db.insert("tickets", {
+          workspaceId: ws.workspaceId,
+          subject: "Existing ticket",
+          status: "submitted",
+          priority: "normal",
+          createdAt: now,
+          updatedAt: now,
+        });
+        return { ticketId };
+      });
+
+      await t.mutation(
+        internal.automationApiInternals.updateTicketForAutomation,
+        {
+          workspaceId: ws.workspaceId,
+          credentialId: ws.credentialId,
+          ticketId,
+          status: "in_progress",
+          priority: "high",
+          assigneeId: ws.userId,
+        }
+      );
+
+      const events = await collectEvents(ws.workspaceId);
+      const ticketEvents = events.filter((e) => e.eventType === "ticket.updated");
+      expect(ticketEvents).toHaveLength(1);
+      expect(ticketEvents[0].resourceId).toBe(ticketId);
+      expect(ticketEvents[0].data).toEqual({
+        channel: "support_ticket",
+        status: "in_progress",
+        priority: "high",
+        assigneeId: ws.userId,
+      });
+    });
+  });
 });

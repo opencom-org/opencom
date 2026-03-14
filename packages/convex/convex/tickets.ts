@@ -769,13 +769,15 @@ export const addComment = mutation({
       });
     }
 
-    await emitAutomationEvent(ctx, {
-      workspaceId: ticket.workspaceId,
-      eventType: "ticket.comment_added",
-      resourceType: "ticket",
-      resourceId: args.ticketId,
-      data: { channel: "support_ticket", commentId, authorType, isInternal },
-    });
+    if (!isInternal) {
+      await emitAutomationEvent(ctx, {
+        workspaceId: ticket.workspaceId,
+        eventType: "ticket.comment_added",
+        resourceType: "ticket",
+        resourceId: args.ticketId,
+        data: { channel: "support_ticket", commentId, authorType },
+      });
+    }
 
     return commentId;
   },
@@ -828,7 +830,7 @@ export const resolve = authMutation({
       eventType: "ticket.updated",
       resourceType: "ticket",
       resourceId: args.id,
-      data: { channel: "support_ticket", status: "resolved", priority: ticket.priority },
+      data: { channel: "support_ticket", status: "resolved", priority: ticket.priority, assigneeId: ticket.assigneeId },
     });
 
     return args.id;
