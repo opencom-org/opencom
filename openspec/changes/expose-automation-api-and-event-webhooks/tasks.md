@@ -31,7 +31,7 @@
 ## 5. Admin Experience And Documentation
 
 - [x] 5.1 Build admin settings UI for credential management, scope review, webhook endpoints, delivery logs, and replay actions.
-- [ ] 5.2 Update developer and security docs for authentication, scopes, rate limits, idempotency, webhook verification, event semantics, and rollout limitations.
+- [x] 5.2 Update developer and security docs for authentication, scopes, rate limits, idempotency, webhook verification, event semantics, and rollout limitations.
 - [x] 5.3 Gate the feature behind workspace flags (`automationApiEnabled` on workspaces table).
 - [ ] 5.3b Add rollout instrumentation for request volume, webhook failures, and automation conflict rates.
 

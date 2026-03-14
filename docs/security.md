@@ -191,6 +191,120 @@ The system verifies Resend's `svix-signature` header using HMAC-SHA256:
 | `ALLOW_TEST_DATA`               | Enables test data seeding/cleanup mutations               | Never enable in production                                                       |
 | `TEST_ADMIN_SECRET`             | Protects `testAdmin.runTestMutation` gateway              | Only set in dedicated test deployments                                           |
 
+## Automation API Security
+
+The Automation API uses bearer token authentication with workspace-scoped credentials. All automation routes are gated behind the `automationApiEnabled` flag — when disabled, all routes return 403.
+
+### API Key Security Model
+
+- **Token format**: `osk_` prefix + 48 random characters (52 characters total)
+- **Workspace-scoped**: Each credential belongs to a single workspace
+- **SHA-256 hashed storage**: The plaintext secret is never stored after creation. Only the SHA-256 hash is persisted.
+- **One-time reveal**: The full secret is shown only at creation time and cannot be recovered
+- **Secret prefix**: `osk_` + first 8 characters shown in admin UI for identification
+- **Credential lifecycle**: Credentials can be disabled (blocking all requests) or expire based on TTL
+- **Recommendation**: Rotate credentials after team member departures
+
+### Scope-Based Access Control
+
+Automation credentials use a least-privilege model:
+
+- Each credential carries only the scopes it needs (from 16 available scopes)
+- Scopes are set at creation and cannot be modified afterward
+- Every request is checked against the credential's scopes (fail-closed)
+- There is no wildcard or admin scope in v1
+
+### Rate Limiting
+
+- **Per credential**: 60 requests/minute
+- **Per workspace**: 120 requests/minute
+- **Window**: 1-minute sliding window
+- A single credential cannot exhaust the workspace-level quota — at most 50% of the workspace's capacity
+
+### Webhook Signature Verification
+
+All webhook deliveries are signed using HMAC-SHA256.
+
+**Signature header format**:
+
+```
+X-Opencom-Signature: t={unix-seconds},v1={hex-signature}
+```
+
+**Signing payload**: `{timestamp}.{json-body}`
+
+**Verification steps**:
+
+```javascript
+const crypto = require("crypto");
+
+function verifyWebhookSignature(body, signatureHeader, secret) {
+  // 1. Extract t and v1 from the header
+  const parts = Object.fromEntries(
+    signatureHeader.split(",").map((p) => p.split("=", 2))
+  );
+  const timestamp = parts.t;
+  const signature = parts.v1;
+
+  // 2. Reconstruct the signing payload
+  const payload = `${timestamp}.${body}`;
+
+  // 3. Compute HMAC-SHA256 with your signing secret
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(payload)
+    .digest("hex");
+
+  // 4. Constant-time compare
+  const valid = crypto.timingSafeEqual(
+    Buffer.from(signature, "hex"),
+    Buffer.from(expected, "hex")
+  );
+
+  // 5. Check timestamp freshness (prevent replay attacks)
+  const age = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
+  if (age > 300) {
+    return false; // Reject deliveries older than 5 minutes
+  }
+
+  return valid;
+}
+```
+
+**Additional headers sent with each delivery**:
+
+| Header                    | Description                             |
+| ------------------------- | --------------------------------------- |
+| `X-Opencom-Signature`     | HMAC-SHA256 signature (`t=...,v1=...`)  |
+| `X-Opencom-Event-Id`      | Unique event identifier                 |
+| `X-Opencom-Delivery-Id`   | Unique delivery attempt identifier      |
+| `X-Opencom-Timestamp`     | Unix timestamp (matches `t` in signature) |
+
+**Retry schedule** (exponential backoff, max 5 attempts):
+
+| Attempt | Delay      |
+| ------- | ---------- |
+| 1       | Immediate  |
+| 2       | 30 seconds |
+| 3       | 2 minutes  |
+| 4       | 10 minutes |
+| 5       | 1 hour     |
+
+Failed deliveries can be replayed via the admin UI, which creates a new delivery starting at attempt 1.
+
+### Webhook Secret Management
+
+- **Secret format**: `whsec_` prefix + 48 random characters (54 characters total)
+- **Encrypted at rest**: AES-GCM encryption
+- **One-time reveal**: The signing secret is shown only at subscription creation and cannot be recovered
+- **Identification**: Admin UI shows the prefix (`whsec_` + first 8 characters)
+
+### Feature Flag Gating
+
+- The `automationApiEnabled` field on the `workspaces` table controls access
+- When `false`, all `/api/v1/*` routes return 403 (`AUTOMATION_DISABLED`)
+- Only workspace owners and admins can toggle the flag
+
 ## CI Supply Chain Controls
 
 GitHub Actions workflow dependencies are treated as supply-chain inputs:
@@ -201,7 +315,15 @@ GitHub Actions workflow dependencies are treated as supply-chain inputs:
 
 ## Authorization Model
 
-All mutations and queries enforce authorization checks:
+All mutations and queries enforce authorization checks via one of three paths:
+
+### Automation API Endpoints
+
+- Authenticated via bearer token (`Authorization: Bearer osk_<secret>`)
+- Token is SHA-256 hashed and looked up in `automationCredentials`
+- Scope check: credential must carry the required scope for the endpoint
+- Rate limit check: per-credential (60/min) and per-workspace (120/min)
+- If all checks pass, the request executes with the credential's workspace context
 
 ### Agent/Admin Endpoints
 

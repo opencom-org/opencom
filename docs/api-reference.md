@@ -4,10 +4,11 @@ This document covers the Convex backend API surface. All functions live in `pack
 
 ## Authentication
 
-All endpoints use one of two authentication paths:
+All endpoints use one of three authentication paths:
 
 - **Agent/admin**: Authenticated via Convex Auth session (JWT). Permission-checked via `requirePermission()`.
 - **Visitor**: Authenticated via signed session token (`sessionToken`). Validated via `resolveVisitorFromSession()`.
+- **Automation API**: Authenticated via bearer token (`Authorization: Bearer osk_<secret>`). Scope-checked per endpoint. See [Automation API](#automation-api) below.
 
 Unauthenticated callers receive null/empty results or a thrown error depending on the endpoint.
 
@@ -372,14 +373,230 @@ Source: `http.ts`
 
 ## Error Codes
 
-| Code                   | Description                |
-| ---------------------- | -------------------------- |
-| `NOT_AUTHENTICATED`    | No auth session            |
-| `SESSION_EXPIRED`      | JWT expired                |
-| `NOT_AUTHORIZED`       | Missing permission         |
-| `PERMISSION_DENIED`    | Specific permission failed |
-| `NOT_WORKSPACE_MEMBER` | Not a workspace member     |
-| `NOT_FOUND`            | Resource doesn't exist     |
-| `ALREADY_EXISTS`       | Duplicate resource         |
-| `INVALID_INPUT`        | Validation failed          |
-| `RATE_LIMITED`         | Request throttled          |
+| Code                   | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| `NOT_AUTHENTICATED`    | No auth session                                          |
+| `SESSION_EXPIRED`      | JWT expired                                              |
+| `NOT_AUTHORIZED`       | Missing permission                                       |
+| `PERMISSION_DENIED`    | Specific permission failed                               |
+| `NOT_WORKSPACE_MEMBER` | Not a workspace member                                   |
+| `NOT_FOUND`            | Resource doesn't exist                                   |
+| `ALREADY_EXISTS`       | Duplicate resource                                       |
+| `INVALID_INPUT`        | Validation failed                                        |
+| `RATE_LIMITED`         | Request throttled                                        |
+| `AUTOMATION_DISABLED`  | `automationApiEnabled` is false for this workspace       |
+| `INVALID_CREDENTIALS`  | Bearer token missing, malformed, or not found            |
+| `SCOPE_DENIED`         | Credential lacks the required scope for this endpoint    |
+| `CREDENTIAL_EXPIRED`   | Credential status is `expired` or `disabled`             |
+
+---
+
+## Automation API
+
+The Automation API provides an HTTP-based interface for external systems to interact with workspace data. All endpoints are under `/api/v1/` and require bearer token authentication. The feature is gated behind the `automationApiEnabled` flag on the workspace — all routes return 403 when disabled.
+
+Source: `automationHttpRoutes.ts`, `automationCredentials.ts`, `automationWebhooks.ts`
+
+### Authentication
+
+Automation API requests authenticate via bearer token:
+
+```
+Authorization: Bearer osk_<secret>
+```
+
+- **Token format**: `osk_` prefix + 48 random characters = 52 characters total
+- **Storage**: SHA-256 hashed (one-way). The plaintext secret cannot be recovered after creation.
+- **One-time reveal**: The full secret is returned only at credential creation time
+- **Identification**: List views show the secret prefix (`osk_` + first 8 characters) for identification
+- **Credential lifecycle**: `active` → `disabled` (admin toggle) or `expired` (TTL-based)
+- **Actor attribution**: Each credential carries an actor name for audit trail purposes
+
+### Scopes
+
+Credentials carry an immutable set of scopes assigned at creation. Every request is checked against the credential's scopes (fail-closed).
+
+| Scope                 | Grants access to                  |
+| --------------------- | --------------------------------- |
+| `conversations.read`  | List/get conversations            |
+| `conversations.write` | Update conversation status/assign |
+| `messages.read`       | List messages                     |
+| `messages.write`      | Send messages                     |
+| `visitors.read`       | List/get visitors                 |
+| `visitors.write`      | Create/update visitors            |
+| `tickets.read`        | List/get tickets                  |
+| `tickets.write`       | Create/update tickets             |
+| `events.read`         | Read event feed                   |
+| `events.write`        | (Reserved)                        |
+| `articles.read`       | List/get articles                 |
+| `articles.write`      | Create/update/delete articles     |
+| `collections.read`    | List/get collections              |
+| `collections.write`   | Create/update/delete collections  |
+| `webhooks.manage`     | Manage webhook subscriptions      |
+| `claims.manage`       | Claim/release/escalate conversations |
+
+There is no wildcard or admin scope in v1. Scopes are set at credential creation and cannot be modified afterward.
+
+### Rate Limits
+
+| Limit          | Value             |
+| -------------- | ----------------- |
+| Per credential | 60 req/min        |
+| Per workspace  | 120 req/min       |
+| Window         | 1-minute sliding  |
+
+When rate-limited, the API returns HTTP 429 with a `Retry-After` header.
+
+### Endpoints
+
+#### Conversations
+
+| Method | Path                                | Scope                 | Description                    |
+| ------ | ----------------------------------- | --------------------- | ------------------------------ |
+| GET    | `/api/v1/conversations`             | `conversations.read`  | List conversations             |
+| GET    | `/api/v1/conversations/get`         | `conversations.read`  | Get conversation by ID         |
+| POST   | `/api/v1/conversations/update`      | `conversations.write` | Update status or assignment    |
+| POST   | `/api/v1/conversations/claim`       | `claims.manage`       | Claim conversation (5-min lease) |
+| POST   | `/api/v1/conversations/release`     | `claims.manage`       | Release claimed conversation   |
+| POST   | `/api/v1/conversations/escalate`    | `claims.manage`       | Escalate to human queue        |
+
+#### Messages
+
+| Method | Path                                      | Scope            | Description          |
+| ------ | ----------------------------------------- | ---------------- | -------------------- |
+| GET    | `/api/v1/conversations/messages`          | `messages.read`  | List messages        |
+| POST   | `/api/v1/conversations/messages/send`     | `messages.write` | Send a message       |
+
+#### Visitors
+
+| Method | Path                        | Scope            | Description       |
+| ------ | --------------------------- | ---------------- | ----------------- |
+| GET    | `/api/v1/visitors`          | `visitors.read`  | List visitors     |
+| GET    | `/api/v1/visitors/get`      | `visitors.read`  | Get visitor by ID |
+| POST   | `/api/v1/visitors/create`   | `visitors.write` | Create visitor    |
+| POST   | `/api/v1/visitors/update`   | `visitors.write` | Update visitor    |
+
+#### Tickets
+
+| Method | Path                        | Scope           | Description      |
+| ------ | --------------------------- | --------------- | ---------------- |
+| GET    | `/api/v1/tickets`           | `tickets.read`  | List tickets     |
+| GET    | `/api/v1/tickets/get`       | `tickets.read`  | Get ticket by ID |
+| POST   | `/api/v1/tickets/create`    | `tickets.write` | Create ticket    |
+| POST   | `/api/v1/tickets/update`    | `tickets.write` | Update ticket    |
+
+#### Articles
+
+| Method | Path                         | Scope           | Description      |
+| ------ | ---------------------------- | --------------- | ---------------- |
+| GET    | `/api/v1/articles`           | `articles.read` | List articles    |
+| GET    | `/api/v1/articles/get`       | `articles.read` | Get article by ID |
+| POST   | `/api/v1/articles/create`    | `articles.write`| Create article   |
+| POST   | `/api/v1/articles/update`    | `articles.write`| Update article   |
+| POST   | `/api/v1/articles/delete`    | `articles.write`| Delete article   |
+
+#### Collections
+
+| Method | Path                            | Scope              | Description          |
+| ------ | ------------------------------- | ------------------ | -------------------- |
+| GET    | `/api/v1/collections`           | `collections.read` | List collections     |
+| GET    | `/api/v1/collections/get`       | `collections.read` | Get collection by ID |
+| POST   | `/api/v1/collections/create`    | `collections.write`| Create collection    |
+| POST   | `/api/v1/collections/update`    | `collections.write`| Update collection    |
+| POST   | `/api/v1/collections/delete`    | `collections.write`| Delete collection    |
+
+#### Events
+
+| Method | Path                    | Scope         | Description              |
+| ------ | ----------------------- | ------------- | ------------------------ |
+| GET    | `/api/v1/events/feed`   | `events.read` | Paginated event feed     |
+
+#### Webhooks
+
+| Method | Path                          | Scope            | Description                  |
+| ------ | ----------------------------- | ---------------- | ---------------------------- |
+| POST   | `/api/v1/webhooks/replay`     | `webhooks.manage`| Replay a failed delivery     |
+
+### Idempotency
+
+The `Idempotency-Key` header is supported on message send (`POST /api/v1/conversations/messages/send`) only.
+
+- **TTL**: 24 hours
+- **Scope**: Per workspace + key combination
+- **Duplicate response**: Returns `cached: true` when a matching key is found within the TTL window
+
+### Pagination & Filtering
+
+All list endpoints use cursor-based pagination:
+
+- **Default page size**: 20
+- **Maximum page size**: 100
+- **Cursor**: Opaque string returned in response; pass as `cursor` query parameter for next page
+
+**Conversation filters**: `status`, `assignee`, `channel`, `email`, `externalUserId`, `customAttribute.*`
+**Visitor filters**: `email`, `externalUserId`, `customAttribute.*`
+**Ticket filters**: `status`, `priority`, `assigneeId`
+**Article filters**: `status`, `collectionId`
+**Collection filters**: `parentId`
+**Message filters**: `conversationId` (required)
+
+### Automation Credentials (Admin)
+
+Managed via Convex mutations (admin UI), not HTTP endpoints.
+
+| Operation           | Description                                                    |
+| ------------------- | -------------------------------------------------------------- |
+| Create credential   | Returns one-time secret. Stores SHA-256 hash.                  |
+| List credentials    | Shows prefix (`osk_` + 8 chars), scopes, status, last used    |
+| Disable credential  | Sets status to `disabled`, blocks all requests                 |
+| Enable credential   | Re-enables a disabled credential                               |
+| Delete credential   | Permanently removes the credential                             |
+
+### Webhook Subscriptions (Admin)
+
+Managed via Convex mutations (admin UI).
+
+| Operation              | Description                                                  |
+| ---------------------- | ------------------------------------------------------------ |
+| Create subscription    | Returns one-time signing secret (`whsec_` prefix)            |
+| List subscriptions     | Shows URL, status, event/resource filter summary             |
+| Update subscription    | Modify URL, filters, or status                               |
+| Delete subscription    | Remove subscription and stop deliveries                      |
+| Test ping              | Sends a `test.ping` event to the subscription URL            |
+
+### Webhook Deliveries (Admin)
+
+| Operation         | Description                                                       |
+| ----------------- | ----------------------------------------------------------------- |
+| List deliveries   | Recent-window view of deliveries, filterable by subscription      |
+| View details      | Status, HTTP response code, error message, attempt count          |
+| Replay delivery   | Creates a new delivery attempt (resets attempt count to 1)        |
+
+Delivery logs show a recent window, not full historical data.
+
+### Events
+
+Events are emitted by UI/domain mutations and most automation API write mutations.
+
+| Event                   | Triggered by                                          | Data payload                                  |
+| ----------------------- | ----------------------------------------------------- | --------------------------------------------- |
+| `conversation.created`  | `conversations.create`, `getOrCreateForVisitor` (new) | `{ channel, status, visitorId }`              |
+| `conversation.updated`  | `updateStatus`, `assign`, API update                  | `{ status }` and/or `{ assignedAgentId }`     |
+| `message.created`       | `messages.send`, bot message, API send                | `{ conversationId, senderType, channel }`     |
+| `visitor.updated`       | `visitors.identify`, API update                       | `{ visitorId }`                               |
+| `ticket.created`        | `tickets.create`, convert from conversation, API      | `{ channel: "support_ticket", status, priority }` |
+| `ticket.updated`        | `tickets.update`, `tickets.resolve`, API update       | `{ channel: "support_ticket", status, priority, assigneeId }` |
+| `ticket.comment_added`  | `tickets.addComment` (external comments only)         | `{ channel: "support_ticket", commentId, authorType }` |
+
+### Known V1 Limitations
+
+- No events for articles/collections — planned for v2
+- No `visitor.created` event — visitors can be created via the API, but no event is emitted; `visitor.updated` fires on `identify()` and API update
+- No `message.updated`/`message.deleted` events — messages are immutable in v1
+- No `conversation.deleted` event — conversations are not deletable
+- No fine-grained event types — status changes, assignments, etc. are communicated via the `data` payload on broad event types (`*.updated`) rather than separate event types
+- Noisy mutations excluded: `visitors.updateLocation` and `visitors.heartbeat` do not emit events
+- `aiWorkflowStates` webhook filter is reserved for future use; no production mutations currently populate this field in event data
+- `ticket.updated` payload is coarse — includes status, priority, assigneeId on every emit regardless of what changed; does not include teamId or resolutionSummary
+
+See `packages/convex/AUTOMATION_V1_COVERAGE.md` for the canonical coverage matrix.
