@@ -7,6 +7,7 @@ import { hasPermission } from "../permissions";
 import { requireValidOrigin } from "../originValidation";
 import { resolveVisitorFromSession } from "../widgetSessions";
 import { logAudit } from "../auditLogs";
+import { emitAutomationEvent } from "../automationEvents";
 import {
   MERGE_REASON_EMAIL_MATCH,
   collectCustomAttributeChanges,
@@ -247,6 +248,14 @@ export const identify = mutation({
           },
         });
 
+        await emitAutomationEvent(ctx, {
+          workspaceId: visitor.workspaceId,
+          eventType: "visitor.updated",
+          resourceType: "visitor",
+          resourceId: canonicalByEmail._id,
+          data: { email: args.email, name: args.name ?? canonicalByEmail.name ?? visitor.name, externalUserId: args.externalUserId ?? canonicalByEmail.externalUserId ?? visitor.externalUserId },
+        });
+
         return await ctx.db.get(canonicalByEmail._id);
       }
     }
@@ -296,6 +305,14 @@ export const identify = mutation({
       visitorId: resolvedVisitorId,
       source: "visitor_attribute_changed",
       changes: attributeChanges,
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: visitor.workspaceId,
+      eventType: "visitor.updated",
+      resourceType: "visitor",
+      resourceId: resolvedVisitorId,
+      data: { email: args.email ?? visitor.email, name: args.name ?? visitor.name, externalUserId: args.externalUserId ?? visitor.externalUserId },
     });
 
     return await ctx.db.get(resolvedVisitorId);

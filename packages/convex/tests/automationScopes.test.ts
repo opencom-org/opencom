@@ -60,8 +60,8 @@ describe("Automation Scopes", () => {
       expect(AUTOMATION_SCOPES).toContain("claims.manage");
     });
 
-    it("has exactly 12 v1 scopes", () => {
-      expect(AUTOMATION_SCOPES).toHaveLength(12);
+    it("has exactly 16 v1 scopes", () => {
+      expect(AUTOMATION_SCOPES).toHaveLength(16);
     });
   });
 });

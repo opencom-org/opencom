@@ -2,10 +2,30 @@ import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { encodeCursor, decodeCursor } from "./lib/apiHelpers";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 
 const deliverWebhookRef = makeFunctionReference<"action">(
   "automationWebhookWorker:deliverWebhook"
 );
+
+const emitEventRef = makeFunctionReference<"mutation">(
+  "automationEvents:emitEvent"
+);
+
+/** Schedule an automation event from a domain mutation. No-ops if automation is disabled. */
+export async function emitAutomationEvent(
+  ctx: Pick<MutationCtx, "scheduler">,
+  params: {
+    workspaceId: Id<"workspaces">;
+    eventType: string;
+    resourceType: string;
+    resourceId: string;
+    data: Record<string, unknown>;
+  }
+) {
+  await ctx.scheduler.runAfter(0, emitEventRef as any, params);
+}
 
 // Emit an automation event and trigger matching webhook deliveries.
 export const emitEvent = internalMutation({
@@ -17,6 +37,12 @@ export const emitEvent = internalMutation({
     data: v.any(),
   },
   handler: async (ctx, args) => {
+    // Check if automation API is enabled for this workspace
+    const workspace = await ctx.db.get(args.workspaceId);
+    if (!workspace || !workspace.automationApiEnabled) {
+      return { eventId: null };
+    }
+
     const now = Date.now();
     const eventId = await ctx.db.insert("automationEvents", {
       workspaceId: args.workspaceId,

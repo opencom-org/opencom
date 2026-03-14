@@ -13,6 +13,7 @@ import {
 } from "./supportAttachments";
 import { supportAttachmentIdArrayValidator } from "./supportAttachmentTypes";
 import { resolveVisitorFromSession } from "./widgetSessions";
+import { emitAutomationEvent } from "./automationEvents";
 
 async function withSupportSenderNames(
   ctx: QueryCtx,
@@ -257,6 +258,14 @@ export const send = mutation({
       channel: "chat",
     });
 
+    await emitAutomationEvent(ctx, {
+      workspaceId: conversation.workspaceId,
+      eventType: "message.created",
+      resourceType: "message",
+      resourceId: messageId,
+      data: { conversationId: args.conversationId, senderType: args.senderType, channel: "chat" },
+    });
+
     return messageId;
   },
 });
@@ -312,6 +321,14 @@ export const internalSendBotMessage = internalMutation({
       senderId: args.senderId ?? "system",
       sentAt: now,
       channel: "chat",
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: conversation.workspaceId,
+      eventType: "message.created",
+      resourceType: "message",
+      resourceId: messageId,
+      data: { conversationId: args.conversationId, senderType: "bot", channel: "chat" },
     });
 
     return messageId;
