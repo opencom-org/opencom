@@ -387,7 +387,7 @@ Source: `http.ts`
 | `AUTOMATION_DISABLED`  | `automationApiEnabled` is false for this workspace       |
 | `INVALID_CREDENTIALS`  | Bearer token missing, malformed, or not found            |
 | `SCOPE_DENIED`         | Credential lacks the required scope for this endpoint    |
-| `CREDENTIAL_EXPIRED`   | Credential status is `expired` or `disabled`             |
+| `CREDENTIAL_EXPIRED`   | Credential's `expiresAt` has passed or status is `disabled` |
 
 ---
 
@@ -409,7 +409,7 @@ Authorization: Bearer osk_<secret>
 - **Storage**: SHA-256 hashed (one-way). The plaintext secret cannot be recovered after creation.
 - **One-time reveal**: The full secret is returned only at credential creation time
 - **Identification**: List views show the secret prefix (`osk_` + first 8 characters) for identification
-- **Credential lifecycle**: `active` → `disabled` (admin toggle) or `expired` (TTL-based)
+- **Credential lifecycle**: Credentials have a `status` field (`active` or `disabled`, toggled by admin). Separately, credentials may have an `expiresAt` timestamp; expired credentials are rejected at auth time regardless of status.
 - **Actor attribution**: Each credential carries an actor name for audit trail purposes
 
 ### Scopes
@@ -443,7 +443,7 @@ There is no wildcard or admin scope in v1. Scopes are set at credential creation
 | -------------- | ----------------- |
 | Per credential | 60 req/min        |
 | Per workspace  | 120 req/min       |
-| Window         | 1-minute sliding  |
+| Window         | 1-minute fixed    |
 
 When rate-limited, the API returns HTTP 429 with a `Retry-After` header.
 
@@ -523,7 +523,8 @@ The `Idempotency-Key` header is supported on message send (`POST /api/v1/convers
 
 - **TTL**: 24 hours
 - **Scope**: Per workspace + key combination
-- **Duplicate response**: Returns `cached: true` when a matching key is found within the TTL window
+- **First send**: Returns HTTP 201 with the message response body
+- **Duplicate replay**: Returns HTTP 200 with the original response body (no `cached` field in the response)
 
 ### Pagination & Filtering
 
@@ -535,7 +536,7 @@ All list endpoints use cursor-based pagination:
 
 **Conversation filters**: `status`, `assignee`, `channel`, `email`, `externalUserId`, `customAttribute.*`
 **Visitor filters**: `email`, `externalUserId`, `customAttribute.*`
-**Ticket filters**: `status`, `priority`, `assigneeId`
+**Ticket filters**: `status`, `priority`, `assignee`
 **Article filters**: `status`, `collectionId`
 **Collection filters**: `parentId`
 **Message filters**: `conversationId` (required)
@@ -562,7 +563,7 @@ Managed via Convex mutations (admin UI).
 | List subscriptions     | Shows URL, status, event/resource filter summary             |
 | Update subscription    | Modify URL, filters, or status                               |
 | Delete subscription    | Remove subscription and stop deliveries                      |
-| Test ping              | Sends a `test.ping` event to the subscription URL            |
+| Test ping              | Sends a `test.ping` event to the subscription URL (admin UI action, not a public HTTP endpoint) |
 
 ### Webhook Deliveries (Admin)
 
@@ -590,7 +591,7 @@ Events are emitted by UI/domain mutations and most automation API write mutation
 
 ### Known V1 Limitations
 
-- No events for articles/collections — planned for v2
+- No events for articles/collections — not supported in v1
 - No `visitor.created` event — visitors can be created via the API, but no event is emitted; `visitor.updated` fires on `identify()` and API update
 - No `message.updated`/`message.deleted` events — messages are immutable in v1
 - No `conversation.deleted` event — conversations are not deletable

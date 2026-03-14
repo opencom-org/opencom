@@ -7,7 +7,7 @@
 | conversations | cursor + filters (status, assignee, channel, email, externalUserId, customAttribute) | by ID | — | status, assign | — | `conversation.created`, `conversation.updated` |
 | messages | cursor + filters (conversationId) | — | send | — | — | `message.created` |
 | visitors | cursor + filters (email, externalUserId, customAttribute) | by ID | create | update | — | `visitor.updated` |
-| tickets | cursor + filters (status, priority, assigneeId) | by ID | create | update, resolve | — | `ticket.created`, `ticket.updated`, `ticket.comment_added` |
+| tickets | cursor + filters (status, priority, assignee) | by ID | create | update, resolve | — | `ticket.created`, `ticket.updated`, `ticket.comment_added` |
 | articles | cursor + filters (status, collectionId) | by ID | create | update | delete | — (v2) |
 | collections | cursor + filters (parentId) | by ID | create | update | delete | — (v2) |
 
@@ -56,8 +56,8 @@ Events are emitted by UI/domain mutations and most automation API write mutation
 ## Webhook Subscriptions
 
 - **Filters:** `eventTypes`, `resourceTypes`, `channels`, `aiWorkflowStates` (reserved — not yet emitted by production mutations)
-- **Delivery:** Async via scheduled function, with exponential backoff retry (30s, 2m, 10m, 1h, 4h; max 5 attempts)
-- **Test endpoint:** `POST /webhooks/{id}/test` sends a `test.ping` event
+- **Delivery:** Async via scheduled function, with exponential backoff retry (30s, 2m, 10m, 1h; max 5 attempts)
+- **Test ping:** Admin UI action (Convex mutation) that sends a `test.ping` event to the subscription URL
 - **Signature:** HMAC-SHA256 in `X-Opencom-Signature` header (format: `t={timestamp},v1={hex}`)
 - **Additional headers:** `X-Opencom-Event-Id`, `X-Opencom-Delivery-Id`, `X-Opencom-Timestamp`
 
@@ -75,7 +75,7 @@ Events are emitted by UI/domain mutations and most automation API write mutation
 
 ## Known V1 Limitations
 
-- **No events for articles/collections** — planned for v2
+- **No events for articles/collections** — not supported in v1
 - **No `visitor.created` event** — visitors can be created via the API, but no event is emitted; `visitor.updated` fires on `identify()` and API update
 - **No `message.updated`/`message.deleted` events** — messages are immutable in v1
 - **No `conversation.deleted` event** — conversations are not deletable

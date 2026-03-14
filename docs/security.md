@@ -202,7 +202,7 @@ The Automation API uses bearer token authentication with workspace-scoped creden
 - **SHA-256 hashed storage**: The plaintext secret is never stored after creation. Only the SHA-256 hash is persisted.
 - **One-time reveal**: The full secret is shown only at creation time and cannot be recovered
 - **Secret prefix**: `osk_` + first 8 characters shown in admin UI for identification
-- **Credential lifecycle**: Credentials can be disabled (blocking all requests) or expire based on TTL
+- **Credential lifecycle**: Credentials have a `status` field (`active` or `disabled`, toggled by admin). Separately, credentials may carry an `expiresAt` timestamp; expired credentials are rejected at auth time regardless of status.
 - **Recommendation**: Rotate credentials after team member departures
 
 ### Scope-Based Access Control
@@ -218,7 +218,7 @@ Automation credentials use a least-privilege model:
 
 - **Per credential**: 60 requests/minute
 - **Per workspace**: 120 requests/minute
-- **Window**: 1-minute sliding window
+- **Window**: 1-minute fixed window (resets when the previous window expires)
 - A single credential cannot exhaust the workspace-level quota — at most 50% of the workspace's capacity
 
 ### Webhook Signature Verification
@@ -282,13 +282,13 @@ function verifyWebhookSignature(body, signatureHeader, secret) {
 
 **Retry schedule** (exponential backoff, max 5 attempts):
 
-| Attempt | Delay      |
-| ------- | ---------- |
-| 1       | Immediate  |
-| 2       | 30 seconds |
-| 3       | 2 minutes  |
-| 4       | 10 minutes |
-| 5       | 1 hour     |
+| Attempt | Delay after failure |
+| ------- | ------------------- |
+| 1       | Immediate           |
+| 2       | 30 seconds          |
+| 3       | 2 minutes           |
+| 4       | 10 minutes          |
+| 5       | 1 hour              |
 
 Failed deliveries can be replayed via the admin UI, which creates a new delivery starting at attempt 1.
 
