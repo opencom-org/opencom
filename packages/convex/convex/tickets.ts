@@ -774,7 +774,7 @@ export const addComment = mutation({
       eventType: "ticket.comment_added",
       resourceType: "ticket",
       resourceId: args.ticketId,
-      data: { channel: "support_ticket", commentId, authorType },
+      data: { channel: "support_ticket", commentId, authorType, isInternal },
     });
 
     return commentId;

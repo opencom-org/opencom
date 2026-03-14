@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { logAudit } from "./auditLogs";
+import { emitAutomationEvent } from "./automationEvents";
 import { encodeCursor, decodeCursor } from "./lib/apiHelpers";
 import {
   articleStatusValidator,
@@ -415,6 +416,18 @@ export const updateConversationForAutomation = internalMutation({
       metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
     });
 
+    const eventData: Record<string, unknown> = {};
+    if (args.status !== undefined) eventData.status = args.status;
+    if (args.assignedAgentId !== undefined) eventData.assignedAgentId = args.assignedAgentId;
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "conversation.updated",
+      resourceType: "conversation",
+      resourceId: args.conversationId,
+      data: eventData,
+    });
+
     return { id: args.conversationId };
   },
 });
@@ -546,6 +559,14 @@ export const sendMessageForAutomation = internalMutation({
       metadata: { credentialId: String(args.credentialId) },
     });
 
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "message.created",
+      resourceType: "message",
+      resourceId: messageId,
+      data: { conversationId: args.conversationId, senderType: "bot", channel: conv.channel ?? "chat" },
+    });
+
     return { id: messageId };
   },
 });
@@ -624,6 +645,14 @@ export const sendMessageIdempotent = internalMutation({
       resourceType: "message",
       resourceId: String(messageId),
       metadata: { credentialId: String(args.credentialId) },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "message.created",
+      resourceType: "message",
+      resourceId: messageId,
+      data: { conversationId: args.conversationId, senderType: "bot", channel: conv.channel ?? "chat" },
     });
 
     const result = { id: messageId };
@@ -836,6 +865,18 @@ export const updateVisitorForAutomation = internalMutation({
       metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
     });
 
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "visitor.updated",
+      resourceType: "visitor",
+      resourceId: args.visitorId,
+      data: {
+        email: args.email ?? visitor.email,
+        name: args.name ?? visitor.name,
+        externalUserId: args.externalUserId ?? visitor.externalUserId,
+      },
+    });
+
     return { id: args.visitorId };
   },
 });
@@ -985,6 +1026,18 @@ export const createTicketForAutomation = internalMutation({
       metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
     });
 
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "ticket.created",
+      resourceType: "ticket",
+      resourceId: id,
+      data: {
+        channel: "support_ticket",
+        status: "submitted",
+        priority: (args.priority as string) ?? "normal",
+      },
+    });
+
     return { id };
   },
 });
@@ -1026,6 +1079,19 @@ export const updateTicketForAutomation = internalMutation({
       resourceType: "ticket",
       resourceId: String(args.ticketId),
       metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "ticket.updated",
+      resourceType: "ticket",
+      resourceId: args.ticketId,
+      data: {
+        channel: "support_ticket",
+        status: args.status ?? ticket.status,
+        priority: args.priority ?? ticket.priority,
+        assigneeId: args.assigneeId ?? ticket.assigneeId,
+      },
     });
 
     return { id: args.ticketId };
