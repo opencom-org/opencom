@@ -18,6 +18,15 @@ import {
   updateCollectionCore,
   deleteCollectionCore,
 } from "./lib/collectionWriteHelpers";
+import {
+  outboundMessageContentValidator,
+  outboundMessageTriggerValidator,
+  outboundMessageFrequencyValidator,
+  outboundMessageSchedulingValidator,
+  outboundMessageStatusValidator,
+} from "./outboundContracts";
+import { audienceRulesValidator } from "./validators";
+import { validateAudienceRule } from "./audienceRules";
 
 const DEFAULT_SCAN_BATCH_SIZE = 200;
 
@@ -1487,5 +1496,317 @@ export const deleteCollectionForAutomation = internalMutation({
     });
 
     return { id: args.collectionId };
+  },
+});
+
+// ── Outbound Messages ─────────────────────────────────────────────
+
+function mapOutboundMessage(msg: Doc<"outboundMessages">) {
+  return {
+    id: msg._id,
+    workspaceId: msg.workspaceId,
+    name: msg.name,
+    content: msg.content,
+    targeting: msg.targeting,
+    triggers: msg.triggers,
+    frequency: msg.frequency,
+    scheduling: msg.scheduling,
+    status: msg.status,
+    priority: msg.priority,
+    createdAt: msg.createdAt,
+    updatedAt: msg.updatedAt,
+  };
+}
+
+export const listOutboundMessagesForAutomation = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    cursor: v.optional(v.string()),
+    limit: v.number(),
+    updatedSince: v.optional(v.number()),
+    status: v.optional(outboundMessageStatusValidator),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit, 100);
+    const cursor = decodeDescCursor(args.cursor);
+
+    const messages = await collectDescendingPage<Doc<"outboundMessages">>({
+      limit,
+      cursor,
+      getSortValue: (msg) => msg.updatedAt,
+      fetchBatch: async (upperBound, take) => {
+        let query = ctx.db
+          .query("outboundMessages")
+          .withIndex("by_workspace_type_updated_at", (q) => {
+            if (args.updatedSince !== undefined && upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .eq("type", "chat")
+                .gt("updatedAt", args.updatedSince)
+                .lte("updatedAt", upperBound);
+            }
+            if (args.updatedSince !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .eq("type", "chat")
+                .gt("updatedAt", args.updatedSince);
+            }
+            if (upperBound !== undefined) {
+              return q
+                .eq("workspaceId", args.workspaceId)
+                .eq("type", "chat")
+                .lte("updatedAt", upperBound);
+            }
+            return q.eq("workspaceId", args.workspaceId).eq("type", "chat");
+          });
+
+        if (args.status) {
+          query = query.filter((q2) => q2.eq(q2.field("status"), args.status!));
+        }
+
+        return query.order("desc").take(take);
+      },
+    });
+
+    const hasMore = messages.length > limit;
+    const data = hasMore ? messages.slice(0, limit) : messages;
+
+    return {
+      data: data.map(mapOutboundMessage),
+      nextCursor:
+        hasMore && data.length > 0
+          ? encodeCursor(data[data.length - 1].updatedAt, data[data.length - 1]._id)
+          : null,
+      hasMore,
+    };
+  },
+});
+
+export const getOutboundMessageForAutomation = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    outboundMessageId: v.id("outboundMessages"),
+  },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.outboundMessageId);
+    if (!msg || msg.workspaceId !== args.workspaceId || msg.type !== "chat") {
+      return null;
+    }
+
+    return mapOutboundMessage(msg);
+  },
+});
+
+export const createOutboundMessageForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    name: v.string(),
+    content: outboundMessageContentValidator,
+    targeting: v.optional(audienceRulesValidator),
+    triggers: v.optional(outboundMessageTriggerValidator),
+    frequency: v.optional(outboundMessageFrequencyValidator),
+    scheduling: v.optional(outboundMessageSchedulingValidator),
+    priority: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    if (args.targeting !== undefined && !validateAudienceRule(args.targeting)) {
+      throw new Error("Invalid targeting rules");
+    }
+
+    const now = Date.now();
+    const id = await ctx.db.insert("outboundMessages", {
+      workspaceId: args.workspaceId,
+      type: "chat",
+      name: args.name,
+      content: args.content,
+      targeting: args.targeting,
+      triggers: args.triggers,
+      frequency: args.frequency,
+      scheduling: args.scheduling,
+      priority: args.priority,
+      status: "draft",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.outbound.created",
+      resourceType: "outboundMessage",
+      resourceId: String(id),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "outbound.created",
+      resourceType: "outboundMessage",
+      resourceId: id,
+      data: { status: "draft", name: args.name },
+    });
+
+    return { id };
+  },
+});
+
+export const updateOutboundMessageForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    outboundMessageId: v.id("outboundMessages"),
+    name: v.optional(v.string()),
+    content: v.optional(outboundMessageContentValidator),
+    targeting: v.optional(audienceRulesValidator),
+    triggers: v.optional(outboundMessageTriggerValidator),
+    frequency: v.optional(outboundMessageFrequencyValidator),
+    scheduling: v.optional(outboundMessageSchedulingValidator),
+    priority: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.outboundMessageId);
+    if (!msg || msg.workspaceId !== args.workspaceId || msg.type !== "chat") {
+      throw new Error("Outbound message not found");
+    }
+
+    if (args.targeting !== undefined && !validateAudienceRule(args.targeting)) {
+      throw new Error("Invalid targeting rules");
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.content !== undefined) updates.content = args.content;
+    if (args.targeting !== undefined) updates.targeting = args.targeting;
+    if (args.triggers !== undefined) updates.triggers = args.triggers;
+    if (args.frequency !== undefined) updates.frequency = args.frequency;
+    if (args.scheduling !== undefined) updates.scheduling = args.scheduling;
+    if (args.priority !== undefined) updates.priority = args.priority;
+
+    await ctx.db.patch(args.outboundMessageId, updates);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.outbound.updated",
+      resourceType: "outboundMessage",
+      resourceId: String(args.outboundMessageId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "outbound.updated",
+      resourceType: "outboundMessage",
+      resourceId: args.outboundMessageId,
+      data: { name: args.name ?? msg.name },
+    });
+
+    return { id: args.outboundMessageId };
+  },
+});
+
+export const deleteOutboundMessageForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    outboundMessageId: v.id("outboundMessages"),
+  },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.outboundMessageId);
+    if (!msg || msg.workspaceId !== args.workspaceId || msg.type !== "chat") {
+      throw new Error("Outbound message not found");
+    }
+
+    await ctx.db.delete(args.outboundMessageId);
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.outbound.deleted",
+      resourceType: "outboundMessage",
+      resourceId: String(args.outboundMessageId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "outbound.deleted",
+      resourceType: "outboundMessage",
+      resourceId: args.outboundMessageId,
+      data: { name: msg.name },
+    });
+
+    return { id: args.outboundMessageId };
+  },
+});
+
+export const activateOutboundMessageForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    outboundMessageId: v.id("outboundMessages"),
+  },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.outboundMessageId);
+    if (!msg || msg.workspaceId !== args.workspaceId || msg.type !== "chat") {
+      throw new Error("Outbound message not found");
+    }
+
+    await ctx.db.patch(args.outboundMessageId, { status: "active", updatedAt: Date.now() });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.outbound.activated",
+      resourceType: "outboundMessage",
+      resourceId: String(args.outboundMessageId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "outbound.activated",
+      resourceType: "outboundMessage",
+      resourceId: args.outboundMessageId,
+      data: { status: "active", name: msg.name },
+    });
+
+    return { id: args.outboundMessageId, status: "active" as const };
+  },
+});
+
+export const pauseOutboundMessageForAutomation = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    credentialId: v.optional(v.id("automationCredentials")),
+    outboundMessageId: v.id("outboundMessages"),
+  },
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.outboundMessageId);
+    if (!msg || msg.workspaceId !== args.workspaceId || msg.type !== "chat") {
+      throw new Error("Outbound message not found");
+    }
+
+    await ctx.db.patch(args.outboundMessageId, { status: "paused", updatedAt: Date.now() });
+
+    await logAudit(ctx, {
+      workspaceId: args.workspaceId,
+      actorType: "api",
+      action: "automation.outbound.paused",
+      resourceType: "outboundMessage",
+      resourceId: String(args.outboundMessageId),
+      metadata: { credentialId: args.credentialId ? String(args.credentialId) : null },
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "outbound.paused",
+      resourceType: "outboundMessage",
+      resourceId: args.outboundMessageId,
+      data: { status: "paused", name: msg.name },
+    });
+
+    return { id: args.outboundMessageId, status: "paused" as const };
   },
 });

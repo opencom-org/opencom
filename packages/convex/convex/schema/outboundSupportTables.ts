@@ -30,7 +30,8 @@ export const outboundSupportTables = {
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_status", ["workspaceId", "status"])
-    .index("by_workspace_type", ["workspaceId", "type"]),
+    .index("by_workspace_type", ["workspaceId", "type"])
+    .index("by_workspace_type_updated_at", ["workspaceId", "type", "updatedAt"]),
 
   // Outbound Message Impressions (tracking)
   outboundMessageImpressions: defineTable({

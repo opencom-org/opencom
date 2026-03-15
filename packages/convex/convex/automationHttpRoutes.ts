@@ -60,6 +60,13 @@ const getCollectionRef = fn("automationApiInternals:getCollectionForAutomation")
 const createCollectionRef = fn("automationApiInternals:createCollectionForAutomation");
 const updateCollectionRef = fn("automationApiInternals:updateCollectionForAutomation");
 const deleteCollectionRef = fn("automationApiInternals:deleteCollectionForAutomation");
+const listOutboundMessagesRef = fn("automationApiInternals:listOutboundMessagesForAutomation");
+const getOutboundMessageRef = fn("automationApiInternals:getOutboundMessageForAutomation");
+const createOutboundMessageRef = fn("automationApiInternals:createOutboundMessageForAutomation");
+const updateOutboundMessageRef = fn("automationApiInternals:updateOutboundMessageForAutomation");
+const deleteOutboundMessageRef = fn("automationApiInternals:deleteOutboundMessageForAutomation");
+const activateOutboundMessageRef = fn("automationApiInternals:activateOutboundMessageForAutomation");
+const pauseOutboundMessageRef = fn("automationApiInternals:pauseOutboundMessageForAutomation");
 const listEventsRef = fn("automationEvents:listEvents");
 const replayDeliveryRef = fn("automationWebhookWorker:replayDelivery");
 
@@ -707,6 +714,165 @@ export const deleteCollection = httpAction(async (ctx, request) => {
       workspaceId: authResult.workspaceId,
       credentialId: authResult.credentialId,
       collectionId: body.collectionId,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: list ──────────────────────────────────────────
+export const listOutboundMessages = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.read");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const url = new URL(request.url);
+    const { cursor, limit, updatedSince } = parsePaginationParams(url);
+    const status = url.searchParams.get("status");
+
+    const result = await ctx.runQuery(listOutboundMessagesRef, {
+      workspaceId: authResult.workspaceId,
+      cursor: cursor ?? undefined,
+      limit,
+      updatedSince: updatedSince ?? undefined,
+      status: status ?? undefined,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: get ──────────────────────────────────────────
+export const getOutboundMessage = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.read");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    if (!id) return errorResponse("Missing id parameter", 400);
+    if (!isPlausibleConvexId(id)) return errorResponse("Invalid id format", 400);
+
+    const result = await ctx.runQuery(getOutboundMessageRef, {
+      workspaceId: authResult.workspaceId,
+      outboundMessageId: id,
+    });
+    if (!result) return errorResponse("Outbound message not found", 404);
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: create ───────────────────────────────────────
+export const createOutboundMessage = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.name) return errorResponse("Missing name", 400);
+    if (!body.content) return errorResponse("Missing content", 400);
+
+    const result = await ctx.runMutation(createOutboundMessageRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      name: body.name,
+      content: body.content,
+      targeting: body.targeting,
+      triggers: body.triggers,
+      frequency: body.frequency,
+      scheduling: body.scheduling,
+      priority: body.priority,
+    });
+    return jsonResponse(result, 201);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: update ───────────────────────────────────────
+export const updateOutboundMessage = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.outboundMessageId) return errorResponse("Missing outboundMessageId", 400);
+
+    const result = await ctx.runMutation(updateOutboundMessageRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      outboundMessageId: body.outboundMessageId,
+      name: body.name,
+      content: body.content,
+      targeting: body.targeting,
+      triggers: body.triggers,
+      frequency: body.frequency,
+      scheduling: body.scheduling,
+      priority: body.priority,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: delete ───────────────────────────────────────
+export const deleteOutboundMessage = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.outboundMessageId) return errorResponse("Missing outboundMessageId", 400);
+
+    const result = await ctx.runMutation(deleteOutboundMessageRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      outboundMessageId: body.outboundMessageId,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: activate ─────────────────────────────────────
+export const activateOutboundMessage = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.outboundMessageId) return errorResponse("Missing outboundMessageId", 400);
+
+    const result = await ctx.runMutation(activateOutboundMessageRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      outboundMessageId: body.outboundMessageId,
+    });
+    return jsonResponse(result);
+  } catch (error) {
+    return catchToResponse(error);
+  }
+});
+
+// ── Outbound Messages: pause ────────────────────────────────────────
+export const pauseOutboundMessage = httpAction(async (ctx, request) => {
+  const authResult = await withAutomationAuth(asAuthCtx(ctx), request, "outbound.write");
+  if (authResult instanceof Response) return authResult;
+
+  try {
+    const body = await request.json();
+    if (!body.outboundMessageId) return errorResponse("Missing outboundMessageId", 400);
+
+    const result = await ctx.runMutation(pauseOutboundMessageRef, {
+      workspaceId: authResult.workspaceId,
+      credentialId: authResult.credentialId,
+      outboundMessageId: body.outboundMessageId,
     });
     return jsonResponse(result);
   } catch (error) {

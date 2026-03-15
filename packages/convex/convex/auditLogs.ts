@@ -49,7 +49,12 @@ export type AuditAction =
   | "automation.article.deleted"
   | "automation.collection.created"
   | "automation.collection.updated"
-  | "automation.collection.deleted";
+  | "automation.collection.deleted"
+  | "automation.outbound.created"
+  | "automation.outbound.updated"
+  | "automation.outbound.deleted"
+  | "automation.outbound.activated"
+  | "automation.outbound.paused";
 
 export type ActorType = "user" | "system" | "api";
 

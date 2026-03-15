@@ -721,6 +721,13 @@ import {
   updateCollection,
   deleteCollection,
   eventsFeed,
+  listOutboundMessages,
+  getOutboundMessage,
+  createOutboundMessage,
+  updateOutboundMessage,
+  deleteOutboundMessage,
+  activateOutboundMessage,
+  pauseOutboundMessage,
   replayWebhookDelivery,
 } from "./automationHttpRoutes";
 
@@ -750,6 +757,13 @@ http.route({ path: "/api/v1/collections/get", method: "GET", handler: getCollect
 http.route({ path: "/api/v1/collections/create", method: "POST", handler: createCollection });
 http.route({ path: "/api/v1/collections/update", method: "POST", handler: updateCollection });
 http.route({ path: "/api/v1/collections/delete", method: "POST", handler: deleteCollection });
+http.route({ path: "/api/v1/outbound", method: "GET", handler: listOutboundMessages });
+http.route({ path: "/api/v1/outbound/get", method: "GET", handler: getOutboundMessage });
+http.route({ path: "/api/v1/outbound/create", method: "POST", handler: createOutboundMessage });
+http.route({ path: "/api/v1/outbound/update", method: "POST", handler: updateOutboundMessage });
+http.route({ path: "/api/v1/outbound/delete", method: "POST", handler: deleteOutboundMessage });
+http.route({ path: "/api/v1/outbound/activate", method: "POST", handler: activateOutboundMessage });
+http.route({ path: "/api/v1/outbound/pause", method: "POST", handler: pauseOutboundMessage });
 http.route({ path: "/api/v1/events/feed", method: "GET", handler: eventsFeed });
 http.route({ path: "/api/v1/webhooks/replay", method: "POST", handler: replayWebhookDelivery });
 
