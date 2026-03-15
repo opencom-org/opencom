@@ -21,6 +21,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Id } from "@opencom/convex/dataModel";
 import { useCampaignsPageConvex } from "./hooks/useCampaignsPageConvex";
+import { useBillingStatus } from "@/components/billing/useBillingStatus";
+import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 
 type CampaignTab = "email" | "push" | "carousels" | "series";
 
@@ -28,6 +30,7 @@ function CampaignsContent() {
   const router = useRouter();
   const { activeWorkspace } = useAuth();
   const [activeTab, setActiveTab] = useState<CampaignTab>("email");
+  const billingStatus = useBillingStatus(activeWorkspace?._id);
   const [searchQuery, setSearchQuery] = useState("");
   const [carouselActionError, setCarouselActionError] = useState<string | null>(null);
   const {
@@ -249,14 +252,26 @@ function CampaignsContent() {
       </div>
 
       {activeTab === "email" && (
-        <EmailCampaignsList
-          campaigns={emailCampaigns?.filter((c: NonNullable<typeof emailCampaigns>[number]) =>
-            c.name.toLowerCase().includes(searchQuery.toLowerCase())
+        <>
+          {/* Task 11.2: Show upgrade prompt when email campaigns feature is not available */}
+          {billingStatus?.billingEnabled && !billingStatus.features.emailCampaigns ? (
+            <div className="p-6">
+              <UpgradePrompt
+                feature="Email Campaigns"
+                description="Create and send targeted email campaigns to your visitors with a Pro subscription."
+              />
+            </div>
+          ) : (
+            <EmailCampaignsList
+              campaigns={emailCampaigns?.filter((c: NonNullable<typeof emailCampaigns>[number]) =>
+                c.name.toLowerCase().includes(searchQuery.toLowerCase())
+              )}
+              onDelete={deleteEmailCampaign}
+              onPause={pauseEmailCampaign}
+              getStatusBadge={getStatusBadge}
+            />
           )}
-          onDelete={deleteEmailCampaign}
-          onPause={pauseEmailCampaign}
-          getStatusBadge={getStatusBadge}
-        />
+        </>
       )}
 
       {activeTab === "push" && (
@@ -283,15 +298,27 @@ function CampaignsContent() {
       )}
 
       {activeTab === "series" && (
-        <SeriesList
-          series={seriesList?.filter((s: NonNullable<typeof seriesList>[number]) =>
-            s.name.toLowerCase().includes(searchQuery.toLowerCase())
+        <>
+          {/* Task 11.3: Show upgrade prompt when series feature is not available */}
+          {billingStatus?.billingEnabled && !billingStatus.features.series ? (
+            <div className="p-6">
+              <UpgradePrompt
+                feature="Automated Series"
+                description="Build automated multi-step journeys that engage visitors over time with a Pro subscription."
+              />
+            </div>
+          ) : (
+            <SeriesList
+              series={seriesList?.filter((s: NonNullable<typeof seriesList>[number]) =>
+                s.name.toLowerCase().includes(searchQuery.toLowerCase())
+              )}
+              onDelete={deleteSeries}
+              onPause={pauseSeries}
+              onActivate={activateSeries}
+              getStatusBadge={getStatusBadge}
+            />
           )}
-          onDelete={deleteSeries}
-          onPause={pauseSeries}
-          onActivate={activateSeries}
-          getStatusBadge={getStatusBadge}
-        />
+        </>
       )}
     </div>
   );

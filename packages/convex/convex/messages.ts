@@ -13,6 +13,7 @@ import {
 } from "./supportAttachments";
 import { supportAttachmentIdArrayValidator } from "./supportAttachmentTypes";
 import { resolveVisitorFromSession } from "./widgetSessions";
+import { requireActiveSubscription } from "./billing/gates";
 
 async function withSupportSenderNames(
   ctx: QueryCtx,
@@ -64,7 +65,9 @@ async function withSupportSenderNames(
 async function withMessageAttachments(
   ctx: QueryCtx,
   messages: Array<Doc<"messages"> & { senderName?: string }>
-): Promise<Array<Doc<"messages"> & { senderName?: string; attachments: SupportAttachmentDescriptor[] }>> {
+): Promise<
+  Array<Doc<"messages"> & { senderName?: string; attachments: SupportAttachmentDescriptor[] }>
+> {
   const descriptorMap = await loadSupportAttachmentDescriptorMap(
     ctx,
     messages.flatMap((message) => message.attachmentIds ?? [])
@@ -188,6 +191,10 @@ export const send = mutation({
       }
       await requirePermission(ctx, user._id, conversation.workspaceId, "conversations.reply");
       authenticatedUserId = user._id;
+
+      // Task 8.5: Restricted state check — agents cannot send messages when subscription is expired/canceled/unpaid.
+      // Visitors can always send messages (visitor flow must not be disrupted by billing state).
+      await requireActiveSubscription(ctx, conversation.workspaceId);
     }
 
     const now = Date.now();

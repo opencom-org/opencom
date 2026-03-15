@@ -13,6 +13,8 @@ import {
   type ResponsivePageShellProps,
   useIsCompactViewport,
 } from "./ResponsiveLayout";
+import { TrialBanner } from "./billing/TrialBanner";
+import { RestrictedBanner } from "./billing/RestrictedBanner";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -28,6 +30,7 @@ export function AppLayout({ children }: AppLayoutProps): React.JSX.Element | nul
   const user = auth?.user ?? null;
   const authLoading = auth?.isLoading ?? false;
   const needsWorkspaceSelection = auth?.needsWorkspaceSelection ?? false;
+  const activeWorkspaceId = auth?.activeWorkspace?._id;
 
   useEffect(() => {
     if (!isCompactViewport && mobileNavOpen) {
@@ -101,6 +104,9 @@ export function AppLayout({ children }: AppLayoutProps): React.JSX.Element | nul
             <span className="font-semibold">Opencom</span>
           </header>
         )}
+        {/* Billing banners — shown above all content when relevant */}
+        <RestrictedBanner workspaceId={activeWorkspaceId} />
+        <TrialBanner workspaceId={activeWorkspaceId} />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
       {isCompactViewport && mobileNavOpen && (

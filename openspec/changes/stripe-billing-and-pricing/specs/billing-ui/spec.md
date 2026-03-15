@@ -124,3 +124,14 @@ The public repository SHALL contain a stub billing settings component that rende
 ### Requirement: Settings section integration
 
 The billing settings section SHALL be added to the existing settings section registry (`apps/web/src/app/settings/settingsSections.ts`) as a new `SettingsSectionId` and `SettingsCategoryId`, following the existing pattern for section configuration (id, label, description, category, keywords, priority).
+
+#### Scenario: Billing section appears in settings navigation
+
+- **WHEN** a workspace admin views the settings page on a hosted deployment
+- **THEN** a "Billing" section SHALL appear in the settings page navigation
+- **AND** it SHALL be expandable and collapsible like other settings sections
+
+#### Scenario: Billing section hidden on self-hosted
+
+- **WHEN** any user views the settings page on a self-hosted deployment
+- **THEN** no billing section entry SHALL appear in the settings navigation

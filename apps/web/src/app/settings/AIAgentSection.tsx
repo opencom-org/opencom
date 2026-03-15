@@ -5,6 +5,8 @@ import { Button, Card, Input } from "@opencom/ui";
 import { AlertTriangle, Bot } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAIAgentSectionConvex } from "./hooks/useSettingsSectionsConvex";
+import { useBillingStatus } from "@/components/billing/useBillingStatus";
+import { UpgradePrompt } from "@/components/billing/UpgradePrompt";
 
 export function AIAgentSection({
   workspaceId,
@@ -66,7 +68,21 @@ export function AIAgentSection({
     }
   };
 
+  const billingStatus = useBillingStatus(workspaceId);
+
   if (!workspaceId) return null;
+
+  // Task 11.1: Show upgrade prompt when AI agent feature is not available
+  if (billingStatus && billingStatus.billingEnabled && !billingStatus.features.aiAgent) {
+    return (
+      <Card className="p-6">
+        <UpgradePrompt
+          feature="AI Agent"
+          description="Enable AI-powered agent responses, automated handoffs, and smart suggestions with a Pro subscription."
+        />
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-6">

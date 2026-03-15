@@ -23,6 +23,32 @@ import {
   serializeReadinessError,
   serializeRuntimeGuardError,
 } from "./shared";
+import { isBillingEnabled } from "../billing/types";
+import { requireActiveSubscription } from "../billing/gates";
+
+// Helper: check series feature entitlement (task 8.3)
+async function requireSeriesFeature(
+  ctx: Parameters<typeof requireActiveSubscription>[0],
+  workspaceId: Id<"workspaces">
+): Promise<void> {
+  await requireActiveSubscription(ctx, workspaceId);
+
+  if (!isBillingEnabled()) return;
+
+  const subscription = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+    .unique();
+
+  if (!subscription) return;
+
+  if (subscription.plan !== "pro") {
+    throw new Error(
+      "Series automation requires a Pro subscription. " +
+        "Upgrade to Pro to create and use automated series."
+    );
+  }
+}
 
 export const create = mutation({
   args: {
@@ -36,6 +62,8 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     await requireSeriesManagePermission(ctx, args.workspaceId);
+    // Task 8.3: Check series feature entitlement
+    await requireSeriesFeature(ctx, args.workspaceId);
 
     if (args.entryRules !== undefined && !validateAudienceRule(args.entryRules)) {
       throw new Error("Invalid entry rules");
@@ -146,7 +174,9 @@ export const archive = mutation({
 export const list = query({
   args: {
     workspaceId: v.id("workspaces"),
-    status: v.optional(v.union(v.literal("draft"), v.literal("active"), v.literal("paused"), v.literal("archived"))),
+    status: v.optional(
+      v.union(v.literal("draft"), v.literal("active"), v.literal("paused"), v.literal("archived"))
+    ),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -223,7 +253,11 @@ export const getWithBlocks = query({
     if (!canManage) return null;
 
     const blockLimit = clampLimit(args.blockLimit, DEFAULT_GRAPH_ITEM_LIMIT, MAX_GRAPH_ITEM_LIMIT);
-    const connectionLimit = clampLimit(args.connectionLimit, DEFAULT_GRAPH_ITEM_LIMIT, MAX_GRAPH_ITEM_LIMIT);
+    const connectionLimit = clampLimit(
+      args.connectionLimit,
+      DEFAULT_GRAPH_ITEM_LIMIT,
+      MAX_GRAPH_ITEM_LIMIT
+    );
     const blocks = await ctx.db
       .query("seriesBlocks")
       .withIndex("by_series", (q) => q.eq("seriesId", args.id))

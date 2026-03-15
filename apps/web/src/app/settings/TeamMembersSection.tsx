@@ -4,6 +4,7 @@ import { Button, Card, Input } from "@opencom/ui";
 import { ChevronDown, Clock, Mail, Trash2, UserPlus, Users, X } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import type { TeamMembersSettingsController } from "./useTeamMembersSettings";
+import { useBillingStatus } from "@/components/billing/useBillingStatus";
 
 type MemberRole = "owner" | "admin" | "agent" | "viewer";
 
@@ -28,6 +29,7 @@ interface TeamMembersSectionProps {
   members: TeamMemberRecord[] | undefined;
   pendingInvitations: PendingInvitationRecord[] | undefined;
   controller: TeamMembersSettingsController;
+  workspaceId?: Id<"workspaces">;
 }
 
 export function TeamMembersSection({
@@ -37,7 +39,15 @@ export function TeamMembersSection({
   members,
   pendingInvitations,
   controller,
+  workspaceId,
 }: TeamMembersSectionProps): React.JSX.Element {
+  const billingStatus = useBillingStatus(workspaceId);
+
+  // Calculate seat limit info for display
+  const memberCount = members?.length ?? 0;
+  const showSeatLimitWarning =
+    billingStatus?.billingEnabled && billingStatus.plan === "starter" && memberCount >= 3; // Starter seat limit
+
   return (
     <>
       <Card className="p-6">
@@ -45,6 +55,27 @@ export function TeamMembersSection({
           <Users className="h-5 w-5" />
           <h2 className="text-lg font-semibold">Team Members</h2>
         </div>
+
+        {/* Task 11.4: Seat limit reached warning */}
+        {isAdmin && showSeatLimitWarning && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+            <Users className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              <p>
+                <strong>Seat limit reached.</strong> Your Starter plan includes up to 3 seats (all
+                roles count equally).
+              </p>
+              <p className="mt-1">
+                Upgrade to Pro for up to 10 seats with pay-as-you-go beyond that, or remove an
+                existing member to free a seat.{" "}
+                <a href="/settings?section=billing" className="underline hover:no-underline">
+                  Manage billing
+                </a>
+                .
+              </p>
+            </div>
+          </div>
+        )}
 
         {isAdmin && (
           <form onSubmit={controller.handleInvite} className="mb-6 p-4 bg-muted/50 rounded-lg">
@@ -85,7 +116,10 @@ export function TeamMembersSection({
                 <option value="agent">Agent</option>
                 <option value="admin">Admin</option>
               </select>
-              <Button type="submit" disabled={controller.isInviting || !controller.inviteEmail.trim()}>
+              <Button
+                type="submit"
+                disabled={controller.isInviting || !controller.inviteEmail.trim()}
+              >
                 {controller.isInviting ? "Sending..." : "Invite"}
               </Button>
             </div>
@@ -127,7 +161,10 @@ export function TeamMembersSection({
 
         <div className="space-y-2">
           {members?.map((member) => (
-            <div key={member._id} className="flex items-center justify-between py-2 border-b last:border-0">
+            <div
+              key={member._id}
+              className="flex items-center justify-between py-2 border-b last:border-0"
+            >
               <div>
                 <p className="font-medium">{member.name || member.email}</p>
                 <p className="text-sm text-muted-foreground">{member.email}</p>

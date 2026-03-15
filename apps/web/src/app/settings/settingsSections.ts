@@ -5,6 +5,7 @@ export type SettingsCategoryId =
   | "automation-ai"
   | "notifications"
   | "integrations-channels"
+  | "billing"
   | "system";
 
 export type SettingsSectionId =
@@ -22,6 +23,7 @@ export type SettingsSectionId =
   | "email-channel"
   | "mobile-devices"
   | "installations"
+  | "billing"
   | "backend-connection";
 
 export interface SettingsSectionConfig {
@@ -42,6 +44,7 @@ export const SETTINGS_CATEGORY_LABELS: Record<SettingsCategoryId, string> = {
   "automation-ai": "Automation & AI",
   notifications: "Notifications",
   "integrations-channels": "Integrations & Channels",
+  billing: "Billing",
   system: "System",
 };
 
@@ -187,13 +190,23 @@ export const SETTINGS_SECTION_CONFIG: SettingsSectionConfig[] = [
     mobileOrder: 14,
   },
   {
+    id: "billing",
+    label: "Billing",
+    description: "Subscription, plan, usage, and payment management",
+    category: "billing",
+    keywords: ["billing", "subscription", "plan", "payment", "usage", "invoices"],
+    defaultExpanded: false,
+    priority: 16,
+    mobileOrder: 16,
+  },
+  {
     id: "backend-connection",
     label: "Backend Connection",
     description: "View current backend and switch environments",
     category: "system",
     keywords: ["backend", "environment", "connection"],
     defaultExpanded: false,
-    priority: 15,
-    mobileOrder: 15,
+    priority: 17,
+    mobileOrder: 17,
   },
 ];

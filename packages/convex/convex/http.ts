@@ -2,6 +2,7 @@ import { httpRouter, makeFunctionReference, type FunctionReference } from "conve
 import { httpAction } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { auth } from "./authConvex";
+import { handleStripeWebhook } from "./billing/webhooks";
 
 const CONVEX_URL = process.env.CONVEX_CLOUD_URL ?? process.env.VITE_CONVEX_URL ?? "";
 const RESEND_WEBHOOK_SECRET = process.env.RESEND_WEBHOOK_SECRET ?? "";
@@ -688,6 +689,40 @@ http.route({
         headers: { "Content-Type": "application/json" },
       });
     }
+  }),
+});
+
+// ============================================================
+// Stripe webhook endpoint
+// POST: receives Stripe events (checkout, subscription updates, invoices)
+// In self-hosted mode, the stub handler returns 200 OK with no processing.
+// In hosted mode, the opencom-billing overlay replaces billing/webhooks.ts
+// with a real Stripe signature verification and event routing implementation.
+// ============================================================
+
+http.route({
+  path: "/api/stripe/webhook",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    return await handleStripeWebhook(ctx, request);
+  }),
+});
+
+// OPTIONS preflight for /api/stripe/webhook
+// NOTE: Stripe sends real webhooks server-to-server (no CORS needed), but
+// registering OPTIONS is consistent with the existing pattern in this file.
+http.route({
+  path: "/api/stripe/webhook",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Stripe-Signature",
+        "Access-Control-Max-Age": "86400",
+      },
+    });
   }),
 });
 

@@ -13,13 +13,56 @@ import { SecuritySettingsSection } from "./SecuritySettingsSection";
 import { MobileDevicesSection } from "./MobileDevicesSection";
 import { NotificationSettingsSection } from "./NotificationSettingsSection";
 import { SettingsSectionContainer } from "./SettingsSectionContainer";
-import {
-  TeamMembersSection,
-} from "./TeamMembersSection";
+import { TeamMembersSection } from "./TeamMembersSection";
 import { SignupAuthSection } from "./SignupAuthSection";
 import { HelpCenterAccessSection } from "./HelpCenterAccessSection";
 import { EmailChannelSection } from "./EmailChannelSection";
 import { useSettingsPageController } from "./hooks/useSettingsPageController";
+import { BillingSettings } from "@/components/billing/BillingSettings";
+import { useBillingStatus } from "@/components/billing/useBillingStatus";
+import type { Id } from "@opencom/convex/dataModel";
+import type { SettingsSectionId } from "./settingsSections";
+
+// ============================================================
+// Billing settings section — conditionally rendered for owner + admin
+// ============================================================
+
+interface BillingSettingsSectionProps {
+  workspaceId: Id<"workspaces"> | undefined;
+  isSectionExpanded: (id: SettingsSectionId) => boolean;
+  toggleSection: (id: SettingsSectionId) => void;
+  statusBySection: Record<string, { label?: string; tone?: string } | undefined>;
+}
+
+function BillingSettingsSection({
+  workspaceId,
+  isSectionExpanded,
+  toggleSection,
+  statusBySection,
+}: BillingSettingsSectionProps) {
+  const billingStatus = useBillingStatus(workspaceId);
+
+  // Only render the section if billing is enabled for this deployment
+  if (!billingStatus?.billingEnabled) {
+    return null;
+  }
+
+  return (
+    <SettingsSectionContainer
+      id="billing"
+      title="Billing"
+      description="Subscription plan, usage meters, and payment management."
+      statusLabel={statusBySection["billing"]?.label}
+      statusTone={
+        statusBySection["billing"]?.tone as "neutral" | "success" | "warning" | "danger" | undefined
+      }
+      isExpanded={isSectionExpanded("billing")}
+      onToggle={() => toggleSection("billing")}
+    >
+      <BillingSettings workspaceId={workspaceId} />
+    </SettingsSectionContainer>
+  );
+}
 
 function SettingsContent(): React.JSX.Element | null {
   const {
@@ -196,6 +239,7 @@ function SettingsContent(): React.JSX.Element | null {
               members={members}
               pendingInvitations={pendingInvitations}
               controller={teamSettings}
+              workspaceId={activeWorkspace?._id}
             />
           </SettingsSectionContainer>
 
@@ -397,6 +441,16 @@ function SettingsContent(): React.JSX.Element | null {
           </SettingsSectionContainer>
 
           {/* Backend Connection */}
+          {/* Billing section — shown only when billing is enabled (hosted) and user has settings.billing permission (owner + admin) */}
+          {isAdmin && (
+            <BillingSettingsSection
+              workspaceId={activeWorkspace?._id}
+              isSectionExpanded={isSectionExpanded}
+              toggleSection={toggleSection}
+              statusBySection={statusBySection}
+            />
+          )}
+
           <SettingsSectionContainer
             id="backend-connection"
             title="Backend Connection"

@@ -66,6 +66,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   ],
   admin: [
     // All except billing transfer (owner-only)
+    // NOTE: settings.billing is included for admin because workspace creators get the admin
+    // role (not owner) in authConvex.ts. Without this, the workspace creator cannot manage billing.
     "conversations.read",
     "conversations.reply",
     "conversations.assign",
@@ -85,6 +87,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "settings.workspace",
     "settings.security",
     "settings.integrations",
+    "settings.billing",
     "data.export",
     "data.delete",
     "audit.read",
