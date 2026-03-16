@@ -9,9 +9,7 @@ import {
   nowTs,
   sortConnectionsDeterministically,
 } from "./shared";
-import { isBillingEnabled } from "../billing/types";
-import { getCurrentPeriodBounds } from "../billing/usage";
-import { checkEmailHardCap } from "../billing/gates";
+import { checkEmailAllowed, trackEmailSent } from "../billing-hooks/onEmailSent";
 
 function getConnectionByCondition(
   connections: Doc<"seriesConnections">[],
@@ -161,45 +159,9 @@ async function runContentBlockAdapter(
       };
     }
 
-    // Task 8.6: Check email hard cap before delivering email block
-    await checkEmailHardCap(ctx, series.workspaceId);
-
-    // Track email send toward billing usage limit.
-    // Non-fatal — usage tracking failure must never block email delivery.
-    if (isBillingEnabled()) {
-      try {
-        const period = await getCurrentPeriodBounds(ctx, series.workspaceId);
-        if (period) {
-          const existing = await ctx.db
-            .query("usageRecords")
-            .withIndex("by_workspace_dimension_period", (q) =>
-              q
-                .eq("workspaceId", series.workspaceId)
-                .eq("dimension", "emails_sent")
-                .eq("periodStart", period.periodStart)
-            )
-            .unique();
-          if (existing) {
-            await ctx.db.patch(existing._id, {
-              value: existing.value + 1,
-              lastUpdatedAt: Date.now(),
-            });
-          } else {
-            await ctx.db.insert("usageRecords", {
-              workspaceId: series.workspaceId,
-              dimension: "emails_sent",
-              periodStart: period.periodStart,
-              periodEnd: period.periodEnd,
-              value: 1,
-              lastUpdatedAt: Date.now(),
-            });
-          }
-        }
-      } catch {
-        // Non-fatal: billing tracking must never block email delivery
-        console.warn("Email usage tracking failed for series email block");
-      }
-    }
+    // Billing hook: throws if email hard cap reached; tracks send. Both non-fatal for delivery.
+    await checkEmailAllowed(ctx, series.workspaceId);
+    await trackEmailSent(ctx, series.workspaceId, 1);
 
     return { deliveryAttempted: true, deliveryFailed: false };
   }

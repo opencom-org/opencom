@@ -18,9 +18,7 @@ import {
 } from "./notifications/functionRefs";
 import { hasPermission, requirePermission } from "./permissions";
 import { formatReadableVisitorId } from "./visitorReadableId";
-import { isBillingEnabled } from "./billing/types";
-import { getCurrentPeriodBounds } from "./billing/usage";
-import { checkEmailHardCap } from "./billing/gates";
+import { checkEmailAllowed, trackEmailSent } from "./billing-hooks/onEmailSent";
 
 const WEBHOOK_INTERNAL_SECRET =
   process.env.EMAIL_WEBHOOK_INTERNAL_SECRET ?? process.env.RESEND_WEBHOOK_SECRET ?? "";
@@ -675,8 +673,8 @@ export const sendEmailReply = mutation({
       }
     }
 
-    // Task 8.6: Check email hard cap before sending
-    await checkEmailHardCap(ctx, conversation.workspaceId);
+    // Billing hook: throws if the email hard cap has been reached.
+    await checkEmailAllowed(ctx, conversation.workspaceId);
 
     // Create message record with pending status
     const dbMessageId = await ctx.db.insert("messages", {
@@ -738,42 +736,8 @@ export const sendEmailReply = mutation({
       signature: emailConfig.signature,
     });
 
-    // Track email send toward billing usage limit (all emails count: conversation replies included).
-    // Non-fatal — usage tracking failure must never block email delivery.
-    if (isBillingEnabled()) {
-      try {
-        const period = await getCurrentPeriodBounds(ctx, conversation.workspaceId);
-        if (period) {
-          const existing = await ctx.db
-            .query("usageRecords")
-            .withIndex("by_workspace_dimension_period", (q) =>
-              q
-                .eq("workspaceId", conversation.workspaceId)
-                .eq("dimension", "emails_sent")
-                .eq("periodStart", period.periodStart)
-            )
-            .unique();
-          if (existing) {
-            await ctx.db.patch(existing._id, {
-              value: existing.value + 1,
-              lastUpdatedAt: Date.now(),
-            });
-          } else {
-            await ctx.db.insert("usageRecords", {
-              workspaceId: conversation.workspaceId,
-              dimension: "emails_sent",
-              periodStart: period.periodStart,
-              periodEnd: period.periodEnd,
-              value: 1,
-              lastUpdatedAt: Date.now(),
-            });
-          }
-        }
-      } catch {
-        // Non-fatal: billing tracking must never block email delivery
-        console.warn("Email usage tracking failed for conversation reply");
-      }
-    }
+    // Billing hook: track email sent toward usage limits. Non-fatal.
+    await trackEmailSent(ctx, conversation.workspaceId, 1);
 
     return { messageId: dbMessageId, emailMessageId: messageId };
   },

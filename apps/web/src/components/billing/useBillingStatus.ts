@@ -36,7 +36,7 @@ export interface BillingStatusResult {
 // ============================================================
 
 const BILLING_STATUS_REF = webQueryRef<{ workspaceId: Id<"workspaces"> }, BillingStatusResult>(
-  "billing/gates:getBillingStatus"
+  "billing-hooks/getBillingStatus:getBillingStatus"
 );
 
 // ============================================================

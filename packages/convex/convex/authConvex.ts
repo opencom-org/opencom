@@ -5,7 +5,7 @@ import { alphabet, generateRandomString } from "oslo/crypto";
 import { Resend as ResendAPI } from "resend";
 import { DataModel } from "./_generated/dataModel";
 import type { DatabaseWriter } from "./_generated/server";
-import { isBillingEnabled, PLAN_LIMITS } from "./billing/types";
+import { onWorkspaceCreated } from "./billing-hooks/onWorkspaceCreated";
 
 // Custom Password provider with workspace creation on signup
 const CustomPassword = Password<DataModel>({
@@ -143,54 +143,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         createdAt: now,
       });
 
-      // Create subscription on signup (hosted mode only).
-      // Self-hosted deployments skip this — no subscription record = unlimited access.
-      if (isBillingEnabled()) {
-        const trialDurationMs = 7 * 24 * 60 * 60 * 1000; // 7 days
-        const trialEndsAt = now + trialDurationMs;
-        // Trial period: start = now, end = trial expiry (placeholder; Stripe populates real period later)
-        const currentPeriodStart = now;
-        const currentPeriodEnd = trialEndsAt;
-        const proLimits = PLAN_LIMITS.pro;
-
-        await ctx.db.insert("subscriptions", {
-          workspaceId,
-          plan: "pro",
-          status: "trialing",
-          trialEndsAt,
-          currentPeriodStart,
-          currentPeriodEnd,
-          cancelAtPeriodEnd: false,
-          seatLimit: proLimits.seatLimit,
-          aiCreditLimitCents: proLimits.aiCreditLimitCents,
-          emailLimit: proLimits.emailLimit,
-          currency: "usd",
-          createdAt: now,
-          updatedAt: now,
-        });
-
-        // Initialize usage records for the trial period at 0
-        for (const dimension of ["ai_cost_cents", "emails_sent"] as const) {
-          await ctx.db.insert("usageRecords", {
-            workspaceId,
-            dimension,
-            periodStart: currentPeriodStart,
-            periodEnd: currentPeriodEnd,
-            value: 0,
-            lastUpdatedAt: now,
-          });
-        }
-
-        // Initialize seat count to 1 (the workspace creator / owner)
-        await ctx.db.insert("usageRecords", {
-          workspaceId,
-          dimension: "seats",
-          periodStart: currentPeriodStart,
-          periodEnd: currentPeriodEnd,
-          value: 1,
-          lastUpdatedAt: now,
-        });
-      }
+      // Billing hook: initialise subscription and usage records for hosted deployments.
+      // Self-hosted: no-op (the hook implementation is a no-op stub).
+      await onWorkspaceCreated(ctx.db, workspaceId, now);
 
       // Process any pending invitations using index-based lookup
       const pendingInvitations = await db

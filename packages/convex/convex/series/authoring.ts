@@ -23,32 +23,7 @@ import {
   serializeReadinessError,
   serializeRuntimeGuardError,
 } from "./shared";
-import { isBillingEnabled } from "../billing/types";
-import { requireActiveSubscription } from "../billing/gates";
-
-// Helper: check series feature entitlement (task 8.3)
-async function requireSeriesFeature(
-  ctx: Parameters<typeof requireActiveSubscription>[0],
-  workspaceId: Id<"workspaces">
-): Promise<void> {
-  await requireActiveSubscription(ctx, workspaceId);
-
-  if (!isBillingEnabled()) return;
-
-  const subscription = await ctx.db
-    .query("subscriptions")
-    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-    .unique();
-
-  if (!subscription) return;
-
-  if (subscription.plan !== "pro") {
-    throw new Error(
-      "Series automation requires a Pro subscription. " +
-        "Upgrade to Pro to create and use automated series."
-    );
-  }
-}
+import { requireFeatureAccess } from "../billing-hooks/onEmailSent";
 
 export const create = mutation({
   args: {
@@ -63,7 +38,8 @@ export const create = mutation({
   handler: async (ctx, args) => {
     await requireSeriesManagePermission(ctx, args.workspaceId);
     // Task 8.3: Check series feature entitlement
-    await requireSeriesFeature(ctx, args.workspaceId);
+    // Billing hook: throws if series automation is not available on the current plan.
+    await requireFeatureAccess(ctx, args.workspaceId, "series");
 
     if (args.entryRules !== undefined && !validateAudienceRule(args.entryRules)) {
       throw new Error("Invalid entry rules");

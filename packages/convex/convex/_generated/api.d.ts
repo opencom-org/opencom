@@ -21,6 +21,7 @@ import type * as authoringSessions from "../authoringSessions.js";
 import type * as autoTagRules from "../autoTagRules.js";
 import type * as automationSettings from "../automationSettings.js";
 import type * as billing_gates from "../billing/gates.js";
+import type * as billing_settings from "../billing/settings.js";
 import type * as billing_stripe from "../billing/stripe.js";
 import type * as billing_stubs from "../billing/stubs.js";
 import type * as billing_trialExpiry from "../billing/trialExpiry.js";
@@ -218,6 +219,7 @@ declare const fullApi: ApiFromModules<{
   autoTagRules: typeof autoTagRules;
   automationSettings: typeof automationSettings;
   "billing/gates": typeof billing_gates;
+  "billing/settings": typeof billing_settings;
   "billing/stripe": typeof billing_stripe;
   "billing/stubs": typeof billing_stubs;
   "billing/trialExpiry": typeof billing_trialExpiry;

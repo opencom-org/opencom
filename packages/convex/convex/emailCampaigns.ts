@@ -4,34 +4,11 @@ import { Doc, Id } from "./_generated/dataModel";
 import { evaluateRuleWithSegmentSupport, validateAudienceRule } from "./audienceRules";
 import { authMutation, authQuery } from "./lib/authWrappers";
 import { audienceRulesOrSegmentValidator } from "./validators";
-import { isBillingEnabled } from "./billing/types";
-import { getCurrentPeriodBounds } from "./billing/usage";
-import { requireActiveSubscription, checkEmailHardCap } from "./billing/gates";
-
-// Helper: check email campaigns feature entitlement
-async function requireEmailCampaignsFeature(
-  ctx: Parameters<typeof requireActiveSubscription>[0],
-  workspaceId: Id<"workspaces">
-): Promise<void> {
-  await requireActiveSubscription(ctx, workspaceId);
-
-  if (!isBillingEnabled()) return;
-
-  const subscription = await ctx.db
-    .query("subscriptions")
-    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-    .unique();
-
-  if (!subscription) return;
-
-  const plan = subscription.plan;
-  if (plan !== "pro") {
-    throw new Error(
-      "Email campaigns require a Pro subscription. " +
-        "Upgrade to Pro to create and send email campaigns."
-    );
-  }
-}
+import {
+  requireFeatureAccess,
+  checkEmailAllowed,
+  trackEmailSent,
+} from "./billing-hooks/onEmailSent";
 
 const TRACKING_TOKEN_PATTERN = /^ect_[a-f0-9]{48}$/;
 const TRACKING_EVENT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
@@ -224,8 +201,8 @@ export const create = authMutation({
   },
   permission: "settings.workspace",
   handler: async (ctx, args) => {
-    // Task 8.2: Check email campaigns feature entitlement
-    await requireEmailCampaignsFeature(ctx, args.workspaceId);
+    // Billing hook: throws if email campaigns are not available on the current plan.
+    await requireFeatureAccess(ctx, args.workspaceId, "emailCampaigns");
 
     const hasSegmentReference =
       typeof args.targeting === "object" &&
@@ -328,8 +305,8 @@ export const send = authMutation({
 
     const now = Date.now();
 
-    // Task 8.6: Check email hard cap before queuing recipients
-    await checkEmailHardCap(ctx, campaign.workspaceId);
+    // Billing hook: throws if the email hard cap has been reached.
+    await checkEmailAllowed(ctx, campaign.workspaceId);
 
     // Get eligible recipients based on targeting
     const visitors = await ctx.db
@@ -379,42 +356,8 @@ export const send = authMutation({
       updatedAt: now,
     });
 
-    // Track email send toward billing usage limit for all queued recipients.
-    // Non-fatal — usage tracking failure must never block campaign send.
-    if (eligibleVisitors.length > 0 && isBillingEnabled()) {
-      try {
-        const period = await getCurrentPeriodBounds(ctx, campaign.workspaceId);
-        if (period) {
-          const existing = await ctx.db
-            .query("usageRecords")
-            .withIndex("by_workspace_dimension_period", (q) =>
-              q
-                .eq("workspaceId", campaign.workspaceId)
-                .eq("dimension", "emails_sent")
-                .eq("periodStart", period.periodStart)
-            )
-            .unique();
-          if (existing) {
-            await ctx.db.patch(existing._id, {
-              value: existing.value + eligibleVisitors.length,
-              lastUpdatedAt: Date.now(),
-            });
-          } else {
-            await ctx.db.insert("usageRecords", {
-              workspaceId: campaign.workspaceId,
-              dimension: "emails_sent",
-              periodStart: period.periodStart,
-              periodEnd: period.periodEnd,
-              value: eligibleVisitors.length,
-              lastUpdatedAt: Date.now(),
-            });
-          }
-        }
-      } catch {
-        // Non-fatal: billing tracking must never block campaign send
-        console.warn("Email usage tracking failed for campaign send");
-      }
-    }
+    // Billing hook: track emails sent toward usage limits. Non-fatal.
+    await trackEmailSent(ctx, campaign.workspaceId, eligibleVisitors.length);
 
     return { recipientCount: eligibleVisitors.length };
   },

@@ -16,8 +16,25 @@ jobs:
       group: deploy-convex-production
       cancel-in-progress: false
     env:
-      # Required repository secret:
+      # Required repository secrets:
       # - CONVEX_DEPLOY_KEY: Production deploy key from Convex dashboard
+      # - BILLING_APP_ID: GitHub App ID (shown on the app's settings page)
+      # - BILLING_APP_PRIVATE_KEY: GitHub App private key (PEM contents, generated on app settings page)
+      #
+      # GitHub App setup (one-time):
+      #   1. Go to your org → Settings → Developer settings → GitHub Apps → New GitHub App
+      #   2. Name: "Opencom Billing CI"
+      #   3. Homepage URL: your org URL (required but not used)
+      #   4. Uncheck "Active" under Webhook
+      #   5. Permissions → Repository permissions → Contents: Read-only
+      #   6. Under "Where can this GitHub App be installed?" → Only on this account
+      #   7. Create app → note the App ID
+      #   8. Generate a private key → download the .pem file
+      #   9. Install the app on the opencom-billing repo only (not this repo)
+      #      App settings → Install App → your org → Only select repositories → opencom-billing
+      #  10. Add secrets to this repo (opencom):
+      #      BILLING_APP_ID = the numeric App ID from step 7
+      #      BILLING_APP_PRIVATE_KEY = full contents of the .pem file from step 8
       CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
 
     steps:
@@ -45,8 +62,50 @@ jobs:
             echo "::error::Missing required secret: CONVEX_DEPLOY_KEY"
             exit 1
           fi
+          if [ -z "${{ secrets.BILLING_APP_ID }}" ]; then
+            echo "::error::Missing required secret: BILLING_APP_ID"
+            exit 1
+          fi
+          if [ -z "${{ secrets.BILLING_APP_PRIVATE_KEY }}" ]; then
+            echo "::error::Missing required secret: BILLING_APP_PRIVATE_KEY"
+            exit 1
+          fi
 
-      - name: Convex backend typecheck
+      # ============================================================
+      # Billing overlay injection
+      # Generates a short-lived GitHub App installation token scoped
+      # to opencom-billing, clones the repo, validates targets, and
+      # copies overlay files before Convex typecheck and deploy.
+      #
+      # The token expires after 1 hour and is never stored — no rotation needed.
+      # ============================================================
+
+      - name: Generate billing repo access token
+        id: billing-token
+        # actions/create-github-app-token pinned to v2.0.6:
+        # https://github.com/actions/create-github-app-token/releases/tag/v2.0.6
+        uses: actions/create-github-app-token@df432ceedc4e8e9e25e672e77ee9f53fc04cad9f
+        with:
+          app-id: ${{ secrets.BILLING_APP_ID }}
+          private-key: ${{ secrets.BILLING_APP_PRIVATE_KEY }}
+          # Scope the token to only the private billing repo — not the whole org
+          repositories: opencom-billing
+
+      - name: Checkout billing overlay (private repo)
+        # actions/checkout pinned to v4.3.1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          repository: opencom-org/opencom-billing
+          token: ${{ steps.billing-token.outputs.token }}
+          path: opencom-billing
+
+      - name: Validate overlay targets exist in public repo
+        run: OPENCOM_REPO=${{ github.workspace }} bash opencom-billing/scripts/validate-overlay.sh
+
+      - name: Apply billing overlay
+        run: OPENCOM_REPO=${{ github.workspace }} bash opencom-billing/scripts/overlay.sh
+
+      - name: Convex backend typecheck (with overlay applied)
         run: pnpm --filter @opencom/convex run typecheck
 
       - name: Deploy Convex production backend

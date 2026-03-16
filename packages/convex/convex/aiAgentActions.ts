@@ -6,7 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import { generateText } from "ai";
 import { createAIClient } from "./lib/aiGateway";
-import { isBillingEnabled } from "./billing/types";
+import { checkAiAllowed, getAiGatewayHeaders, trackAiUsage } from "./billing-hooks/onAiGeneration";
 
 type AIConfigurationDiagnostic = {
   code: string;
@@ -208,64 +208,6 @@ const INTERNAL_SEND_BOT_MESSAGE_REF = makeFunctionReference<
   "internal",
   InternalSendBotMessageArgs,
   Id<"messages">
->;
-
-// Billing refs — used for AI cost tracking and Stripe Gateway headers
-type IncrementUsageArgs = {
-  workspaceId: Id<"workspaces">;
-  dimension: "ai_cost_cents" | "emails_sent" | "seats";
-  amount: number;
-  periodStart: number;
-  periodEnd: number;
-};
-
-const INCREMENT_USAGE_REF = makeFunctionReference<"mutation", IncrementUsageArgs, null>(
-  "billing/usage:incrementUsage"
-) as unknown as ConvexRef<"mutation", "internal", IncrementUsageArgs, null>;
-
-type GetWorkspaceSubscriptionArgs = { workspaceId: Id<"workspaces"> };
-type WorkspaceSubscriptionResult = {
-  stripeCustomerId?: string;
-  currentPeriodStart: number;
-  currentPeriodEnd: number;
-  status: string;
-  plan: string;
-} | null;
-
-const GET_WORKSPACE_SUBSCRIPTION_REF = makeFunctionReference<
-  "query",
-  GetWorkspaceSubscriptionArgs,
-  WorkspaceSubscriptionResult
->("billing/gates:_getWorkspaceSubscription") as unknown as ConvexRef<
-  "query",
-  "internal",
-  GetWorkspaceSubscriptionArgs,
-  WorkspaceSubscriptionResult
->;
-
-// Entitlements ref for feature gating checks
-type GetEntitlementsArgs = { workspaceId: Id<"workspaces"> };
-type EntitlementsResult = {
-  plan: string;
-  status: string;
-  features: { aiAgent: boolean; emailCampaigns: boolean; series: boolean };
-  limits: {
-    seats: { used: number; limit: number; payg: boolean; hardCap: boolean };
-    aiCredits: { used: number; limit: number; payg: boolean; hardCap: boolean };
-    emails: { used: number; limit: number; payg: boolean; hardCap: boolean };
-  };
-  isRestricted: boolean;
-};
-
-const GET_ENTITLEMENTS_REF = makeFunctionReference<
-  "query",
-  GetEntitlementsArgs,
-  EntitlementsResult
->("billing/gates:getEntitlements") as unknown as ConvexRef<
-  "query",
-  "internal",
-  GetEntitlementsArgs,
-  EntitlementsResult
 >;
 
 function getShallowRunQuery(ctx: { runQuery: unknown }) {
@@ -559,78 +501,25 @@ export const generateResponse = action({
       };
     }
 
-    // Check billing entitlement for AI agent feature (task 8.1)
-    // Self-hosted and trial workspaces always pass this check.
-    if (isBillingEnabled()) {
-      try {
-        const entitlements = await runQuery(GET_ENTITLEMENTS_REF, {
-          workspaceId: args.workspaceId,
-        });
-
-        if (entitlements.isRestricted) {
-          const reason = "AI Agent unavailable: subscription is expired or inactive";
-          try {
-            const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
-              conversationId: args.conversationId,
-              visitorId: args.visitorId,
-              sessionToken: args.sessionToken,
-              reason,
-            });
-            return {
-              response: handoff.handoffMessage,
-              confidence: 0,
-              sources: [],
-              handoff: true,
-              handoffReason: reason,
-              messageId: handoff.messageId,
-            };
-          } catch {
-            // Ignore handoff failure — return empty/restricted response
-          }
-          return {
-            response: "",
-            confidence: 0,
-            sources: [],
-            handoff: true,
-            handoffReason: reason,
-            messageId: null,
-          };
-        }
-
-        if (!entitlements.features.aiAgent) {
-          const reason = "AI Agent requires a Pro subscription";
-          try {
-            const handoff = await runMutation(HANDOFF_TO_HUMAN_REF, {
-              conversationId: args.conversationId,
-              visitorId: args.visitorId,
-              sessionToken: args.sessionToken,
-              reason,
-            });
-            return {
-              response: handoff.handoffMessage,
-              confidence: 0,
-              sources: [],
-              handoff: true,
-              handoffReason: reason,
-              messageId: handoff.messageId,
-            };
-          } catch {
-            // Ignore handoff failure
-          }
-          return {
-            response: "",
-            confidence: 0,
-            sources: [],
-            handoff: true,
-            handoffReason: reason,
-            messageId: null,
-          };
-        }
-      } catch (entitlementError) {
-        // Non-fatal: if entitlement check fails, allow the request to proceed
-        // to avoid blocking AI responses due to billing system issues.
-        console.warn("AI entitlement check failed, proceeding:", entitlementError);
-      }
+    // Billing hook: check whether the AI agent is allowed for this workspace.
+    // Self-hosted: always returns { blocked: false }.
+    const billingCheck = await checkAiAllowed(
+      ctx,
+      args.workspaceId,
+      args.conversationId,
+      args.visitorId,
+      args.sessionToken
+    );
+    if (billingCheck.blocked) {
+      const handoffMessageId = billingCheck.handoffMessageId;
+      return {
+        response: "",
+        confidence: 0,
+        sources: [],
+        handoff: true,
+        handoffReason: billingCheck.reason,
+        messageId: handoffMessageId,
+      };
     }
 
     // Get AI settings
@@ -844,27 +733,9 @@ export const generateResponse = action({
       };
     };
 
-    // Look up workspace subscription for Stripe AI Gateway billing headers.
-    // Only pass headers for active paid subscriptions (not trials — no Stripe customer yet).
-    const stripeHeaders: Record<string, string> = {};
-    if (isBillingEnabled()) {
-      try {
-        const subscription = await runQuery(GET_WORKSPACE_SUBSCRIPTION_REF, {
-          workspaceId: args.workspaceId,
-        });
-        if (
-          subscription?.stripeCustomerId &&
-          subscription.status === "active" &&
-          process.env.STRIPE_RESTRICTED_ACCESS_KEY
-        ) {
-          stripeHeaders["stripe-customer-id"] = subscription.stripeCustomerId;
-          stripeHeaders["stripe-restricted-access-key"] = process.env.STRIPE_RESTRICTED_ACCESS_KEY;
-        }
-      } catch {
-        // Non-fatal: if subscription lookup fails, proceed without billing headers
-        console.warn("AI billing header lookup failed, proceeding without Stripe metering");
-      }
-    }
+    // Billing hook: returns Stripe billing headers for the AI Gateway.
+    // Self-hosted: returns {} (no headers). Non-fatal.
+    const stripeHeaders = await getAiGatewayHeaders(ctx, args.workspaceId);
 
     const aiClient = createAIClient(
       Object.keys(stripeHeaders).length > 0 ? { stripeHeaders } : undefined
@@ -1000,31 +871,9 @@ export const generateResponse = action({
 
     const generationTimeMs = Date.now() - startTime;
 
-    // Track AI cost for billing display (display only — actual billing via AI Gateway).
-    // Estimate cost: ~$5/1M tokens at typical provider rates; round to cents.
-    // This is intentionally approximate — it's for the user's awareness dashboard only.
-    if (isBillingEnabled() && tokensUsed && tokensUsed > 0) {
-      try {
-        const subscription = await runQuery(GET_WORKSPACE_SUBSCRIPTION_REF, {
-          workspaceId: args.workspaceId,
-        });
-        if (subscription) {
-          // Estimate cost: 0.5 cents per 1000 tokens (rough average across models)
-          const estimatedCostCents = Math.ceil((tokensUsed / 1000) * 0.5);
-          if (estimatedCostCents > 0) {
-            await runMutation(INCREMENT_USAGE_REF, {
-              workspaceId: args.workspaceId,
-              dimension: "ai_cost_cents",
-              amount: estimatedCostCents,
-              periodStart: subscription.currentPeriodStart,
-              periodEnd: subscription.currentPeriodEnd,
-            });
-          }
-        }
-      } catch {
-        // Non-fatal: usage tracking failure should never block AI response delivery
-        console.warn("AI cost usage tracking failed");
-      }
+    // Billing hook: track AI token usage. Non-fatal — never blocks response delivery.
+    if (tokensUsed && tokensUsed > 0) {
+      await trackAiUsage(ctx, args.workspaceId, tokensUsed);
     }
 
     // Calculate confidence

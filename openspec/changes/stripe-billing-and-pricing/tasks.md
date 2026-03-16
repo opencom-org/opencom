@@ -99,36 +99,36 @@
 
 ## 14. Stripe Integration — Checkout and Portal (Private Repo)
 
-- [ ] 14.1 Add `stripe` npm dependency to the private repo (used in Convex overlay actions) — private repo structure ready at ~/opencom-billing
-- [ ] 14.2 Implement `convex-overlay/billing/stripe.ts` with `createCheckoutSession` action — accepts workspaceId, plan, currency; creates Stripe customer if needed; creates Checkout session with correct Price ID from env vars; includes workspaceId in session metadata; returns URL
-- [ ] 14.3 Implement `createPortalSession` action — accepts workspaceId; looks up stripeCustomerId; creates Customer Portal session; returns URL
-- [ ] 14.4 Both actions SHALL enforce `settings.billing` permission (owner + admin)
+- [x] 14.1 Add `stripe` npm dependency to the private repo (used in Convex overlay actions)
+- [x] 14.2 Implement `convex-overlay/billing/stripe.ts` with `createCheckoutSession` action — accepts workspaceId, plan, currency; creates Stripe customer if needed; creates Checkout session with correct Price ID from env vars; includes workspaceId in session metadata; returns URL
+- [x] 14.3 Implement `createPortalSession` action — accepts workspaceId; looks up stripeCustomerId; creates Customer Portal session; returns URL
+- [x] 14.4 Both actions SHALL enforce `settings.billing` permission (owner + admin)
 
 ## 15. Stripe Integration — Webhook Handler (Private Repo)
 
-- [ ] 15.1 Implement `convex-overlay/billing/webhooks.ts` with `handleStripeWebhook` — verifies signature using `STRIPE_WEBHOOK_SECRET`, parses event, routes to handler by event type
-- [ ] 15.2 Implement `checkout.session.completed` handler — extracts workspaceId from metadata, updates subscription with stripeCustomerId, stripeSubscriptionId, status: "active", plan and currency from metadata
-- [ ] 15.3 Implement `customer.subscription.updated` handler — updates plan, status, period dates, cancelAtPeriodEnd from Stripe subscription object
-- [ ] 15.4 Implement `customer.subscription.deleted` handler — updates status to "canceled"
-- [ ] 15.5 Implement `invoice.payment_failed` handler — updates status to "past_due"
-- [ ] 15.6 Implement `invoice.payment_succeeded` handler — updates status to "active" if currently past_due
-- [ ] 15.7 Add idempotency check — store processed event IDs (in a `stripeEvents` table or in-memory cache) and skip duplicates
-- [ ] 15.8 Write tests for webhook handler covering each event type
+- [x] 15.1 Implement `convex-overlay/billing/webhooks.ts` with `handleStripeWebhook` — verifies signature using `STRIPE_WEBHOOK_SECRET`, parses event, routes to handler by event type
+- [x] 15.2 Implement `checkout.session.completed` handler — extracts workspaceId from metadata, updates subscription with stripeCustomerId, stripeSubscriptionId, status: "active", plan and currency from metadata
+- [x] 15.3 Implement `customer.subscription.updated` handler — updates plan, status, period dates, cancelAtPeriodEnd from Stripe subscription object
+- [x] 15.4 Implement `customer.subscription.deleted` handler — updates status to "canceled"
+- [x] 15.5 Implement `invoice.payment_failed` handler — updates status to "past_due"
+- [x] 15.6 Implement `invoice.payment_succeeded` handler — updates status to "active" if currently past_due
+- [x] 15.7 Add idempotency check — store processed event IDs in `stripeEvents` table and skip duplicates
+- [x] 15.8 Write tests for webhook handler covering each event type
 
 ## 16. Stripe Integration — Usage Reporter (Private Repo)
 
-- [ ] 16.1 Implement `convex-overlay/billing/usageReporter.ts` with `reportUsageToStripe` scheduled action — queries all Pro workspaces with active subscriptions, calculates overage for email and seat dimensions, reports incremental overage to Stripe metered billing API (AI is handled by AI Gateway automatically)
-- [ ] 16.2 Add tracking for last-reported overage values to avoid double-reporting (store in subscription record or separate tracking table)
-- [ ] 16.3 Schedule the reporter to run periodically (e.g., every hour) via cron job addition to the overlay
-- [ ] 16.4 Write tests for usage reporter: no overage = no report, overage calculated correctly, incremental reporting works
+- [x] 16.1 Implement `convex-overlay/billing/usageReporter.ts` with `reportUsageToStripe` scheduled action — queries all Pro workspaces with active subscriptions, calculates overage for email and seat dimensions, reports incremental overage to Stripe metered billing API
+- [x] 16.2 Add tracking for last-reported overage values — stored in subscription `lastReportedEmailOverage`/`lastReportedSeatOverage` fields
+- [x] 16.3 Schedule the reporter to run hourly via `runUsageReporter` action registered in public `crons.ts`
+- [x] 16.4 Write tests for usage reporter: no overage = no report, overage calculated correctly, incremental reporting works
 
 ## 17. Billing Settings UI (Private Repo — Web Overlay)
 
-- [ ] 17.1 Implement `web-overlay/billing/BillingSettings.tsx` — full billing management component showing: current plan badge, subscription status, billing period dates, usage meters (AI credits, emails, seats) with progress bars, hard cap toggle per dimension, "Manage subscription" button (Stripe Portal), "Change plan" button (Stripe Checkout)
-- [ ] 17.2 Add plan change flow — selection UI for Starter/Pro with pricing, triggers `createCheckoutSession` or Stripe proration
-- [ ] 17.3 Add usage warning display — show yellow/red indicators when usage approaches 80%/100% of limits
-- [ ] 17.4 Add hard cap management UI — toggles per dimension (AI, emails, seats) that update `hardCaps` on the subscription
-- [ ] 17.5 Verify the overlay component correctly replaces the public stub when overlay.sh runs
+- [x] 17.1 Implement `web-overlay/billing/BillingSettings.tsx` — full billing management component showing plan badge, subscription status, billing period dates, usage meters with progress bars, hard cap toggles, portal/checkout buttons
+- [x] 17.2 Add plan change flow — Starter/Pro selection UI with currency toggle, triggers `createCheckoutSession`
+- [x] 17.3 Add usage warning display — orange/red progress bars when usage approaches 80%/100% of limits
+- [x] 17.4 Add hard cap management UI — checkboxes per dimension (AI, emails, seats) that update `hardCaps` on the subscription
+- [x] 17.5 Verify the overlay component correctly replaces the public stub when overlay.sh runs
 
 ## 18. Overage Warning Notifications
 
@@ -151,8 +151,8 @@
 
 ## 20. CI/CD and Deployment
 
-- [ ] 20.1 Update hosted deployment pipeline to clone opencom-billing, run overlay.sh, then deploy Convex and Vercel
-- [ ] 20.2 Add validate-overlay.sh to CI on the public repo (runs on every PR to catch overlay target path breakage)
+- [x] 20.1 Update hosted deployment pipeline to clone opencom-billing, run overlay.sh, then deploy Convex and Vercel
+- [x] 20.2 Add validate-overlay.sh to CI on the public repo (runs on every PR to catch overlay target path breakage)
 - [ ] 20.3 Test full deployment with overlay: verify webhook endpoint processes events, checkout flow works, billing settings UI renders
 
 ## 21. Existing Workspace Migration

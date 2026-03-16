@@ -66,6 +66,20 @@ jobs:
         continue-on-error: true
         run: pnpm test:convex
 
+      - name: Validate billing overlay targets
+        id: overlay_validation
+        continue-on-error: true
+        # Verifies that every file the private opencom-billing overlay expects to replace
+        # still exists at its target path. Catches renames or restructuring that would
+        # break the hosted deployment overlay without needing to run the full deploy.
+        # This runs against the public repo stubs — no private repo access needed.
+        run: |
+          if [ -f "scripts/validate-overlay-targets.sh" ]; then
+            bash scripts/validate-overlay-targets.sh
+          else
+            echo "::warning::validate-overlay-targets.sh not found — skipping"
+          fi
+
       - name: Web production build
         id: web_build
         continue-on-error: true
@@ -113,6 +127,7 @@ jobs:
           report_blocking "Secret scan gate" "${{ steps.secret_scan.outcome }}"
           report_blocking "Security headers policy check" "${{ steps.headers_check.outcome }}"
           report_blocking "Convex backend tests" "${{ steps.convex_tests.outcome }}"
+          report_blocking "Validate billing overlay targets" "${{ steps.overlay_validation.outcome }}"
           report_blocking "Web production build" "${{ steps.web_build.outcome }}"
           report_blocking "Dependency audit gate" "${{ steps.dependency_audit.outcome }}"
 

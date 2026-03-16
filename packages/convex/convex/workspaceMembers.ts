@@ -14,8 +14,7 @@ import {
   Role,
 } from "./permissions";
 import { logAudit } from "./auditLogs";
-import { syncSeatCount } from "./billing/usage";
-import { isBillingEnabled } from "./billing/types";
+import { checkSeatAllowed, syncSeatCount } from "./billing-hooks/onMemberChanged";
 
 type InternalMutationRef<
   Args extends Record<string, unknown>,
@@ -301,43 +300,8 @@ export const createInvitation = internalMutation({
     // Check permission to invite users
     await requirePermission(ctx, args.inviterId, args.workspaceId, "users.invite");
 
-    // Task 8.4: Check seat limit before creating invitation.
-    // All roles count equally (owner, admin, agent, viewer).
-    if (isBillingEnabled()) {
-      const subscription = await ctx.db
-        .query("subscriptions")
-        .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
-        .unique();
-
-      if (subscription) {
-        const currentMembers = await ctx.db
-          .query("workspaceMembers")
-          .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-          .collect();
-
-        const currentSeatCount = currentMembers.length;
-
-        if (subscription.plan === "starter" && currentSeatCount >= subscription.seatLimit) {
-          throw new Error(
-            `Your workspace has reached the Starter plan seat limit of ${subscription.seatLimit}. ` +
-              "Upgrade to Pro to add more team members, or remove an existing member first."
-          );
-        }
-
-        // Pro: PAYG beyond 10, unless hard cap is enabled
-        if (
-          subscription.plan === "pro" &&
-          subscription.hardCaps?.seats === true &&
-          currentSeatCount >= subscription.seatLimit
-        ) {
-          throw new Error(
-            `Your workspace has reached the seat limit of ${subscription.seatLimit} and hard caps are enabled. ` +
-              "Disable the seat hard cap in billing settings to allow additional members (PAYG applies)."
-          );
-        }
-        // Pro without hard cap: allow PAYG (no block here)
-      }
-    }
+    // Billing hook: throws if the workspace has reached its seat limit.
+    await checkSeatAllowed(ctx, args.workspaceId);
 
     const workspace = await ctx.db.get(args.workspaceId);
     if (!workspace) {
