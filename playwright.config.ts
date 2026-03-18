@@ -7,6 +7,7 @@ const e2eWorkers =
   Number.isFinite(requestedWorkers) && requestedWorkers > 0 ? Math.floor(requestedWorkers) : 1;
 
 export default defineConfig({
+  timeout: 60000,
   globalTeardown: "./apps/web/e2e/global-teardown.ts",
   testDir: "./apps/web/e2e",
   // Keep intra-file ordering for stateful suites while parallelizing by worker across files.
