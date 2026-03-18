@@ -691,9 +691,9 @@ http.route({
   }),
 });
 
-// Billing routes are registered by the hosted overlay via billing-hooks/httpRoutes.ts
+// Billing routes are registered by the hosted overlay via billingHooks/httpRoutes.ts
 // Self-hosted deployments: this file is a no-op stub that adds nothing.
-import { registerBillingHttpRoutes } from "./billing-hooks/httpRoutes";
+import { registerBillingHttpRoutes } from "./billingHooks/httpRoutes";
 registerBillingHttpRoutes(http);
 
 export default http;

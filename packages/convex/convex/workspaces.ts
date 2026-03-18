@@ -17,6 +17,7 @@ import {
   getHostedOnboardingIntegrationSignalsQueryHandler,
   getHostedOnboardingStateQueryHandler,
 } from "./workspaceHostedOnboardingQueries";
+import { onWorkspaceCreated } from "./billingHooks/onWorkspaceCreated";
 
 type HelpCenterAccessPolicy = "public" | "restricted";
 
@@ -175,6 +176,7 @@ export const create = authMutation({
     name: v.string(),
   },
   handler: async (ctx, args) => {
+    const now = Date.now();
     const found = await ctx.db
       .query("workspaces")
       .withIndex("by_name", (q) => q.eq("name", args.name))
@@ -185,7 +187,7 @@ export const create = authMutation({
 
     const workspaceId = await ctx.db.insert("workspaces", {
       name: args.name,
-      createdAt: Date.now(),
+      createdAt: now,
       helpCenterAccessPolicy: "public",
     });
 
@@ -194,8 +196,11 @@ export const create = authMutation({
       userId: ctx.user._id,
       workspaceId,
       role: "owner",
-      createdAt: Date.now(),
+      createdAt: now,
     });
+
+    // Hosted billing bootstrap for non-auth workspace creation flows.
+    await onWorkspaceCreated(ctx.db, workspaceId, now);
 
     await logAudit(ctx, {
       workspaceId,
@@ -223,9 +228,10 @@ export const getOrCreateDefault = authMutation({
       if (workspace) return workspace;
     }
 
+    const now = Date.now();
     const id = await ctx.db.insert("workspaces", {
       name: "Default Workspace",
-      createdAt: Date.now(),
+      createdAt: now,
       helpCenterAccessPolicy: "public",
     });
 
@@ -234,8 +240,11 @@ export const getOrCreateDefault = authMutation({
       userId: ctx.user._id,
       workspaceId: id,
       role: "owner",
-      createdAt: Date.now(),
+      createdAt: now,
     });
+
+    // Hosted billing bootstrap for fallback/default workspace creation flows.
+    await onWorkspaceCreated(ctx.db, id, now);
 
     await logAudit(ctx, {
       workspaceId: id,

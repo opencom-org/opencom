@@ -8,7 +8,7 @@ import {
   requireFeatureAccess,
   checkEmailAllowed,
   trackEmailSent,
-} from "./billing-hooks/onEmailSent";
+} from "./billingHooks/onEmailSent";
 
 const TRACKING_TOKEN_PATTERN = /^ect_[a-f0-9]{48}$/;
 const TRACKING_EVENT_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;

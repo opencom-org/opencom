@@ -7,6 +7,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -54,6 +55,7 @@ const ACTIVE_WORKSPACE_KEY = "opencom_active_workspace";
 export function AuthProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const [needsWorkspaceSelection, setNeedsWorkspaceSelection] = useState(false);
+  const userRef = useRef<User | null>(null);
 
   // Convex Auth hooks
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions();
@@ -74,6 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     isAuthenticated && !!workspaceIdForHomeRouting && hostedOnboardingState === undefined;
   const defaultHomePath: "/onboarding" | "/inbox" =
     hostedOnboardingState && !hostedOnboardingState.isWidgetVerified ? "/onboarding" : "/inbox";
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const restoreStoredWorkspace = useCallback((): Workspace | null => {
     const storedActiveWorkspace = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
@@ -174,6 +180,13 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
 
       if (Object.keys(payload).length === 0) {
         return;
+      }
+
+      if (!userRef.current) {
+        const start = Date.now();
+        while (!userRef.current && Date.now() - start < 5000) {
+          await new Promise((resolve) => window.setTimeout(resolve, 100));
+        }
       }
 
       await completeSignupProfileMutation(payload);

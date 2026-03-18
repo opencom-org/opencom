@@ -14,7 +14,7 @@ import {
   Role,
 } from "./permissions";
 import { logAudit } from "./auditLogs";
-import { checkSeatAllowed, syncSeatCount } from "./billing-hooks/onMemberChanged";
+import { checkSeatAllowed, syncSeatCount } from "./billingHooks/onMemberChanged";
 
 type InternalMutationRef<
   Args extends Record<string, unknown>,

@@ -22,14 +22,14 @@ check_file() {
   fi
 }
 
-# billing-hooks/ no-op stubs (overlay replaces with real implementations)
-check_file "packages/convex/convex/billing-hooks/onWorkspaceCreated.ts"
-check_file "packages/convex/convex/billing-hooks/onEmailSent.ts"
-check_file "packages/convex/convex/billing-hooks/onMemberChanged.ts"
-check_file "packages/convex/convex/billing-hooks/onAgentMessage.ts"
-check_file "packages/convex/convex/billing-hooks/onAiGeneration.ts"
-check_file "packages/convex/convex/billing-hooks/getBillingStatus.ts"
-check_file "packages/convex/convex/billing-hooks/httpRoutes.ts"
+# billingHooks/ no-op stubs (overlay replaces with real implementations)
+check_file "packages/convex/convex/billingHooks/onWorkspaceCreated.ts"
+check_file "packages/convex/convex/billingHooks/onEmailSent.ts"
+check_file "packages/convex/convex/billingHooks/onMemberChanged.ts"
+check_file "packages/convex/convex/billingHooks/onAgentMessage.ts"
+check_file "packages/convex/convex/billingHooks/onAiGeneration.ts"
+check_file "packages/convex/convex/billingHooks/getBillingStatus.ts"
+check_file "packages/convex/convex/billingHooks/httpRoutes.ts"
 
 # schema.ts — overlay adds billing tables
 check_file "packages/convex/convex/schema.ts"

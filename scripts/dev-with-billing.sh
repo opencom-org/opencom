@@ -2,7 +2,8 @@
 # dev-with-billing.sh
 #
 # Runs the local dev environment with the private billing overlay applied.
-# Automatically restores the public stubs when you exit (Ctrl+C or error).
+# Automatically restores the public stubs and removes overlay-generated files
+# when you exit (Ctrl+C or error).
 #
 # Usage:
 #   bash scripts/dev-with-billing.sh
@@ -29,10 +30,9 @@
 #
 # What this script does:
 #   1. Validates the billing repo is present and overlay targets exist
-#   2. Creates a git stash of any current working tree changes (non-destructive)
-#   3. Applies the billing overlay (copies private Stripe code into place)
-#   4. Runs `pnpm dev` (all apps in parallel)
-#   5. On exit: restores all overlayed files to their public stubs via git checkout
+#   2. Applies the billing overlay (copies private Stripe code into place)
+#   3. Runs `pnpm dev` (all apps in parallel)
+#   4. On exit: restores tracked stubs and removes overlay-generated files
 
 set -euo pipefail
 
@@ -43,14 +43,25 @@ BILLING_REPO="${BILLING_REPO:-$(cd "$REPO_ROOT/../opencom-billing" 2>/dev/null &
 # Overlay target paths — keep in sync with opencom-billing/scripts/validate-overlay.sh
 # ============================================================
 OVERLAY_TARGETS=(
-  "packages/convex/convex/billing-hooks/onWorkspaceCreated.ts"
-  "packages/convex/convex/billing-hooks/onEmailSent.ts"
-  "packages/convex/convex/billing-hooks/onMemberChanged.ts"
-  "packages/convex/convex/billing-hooks/onAgentMessage.ts"
-  "packages/convex/convex/billing-hooks/onAiGeneration.ts"
-  "packages/convex/convex/billing-hooks/getBillingStatus.ts"
-  "packages/convex/convex/billing-hooks/httpRoutes.ts"
+  "packages/convex/convex/billingHooks/onWorkspaceCreated.ts"
+  "packages/convex/convex/billingHooks/onEmailSent.ts"
+  "packages/convex/convex/billingHooks/onMemberChanged.ts"
+  "packages/convex/convex/billingHooks/onAgentMessage.ts"
+  "packages/convex/convex/billingHooks/onAiGeneration.ts"
+  "packages/convex/convex/billingHooks/getBillingStatus.ts"
+  "packages/convex/convex/billingHooks/httpRoutes.ts"
+  "packages/convex/convex/billing/gates.ts"
+  "packages/convex/convex/billing/settings.ts"
+  "packages/convex/convex/billing/stripe.ts"
+  "packages/convex/convex/billing/trialExpiry.ts"
+  "packages/convex/convex/billing/types.ts"
+  "packages/convex/convex/billing/usage.ts"
+  "packages/convex/convex/billing/usageReporter.ts"
+  "packages/convex/convex/billing/warnings.ts"
+  "packages/convex/convex/billing/webhooks.ts"
+  "packages/convex/convex/schema/billingTables.ts"
   "packages/convex/convex/schema.ts"
+  "packages/convex/convex/crons.ts"
   "apps/web/src/components/billing/BillingSettings.tsx"
 )
 
@@ -59,11 +70,27 @@ OVERLAY_TARGETS=(
 # ============================================================
 cleanup() {
   echo ""
-  echo "Restoring public stubs..."
+  echo "Restoring public billing files..."
   cd "$REPO_ROOT"
-  git checkout -- "${OVERLAY_TARGETS[@]}" 2>/dev/null && \
-    echo "Public stubs restored." || \
-    echo "Warning: some stubs could not be restored — run: git checkout -- ${OVERLAY_TARGETS[*]}"
+
+  local restore_errors=0
+
+  for path in "${OVERLAY_TARGETS[@]}"; do
+    if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
+      git checkout -- "$path" 2>/dev/null || restore_errors=1
+    elif [[ -e "$path" ]]; then
+      rm -f "$path" 2>/dev/null || restore_errors=1
+    fi
+  done
+
+  rmdir "packages/convex/convex/billing" 2>/dev/null || true
+
+  if [[ "$restore_errors" -eq 0 ]]; then
+    echo "Public billing files restored."
+  else
+    echo "Warning: some billing files could not be restored automatically."
+    echo "Review the working tree before committing."
+  fi
 }
 trap cleanup EXIT INT TERM
 

@@ -47,12 +47,12 @@ export function TrialBanner({ workspaceId }: TrialBannerProps) {
         )}
         <span>
           {daysRemaining === null
-            ? "Free trial active — choose a plan to continue."
+            ? "Pro trial active."
             : daysRemaining === 0
-              ? "Your free trial expires today."
+              ? "Your Pro trial expires today. Choose a paid plan to keep AI and email features."
               : daysRemaining === 1
-                ? "Your free trial expires tomorrow."
-                : `${daysRemaining} days left in your free trial.`}
+                ? "Your Pro trial expires tomorrow. Choose a paid plan to keep AI and email features."
+                : `${daysRemaining} days left in your Pro trial.`}
         </span>
       </div>
       <a

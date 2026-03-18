@@ -88,6 +88,7 @@ export const inboxConversationTables = {
       v.union(v.literal("none"), v.literal("ai_handled"), v.literal("handoff"))
     ),
     aiHandoffReason: v.optional(v.string()),
+    aiTurnSequence: v.optional(v.number()),
     aiLastConfidence: v.optional(v.number()),
     aiLastResponseAt: v.optional(v.number()),
   })

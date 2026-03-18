@@ -9,7 +9,7 @@ interface RestrictedBannerProps {
 }
 
 const RESTRICTED_MESSAGES: Record<string, string> = {
-  expired: "Your free trial has ended. Your workspace is in read-only mode.",
+  expired: "Your subscription could not be completed and your workspace is in read-only mode.",
   canceled: "Your subscription has been canceled. Your workspace is in read-only mode.",
   past_due: "Your subscription payment failed. Your workspace is in read-only mode.",
   unpaid: "Your subscription is unpaid. Your workspace is in read-only mode.",

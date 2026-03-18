@@ -5,7 +5,8 @@ import type { StoredBackend, BackendStorage, DiscoveryResponse } from "@opencom/
 import { validateBackendUrl } from "@opencom/types";
 
 const BACKEND_STORAGE_KEY = "opencom_backends";
-const DEFAULT_BACKEND_URL = process.env.NEXT_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL;
+const DEFAULT_BACKEND_URL =
+  process.env.NEXT_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL ?? process.env.NEXT_PUBLIC_CONVEX_URL;
 
 // Auth storage keys - must match AuthContext
 const AUTH_STORAGE_KEYS = [

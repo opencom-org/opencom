@@ -23,7 +23,7 @@ import {
   serializeReadinessError,
   serializeRuntimeGuardError,
 } from "./shared";
-import { requireFeatureAccess } from "../billing-hooks/onEmailSent";
+import { requireFeatureAccess } from "../billingHooks/onEmailSent";
 
 export const create = mutation({
   args: {

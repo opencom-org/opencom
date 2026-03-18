@@ -13,7 +13,7 @@ import {
 } from "./supportAttachments";
 import { supportAttachmentIdArrayValidator } from "./supportAttachmentTypes";
 import { resolveVisitorFromSession } from "./widgetSessions";
-import { requireWorkspaceActive } from "./billing-hooks/onAgentMessage";
+import { requireWorkspaceActive } from "./billingHooks/onAgentMessage";
 
 async function withSupportSenderNames(
   ctx: QueryCtx,

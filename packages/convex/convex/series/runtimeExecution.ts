@@ -9,7 +9,7 @@ import {
   nowTs,
   sortConnectionsDeterministically,
 } from "./shared";
-import { checkEmailAllowed, trackEmailSent } from "../billing-hooks/onEmailSent";
+import { checkEmailAllowed, trackEmailSent } from "../billingHooks/onEmailSent";
 
 function getConnectionByCondition(
   connections: Doc<"seriesConnections">[],

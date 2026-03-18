@@ -5,7 +5,7 @@ import { alphabet, generateRandomString } from "oslo/crypto";
 import { Resend as ResendAPI } from "resend";
 import { DataModel } from "./_generated/dataModel";
 import type { DatabaseWriter } from "./_generated/server";
-import { onWorkspaceCreated } from "./billing-hooks/onWorkspaceCreated";
+import { onWorkspaceCreated } from "./billingHooks/onWorkspaceCreated";
 
 // Custom Password provider with workspace creation on signup
 const CustomPassword = Password<DataModel>({

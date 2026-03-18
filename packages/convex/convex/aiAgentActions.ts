@@ -6,7 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import { generateText } from "ai";
 import { createAIClient } from "./lib/aiGateway";
-import { checkAiAllowed, getAiGatewayHeaders, trackAiUsage } from "./billing-hooks/onAiGeneration";
+import { checkAiAllowed, getAiGatewayHeaders, trackAiUsage } from "./billingHooks/onAiGeneration";
 
 type AIConfigurationDiagnostic = {
   code: string;

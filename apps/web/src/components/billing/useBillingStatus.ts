@@ -7,7 +7,7 @@ import { useWebQuery, webQueryRef } from "@/lib/convex/hooks";
 // Types
 // ============================================================
 
-export type BillingPlan = "starter" | "pro" | "unlimited";
+export type BillingPlan = "free" | "starter" | "pro" | "unlimited";
 
 export type BillingStatus =
   | "trialing"
@@ -36,7 +36,7 @@ export interface BillingStatusResult {
 // ============================================================
 
 const BILLING_STATUS_REF = webQueryRef<{ workspaceId: Id<"workspaces"> }, BillingStatusResult>(
-  "billing-hooks/getBillingStatus:getBillingStatus"
+  "billingHooks/getBillingStatus:getBillingStatus"
 );
 
 // ============================================================

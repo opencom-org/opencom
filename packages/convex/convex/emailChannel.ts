@@ -18,7 +18,7 @@ import {
 } from "./notifications/functionRefs";
 import { hasPermission, requirePermission } from "./permissions";
 import { formatReadableVisitorId } from "./visitorReadableId";
-import { checkEmailAllowed, trackEmailSent } from "./billing-hooks/onEmailSent";
+import { checkEmailAllowed, trackEmailSent } from "./billingHooks/onEmailSent";
 
 const WEBHOOK_INTERNAL_SECRET =
   process.env.EMAIL_WEBHOOK_INTERNAL_SECRET ?? process.env.RESEND_WEBHOOK_SECRET ?? "";
