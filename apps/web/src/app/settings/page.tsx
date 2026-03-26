@@ -19,6 +19,7 @@ import {
 import { SignupAuthSection } from "./SignupAuthSection";
 import { HelpCenterAccessSection } from "./HelpCenterAccessSection";
 import { EmailChannelSection } from "./EmailChannelSection";
+import { AutomationApiSection } from "./AutomationApiSection";
 import { useSettingsPageController } from "./hooks/useSettingsPageController";
 
 function SettingsContent(): React.JSX.Element | null {
@@ -267,6 +268,20 @@ function SettingsContent(): React.JSX.Element | null {
                 isSavingEmail={isSavingEmail}
                 onSave={handleSaveEmailSettings}
               />
+            </SettingsSectionContainer>
+          )}
+
+          {isAdmin && workspace?.automationApiEnabled && (
+            <SettingsSectionContainer
+              id="automation-api"
+              title="Automation API"
+              description="Manage API credentials, webhooks, and delivery logs."
+              statusLabel={statusBySection["automation-api"]?.label}
+              statusTone={statusBySection["automation-api"]?.tone}
+              isExpanded={isSectionExpanded("automation-api")}
+              onToggle={() => toggleSection("automation-api")}
+            >
+              <AutomationApiSection workspaceId={activeWorkspace?._id} />
             </SettingsSectionContainer>
           )}
 

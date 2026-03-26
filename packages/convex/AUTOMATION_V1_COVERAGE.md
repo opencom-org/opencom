@@ -1,0 +1,85 @@
+# Automation API — V1 Coverage Matrix
+
+## Resource Coverage
+
+| Resource | List | Get | Create | Update | Delete | Events |
+|---|---|---|---|---|---|---|
+| conversations | cursor + filters (status, assignee, channel, email, externalUserId, customAttribute) | by ID | — | status, assign | — | `conversation.created`, `conversation.updated` |
+| messages | cursor + filters (conversationId) | — | send | — | — | `message.created` |
+| visitors | cursor + filters (email, externalUserId, customAttribute) | by ID | create | update | — | `visitor.updated` |
+| tickets | cursor + filters (status, priority, assignee) | by ID | create | update, resolve | — | `ticket.created`, `ticket.updated`, `ticket.comment_added` |
+| articles | cursor + filters (status, collectionId) | by ID | create | update | delete | — (v2) |
+| collections | cursor + filters (parentId) | by ID | create | update | delete | — (v2) |
+
+## Event Details
+
+Events are emitted by UI/domain mutations and most automation API write mutations. Not all API writes emit events — notably, `createVisitor` via the API does not emit `visitor.created`.
+
+### conversation.created
+- **Triggered by:** `conversations.create`, `conversations.getOrCreateForVisitor` (new branch), `conversations.createForVisitor`
+- **Data payload:** `{ channel, status, visitorId }`
+
+### conversation.updated
+- **Triggered by:** `conversations.updateStatus`, `conversations.assign`, `automationApi.updateConversation`
+- **Data payload:** `{ status }` and/or `{ assignedAgentId }`
+
+### message.created
+- **Triggered by:** `messages.send`, `messages.internalSendBotMessage`, `automationApi.sendMessage`
+- **Data payload:** `{ conversationId, senderType, channel }`
+- **Note:** `channel` is derived from the conversation's channel field (defaults to `"chat"` if unset)
+
+### visitor.updated
+- **Triggered by:** `visitors.identify` (direct update and merge branches), `automationApi.updateVisitor`
+- **Data payload:** `{ visitorId }`
+- **Note:** The event signals that a visitor was updated. To retrieve updated fields, use the visitors GET endpoint with the `visitorId` from the payload.
+
+### ticket.created
+- **Triggered by:** `tickets.create`, `tickets.convertFromConversation`, `automationApi.createTicket`
+- **Data payload:** `{ channel: "support_ticket", status, priority }`
+
+### ticket.updated
+- **Triggered by:** `tickets.update`, `tickets.resolve`, `automationApi.updateTicket`
+- **Data payload:** `{ channel: "support_ticket", status, priority, assigneeId }`
+- **Note:** This is a coarse event, not a field-level diff. All listed fields are included regardless of which field changed. Fields like `teamId` and `resolutionSummary` are not included in the event payload.
+
+### ticket.comment_added
+- **Triggered by:** `tickets.addComment` (external comments only)
+- **Data payload:** `{ channel: "support_ticket", commentId, authorType }`
+- **Note:** Internal notes do not trigger this event.
+
+## Authentication & Authorization
+
+- **API key auth:** Bearer token with `osk_` prefix, scoped to workspace
+- **Permissions:** API keys carry explicit scopes (e.g. `conversations.read`, `messages.write`)
+- **Rate limits:** 60 requests/minute per credential, 120 requests/minute per workspace
+
+## Webhook Subscriptions
+
+- **Filters:** `eventTypes`, `resourceTypes`, `channels`, `aiWorkflowStates` (reserved — not yet emitted by production mutations)
+- **Delivery:** Async via scheduled function, with exponential backoff retry (30s, 2m, 10m, 1h; max 5 attempts)
+- **Test ping:** Admin UI action (Convex mutation) that sends a `test.ping` event to the subscription URL
+- **Signature:** HMAC-SHA256 in `X-Opencom-Signature` header (format: `t={timestamp},v1={hex}`)
+- **Additional headers:** `X-Opencom-Event-Id`, `X-Opencom-Delivery-Id`, `X-Opencom-Timestamp`
+
+## Polling Event Feed
+
+- **Endpoint:** Cursor-based pagination over `automationEvents` table
+- **Ordering:** Descending by timestamp
+- **Limit:** Max 100 events per page
+
+## Idempotency
+
+- **Supported:** Message send (`POST /messages`) accepts `Idempotency-Key` header
+- **TTL:** 24 hours
+- **Scope:** Per workspace + key
+
+## Known V1 Limitations
+
+- **No events for articles/collections** — not supported in v1
+- **No `visitor.created` event** — visitors can be created via the API, but no event is emitted; `visitor.updated` fires on `identify()` and API update
+- **No `message.updated`/`message.deleted` events** — messages are immutable in v1
+- **No `conversation.deleted` event** — conversations are not deletable
+- **No fine-grained event types** — status changes, assignments, etc. are communicated via the `data` payload on broad event types (`*.updated`) rather than separate event types
+- **Noisy mutations excluded:** `visitors.updateLocation` and `visitors.heartbeat` do not emit events
+- **`aiWorkflowStates` webhook filter:** Reserved for future use; no production mutations currently populate this field in event data
+- **`ticket.updated` payload is coarse** — includes status, priority, assigneeId on every emit regardless of what changed; does not include teamId or resolutionSummary

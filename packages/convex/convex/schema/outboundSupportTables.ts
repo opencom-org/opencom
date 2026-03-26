@@ -30,7 +30,8 @@ export const outboundSupportTables = {
   })
     .index("by_workspace", ["workspaceId"])
     .index("by_workspace_status", ["workspaceId", "status"])
-    .index("by_workspace_type", ["workspaceId", "type"]),
+    .index("by_workspace_type", ["workspaceId", "type"])
+    .index("by_workspace_type_updated_at", ["workspaceId", "type", "updatedAt"]),
 
   // Outbound Message Impressions (tracking)
   outboundMessageImpressions: defineTable({
@@ -165,6 +166,7 @@ export const outboundSupportTables = {
     resolvedAt: v.optional(v.number()),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_updated_at", ["workspaceId", "updatedAt"])
     .index("by_visitor", ["visitorId"])
     .index("by_status", ["workspaceId", "status"])
     .index("by_assignee", ["workspaceId", "assigneeId"])

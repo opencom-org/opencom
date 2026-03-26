@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 const TARGET_FILES = [
   "../convex/aiAgent.ts",
   "../convex/articles.ts",
+  "../convex/automationHttpRoutes.ts",
+  "../convex/automationWebhooks.ts",
   "../convex/conversations.ts",
   "../convex/embeddings.ts",
   "../convex/emailChannel.ts",
@@ -221,6 +223,19 @@ describe("runtime type hardening guards", () => {
     expect(httpSource).toContain("UPDATE_DELIVERY_STATUS_BY_EXTERNAL_ID_REF");
     expect(httpSource).toContain("getShallowRunQuery");
     expect(httpSource).toContain("getShallowRunMutation");
+  });
+
+  it("uses explicit fixed refs for automation HTTP routes", () => {
+    const automationHttpRoutesSource = readFileSync(
+      new URL("../convex/automationHttpRoutes.ts", import.meta.url),
+      "utf8"
+    );
+
+    expect(automationHttpRoutesSource).not.toContain("const fn = (name: string)");
+    expect(automationHttpRoutesSource).not.toContain("makeFunctionReference(name)");
+    expect(automationHttpRoutesSource).toContain("type AutomationRouteArgs = Record<string, unknown>;");
+    expect(automationHttpRoutesSource).toContain("listConversationsRef");
+    expect(automationHttpRoutesSource).toContain("replayDeliveryRef");
   });
 
   it("uses shared notification refs and fixed email delivery refs for email channel flows", () => {
