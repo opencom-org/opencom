@@ -554,6 +554,68 @@ describe("automation fixes", () => {
         deliveries.filter((d) => d.workspaceId === ws.workspaceId)
       ).toHaveLength(1);
     });
+
+    it("targets test ping deliveries to the selected subscription", async () => {
+      const ws = await seedWorkspace();
+
+      const { targetSubscriptionId, otherSubscriptionId } = await t.run(
+        async (ctx) => {
+          const now = Date.now();
+          const targetSubscriptionId = await ctx.db.insert(
+            "automationWebhookSubscriptions",
+            {
+              workspaceId: ws.workspaceId,
+              url: "https://example.com/target-webhook",
+              signingSecret: "whsec_targetsecret",
+              signingSecretPrefix: "whsec_target",
+              eventTypes: ["message.created"],
+              resourceTypes: ["message"],
+              status: "active",
+              createdBy: ws.userId,
+              createdAt: now,
+            }
+          );
+          const otherSubscriptionId = await ctx.db.insert(
+            "automationWebhookSubscriptions",
+            {
+              workspaceId: ws.workspaceId,
+              url: "https://example.com/other-webhook",
+              signingSecret: "whsec_othersecret",
+              signingSecretPrefix: "whsec_others",
+              status: "active",
+              createdBy: ws.userId,
+              createdAt: now,
+            }
+          );
+
+          return { targetSubscriptionId, otherSubscriptionId };
+        }
+      );
+
+      const queued = await t.mutation(
+        internal.automationWebhooks.queueTestSubscriptionDeliveryInternal,
+        {
+          workspaceId: ws.workspaceId,
+          subscriptionId: targetSubscriptionId,
+        }
+      );
+      expect(queued.deliveryId).toBeDefined();
+
+      const { event, deliveries } = await t.run(async (ctx) => {
+        const event = await ctx.db.get(queued.eventId);
+        const deliveries = await ctx.db
+          .query("automationWebhookDeliveries")
+          .withIndex("by_workspace", (q) => q.eq("workspaceId", ws.workspaceId))
+          .collect();
+        return { event, deliveries };
+      });
+
+      expect(event?.eventType).toBe("test.ping");
+      expect(event?.resourceType).toBe("webhook");
+      expect(deliveries).toHaveLength(1);
+      expect(deliveries[0].subscriptionId).toBe(targetSubscriptionId);
+      expect(deliveries[0].subscriptionId).not.toBe(otherSubscriptionId);
+    });
   });
 
   // ── R7: Release clears assignee, escalate sets handoff ───────────────

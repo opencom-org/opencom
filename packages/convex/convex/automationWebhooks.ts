@@ -1,12 +1,77 @@
 import { makeFunctionReference } from "convex/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, type MutationCtx } from "./_generated/server";
 import { authMutation, authQuery } from "./lib/authWrappers";
 import { encryptWebhookSecret } from "./lib/automationWebhookSecrets";
 
-const emitEventRef = makeFunctionReference<"mutation">("automationEvents:emitEvent");
+const deliverWebhookRef = makeFunctionReference<
+  "action",
+  { deliveryId: Id<"automationWebhookDeliveries"> },
+  unknown
+>("automationWebhookWorker:deliverWebhook");
 const replayDeliveryInternalRef = makeFunctionReference<"mutation">(
   "automationWebhookWorker:replayDelivery"
 );
+
+type SchedulerArgs = Record<string, unknown>;
+type ShallowRunAfter = (
+  delayMs: number,
+  ref: unknown,
+  args: SchedulerArgs
+) => Promise<unknown>;
+
+function scheduleAfter(
+  scheduler: Pick<MutationCtx["scheduler"], "runAfter">,
+  delayMs: number,
+  ref: unknown,
+  args: SchedulerArgs
+) {
+  const runAfter = scheduler.runAfter as unknown as ShallowRunAfter;
+  return runAfter(delayMs, ref, args);
+}
+
+async function queueTestSubscriptionDelivery(
+  ctx: Pick<MutationCtx, "db" | "scheduler">,
+  args: {
+    workspaceId: Id<"workspaces">;
+    subscriptionId: Id<"automationWebhookSubscriptions">;
+  }
+) {
+  const sub = await ctx.db.get(args.subscriptionId);
+  if (!sub || sub.workspaceId !== args.workspaceId) {
+    throw new Error("Subscription not found");
+  }
+
+  const now = Date.now();
+  const eventId = await ctx.db.insert("automationEvents", {
+    workspaceId: args.workspaceId,
+    eventType: "test.ping",
+    resourceType: "webhook",
+    resourceId: String(args.subscriptionId),
+    data: {
+      test: true,
+      subscriptionId: args.subscriptionId,
+      timestamp: now,
+    },
+    timestamp: now,
+  });
+
+  const deliveryId = await ctx.db.insert("automationWebhookDeliveries", {
+    workspaceId: args.workspaceId,
+    subscriptionId: args.subscriptionId,
+    eventId,
+    attemptNumber: 1,
+    status: "pending",
+    createdAt: now,
+  });
+
+  await scheduleAfter(ctx.scheduler, 0, deliverWebhookRef, {
+    deliveryId,
+  });
+
+  return { eventId, deliveryId };
+}
 
 function generateSigningSecret(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -153,22 +218,17 @@ export const testSubscription = authMutation({
   },
   permission: "settings.integrations",
   handler: async (ctx, args) => {
-    const sub = await ctx.db.get(args.subscriptionId);
-    if (!sub || sub.workspaceId !== args.workspaceId) {
-      throw new Error("Subscription not found");
-    }
-
-    // Emit a test event
-    await ctx.scheduler.runAfter(0, emitEventRef as any, {
-      workspaceId: args.workspaceId,
-      eventType: "test.ping",
-      resourceType: "webhook",
-      resourceId: args.subscriptionId,
-      data: { test: true, timestamp: Date.now() },
-    });
-
+    await queueTestSubscriptionDelivery(ctx, args);
     return { success: true, message: "Test event queued" };
   },
+});
+
+export const queueTestSubscriptionDeliveryInternal = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+    subscriptionId: v.id("automationWebhookSubscriptions"),
+  },
+  handler: async (ctx, args) => queueTestSubscriptionDelivery(ctx, args),
 });
 
 export const listDeliveries = authQuery({
@@ -237,7 +297,7 @@ export const replayDelivery = authMutation({
       throw new Error("Cannot replay a pending delivery");
     }
 
-    await ctx.scheduler.runAfter(0, replayDeliveryInternalRef as any, {
+    await scheduleAfter(ctx.scheduler, 0, replayDeliveryInternalRef, {
       deliveryId: args.deliveryId,
       workspaceId: args.workspaceId,
     });

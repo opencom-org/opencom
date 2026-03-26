@@ -29,46 +29,186 @@ function catchToResponse(error: unknown): Response {
   return errorResponse(msg, 500);
 }
 
-// Use makeFunctionReference for cross-module references (no codegen dependency).
-// Args/return types are untyped since codegen hasn't run; runtime validation
-// is handled by each internal function's Convex validators.
-const fn = (name: string) => makeFunctionReference(name) as any;
+type AutomationRouteArgs = Record<string, unknown>;
+type AutomationRouteResult = unknown;
 
-const listConversationsRef = fn("automationApiInternals:listConversationsForAutomation");
-const getConversationRef = fn("automationApiInternals:getConversationForAutomation");
-const updateConversationRef = fn("automationApiInternals:updateConversationForAutomation");
-const listMessagesRef = fn("automationApiInternals:listMessagesForAutomation");
-const listVisitorsRef = fn("automationApiInternals:listVisitorsForAutomation");
-const getVisitorRef = fn("automationApiInternals:getVisitorForAutomation");
-const createVisitorRef = fn("automationApiInternals:createVisitorForAutomation");
-const updateVisitorRef = fn("automationApiInternals:updateVisitorForAutomation");
-const listTicketsRef = fn("automationApiInternals:listTicketsForAutomation");
-const getTicketRef = fn("automationApiInternals:getTicketForAutomation");
-const createTicketRef = fn("automationApiInternals:createTicketForAutomation");
-const updateTicketRef = fn("automationApiInternals:updateTicketForAutomation");
-const sendMessageIdempotentRef = fn("automationApiInternals:sendMessageIdempotent");
-const claimConversationRef = fn("automationConversationClaims:claimConversation");
-const releaseConversationRef = fn("automationConversationClaims:releaseConversation");
-const escalateConversationRef = fn("automationConversationClaims:escalateConversation");
-const listArticlesRef = fn("automationApiInternals:listArticlesForAutomation");
-const getArticleRef = fn("automationApiInternals:getArticleForAutomation");
-const createArticleRef = fn("automationApiInternals:createArticleForAutomation");
-const updateArticleRef = fn("automationApiInternals:updateArticleForAutomation");
-const deleteArticleRef = fn("automationApiInternals:deleteArticleForAutomation");
-const listCollectionsRef = fn("automationApiInternals:listCollectionsForAutomation");
-const getCollectionRef = fn("automationApiInternals:getCollectionForAutomation");
-const createCollectionRef = fn("automationApiInternals:createCollectionForAutomation");
-const updateCollectionRef = fn("automationApiInternals:updateCollectionForAutomation");
-const deleteCollectionRef = fn("automationApiInternals:deleteCollectionForAutomation");
-const listOutboundMessagesRef = fn("automationApiInternals:listOutboundMessagesForAutomation");
-const getOutboundMessageRef = fn("automationApiInternals:getOutboundMessageForAutomation");
-const createOutboundMessageRef = fn("automationApiInternals:createOutboundMessageForAutomation");
-const updateOutboundMessageRef = fn("automationApiInternals:updateOutboundMessageForAutomation");
-const deleteOutboundMessageRef = fn("automationApiInternals:deleteOutboundMessageForAutomation");
-const activateOutboundMessageRef = fn("automationApiInternals:activateOutboundMessageForAutomation");
-const pauseOutboundMessageRef = fn("automationApiInternals:pauseOutboundMessageForAutomation");
-const listEventsRef = fn("automationEvents:listEvents");
-const replayDeliveryRef = fn("automationWebhookWorker:replayDelivery");
+// Keep route refs explicit at this HTTP boundary instead of hiding them behind
+// a generic string-ref helper.
+const listConversationsRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listConversationsForAutomation");
+const getConversationRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:getConversationForAutomation");
+const updateConversationRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:updateConversationForAutomation");
+const listMessagesRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listMessagesForAutomation");
+const listVisitorsRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listVisitorsForAutomation");
+const getVisitorRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:getVisitorForAutomation");
+const createVisitorRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:createVisitorForAutomation");
+const updateVisitorRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:updateVisitorForAutomation");
+const listTicketsRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listTicketsForAutomation");
+const getTicketRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:getTicketForAutomation");
+const createTicketRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:createTicketForAutomation");
+const updateTicketRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:updateTicketForAutomation");
+const sendMessageIdempotentRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:sendMessageIdempotent");
+const claimConversationRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationConversationClaims:claimConversation");
+const releaseConversationRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationConversationClaims:releaseConversation");
+const escalateConversationRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationConversationClaims:escalateConversation");
+const listArticlesRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listArticlesForAutomation");
+const getArticleRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:getArticleForAutomation");
+const createArticleRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:createArticleForAutomation");
+const updateArticleRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:updateArticleForAutomation");
+const deleteArticleRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:deleteArticleForAutomation");
+const listCollectionsRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listCollectionsForAutomation");
+const getCollectionRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:getCollectionForAutomation");
+const createCollectionRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:createCollectionForAutomation");
+const updateCollectionRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:updateCollectionForAutomation");
+const deleteCollectionRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:deleteCollectionForAutomation");
+const listOutboundMessagesRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:listOutboundMessagesForAutomation");
+const getOutboundMessageRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:getOutboundMessageForAutomation");
+const createOutboundMessageRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:createOutboundMessageForAutomation");
+const updateOutboundMessageRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:updateOutboundMessageForAutomation");
+const deleteOutboundMessageRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:deleteOutboundMessageForAutomation");
+const activateOutboundMessageRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:activateOutboundMessageForAutomation");
+const pauseOutboundMessageRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationApiInternals:pauseOutboundMessageForAutomation");
+const listEventsRef = makeFunctionReference<
+  "query",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationEvents:listEvents");
+const replayDeliveryRef = makeFunctionReference<
+  "mutation",
+  AutomationRouteArgs,
+  AutomationRouteResult
+>("automationWebhookWorker:replayDelivery");
 
 // Shorthand to cast ctx for withAutomationAuth (httpAction ctx is compatible at runtime).
 function asAuthCtx(ctx: { runQuery: unknown; runMutation: unknown }) {
