@@ -325,8 +325,59 @@ Source: `aiAgent.ts`
 
 | Function         | Type     | Auth   | Key Args                                                               | Description          |
 | ---------------- | -------- | ------ | ---------------------------------------------------------------------- | -------------------- |
-| `getSettings`    | query    | member | workspaceId                                                            | Get AI configuration |
-| `updateSettings` | mutation | agent  | workspaceId, enabled?, model?, confidenceThreshold?, knowledgeSources? | Update AI config     |
+| `getSettings`              | query    | member            | workspaceId                                                                                                   | Get AI configuration                                             |
+| `getPublicSettings`        | query    | public            | workspaceId                                                                                                   | Get widget-safe AI settings for runtime use                      |
+| `updateSettings`           | mutation | agent             | workspaceId, enabled?, model?, confidenceThreshold?, knowledgeSources?, suggestionsEnabled?, embeddingModel? | Update AI config                                                 |
+| `getConversationResponses` | query    | member or visitor | conversationId, visitorId?, sessionToken?                                                                     | Get stored AI response records for a conversation                |
+| `listAvailableModels`      | action   | agent             | workspaceId, selectedModel?                                                                                   | Discover generation-capable models for the configured AI gateway |
+
+ The AI agent currently uses two separate model settings:
+
+ - **[reply generation model]**
+   - Stored at `aiAgentSettings.model`
+   - Used by `aiAgentActions:generateResponse` for AI replies and handoff candidate responses
+
+ - **[suggestions / retrieval embedding model]**
+   - Stored at `aiAgentSettings.embeddingModel`
+   - Used by suggestions and embedding-powered retrieval paths such as `suggestions:getForConversation`
+
+ To validate that AI replies are using the selected reply model instead of a default:
+
+ - **[save a distinctive model]**
+   - Save a recognizable model value in AI Agent settings.
+
+ - **[trigger a new AI reply]**
+   - Send a visitor message that produces a fresh AI response.
+
+ - **[inspect stored response metadata]**
+   - The `aiResponses` table persists `model` and `provider` for each stored AI response.
+   - `aiAgent:getConversationResponses` returns those persisted fields.
+
+ - **[expected result]**
+   - The stored `model` should match the selected `aiAgentSettings.model` value that was active when the reply was generated.
+
+ To validate the model used for suggestions:
+ 
+ - **[confirm saved settings]**
+   - `aiAgent:getSettings` should return the selected `embeddingModel`.
+ 
+ - **[trace the runtime path]**
+   - `suggestions:getForConversation` reads `settings.embeddingModel` and passes it into the embedding search path.
+   - That value is normalized by `resolveContentEmbeddingModel(...)` before the embedding provider is called.
+ 
+ - **[inspect admin visibility and persisted feedback]**
+   - The admin suggestions panel now shows `Using embedding model: ...` for the active request.
+   - Usage and dismissal tracking now persist `embeddingModel` on `suggestionFeedback` records.
+ 
+ Current admin UI visibility:
+
+ - **[AI review panel]**
+   - The admin inbox AI review panel currently shows response text, confidence, feedback, sources, and handoff context.
+   - It now also displays the persisted `model` and `provider` fields returned by `aiAgent:getConversationResponses`.
+ 
+ - **[suggestions UI]**
+   - The admin suggestions UI now displays the resolved embedding model used for the current suggestion request.
+   - Individual suggestion usage and dismissal events can also be validated against persisted `suggestionFeedback.embeddingModel` metadata.
 
 ## Identity Verification
 

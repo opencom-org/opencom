@@ -5,10 +5,10 @@ import { Doc, Id } from "./_generated/dataModel";
 import { embed } from "ai";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
+import { DEFAULT_CONTENT_EMBEDDING_MODEL, resolveContentEmbeddingModel } from "./lib/embeddingModels";
 import { getUnifiedArticleByIdOrLegacyInternalId, isInternalArticle } from "./lib/unifiedArticles";
 import type { Permission } from "./permissions";
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
 const FEEDBACK_STATS_MAX_LIMIT = 20000;
 const SUGGESTIONS_DEFAULT_LIMIT = 10;
@@ -41,6 +41,7 @@ type SuggestionResult = {
   title: string;
   snippet: string;
   score: number;
+  embeddingModel?: string;
 };
 
 type SuggestionResultWithContent = SuggestionResult & { content: string };
@@ -92,9 +93,11 @@ type OriginValidationResult = {
 const GET_EMBEDDING_BY_ID_REF: SuggestionQueryRef<
   { id: Id<"contentEmbeddings"> },
   Doc<"contentEmbeddings"> | null
-> = makeFunctionReference<"query", { id: Id<"contentEmbeddings"> }, Doc<"contentEmbeddings"> | null>(
-  "suggestions:getEmbeddingById"
-);
+> = makeFunctionReference<
+  "query",
+  { id: Id<"contentEmbeddings"> },
+  Doc<"contentEmbeddings"> | null
+>("suggestions:getEmbeddingById");
 
 const GET_CONVERSATION_REF: SuggestionQueryRef<
   { conversationId: Id<"conversations"> },
@@ -125,9 +128,11 @@ const REQUIRE_PERMISSION_FOR_ACTION_REF: SuggestionQueryRef<
 const GET_AI_SETTINGS_REF: SuggestionQueryRef<
   { workspaceId: Id<"workspaces"> },
   Doc<"aiAgentSettings"> | null
-> = makeFunctionReference<"query", { workspaceId: Id<"workspaces"> }, Doc<"aiAgentSettings"> | null>(
-  "suggestions:getAiSettings"
-);
+> = makeFunctionReference<
+  "query",
+  { workspaceId: Id<"workspaces"> },
+  Doc<"aiAgentSettings"> | null
+>("suggestions:getAiSettings");
 
 const GET_RECENT_MESSAGES_REF: SuggestionQueryRef<
   { conversationId: Id<"conversations">; limit: number },
@@ -228,7 +233,11 @@ function normalizeSuggestionContentTypes(
   }
 
   const normalized = Array.from(
-    new Set(values.map(normalizeSuggestionContentType).filter((value): value is SuggestionContentType => Boolean(value)))
+    new Set(
+      values
+        .map(normalizeSuggestionContentType)
+        .filter((value): value is SuggestionContentType => Boolean(value))
+    )
   );
 
   return normalized.length > 0 ? normalized : undefined;
@@ -250,7 +259,9 @@ export const searchSimilar = authAction({
       1,
       Math.min(args.limit ?? SUGGESTIONS_DEFAULT_LIMIT, SUGGESTIONS_MAX_LIMIT)
     );
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const modelName = resolveContentEmbeddingModel(
+      args.model?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
 
@@ -342,6 +353,8 @@ export const getForConversation = authAction({
       return [];
     }
 
+    const embeddingModel = resolveContentEmbeddingModel(settings.embeddingModel);
+
     const messages = await runQuery(GET_RECENT_MESSAGES_REF, {
       conversationId: args.conversationId,
       limit: 5,
@@ -361,10 +374,13 @@ export const getForConversation = authAction({
       query: contextText,
       contentTypes: normalizedContentTypes,
       limit,
-      model: settings.embeddingModel,
+      model: embeddingModel,
     });
 
-    return results;
+    return results.map((result) => ({
+      ...result,
+      embeddingModel,
+    }));
   },
 });
 
@@ -395,7 +411,9 @@ export const searchSimilarInternal = internalAction({
       1,
       Math.min(args.limit ?? SUGGESTIONS_DEFAULT_LIMIT, SUGGESTIONS_MAX_LIMIT)
     );
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const modelName = resolveContentEmbeddingModel(
+      args.model?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
 
@@ -476,6 +494,7 @@ export const trackUsage = authMutation({
     conversationId: v.id("conversations"),
     contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
     contentId: v.string(),
+    embeddingModel: v.optional(v.string()),
   },
   permission: "conversations.read",
   handler: async (ctx, args) => {
@@ -493,6 +512,7 @@ export const trackUsage = authMutation({
       conversationId: args.conversationId,
       contentType: args.contentType,
       contentId: args.contentId,
+      embeddingModel: args.embeddingModel,
       action: "used",
       createdAt: Date.now(),
     });
@@ -505,6 +525,7 @@ export const trackDismissal = authMutation({
     conversationId: v.id("conversations"),
     contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
     contentId: v.string(),
+    embeddingModel: v.optional(v.string()),
   },
   permission: "conversations.read",
   handler: async (ctx, args) => {
@@ -522,6 +543,7 @@ export const trackDismissal = authMutation({
       conversationId: args.conversationId,
       contentType: args.contentType,
       contentId: args.contentId,
+      embeddingModel: args.embeddingModel,
       action: "dismissed",
       createdAt: Date.now(),
     });
@@ -628,7 +650,7 @@ export const getContentById = internalQuery({
         args.contentId as Id<"articles"> | Id<"internalArticles">
       );
       if (article && article.visibility !== "internal") {
-        return { content: article.content, title: article.title };
+        return { content: article.content, title: article.title, slug: article.slug };
       }
     } else if (args.contentType === "internalArticle") {
       const article = await getUnifiedArticleByIdOrLegacyInternalId(
@@ -707,7 +729,7 @@ export const searchForWidget = action({
 
     const aiClient = createAIClient();
     const { embedding } = await embed({
-      model: aiClient.embedding(DEFAULT_EMBEDDING_MODEL),
+      model: aiClient.embedding(DEFAULT_CONTENT_EMBEDDING_MODEL),
       value: normalizedQuery,
     });
 

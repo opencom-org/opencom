@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import type { Id } from "@opencom/convex/dataModel";
 import type { HomeCard, HomeConfig, HomeDefaultSpace, HomeTab } from "@opencom/types";
 import {
@@ -13,6 +14,57 @@ import {
 
 type WorkspaceArgs = {
   workspaceId: Id<"workspaces">;
+};
+
+type AIAgentKnowledgeSource = "articles" | "internalArticles" | "snippets";
+
+type AIAgentSettingsQueryResult = {
+  enabled: boolean;
+  model: string;
+  confidenceThreshold: number;
+  knowledgeSources: AIAgentKnowledgeSource[];
+  personality?: string;
+  handoffMessage?: string;
+  suggestionsEnabled?: boolean;
+  embeddingModel?: string;
+  lastConfigError?: {
+    message: string;
+    code: string;
+    provider?: string;
+    model?: string;
+  } | null;
+} | null;
+
+type AvailableAIAgentModel = {
+  id: string;
+  name: string;
+  provider: string;
+};
+
+type AvailableModelsStatus = "idle" | "loading" | "loaded" | "error";
+
+type UpdateAIAgentSettingsArgs = {
+  workspaceId: Id<"workspaces">;
+  enabled?: boolean;
+  model?: string;
+  confidenceThreshold?: number;
+  knowledgeSources?: AIAgentKnowledgeSource[];
+  personality?: string;
+  handoffMessage?: string;
+  suggestionsEnabled?: boolean;
+  embeddingModel?: string;
+};
+
+type SaveAIAgentSettingsArgs = {
+  workspaceId: Id<"workspaces">;
+  enabled: boolean;
+  model: string;
+  confidenceThreshold: number;
+  knowledgeSources: AIAgentKnowledgeSource[];
+  personality: string;
+  handoffMessage: string;
+  suggestionsEnabled: boolean;
+  embeddingModel: string;
 };
 
 type AuditAccessRecord = {
@@ -64,43 +116,16 @@ type SuccessResponse = {
   success: boolean;
 };
 
-const AI_SETTINGS_QUERY_REF = webQueryRef<
-  WorkspaceArgs,
-  {
-    enabled: boolean;
-    model: string;
-    confidenceThreshold: number;
-    knowledgeSources: string[];
-    personality?: string;
-    handoffMessage?: string;
-    suggestionsEnabled?: boolean;
-    embeddingModel?: string;
-    lastConfigError?: {
-      message: string;
-      code: string;
-      provider?: string;
-      model?: string;
-    } | null;
-  } | null
->("aiAgent:getSettings");
-const AVAILABLE_MODELS_QUERY_REF = webQueryRef<
-  Record<string, never>,
-  Array<{ id: string; name: string; provider: string }>
+const AI_SETTINGS_QUERY_REF = webQueryRef<WorkspaceArgs, AIAgentSettingsQueryResult>(
+  "aiAgent:getSettings"
+);
+const AVAILABLE_MODELS_ACTION_REF = webActionRef<
+  { workspaceId: Id<"workspaces">; selectedModel?: string },
+  AvailableAIAgentModel[]
 >("aiAgent:listAvailableModels");
-const UPDATE_AI_SETTINGS_REF = webMutationRef<
-  {
-    workspaceId: Id<"workspaces">;
-    enabled?: boolean;
-    model?: string;
-    confidenceThreshold?: number;
-    knowledgeSources?: Array<"articles" | "internalArticles" | "snippets">;
-    personality?: string;
-    handoffMessage?: string;
-    suggestionsEnabled?: boolean;
-    embeddingModel?: string;
-  },
-  null
->("aiAgent:updateSettings");
+const UPDATE_AI_SETTINGS_REF = webMutationRef<UpdateAIAgentSettingsArgs, Id<"aiAgentSettings">>(
+  "aiAgent:updateSettings"
+);
 const AUTOMATION_SETTINGS_QUERY_REF = webQueryRef<
   WorkspaceArgs,
   {
@@ -278,10 +303,86 @@ const TRANSFER_OWNERSHIP_REF = webMutationRef<TransferOwnershipArgs, SuccessResp
 );
 
 export function useAIAgentSectionConvex(workspaceId?: Id<"workspaces">) {
+  const aiSettings = useWebQuery(AI_SETTINGS_QUERY_REF, workspaceId ? { workspaceId } : "skip");
+  const listAvailableModels = useWebAction(AVAILABLE_MODELS_ACTION_REF);
+  const updateAIAgentSettings = useWebMutation(UPDATE_AI_SETTINGS_REF);
+  const [availableModels, setAvailableModels] = useState<AvailableAIAgentModel[] | undefined>(
+    undefined
+  );
+  const [availableModelsStatus, setAvailableModelsStatus] =
+    useState<AvailableModelsStatus>("idle");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const saveSettings = useCallback(
+    async (settings: SaveAIAgentSettingsArgs): Promise<string | null> => {
+      const normalizedModel = settings.model.trim();
+      setIsSaving(true);
+      try {
+        await updateAIAgentSettings({
+          workspaceId: settings.workspaceId,
+          enabled: settings.enabled,
+          model: normalizedModel,
+          confidenceThreshold: settings.confidenceThreshold,
+          knowledgeSources: settings.knowledgeSources,
+          personality: settings.personality || undefined,
+          handoffMessage: settings.handoffMessage || undefined,
+          suggestionsEnabled: settings.suggestionsEnabled,
+          embeddingModel: settings.embeddingModel,
+        });
+        return normalizedModel;
+      } catch (error) {
+        console.error("Failed to save AI settings:", error);
+        return null;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [updateAIAgentSettings]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!workspaceId) {
+      setAvailableModels(undefined);
+      setAvailableModelsStatus("idle");
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setAvailableModels(undefined);
+    setAvailableModelsStatus("loading");
+
+    void listAvailableModels({
+      workspaceId,
+      selectedModel: aiSettings?.model,
+    })
+      .then((models) => {
+        if (!cancelled) {
+          setAvailableModels(models);
+          setAvailableModelsStatus("loaded");
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load available AI models:", error);
+        if (!cancelled) {
+          setAvailableModels([]);
+          setAvailableModelsStatus("error");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, aiSettings?.model, listAvailableModels]);
+
   return {
-    aiSettings: useWebQuery(AI_SETTINGS_QUERY_REF, workspaceId ? { workspaceId } : "skip"),
-    availableModels: useWebQuery(AVAILABLE_MODELS_QUERY_REF, {}),
-    updateSettings: useWebMutation(UPDATE_AI_SETTINGS_REF),
+    aiSettings,
+    availableModels,
+    availableModelsStatus,
+    isSaving,
+    saveSettings,
   };
 }
 

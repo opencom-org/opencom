@@ -283,15 +283,18 @@ function InboxContent(): React.JSX.Element | null {
       }
     };
   }, []);
-  const handleOpenConversationFromNotification = useCallback((conversationId: Id<"conversations">) => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const url = new URL(window.location.href);
-    url.pathname = "/inbox";
-    url.searchParams.set("conversationId", conversationId);
-    window.location.assign(url.toString());
-  }, []);
+  const handleOpenConversationFromNotification = useCallback(
+    (conversationId: Id<"conversations">) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      const url = new URL(window.location.href);
+      url.pathname = "/inbox";
+      url.searchParams.set("conversationId", conversationId);
+      window.location.assign(url.toString());
+    },
+    []
+  );
   useInboxAttentionCues({
     conversations,
     selectedConversationId,
@@ -382,7 +385,7 @@ function InboxContent(): React.JSX.Element | null {
       setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}${item.content}`);
       setLastInsertedSnippetId(item.id as Id<"snippets">);
     } else if (action === "link" && item.type === "article" && item.slug) {
-      setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}[${item.title}](/help/${item.slug})`);
+      setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}[${item.title}](article:${item.id})`);
     } else {
       setInputValue((prev) => `${prev}${prev ? "\n\n" : ""}${item.content}`);
     }

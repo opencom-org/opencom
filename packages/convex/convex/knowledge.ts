@@ -1,7 +1,11 @@
 import { v } from "convex/values";
-import { authMutation, authQuery } from "./lib/authWrappers";
+import { type FunctionReference } from "convex/server";
+import { embed } from "ai";
+import { internal } from "./_generated/api";
+import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { createAIClient } from "./lib/aiGateway";
 import {
   getArticleVisibility,
   getUnifiedArticleByIdOrLegacyInternalId,
@@ -232,6 +236,129 @@ export const search = authQuery({
   },
 });
 
+type EmbeddingQueryRef<Args extends Record<string, unknown>, Return> = FunctionReference<
+  "query",
+  "internal",
+  Args,
+  Return
+>;
+
+// NOTE: getShallowRunQuery uses a type escape cast to work around TS2589
+// (Type instantiation is excessively deep) when calling ctx.runQuery with
+// generated internal refs. The cast keeps the call signature shallow at the
+// hotspot. This can be removed once TypeScript or Convex provides better
+// type inference for cross-function calls in actions.
+function getShallowRunQuery(ctx: { runQuery: unknown }) {
+  return ctx.runQuery as unknown as <Args extends Record<string, unknown>, Return>(
+    queryRef: EmbeddingQueryRef<Args, Return>,
+    queryArgs: Args
+  ) => Promise<Return>;
+}
+
+const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+const KNOWLEDGE_SEARCH_DEFAULT_LIMIT = 20;
+const KNOWLEDGE_SEARCH_MAX_LIMIT = 50;
+
+export const searchWithEmbeddings = authAction({
+  args: {
+    workspaceId: v.id("workspaces"),
+    query: v.string(),
+    contentTypes: v.optional(v.array(contentTypeValidator)),
+    limit: v.optional(v.number()),
+  },
+  permission: "articles.read",
+  handler: async (ctx, args): Promise<KnowledgeSearchResult[]> => {
+    const limit = Math.max(
+      1,
+      Math.min(args.limit ?? KNOWLEDGE_SEARCH_DEFAULT_LIMIT, KNOWLEDGE_SEARCH_MAX_LIMIT)
+    );
+
+    const aiClient = createAIClient();
+    const runQuery = getShallowRunQuery(ctx);
+
+    const { embedding } = await embed({
+      model: aiClient.embedding(DEFAULT_EMBEDDING_MODEL),
+      value: args.query,
+    });
+
+    const vectorResults = await ctx.vectorSearch("contentEmbeddings", "by_embedding", {
+      vector: embedding,
+      limit: limit * 8,
+      filter: (q) => q.eq("workspaceId", args.workspaceId),
+    });
+
+    const contentTypeSet =
+      args.contentTypes && args.contentTypes.length > 0 ? new Set(args.contentTypes) : null;
+
+    const embeddingDocs = await Promise.all(
+      vectorResults.map((result) =>
+        runQuery(internal.suggestions.getEmbeddingById, { id: result._id }).then((doc) =>
+          doc ? { ...doc, _score: result._score } : null
+        )
+      )
+    );
+
+    const seen = new Set<string>();
+    const dedupedEmbeddingDocs: {
+      contentId: string;
+      contentType: KnowledgeContentType;
+      title: string;
+      snippet: string;
+      updatedAt: number;
+      _score: number;
+    }[] = [];
+
+    for (const doc of embeddingDocs) {
+      if (!doc) continue;
+      if (contentTypeSet && !contentTypeSet.has(doc.contentType)) continue;
+
+      const key = `${doc.contentType}:${doc.contentId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      dedupedEmbeddingDocs.push({
+        contentId: doc.contentId,
+        contentType: doc.contentType,
+        title: doc.title,
+        snippet: doc.snippet,
+        updatedAt: doc.updatedAt,
+        _score: doc._score,
+      });
+
+      if (dedupedEmbeddingDocs.length >= limit) break;
+    }
+
+    const contentRecords = await Promise.all(
+      dedupedEmbeddingDocs.map((doc) =>
+        runQuery(internal.suggestions.getContentById, {
+          contentType: doc.contentType,
+          contentId: doc.contentId,
+        })
+      )
+    );
+
+    const results: KnowledgeSearchResult[] = [];
+    for (let i = 0; i < dedupedEmbeddingDocs.length; i++) {
+      const doc = dedupedEmbeddingDocs[i];
+      const content = contentRecords[i];
+      if (!doc || !content) continue;
+
+      results.push({
+        id: doc.contentId,
+        type: doc.contentType,
+        title: doc.title,
+        content: content.content,
+        snippet: doc.snippet,
+        slug: content.slug,
+        relevanceScore: doc._score,
+        updatedAt: doc.updatedAt,
+      });
+    }
+
+    return results;
+  },
+});
+
 export const trackAccess = authMutation({
   args: {
     userId: v.id("users"),
@@ -316,7 +443,9 @@ export const getRecentlyUsed = authQuery({
       accessedAt: number;
     }> = [];
 
-    for (const record of accessRecords.sort((a, b) => b.accessedAt - a.accessedAt).slice(0, limit)) {
+    for (const record of accessRecords
+      .sort((a, b) => b.accessedAt - a.accessedAt)
+      .slice(0, limit)) {
       if (record.contentType === "snippet") {
         const snippet = await ctx.db.get(record.contentId as Id<"snippets">);
         if (!snippet) {
@@ -425,7 +554,12 @@ export const getFrequentlyUsed = authQuery({
         continue;
       }
 
-      const article = await resolveArticleKnowledgeItem(ctx, args.workspaceId, data.type, contentId);
+      const article = await resolveArticleKnowledgeItem(
+        ctx,
+        args.workspaceId,
+        data.type,
+        contentId
+      );
       if (!article) {
         continue;
       }

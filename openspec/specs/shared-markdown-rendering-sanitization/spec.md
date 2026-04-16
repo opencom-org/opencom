@@ -1,8 +1,11 @@
 # shared-markdown-rendering-sanitization Specification
 
 ## Purpose
+
 TBD - created by archiving change unify-markdown-rendering-utility. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Web and widget MUST consume a shared markdown rendering implementation
 
 Markdown rendering and sanitization SHALL be implemented in a shared utility module consumed by both web and widget surfaces.
@@ -37,3 +40,18 @@ The shared utility SHALL support frontmatter stripping and plain-text excerpt he
 - **WHEN** input markdown begins with frontmatter metadata
 - **THEN** rendered output and excerpt generation SHALL ignore the frontmatter block
 
+### Requirement: Shared markdown utility MUST detect article links for in-widget navigation
+
+The shared markdown utility SHALL detect `article:` protocol links and emit metadata for in-widget article navigation.
+
+#### Scenario: Article link is rendered with navigation metadata
+
+- **WHEN** markdown contains a link in the format `[title](article:<articleId>)`
+- **THEN** the rendered anchor SHALL include a `data-article-id` attribute with the article ID
+- **AND** the link SHALL NOT have `target="_blank"` (in-widget navigation)
+
+#### Scenario: Article link click is handled by widget
+
+- **WHEN** a visitor clicks an article link in the widget
+- **THEN** the widget SHALL call `onSelectArticle(articleId)` to open the article view
+- **AND** the link SHALL NOT open in a new browser tab

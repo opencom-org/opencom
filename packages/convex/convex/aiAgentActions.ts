@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
 import { generateText } from "ai";
-import { createAIClient } from "./lib/aiGateway";
+import { createAIClient, getAIGatewayProviderLabel } from "./lib/aiGateway";
 
 type AIConfigurationDiagnostic = {
   code: string;
@@ -242,7 +242,13 @@ function getShallowRunAction(ctx: { runAction: unknown }) {
   ) => Promise<Return>;
 }
 
-const SUPPORTED_AI_PROVIDERS = new Set(["openai"]);
+function maybeGetShallowRunAction(ctx: { runAction?: unknown }) {
+  if (typeof ctx.runAction !== "function") {
+    return null;
+  }
+  return getShallowRunAction(ctx as { runAction: unknown });
+}
+
 const GENERATION_FAILURE_FALLBACK_RESPONSE =
   "I'm having trouble processing your request right now. Let me connect you with a human agent.";
 const EMPTY_RESPONSE_RETRY_LIMIT = 1;
@@ -263,17 +269,20 @@ const isGPT5ReasoningModel = (provider: string, model: string): boolean =>
 
 // Parse model string to get provider and model name
 export const parseModel = (modelString: string): { provider: string; model: string } => {
-  const parts = modelString.split("/");
+  const trimmedModel = modelString.trim();
+  const parts = trimmedModel.split("/");
   if (parts.length === 2) {
     return { provider: parts[0], model: parts[1] };
   }
-  return { provider: "openai", model: modelString };
+
+  return { provider: getAIGatewayProviderLabel(), model: trimmedModel };
 };
 
 export const getAIConfigurationDiagnostic = (
   modelString: string,
-  environment: { aiGatewayApiKey?: string } = {
+  environment: { aiGatewayApiKey?: string; aiGatewayProviderLabel?: string } = {
     aiGatewayApiKey: process.env.AI_GATEWAY_API_KEY,
+    aiGatewayProviderLabel: getAIGatewayProviderLabel(),
   }
 ): AIConfigurationDiagnostic | null => {
   const trimmedModel = modelString.trim();
@@ -284,21 +293,24 @@ export const getAIConfigurationDiagnostic = (
     };
   }
 
+  const providerLabel = environment.aiGatewayProviderLabel ?? getAIGatewayProviderLabel();
   const parts = trimmedModel.split("/");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+  if (parts.length > 2 || (parts.length === 2 && (!parts[0] || !parts[1]))) {
     return {
       code: "INVALID_MODEL_FORMAT",
-      message: "AI model format is invalid. Use provider/model (for example openai/gpt-5-nano).",
+      message:
+        "AI model format is invalid. Use provider/model or a raw model ID exposed by the configured AI gateway.",
       model: trimmedModel,
     };
   }
 
-  const provider = parts[0];
-  if (!SUPPORTED_AI_PROVIDERS.has(provider)) {
+  const provider = parts.length === 2 ? parts[0] : providerLabel;
+  const model = parts.length === 2 ? parts[1] : trimmedModel;
+  if (!provider || !model) {
     return {
-      code: "UNSUPPORTED_PROVIDER",
-      message: `Provider '${provider}' is not supported in this runtime.`,
-      provider,
+      code: "INVALID_MODEL_FORMAT",
+      message:
+        "AI model format is invalid. Use provider/model or a raw model ID exposed by the configured AI gateway.",
       model: trimmedModel,
     };
   }
@@ -473,7 +485,7 @@ export const generateResponse = action({
 
     const runQuery = getShallowRunQuery(ctx);
     const runMutation = getShallowRunMutation(ctx);
-    const runAction = getShallowRunAction(ctx);
+    const runAction = maybeGetShallowRunAction(ctx);
     const access = await runQuery(AUTHORIZE_CONVERSATION_ACCESS_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -576,19 +588,21 @@ export const generateResponse = action({
 
     // Get relevant knowledge
     let knowledgeResults: RelevantKnowledgeResult[] = [];
-    try {
-      knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
-        workspaceId: args.workspaceId,
-        query: args.query,
-        knowledgeSources: settings.knowledgeSources,
-        limit: 5,
-        embeddingModel: settings.embeddingModel,
-      });
-    } catch (retrievalError) {
-      console.error(
-        "Knowledge retrieval failed; continuing without knowledge context:",
-        retrievalError
-      );
+    if (runAction) {
+      try {
+        knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
+          workspaceId: args.workspaceId,
+          query: args.query,
+          knowledgeSources: settings.knowledgeSources,
+          limit: 5,
+          embeddingModel: settings.embeddingModel,
+        });
+      } catch (retrievalError) {
+        console.error(
+          "Knowledge retrieval failed; continuing without knowledge context:",
+          retrievalError
+        );
+      }
     }
 
     // Build knowledge context for prompt

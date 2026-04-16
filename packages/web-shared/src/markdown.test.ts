@@ -33,6 +33,31 @@ describe("parseMarkdown", () => {
     expect(html).not.toContain("target=");
     expect(html).not.toContain("rel=");
   });
+
+  it("detects article links and adds data-article-id attribute", () => {
+    const html = parseMarkdown("[Read more](article:k57f8d9g2h3j4k5l)");
+    expect(html).toContain('data-article-id="k57f8d9g2h3j4k5l"');
+    expect(html).toContain('href="article:k57f8d9g2h3j4k5l"');
+    expect(html).not.toContain("target=");
+    expect(html).not.toContain("rel=");
+  });
+
+  it("renders article link text correctly", () => {
+    const html = parseMarkdown("[Help Article](article:abc123)");
+    expect(html).toContain(">Help Article<");
+  });
+
+  it("handles invalid article link format gracefully", () => {
+    const html = parseMarkdown("[Invalid](article:)");
+    expect(html).not.toContain("data-article-id");
+    expect(html).not.toContain("href=");
+  });
+
+  it("does not allow article protocol in image src", () => {
+    const html = parseMarkdown("![alt](article:abc123)");
+    expect(html).not.toContain("article:");
+    expect(html).not.toContain('src="article:');
+  });
 });
 
 describe("frontmatter and excerpt helpers", () => {

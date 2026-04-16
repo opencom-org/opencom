@@ -24,7 +24,7 @@ async function callInternalTestMutation<T>(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       path: "testAdmin:runTestMutation",
-      args: { secret, name, mutationArgs },
+      args: { secret, name, mutationArgsJson: JSON.stringify(mutationArgs) },
       format: "json",
     }),
   });
