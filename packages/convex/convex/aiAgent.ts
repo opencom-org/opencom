@@ -46,6 +46,28 @@ type OpenAIModelListResponse = {
   }>;
 };
 
+type StoredAIResponse = Doc<"aiResponses">;
+type StoredAIResponseSource = StoredAIResponse["sources"][number];
+type StoredAIResponseWithMessage = StoredAIResponse & {
+  messageId: Id<"messages">;
+};
+
+type ConversationResponse = Omit<StoredAIResponse, "messageId"> & {
+  messageId: Id<"messages">;
+  deliveredResponseContext: {
+    response: string;
+    sources: StoredAIResponseSource[];
+    confidence: number | null;
+  };
+  generatedResponseContext:
+    | {
+        response: string;
+        sources: StoredAIResponseSource[];
+        confidence: number;
+      }
+    | null;
+};
+
 type GetRelevantKnowledgeForRuntimeActionArgs = {
   workspaceId: Id<"workspaces">;
   query: string;
@@ -123,12 +145,22 @@ function createAvailableAIModel(value: string | undefined): AvailableAIModel | n
     return null;
   }
 
-  const [provider, ...modelParts] = normalizedId.split("/");
-  const model = modelParts.join("/") || normalizedId;
+  const defaultProvider = getAIGatewayProviderLabel(getAIBaseURL(getAIGatewayApiKey()));
+  const providerSeparatorIndex = normalizedId.indexOf("/");
+  if (providerSeparatorIndex === -1) {
+    return {
+      id: normalizedId,
+      name: normalizedId,
+      provider: defaultProvider,
+    };
+  }
+
+  const provider = normalizedId.slice(0, providerSeparatorIndex).trim();
+  const model = normalizedId.slice(providerSeparatorIndex + 1).trim();
   return {
     id: normalizedId,
-    name: model,
-    provider,
+    name: model || normalizedId,
+    provider: provider || defaultProvider,
   };
 }
 
@@ -138,7 +170,13 @@ function isLikelyGenerationModel(modelId: string): boolean {
     return false;
   }
 
-  return !NON_GENERATION_MODEL_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  const modelPathParts = normalized.split("/").map((part) => part.trim()).filter(Boolean);
+  const modelName = modelPathParts[modelPathParts.length - 1] ?? "";
+  if (!modelName) {
+    return false;
+  }
+
+  return !NON_GENERATION_MODEL_PREFIXES.some((prefix) => modelName.startsWith(prefix));
 }
 
 function dedupeAvailableAIModels(models: AvailableAIModel[]): AvailableAIModel[] {
@@ -245,6 +283,7 @@ async function getWorkspaceAISettings(
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
     .first();
 }
+
 async function requireConversationAccess(
   ctx: QueryCtx | MutationCtx,
   args: {
@@ -357,7 +396,7 @@ export const updateSettings = authMutation({
     embeddingModel: v.optional(v.string()),
   },
   permission: "settings.workspace",
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"aiAgentSettings">> => {
     const now = Date.now();
 
     const existing = await ctx.db
@@ -501,7 +540,7 @@ export const getRelevantKnowledgeForRuntime = internalQuery({
     knowledgeSources: v.optional(v.array(knowledgeSourceValidator)),
     limit: v.optional(v.number()),
   },
-  handler: async () => {
+  handler: async (): Promise<RuntimeKnowledgeResult[]> => {
     return [];
   },
 });
@@ -527,7 +566,7 @@ export const storeResponse = mutation({
     model: v.string(),
     provider: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"aiResponses">> => {
     await requireConversationAccess(ctx, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -573,7 +612,7 @@ export const submitFeedback = mutation({
     visitorId: v.optional(v.id("visitors")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const response = await ctx.db.get(args.responseId);
     if (!response) {
       throw new Error("AI response not found");
@@ -596,7 +635,7 @@ export const getConversationResponses = query({
     visitorId: v.optional(v.id("visitors")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ConversationResponse[]> => {
     await requireConversationAccess(ctx, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -608,22 +647,26 @@ export const getConversationResponses = query({
       .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
       .collect();
 
-    return responses.filter((response) => response.messageId !== undefined).map((response) => ({
-      ...response,
-      deliveredResponseContext: {
-        response: response.response,
-        sources: response.sources,
-        confidence: response.handedOff ? null : response.confidence,
-      },
-      generatedResponseContext:
-        response.generatedCandidateResponse === undefined
-          ? null
-          : {
-              response: response.generatedCandidateResponse,
-              sources: response.generatedCandidateSources ?? [],
-              confidence: response.generatedCandidateConfidence ?? response.confidence,
-            },
-    }));
+    return responses
+      .filter(
+        (response): response is StoredAIResponseWithMessage => response.messageId !== undefined
+      )
+      .map((response) => ({
+        ...response,
+        deliveredResponseContext: {
+          response: response.response,
+          sources: response.sources,
+          confidence: response.handedOff ? null : response.confidence,
+        },
+        generatedResponseContext:
+          response.generatedCandidateResponse === undefined
+            ? null
+            : {
+                response: response.generatedCandidateResponse,
+                sources: response.generatedCandidateSources ?? [],
+                confidence: response.generatedCandidateConfidence ?? response.confidence,
+              },
+      }));
   },
 });
 

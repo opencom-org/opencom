@@ -30,4 +30,13 @@ describe("content embedding model compatibility", () => {
       String(CONTENT_EMBEDDING_INDEX_DIMENSIONS)
     );
   });
+
+  it("normalizes supported embedding model ids to canonical constants", () => {
+    expect(resolveContentEmbeddingModel("  Text-Embedding-3-Small  ")).toBe(
+      DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
+    expect(resolveContentEmbeddingModel("TEXT-EMBEDDING-ADA-002")).toBe(
+      LEGACY_CONTENT_EMBEDDING_MODEL
+    );
+  });
 });

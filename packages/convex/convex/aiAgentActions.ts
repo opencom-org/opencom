@@ -293,6 +293,7 @@ export const getAIConfigurationDiagnostic = (
     };
   }
 
+  const providerLabel = environment.aiGatewayProviderLabel ?? getAIGatewayProviderLabel();
   const parts = trimmedModel.split("/");
   if (parts.length > 2 || (parts.length === 2 && (!parts[0] || !parts[1]))) {
     return {
@@ -303,7 +304,7 @@ export const getAIConfigurationDiagnostic = (
     };
   }
 
-  const provider = parts.length === 2 ? parts[0] : getAIGatewayProviderLabel();
+  const provider = parts.length === 2 ? parts[0] : providerLabel;
   const model = parts.length === 2 ? parts[1] : trimmedModel;
   if (!provider || !model) {
     return {

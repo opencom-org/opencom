@@ -25,9 +25,14 @@ export function isContentEmbeddingModelSupportedByCurrentIndex(model: string | u
 }
 
 export function resolveContentEmbeddingModel(model: string | undefined): string {
-  return isContentEmbeddingModelSupportedByCurrentIndex(model)
-    ? model?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
-    : DEFAULT_CONTENT_EMBEDDING_MODEL;
+  const normalized = normalizeModelName(model);
+  if (normalized === "" || normalized === DEFAULT_CONTENT_EMBEDDING_MODEL) {
+    return DEFAULT_CONTENT_EMBEDDING_MODEL;
+  }
+  if (normalized === LEGACY_CONTENT_EMBEDDING_MODEL) {
+    return LEGACY_CONTENT_EMBEDDING_MODEL;
+  }
+  return DEFAULT_CONTENT_EMBEDDING_MODEL;
 }
 
 export function getContentEmbeddingModelCompatibilityMessage(model: string | undefined): string | null {

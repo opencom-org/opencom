@@ -15,7 +15,7 @@ export function AIAgentSection({
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const { aiSettings, availableModels, updateSettings } = useAIAgentSectionConvex(workspaceId);
+  const { aiSettings, availableModels, isSaving, saveSettings } = useAIAgentSectionConvex(workspaceId);
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("openai/gpt-5-nano");
@@ -25,7 +25,6 @@ export function AIAgentSection({
   const [handoffMessage, setHandoffMessage] = useState("");
   const [suggestionsEnabled, setSuggestionsEnabled] = useState(false);
   const [embeddingModel, setEmbeddingModel] = useState("text-embedding-3-small");
-  const [isSaving, setIsSaving] = useState(false);
   const normalizedModel = normalizeModelValue(model);
   const selectedDiscoveredModel =
     availableModels?.some((availableModel) => availableModel.id === normalizedModel) ?? false
@@ -47,25 +46,19 @@ export function AIAgentSection({
 
   const handleSave = async () => {
     if (!workspaceId) return;
-    setIsSaving(true);
-    const nextModel = normalizeModelValue(model);
-    try {
-      await updateSettings({
-        workspaceId,
-        enabled,
-        model: nextModel,
-        confidenceThreshold,
-        knowledgeSources: knowledgeSources as ("articles" | "internalArticles" | "snippets")[],
-        personality: personality || undefined,
-        handoffMessage: handoffMessage || undefined,
-        suggestionsEnabled,
-        embeddingModel,
-      });
+    const nextModel = await saveSettings({
+      workspaceId,
+      enabled,
+      model,
+      confidenceThreshold,
+      knowledgeSources: knowledgeSources as ("articles" | "internalArticles" | "snippets")[],
+      personality,
+      handoffMessage,
+      suggestionsEnabled,
+      embeddingModel,
+    });
+    if (nextModel) {
       setModel(nextModel);
-    } catch (error) {
-      console.error("Failed to save AI settings:", error);
-    } finally {
-      setIsSaving(false);
     }
   };
 
