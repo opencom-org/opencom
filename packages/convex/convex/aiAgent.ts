@@ -12,6 +12,7 @@ import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
+import { DEFAULT_CONTENT_EMBEDDING_MODEL, resolveContentEmbeddingModel } from "./lib/embeddingModels";
 import { getAIGatewayApiKey, getAIBaseURL, getAIGatewayProviderLabel } from "./lib/aiGateway";
 import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
 import { resolveVisitorFromSession } from "./widgetSessions";
@@ -91,7 +92,7 @@ const DEFAULT_AI_SETTINGS = {
   workingHours: null,
   model: "openai/gpt-5-nano",
   suggestionsEnabled: false,
-  embeddingModel: "text-embedding-3-small",
+  embeddingModel: DEFAULT_CONTENT_EMBEDDING_MODEL,
   lastConfigError: null,
 };
 
@@ -228,7 +229,9 @@ function withAISettingDefaults(settings: Doc<"aiAgentSettings"> | null): {
     handoffMessage: settings.handoffMessage ?? DEFAULT_AI_SETTINGS.handoffMessage,
     workingHours: settings.workingHours ?? null,
     suggestionsEnabled: settings.suggestionsEnabled ?? false,
-    embeddingModel: settings.embeddingModel ?? DEFAULT_AI_SETTINGS.embeddingModel,
+    embeddingModel: resolveContentEmbeddingModel(
+      settings.embeddingModel ?? DEFAULT_AI_SETTINGS.embeddingModel
+    ),
     lastConfigError: settings.lastConfigError ?? null,
   };
 }
@@ -377,7 +380,8 @@ export const updateSettings = authMutation({
       if (args.model !== undefined) updates.model = args.model;
       if (args.suggestionsEnabled !== undefined)
         updates.suggestionsEnabled = args.suggestionsEnabled;
-      if (args.embeddingModel !== undefined) updates.embeddingModel = args.embeddingModel;
+      if (args.embeddingModel !== undefined)
+        updates.embeddingModel = resolveContentEmbeddingModel(args.embeddingModel);
 
       await ctx.db.patch(existing._id, updates);
       return existing._id;
@@ -394,7 +398,9 @@ export const updateSettings = authMutation({
       workingHours: args.workingHours ?? undefined,
       model: args.model ?? "openai/gpt-5-nano",
       suggestionsEnabled: args.suggestionsEnabled ?? false,
-      embeddingModel: args.embeddingModel ?? "text-embedding-3-small",
+      embeddingModel: resolveContentEmbeddingModel(
+        args.embeddingModel ?? DEFAULT_CONTENT_EMBEDDING_MODEL
+      ),
       createdAt: now,
       updatedAt: now,
     });

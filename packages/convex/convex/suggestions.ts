@@ -5,10 +5,10 @@ import { Doc, Id } from "./_generated/dataModel";
 import { embed } from "ai";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
+import { DEFAULT_CONTENT_EMBEDDING_MODEL, resolveContentEmbeddingModel } from "./lib/embeddingModels";
 import { getUnifiedArticleByIdOrLegacyInternalId, isInternalArticle } from "./lib/unifiedArticles";
 import type { Permission } from "./permissions";
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const FEEDBACK_STATS_DEFAULT_LIMIT = 5000;
 const FEEDBACK_STATS_MAX_LIMIT = 20000;
 const SUGGESTIONS_DEFAULT_LIMIT = 10;
@@ -258,7 +258,9 @@ export const searchSimilar = authAction({
       1,
       Math.min(args.limit ?? SUGGESTIONS_DEFAULT_LIMIT, SUGGESTIONS_MAX_LIMIT)
     );
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const modelName = resolveContentEmbeddingModel(
+      args.model?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
 
@@ -403,7 +405,9 @@ export const searchSimilarInternal = internalAction({
       1,
       Math.min(args.limit ?? SUGGESTIONS_DEFAULT_LIMIT, SUGGESTIONS_MAX_LIMIT)
     );
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const modelName = resolveContentEmbeddingModel(
+      args.model?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
 
@@ -715,7 +719,7 @@ export const searchForWidget = action({
 
     const aiClient = createAIClient();
     const { embedding } = await embed({
-      model: aiClient.embedding(DEFAULT_EMBEDDING_MODEL),
+      model: aiClient.embedding(DEFAULT_CONTENT_EMBEDDING_MODEL),
       value: normalizedQuery,
     });
 

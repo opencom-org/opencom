@@ -52,6 +52,7 @@ import type * as internalArticles from "../internalArticles.js";
 import type * as knowledge from "../knowledge.js";
 import type * as lib_aiGateway from "../lib/aiGateway.js";
 import type * as lib_authWrappers from "../lib/authWrappers.js";
+import type * as lib_embeddingModels from "../lib/embeddingModels.js";
 import type * as lib_notificationPreferences from "../lib/notificationPreferences.js";
 import type * as lib_seriesRuntimeAdapter from "../lib/seriesRuntimeAdapter.js";
 import type * as lib_unifiedArticles from "../lib/unifiedArticles.js";
@@ -238,6 +239,7 @@ declare const fullApi: ApiFromModules<{
   knowledge: typeof knowledge;
   "lib/aiGateway": typeof lib_aiGateway;
   "lib/authWrappers": typeof lib_authWrappers;
+  "lib/embeddingModels": typeof lib_embeddingModels;
   "lib/notificationPreferences": typeof lib_notificationPreferences;
   "lib/seriesRuntimeAdapter": typeof lib_seriesRuntimeAdapter;
   "lib/unifiedArticles": typeof lib_unifiedArticles;

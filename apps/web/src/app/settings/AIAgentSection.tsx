@@ -270,9 +270,6 @@ export function AIAgentSection({
                     <option value="text-embedding-3-small">
                       text-embedding-3-small (Recommended)
                     </option>
-                    <option value="text-embedding-3-large">
-                      text-embedding-3-large (Higher quality)
-                    </option>
                     <option value="text-embedding-ada-002">text-embedding-ada-002 (Legacy)</option>
                   </select>
                   <p className="text-xs text-muted-foreground">
