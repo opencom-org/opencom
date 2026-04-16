@@ -41,6 +41,8 @@ type AvailableAIAgentModel = {
   provider: string;
 };
 
+type AvailableModelsStatus = "idle" | "loading" | "loaded" | "error";
+
 type UpdateAIAgentSettingsArgs = {
   workspaceId: Id<"workspaces">;
   enabled?: boolean;
@@ -307,6 +309,8 @@ export function useAIAgentSectionConvex(workspaceId?: Id<"workspaces">) {
   const [availableModels, setAvailableModels] = useState<AvailableAIAgentModel[] | undefined>(
     undefined
   );
+  const [availableModelsStatus, setAvailableModelsStatus] =
+    useState<AvailableModelsStatus>("idle");
   const [isSaving, setIsSaving] = useState(false);
 
   const saveSettings = useCallback(
@@ -341,10 +345,14 @@ export function useAIAgentSectionConvex(workspaceId?: Id<"workspaces">) {
 
     if (!workspaceId) {
       setAvailableModels(undefined);
+      setAvailableModelsStatus("idle");
       return () => {
         cancelled = true;
       };
     }
+
+    setAvailableModels(undefined);
+    setAvailableModelsStatus("loading");
 
     void listAvailableModels({
       workspaceId,
@@ -353,12 +361,14 @@ export function useAIAgentSectionConvex(workspaceId?: Id<"workspaces">) {
       .then((models) => {
         if (!cancelled) {
           setAvailableModels(models);
+          setAvailableModelsStatus("loaded");
         }
       })
       .catch((error) => {
         console.error("Failed to load available AI models:", error);
         if (!cancelled) {
-          setAvailableModels(undefined);
+          setAvailableModels([]);
+          setAvailableModelsStatus("error");
         }
       });
 
@@ -370,6 +380,7 @@ export function useAIAgentSectionConvex(workspaceId?: Id<"workspaces">) {
   return {
     aiSettings,
     availableModels,
+    availableModelsStatus,
     isSaving,
     saveSettings,
   };

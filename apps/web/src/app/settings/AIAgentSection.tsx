@@ -15,7 +15,8 @@ export function AIAgentSection({
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const { aiSettings, availableModels, isSaving, saveSettings } = useAIAgentSectionConvex(workspaceId);
+  const { aiSettings, availableModels, availableModelsStatus, isSaving, saveSettings } =
+    useAIAgentSectionConvex(workspaceId);
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("openai/gpt-5-nano");
@@ -30,6 +31,12 @@ export function AIAgentSection({
     availableModels?.some((availableModel) => availableModel.id === normalizedModel) ?? false
       ? normalizedModel
       : "";
+  const discoveredModelsPlaceholder =
+    availableModelsStatus === "loading"
+      ? "Loading discovered models..."
+      : availableModelsStatus === "error"
+        ? "Model discovery unavailable"
+        : "Choose a discovered model";
 
   useEffect(() => {
     if (aiSettings) {
@@ -139,7 +146,7 @@ export function AIAgentSection({
                 onChange={(e) => setModel(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md text-sm bg-background"
               >
-                <option value="">{availableModels ? "Choose a discovered model" : "Loading discovered models..."}</option>
+                <option value="">{discoveredModelsPlaceholder}</option>
                 {availableModels?.map((m: NonNullable<typeof availableModels>[number]) => (
                   <option key={m.id} value={m.id}>
                     {m.name} ({m.provider})
@@ -151,6 +158,12 @@ export function AIAgentSection({
                 onChange={(e) => setModel(e.target.value)}
                 placeholder="openai/gpt-5-nano"
               />
+              {availableModelsStatus === "error" && (
+                <p className="text-xs text-amber-700">
+                  Model discovery is currently unavailable. Enter a model ID manually or try again
+                  later.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Choose a discovered model or enter one manually. Raw model IDs are interpreted
                 against the currently configured AI gateway runtime.
