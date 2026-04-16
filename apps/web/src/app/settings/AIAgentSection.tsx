@@ -6,12 +6,17 @@ import { AlertTriangle, Bot } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAIAgentSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
+function normalizeModelValue(value: string): string {
+  return value.trim();
+}
+
 export function AIAgentSection({
   workspaceId,
 }: {
   workspaceId?: Id<"workspaces">;
 }): React.JSX.Element | null {
-  const { aiSettings, availableModels, updateSettings } = useAIAgentSectionConvex(workspaceId);
+  const { aiSettings, availableModels, availableModelsStatus, isSaving, saveSettings } =
+    useAIAgentSectionConvex(workspaceId);
 
   const [enabled, setEnabled] = useState(false);
   const [model, setModel] = useState("openai/gpt-5-nano");
@@ -21,7 +26,17 @@ export function AIAgentSection({
   const [handoffMessage, setHandoffMessage] = useState("");
   const [suggestionsEnabled, setSuggestionsEnabled] = useState(false);
   const [embeddingModel, setEmbeddingModel] = useState("text-embedding-3-small");
-  const [isSaving, setIsSaving] = useState(false);
+  const normalizedModel = normalizeModelValue(model);
+  const selectedDiscoveredModel =
+    availableModels?.some((availableModel) => availableModel.id === normalizedModel) ?? false
+      ? normalizedModel
+      : "";
+  const discoveredModelsPlaceholder =
+    availableModelsStatus === "loading"
+      ? "Loading discovered models..."
+      : availableModelsStatus === "error"
+        ? "Model discovery unavailable"
+        : "Choose a discovered model";
 
   useEffect(() => {
     if (aiSettings) {
@@ -38,23 +53,19 @@ export function AIAgentSection({
 
   const handleSave = async () => {
     if (!workspaceId) return;
-    setIsSaving(true);
-    try {
-      await updateSettings({
-        workspaceId,
-        enabled,
-        model,
-        confidenceThreshold,
-        knowledgeSources: knowledgeSources as ("articles" | "internalArticles" | "snippets")[],
-        personality: personality || undefined,
-        handoffMessage: handoffMessage || undefined,
-        suggestionsEnabled,
-        embeddingModel,
-      });
-    } catch (error) {
-      console.error("Failed to save AI settings:", error);
-    } finally {
-      setIsSaving(false);
+    const nextModel = await saveSettings({
+      workspaceId,
+      enabled,
+      model,
+      confidenceThreshold,
+      knowledgeSources: knowledgeSources as ("articles" | "internalArticles" | "snippets")[],
+      personality,
+      handoffMessage,
+      suggestionsEnabled,
+      embeddingModel,
+    });
+    if (nextModel) {
+      setModel(nextModel);
     }
   };
 
@@ -131,18 +142,31 @@ export function AIAgentSection({
             <div className="space-y-2">
               <label className="text-sm font-medium">AI Model</label>
               <select
-                value={model}
+                value={selectedDiscoveredModel}
                 onChange={(e) => setModel(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md text-sm bg-background"
               >
+                <option value="">{discoveredModelsPlaceholder}</option>
                 {availableModels?.map((m: NonNullable<typeof availableModels>[number]) => (
                   <option key={m.id} value={m.id}>
                     {m.name} ({m.provider})
                   </option>
                 ))}
               </select>
+              <Input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="openai/gpt-5-nano"
+              />
+              {availableModelsStatus === "error" && (
+                <p className="text-xs text-amber-700">
+                  Model discovery is currently unavailable. Enter a model ID manually or try again
+                  later.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
-                Choose the AI model for generating responses.
+                Choose a discovered model or enter one manually. Raw model IDs are interpreted
+                against the currently configured AI gateway runtime.
               </p>
             </div>
 
@@ -251,9 +275,6 @@ export function AIAgentSection({
                   >
                     <option value="text-embedding-3-small">
                       text-embedding-3-small (Recommended)
-                    </option>
-                    <option value="text-embedding-3-large">
-                      text-embedding-3-large (Higher quality)
                     </option>
                     <option value="text-embedding-ada-002">text-embedding-ada-002 (Legacy)</option>
                   </select>

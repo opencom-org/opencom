@@ -2,10 +2,10 @@ import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { embed } from "ai";
 import { createAIClient } from "./lib/aiGateway";
+import { DEFAULT_CONTENT_EMBEDDING_MODEL, resolveContentEmbeddingModel } from "./lib/embeddingModels";
 import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "./_generated/dataModel";
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const RUNTIME_KNOWLEDGE_DEFAULT_LIMIT = 5;
 const RUNTIME_KNOWLEDGE_MAX_LIMIT = 20;
 
@@ -75,7 +75,9 @@ export const getRelevantKnowledgeForRuntimeAction = internalAction({
     const aiClient = createAIClient();
     const runQuery = getShallowRunQuery(ctx);
 
-    const embeddingModel = args.embeddingModel?.trim() || DEFAULT_EMBEDDING_MODEL;
+    const embeddingModel = resolveContentEmbeddingModel(
+      args.embeddingModel?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
 
     // 1. Embed the query
     const { embedding } = await embed({

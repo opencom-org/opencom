@@ -5,13 +5,13 @@ import { Doc, Id } from "./_generated/dataModel";
 import { embedMany } from "ai";
 import { authAction } from "./lib/authWrappers";
 import { createAIClient } from "./lib/aiGateway";
+import { DEFAULT_CONTENT_EMBEDDING_MODEL, resolveContentEmbeddingModel } from "./lib/embeddingModels";
 import {
   isInternalArticle,
   isPublicArticle,
   listUnifiedArticlesWithLegacyFallback,
 } from "./lib/unifiedArticles";
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_GENERATE_CONCURRENCY = 4;
 const EMBEDDING_BACKFILL_BATCH_CONCURRENCY = 2;
 
@@ -315,7 +315,9 @@ export const generateInternal = internalAction({
       return { id: existing[0]._id, skipped: true };
     }
 
-    const modelName = args.model || DEFAULT_EMBEDDING_MODEL;
+    const modelName = resolveContentEmbeddingModel(
+      args.model?.trim() || DEFAULT_CONTENT_EMBEDDING_MODEL
+    );
     const aiClient = createAIClient();
     const chunkTexts = chunks.map((chunk) => `${args.title}\n\n${chunk}`);
     const { embeddings } = await embedMany({

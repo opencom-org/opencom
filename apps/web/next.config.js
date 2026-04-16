@@ -46,18 +46,6 @@ const nextConfig = {
     // Reduce memory usage during webpack compilation
     webpackMemoryOptimizations: true,
   },
-  webpack: (config, { dev }) => {
-    if (dev) {
-      // Use filesystem cache to reduce in-memory pressure during dev
-      config.cache = {
-        type: "filesystem",
-        buildDependencies: {
-          config: [__filename],
-        },
-      };
-    }
-    return config;
-  },
   async headers() {
     return [
       {

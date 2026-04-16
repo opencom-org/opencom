@@ -40,7 +40,7 @@ export async function callMutation(
     },
     body: JSON.stringify({
       path: "testAdmin:runTestMutation",
-      args: { secret, name: path, mutationArgs: args },
+      args: { secret, name: path, mutationArgsJson: JSON.stringify(args) },
       format: "json",
     }),
   });

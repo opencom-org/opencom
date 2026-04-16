@@ -37,6 +37,8 @@ export function SuggestionsPanel({
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const { settings, getSuggestions, trackUsage, trackDismissal } =
     useSuggestionsPanelConvex(workspaceId);
+  const resolvedEmbeddingModel =
+    suggestions[0]?.embeddingModel ?? settings?.embeddingModel ?? "text-embedding-3-small";
 
   const fetchSuggestions = useCallback(async () => {
     if (!settings?.suggestionsEnabled) {
@@ -82,6 +84,7 @@ export function SuggestionsPanel({
         conversationId,
         contentType: suggestion.type,
         contentId: suggestion.id,
+        embeddingModel: suggestion.embeddingModel,
       });
     } catch (err) {
       console.error("Failed to track usage:", err);
@@ -97,6 +100,7 @@ export function SuggestionsPanel({
         conversationId,
         contentType: suggestion.type,
         contentId: suggestion.id,
+        embeddingModel: suggestion.embeddingModel,
       });
     } catch (err) {
       console.error("Failed to track dismissal:", err);
@@ -166,6 +170,10 @@ export function SuggestionsPanel({
         </Button>
       </div>
 
+      <p className="mb-3 text-xs text-muted-foreground" data-testid="inbox-suggestions-embedding-model">
+        Using embedding model: {resolvedEmbeddingModel}
+      </p>
+
       {isLoading && visibleSuggestions.length === 0 && (
         <div className="flex items-center justify-center py-4 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -198,6 +206,11 @@ export function SuggestionsPanel({
                   <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                     {suggestion.snippet}
                   </p>
+                  {suggestion.embeddingModel && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Embedding model {suggestion.embeddingModel}
+                    </p>
+                  )}
                 </div>
               </div>
               <Button
@@ -205,6 +218,7 @@ export function SuggestionsPanel({
                 size="sm"
                 onClick={() => handleDismiss(suggestion)}
                 className="h-6 w-6 p-0 flex-shrink-0"
+                aria-label={`Dismiss suggestion ${suggestion.title}`}
                 title="Dismiss"
               >
                 <X className="h-3 w-3" />

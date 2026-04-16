@@ -86,9 +86,16 @@ describe("suggestions", () => {
         conversationId: testConversationId,
         contentType: "article",
         contentId: testArticleId,
+        embeddingModel: "text-embedding-3-small",
       });
 
       expect(feedbackId).toBeDefined();
+
+      const feedback = await client.mutation(api.testing_helpers.listTestSuggestionFeedback, {
+        workspaceId: testWorkspaceId,
+      });
+      const stored = feedback.find((entry) => entry._id === feedbackId);
+      expect(stored?.embeddingModel).toBe("text-embedding-3-small");
     });
   });
 
@@ -99,9 +106,16 @@ describe("suggestions", () => {
         conversationId: testConversationId,
         contentType: "snippet",
         contentId: testSnippetId,
+        embeddingModel: "text-embedding-3-small",
       });
 
       expect(feedbackId).toBeDefined();
+
+      const feedback = await client.mutation(api.testing_helpers.listTestSuggestionFeedback, {
+        workspaceId: testWorkspaceId,
+      });
+      const stored = feedback.find((entry) => entry._id === feedbackId);
+      expect(stored?.embeddingModel).toBe("text-embedding-3-small");
     });
   });
 

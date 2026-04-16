@@ -12,6 +12,8 @@ import { Doc, Id } from "./_generated/dataModel";
 import { getAuthenticatedUserFromSession } from "./auth";
 import { getWorkspaceMembership, requirePermission } from "./permissions";
 import { authAction, authMutation, authQuery } from "./lib/authWrappers";
+import { DEFAULT_CONTENT_EMBEDDING_MODEL, resolveContentEmbeddingModel } from "./lib/embeddingModels";
+import { getAIGatewayApiKey, getAIBaseURL, getAIGatewayProviderLabel } from "./lib/aiGateway";
 import { getShallowRunAfter, routeEventRef } from "./notifications/functionRefs";
 import { resolveVisitorFromSession } from "./widgetSessions";
 
@@ -29,6 +31,41 @@ type RuntimeKnowledgeResult = {
   title: string;
   content: string;
   relevanceScore: number;
+};
+
+type AvailableAIModel = {
+  id: string;
+  name: string;
+  provider: string;
+};
+
+type OpenAIModelListResponse = {
+  data?: Array<{
+    id?: string;
+    created?: number;
+  }>;
+};
+
+type StoredAIResponse = Doc<"aiResponses">;
+type StoredAIResponseSource = StoredAIResponse["sources"][number];
+type StoredAIResponseWithMessage = StoredAIResponse & {
+  messageId: Id<"messages">;
+};
+
+type ConversationResponse = Omit<StoredAIResponse, "messageId"> & {
+  messageId: Id<"messages">;
+  deliveredResponseContext: {
+    response: string;
+    sources: StoredAIResponseSource[];
+    confidence: number | null;
+  };
+  generatedResponseContext:
+    | {
+        response: string;
+        sources: StoredAIResponseSource[];
+        confidence: number;
+      }
+    | null;
 };
 
 type GetRelevantKnowledgeForRuntimeActionArgs = {
@@ -77,9 +114,124 @@ const DEFAULT_AI_SETTINGS = {
   workingHours: null,
   model: "openai/gpt-5-nano",
   suggestionsEnabled: false,
-  embeddingModel: "text-embedding-3-small",
+  embeddingModel: DEFAULT_CONTENT_EMBEDDING_MODEL,
   lastConfigError: null,
 };
+
+const AVAILABLE_MODEL_DISCOVERY_TIMEOUT_MS = 5000;
+const NON_GENERATION_MODEL_PREFIXES = [
+  "text-embedding-",
+  "omni-moderation-",
+  "whisper-",
+  "tts-",
+  "gpt-image-",
+  "dall-e-",
+  "babbage-",
+  "davinci-",
+];
+
+function normalizeAvailableModelId(value: string | undefined): string | null {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function createAvailableAIModel(value: string | undefined): AvailableAIModel | null {
+  const normalizedId = normalizeAvailableModelId(value);
+  if (!normalizedId) {
+    return null;
+  }
+
+  const defaultProvider = getAIGatewayProviderLabel(getAIBaseURL(getAIGatewayApiKey()));
+  const providerSeparatorIndex = normalizedId.indexOf("/");
+  if (providerSeparatorIndex === -1) {
+    return {
+      id: normalizedId,
+      name: normalizedId,
+      provider: defaultProvider,
+    };
+  }
+
+  const provider = normalizedId.slice(0, providerSeparatorIndex).trim();
+  const model = normalizedId.slice(providerSeparatorIndex + 1).trim();
+  return {
+    id: normalizedId,
+    name: model || normalizedId,
+    provider: provider || defaultProvider,
+  };
+}
+
+function isLikelyGenerationModel(modelId: string): boolean {
+  const normalized = modelId.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const modelPathParts = normalized.split("/").map((part) => part.trim()).filter(Boolean);
+  const modelName = modelPathParts[modelPathParts.length - 1] ?? "";
+  if (!modelName) {
+    return false;
+  }
+
+  return !NON_GENERATION_MODEL_PREFIXES.some((prefix) => modelName.startsWith(prefix));
+}
+
+function dedupeAvailableAIModels(models: AvailableAIModel[]): AvailableAIModel[] {
+  const seen = new Set<string>();
+  return models.filter((model) => {
+    if (seen.has(model.id)) {
+      return false;
+    }
+
+    seen.add(model.id);
+    return true;
+  });
+}
+
+async function discoverAvailableAIModels(): Promise<AvailableAIModel[] | null> {
+  const apiKey = getAIGatewayApiKey();
+  if (!apiKey) {
+    return null;
+  }
+
+  const providerLabel = getAIGatewayProviderLabel(getAIBaseURL(apiKey));
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AVAILABLE_MODEL_DISCOVERY_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${getAIBaseURL(apiKey)}/models`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as OpenAIModelListResponse;
+    const models = Array.isArray(payload.data) ? payload.data : [];
+
+    return models
+      .filter(
+        (model): model is { id: string; created?: number } =>
+          typeof model.id === "string" && isLikelyGenerationModel(model.id)
+      )
+      .sort((left, right) => (right.created ?? 0) - (left.created ?? 0) || left.id.localeCompare(right.id))
+      .map((model) =>
+        createAvailableAIModel(model.id.includes("/") ? model.id : `${providerLabel}/${model.id}`)
+      )
+      .filter((model): model is AvailableAIModel => model !== null);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function withAISettingDefaults(settings: Doc<"aiAgentSettings"> | null): {
   _id?: Id<"aiAgentSettings">;
@@ -115,7 +267,9 @@ function withAISettingDefaults(settings: Doc<"aiAgentSettings"> | null): {
     handoffMessage: settings.handoffMessage ?? DEFAULT_AI_SETTINGS.handoffMessage,
     workingHours: settings.workingHours ?? null,
     suggestionsEnabled: settings.suggestionsEnabled ?? false,
-    embeddingModel: settings.embeddingModel ?? DEFAULT_AI_SETTINGS.embeddingModel,
+    embeddingModel: resolveContentEmbeddingModel(
+      settings.embeddingModel ?? DEFAULT_AI_SETTINGS.embeddingModel
+    ),
     lastConfigError: settings.lastConfigError ?? null,
   };
 }
@@ -129,6 +283,7 @@ async function getWorkspaceAISettings(
     .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
     .first();
 }
+
 async function requireConversationAccess(
   ctx: QueryCtx | MutationCtx,
   args: {
@@ -241,7 +396,7 @@ export const updateSettings = authMutation({
     embeddingModel: v.optional(v.string()),
   },
   permission: "settings.workspace",
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"aiAgentSettings">> => {
     const now = Date.now();
 
     const existing = await ctx.db
@@ -264,7 +419,8 @@ export const updateSettings = authMutation({
       if (args.model !== undefined) updates.model = args.model;
       if (args.suggestionsEnabled !== undefined)
         updates.suggestionsEnabled = args.suggestionsEnabled;
-      if (args.embeddingModel !== undefined) updates.embeddingModel = args.embeddingModel;
+      if (args.embeddingModel !== undefined)
+        updates.embeddingModel = resolveContentEmbeddingModel(args.embeddingModel);
 
       await ctx.db.patch(existing._id, updates);
       return existing._id;
@@ -281,7 +437,9 @@ export const updateSettings = authMutation({
       workingHours: args.workingHours ?? undefined,
       model: args.model ?? "openai/gpt-5-nano",
       suggestionsEnabled: args.suggestionsEnabled ?? false,
-      embeddingModel: args.embeddingModel ?? "text-embedding-3-small",
+      embeddingModel: resolveContentEmbeddingModel(
+        args.embeddingModel ?? DEFAULT_CONTENT_EMBEDDING_MODEL
+      ),
       createdAt: now,
       updatedAt: now,
     });
@@ -382,7 +540,7 @@ export const getRelevantKnowledgeForRuntime = internalQuery({
     knowledgeSources: v.optional(v.array(knowledgeSourceValidator)),
     limit: v.optional(v.number()),
   },
-  handler: async () => {
+  handler: async (): Promise<RuntimeKnowledgeResult[]> => {
     return [];
   },
 });
@@ -408,7 +566,7 @@ export const storeResponse = mutation({
     model: v.string(),
     provider: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Id<"aiResponses">> => {
     await requireConversationAccess(ctx, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -454,7 +612,7 @@ export const submitFeedback = mutation({
     visitorId: v.optional(v.id("visitors")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<void> => {
     const response = await ctx.db.get(args.responseId);
     if (!response) {
       throw new Error("AI response not found");
@@ -477,7 +635,7 @@ export const getConversationResponses = query({
     visitorId: v.optional(v.id("visitors")),
     sessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ConversationResponse[]> => {
     await requireConversationAccess(ctx, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -489,22 +647,26 @@ export const getConversationResponses = query({
       .withIndex("by_conversation", (q) => q.eq("conversationId", args.conversationId))
       .collect();
 
-    return responses.map((response) => ({
-      ...response,
-      deliveredResponseContext: {
-        response: response.response,
-        sources: response.sources,
-        confidence: response.handedOff ? null : response.confidence,
-      },
-      generatedResponseContext:
-        response.generatedCandidateResponse === undefined
-          ? null
-          : {
-              response: response.generatedCandidateResponse,
-              sources: response.generatedCandidateSources ?? [],
-              confidence: response.generatedCandidateConfidence ?? response.confidence,
-            },
-    }));
+    return responses
+      .filter(
+        (response): response is StoredAIResponseWithMessage => response.messageId !== undefined
+      )
+      .map((response) => ({
+        ...response,
+        deliveredResponseContext: {
+          response: response.response,
+          sources: response.sources,
+          confidence: response.handedOff ? null : response.confidence,
+        },
+        generatedResponseContext:
+          response.generatedCandidateResponse === undefined
+            ? null
+            : {
+                response: response.generatedCandidateResponse,
+                sources: response.generatedCandidateSources ?? [],
+                confidence: response.generatedCandidateConfidence ?? response.confidence,
+              },
+      }));
   },
 });
 
@@ -711,20 +873,19 @@ export const getAnalytics = authQuery({
 });
 
 // List available AI models (from AI Gateway)
-export const listAvailableModels = query({
-  args: {},
-  handler: async () => {
-    // Return a static list of supported models
-    // In production, this could query the AI Gateway API
-    return [
-      { id: "openai/gpt-5-nano", name: "GPT-5.1 Mini", provider: "openai" },
-      // { id: "openai/gpt-5.1", name: "GPT-5.1", provider: "openai" },
-      // { id: "anthropic/claude-3-haiku-20240307", name: "Claude 3 Haiku", provider: "anthropic" },
-      // {
-      //   id: "anthropic/claude-3-5-sonnet-20241022",
-      //   name: "Claude 3.5 Sonnet",
-      //   provider: "anthropic",
-      // },
-    ];
+export const listAvailableModels = authAction({
+  args: {
+    workspaceId: v.id("workspaces"),
+    selectedModel: v.optional(v.string()),
+  },
+  permission: "settings.workspace",
+  handler: async (_ctx, args): Promise<AvailableAIModel[]> => {
+    const discoveredModels = await discoverAvailableAIModels();
+    const fallbackModels = [
+      createAvailableAIModel(args.selectedModel),
+      createAvailableAIModel(DEFAULT_AI_SETTINGS.model),
+    ].filter((model): model is AvailableAIModel => model !== null);
+
+    return dedupeAvailableAIModels([...(discoveredModels ?? []), ...fallbackModels]);
   },
 });

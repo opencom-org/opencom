@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("ai", () => ({
   generateText: vi.fn(),
@@ -11,27 +11,131 @@ vi.mock("@ai-sdk/openai", () => ({
 }));
 
 import { generateText } from "ai";
-import { generateResponse, getAIConfigurationDiagnostic } from "../convex/aiAgentActions";
+import { listAvailableModels as listAvailableModelsDefinition } from "../convex/aiAgent";
+import {
+  generateResponse as generateResponseDefinition,
+  getAIConfigurationDiagnostic,
+} from "../convex/aiAgentActions";
 
 const mockGenerateText = vi.mocked(generateText);
+type GenerateResponseHandlerResult = {
+  response: string;
+  confidence: number;
+  sources: Array<Record<string, unknown>>;
+  handoff: boolean;
+  handoffReason: string | null;
+  messageId: string | null;
+};
+const generateResponse = generateResponseDefinition as unknown as {
+  _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<GenerateResponseHandlerResult>;
+};
+const generateResponseHandler = generateResponse;
+const listAvailableModels = listAvailableModelsDefinition as unknown as {
+  _handler: (
+    ctx: unknown,
+    args: Record<string, unknown>
+  ) => Promise<Array<{ id: string; name: string; provider: string }>>;
+};
+const listAvailableModelsHandler = listAvailableModels;
 
 describe("aiAgentActions runtime safety", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.AI_GATEWAY_API_KEY = "test-ai-key";
+    process.env.AI_GATEWAY_BASE_URL = "https://api.openai.com/v1";
   });
 
   it("returns explicit diagnostics for invalid runtime configuration", () => {
     expect(getAIConfigurationDiagnostic("")).toMatchObject({
       code: "MISSING_MODEL",
     });
-    expect(getAIConfigurationDiagnostic("invalid-model-format")).toMatchObject({
+    expect(getAIConfigurationDiagnostic("invalid/model/format")).toMatchObject({
       code: "INVALID_MODEL_FORMAT",
     });
-    expect(getAIConfigurationDiagnostic("anthropic/claude-3-5-sonnet")).toMatchObject({
-      code: "UNSUPPORTED_PROVIDER",
-      provider: "anthropic",
+    expect(
+      getAIConfigurationDiagnostic("zai/glm-5-turbo", {
+        aiGatewayApiKey: "test-ai-key",
+        aiGatewayProviderLabel: "zai",
+      })
+    ).toBeNull();
+    expect(
+      getAIConfigurationDiagnostic("glm-5-turbo", {
+        aiGatewayApiKey: "test-ai-key",
+        aiGatewayProviderLabel: "zai",
+      })
+    ).toBeNull();
+    expect(getAIConfigurationDiagnostic("anthropic/claude-3-5-sonnet")).toBeNull();
+  });
+
+  it("uses the provided gateway provider label for raw-model diagnostics", () => {
+    expect(
+      getAIConfigurationDiagnostic("glm-5-turbo", {
+        aiGatewayApiKey: undefined,
+        aiGatewayProviderLabel: "zai",
+      })
+    ).toMatchObject({
+      code: "MISSING_PROVIDER_CREDENTIALS",
+      provider: "zai",
+      model: "glm-5-turbo",
     });
+  });
+
+  it("filters provider-prefixed non-generation models and labels raw fallback models correctly", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: [
+          { id: "openai/text-embedding-3-small", created: 30 },
+          { id: "openai/gpt-5-nano", created: 20 },
+          { id: "gpt-5.1-mini", created: 10 },
+        ],
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const runQuery = vi.fn(async (_reference: unknown, args: Record<string, unknown>) => {
+      if (Object.keys(args).length === 0) {
+        return {
+          user: {
+            _id: "user_1",
+          },
+        };
+      }
+      if ("permission" in args) {
+        return null;
+      }
+      throw new Error(`Unexpected query args: ${JSON.stringify(args)}`);
+    });
+
+    const result = await listAvailableModelsHandler._handler(
+      {
+        runQuery,
+      } as any,
+      {
+        workspaceId: "workspace_1" as any,
+        selectedModel: "custom-raw-model",
+      }
+    );
+
+    expect(result.some((model) => model.id === "openai/text-embedding-3-small")).toBe(false);
+    expect(result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "openai/gpt-5-nano",
+          name: "gpt-5-nano",
+          provider: "openai",
+        }),
+        expect.objectContaining({
+          id: "custom-raw-model",
+          name: "custom-raw-model",
+          provider: "openai",
+        }),
+      ])
+    );
   });
 
   it("falls back to handoff and records diagnostics when configuration is invalid", async () => {
@@ -42,7 +146,7 @@ describe("aiAgentActions runtime safety", () => {
       if ("workspaceId" in args && "conversationId" in args === false) {
         return {
           enabled: true,
-          model: "invalid-model-format",
+          model: "invalid/model/format",
           confidenceThreshold: 0.6,
           knowledgeSources: ["articles"],
           personality: null,
@@ -68,7 +172,7 @@ describe("aiAgentActions runtime safety", () => {
       throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
     });
 
-    const result = await generateResponse._handler(
+    const result = await generateResponseHandler._handler(
       {
         runQuery,
         runMutation,
@@ -121,7 +225,7 @@ describe("aiAgentActions runtime safety", () => {
       throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
     });
 
-    const result = await generateResponse._handler(
+    const result = await generateResponseHandler._handler(
       {
         runQuery,
         runMutation,
@@ -151,7 +255,7 @@ describe("aiAgentActions runtime safety", () => {
 
     const runMutation = vi.fn();
 
-    const result = await generateResponse._handler(
+    const result = await generateResponseHandler._handler(
       {
         runQuery,
         runMutation,
@@ -407,7 +511,7 @@ describe("aiAgentActions runtime safety", () => {
       throw new Error(`Unexpected mutation args: ${JSON.stringify(args)}`);
     });
 
-    await generateResponse._handler(
+    await generateResponseHandler._handler(
       {
         runQuery,
         runMutation,
@@ -852,7 +956,7 @@ describe("aiAgentActions runtime safety", () => {
     const runMutation = vi.fn();
 
     await expect(
-      generateResponse._handler(
+      generateResponseHandler._handler(
         {
           runQuery,
           runMutation,

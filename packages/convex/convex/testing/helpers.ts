@@ -77,6 +77,8 @@ export const updateTestAllowedOrigins: ReturnType<typeof internalMutation> = wor
 export const updateTestSignupSettings: ReturnType<typeof internalMutation> = workspaceTestHelpers.updateTestSignupSettings;
 export const getTestAISettings: ReturnType<typeof internalMutation> = aiTestHelpers.getTestAISettings;
 export const updateTestAISettings: ReturnType<typeof internalMutation> = aiTestHelpers.updateTestAISettings;
+export const listTestSuggestionFeedback: ReturnType<typeof internalMutation> =
+  aiTestHelpers.listTestSuggestionFeedback;
 export const getTestVisitor: ReturnType<typeof internalMutation> = conversationTestHelpers.getTestVisitor;
 export const addTestWorkspaceMember: ReturnType<typeof internalMutation> = workspaceTestHelpers.addTestWorkspaceMember;
 export const listTestWorkspaceMembers: ReturnType<typeof internalMutation> = workspaceTestHelpers.listTestWorkspaceMembers;

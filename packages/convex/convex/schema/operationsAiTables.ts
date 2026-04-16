@@ -1,5 +1,6 @@
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
+import { CONTENT_EMBEDDING_INDEX_DIMENSIONS } from "../lib/embeddingModels";
 
 export const operationsAiTables = {
   aiAgentSettings: defineTable({
@@ -49,7 +50,7 @@ export const operationsAiTables = {
     .index("by_workspace", ["workspaceId"])
     .vectorIndex("by_embedding", {
       vectorField: "embedding",
-      dimensions: 1536,
+      dimensions: CONTENT_EMBEDDING_INDEX_DIMENSIONS,
       filterFields: ["workspaceId", "contentType"],
     }),
 
@@ -59,6 +60,7 @@ export const operationsAiTables = {
     conversationId: v.id("conversations"),
     contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
     contentId: v.string(),
+    embeddingModel: v.optional(v.string()),
     action: v.union(v.literal("used"), v.literal("dismissed")),
     createdAt: v.number(),
   })

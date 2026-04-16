@@ -76,10 +76,11 @@ export function Home({
 }: HomeProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
-  const homeConfig = useWidgetQuery(publicHomeConfigQueryRef, {
-    workspaceId,
-    isIdentified,
-  }) as NormalizedHomeConfig | undefined;
+  const homeConfig =
+    (useWidgetQuery(publicHomeConfigQueryRef, {
+      workspaceId,
+      isIdentified,
+    }) as NormalizedHomeConfig | undefined) ?? getDefaultHomeConfig();
 
   const featuredArticles = useWidgetQuery(
     visitorArticlesListQueryRef,
@@ -93,7 +94,7 @@ export function Home({
       : "skip"
   ) as Article[] | undefined;
 
-  if (!homeConfig?.enabled) {
+  if (!homeConfig.enabled) {
     return null;
   }
 

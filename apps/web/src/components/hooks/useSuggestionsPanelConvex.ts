@@ -17,6 +17,7 @@ export type SuggestionRecord = {
   snippet: string;
   content: string;
   score: number;
+  embeddingModel?: string;
 };
 
 type WorkspaceArgs = {
@@ -33,11 +34,12 @@ type TrackSuggestionArgs = {
   conversationId: Id<"conversations">;
   contentType: SuggestionRecord["type"];
   contentId: string;
+  embeddingModel?: string;
 };
 
 const AI_SETTINGS_QUERY_REF = webQueryRef<
   WorkspaceArgs,
-  { suggestionsEnabled?: boolean } | null
+  { suggestionsEnabled?: boolean; embeddingModel?: string } | null
 >("aiAgent:getSettings");
 const GET_SUGGESTIONS_ACTION_REF = webActionRef<SuggestionsArgs, SuggestionRecord[]>(
   "suggestions:getForConversation"

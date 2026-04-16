@@ -136,6 +136,12 @@ export function InboxAiReviewPanel({
                   <span className="rounded bg-muted px-2 py-0.5">
                     {confidenceLabel} {Math.round(confidenceValue * 100)}%
                   </span>
+                  <span className="rounded bg-muted px-2 py-0.5" data-testid={`inbox-ai-review-model-${response._id}`}>
+                    Model {response.model}
+                  </span>
+                  <span className="rounded bg-muted px-2 py-0.5" data-testid={`inbox-ai-review-provider-${response._id}`}>
+                    Provider {response.provider}
+                  </span>
                   {response.feedback && (
                     <span className="rounded bg-muted px-2 py-0.5">
                       Feedback {response.feedback === "helpful" ? "helpful" : "not helpful"}

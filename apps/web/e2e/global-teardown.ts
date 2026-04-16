@@ -46,7 +46,7 @@ async function globalTeardown() {
         args: {
           secret: adminSecret,
           name: "testing/helpers:cleanupE2ETestData",
-          mutationArgs: {},
+          mutationArgsJson: JSON.stringify({}),
         },
         format: "json",
       }),
