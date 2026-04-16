@@ -87,6 +87,8 @@ export interface InboxAiResponse {
   query: string;
   response: string;
   confidence: number;
+  model: string;
+  provider: string;
   handedOff: boolean;
   handoffReason?: string | null;
   messageId: Id<"messages">;

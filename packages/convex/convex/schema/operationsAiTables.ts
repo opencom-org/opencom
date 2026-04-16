@@ -60,6 +60,7 @@ export const operationsAiTables = {
     conversationId: v.id("conversations"),
     contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
     contentId: v.string(),
+    embeddingModel: v.optional(v.string()),
     action: v.union(v.literal("used"), v.literal("dismissed")),
     createdAt: v.number(),
   })

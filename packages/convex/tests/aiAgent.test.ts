@@ -174,6 +174,8 @@ describe("aiAgent", () => {
       expect(responses.length).toBeGreaterThan(0);
       expect(responses[0].query).toBe("How do I reset my password?");
       expect(responses[0].confidence).toBe(0.85);
+      expect(responses[0].model).toBe("openai/gpt-5-nano");
+      expect(responses[0].provider).toBe("openai");
     });
   });
 

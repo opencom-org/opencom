@@ -41,6 +41,7 @@ type SuggestionResult = {
   title: string;
   snippet: string;
   score: number;
+  embeddingModel?: string;
 };
 
 type SuggestionResultWithContent = SuggestionResult & { content: string };
@@ -352,6 +353,8 @@ export const getForConversation = authAction({
       return [];
     }
 
+    const embeddingModel = resolveContentEmbeddingModel(settings.embeddingModel);
+
     const messages = await runQuery(GET_RECENT_MESSAGES_REF, {
       conversationId: args.conversationId,
       limit: 5,
@@ -371,10 +374,13 @@ export const getForConversation = authAction({
       query: contextText,
       contentTypes: normalizedContentTypes,
       limit,
-      model: settings.embeddingModel,
+      model: embeddingModel,
     });
 
-    return results;
+    return results.map((result) => ({
+      ...result,
+      embeddingModel,
+    }));
   },
 });
 
@@ -488,6 +494,7 @@ export const trackUsage = authMutation({
     conversationId: v.id("conversations"),
     contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
     contentId: v.string(),
+    embeddingModel: v.optional(v.string()),
   },
   permission: "conversations.read",
   handler: async (ctx, args) => {
@@ -505,6 +512,7 @@ export const trackUsage = authMutation({
       conversationId: args.conversationId,
       contentType: args.contentType,
       contentId: args.contentId,
+      embeddingModel: args.embeddingModel,
       action: "used",
       createdAt: Date.now(),
     });
@@ -517,6 +525,7 @@ export const trackDismissal = authMutation({
     conversationId: v.id("conversations"),
     contentType: v.union(v.literal("article"), v.literal("internalArticle"), v.literal("snippet")),
     contentId: v.string(),
+    embeddingModel: v.optional(v.string()),
   },
   permission: "conversations.read",
   handler: async (ctx, args) => {
@@ -534,6 +543,7 @@ export const trackDismissal = authMutation({
       conversationId: args.conversationId,
       contentType: args.contentType,
       contentId: args.contentId,
+      embeddingModel: args.embeddingModel,
       action: "dismissed",
       createdAt: Date.now(),
     });
