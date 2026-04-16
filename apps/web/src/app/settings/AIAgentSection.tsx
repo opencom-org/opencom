@@ -6,6 +6,10 @@ import { AlertTriangle, Bot } from "lucide-react";
 import type { Id } from "@opencom/convex/dataModel";
 import { useAIAgentSectionConvex } from "./hooks/useSettingsSectionsConvex";
 
+function normalizeModelValue(value: string): string {
+  return value.trim();
+}
+
 export function AIAgentSection({
   workspaceId,
 }: {
@@ -22,6 +26,11 @@ export function AIAgentSection({
   const [suggestionsEnabled, setSuggestionsEnabled] = useState(false);
   const [embeddingModel, setEmbeddingModel] = useState("text-embedding-3-small");
   const [isSaving, setIsSaving] = useState(false);
+  const normalizedModel = normalizeModelValue(model);
+  const selectedDiscoveredModel =
+    availableModels?.some((availableModel) => availableModel.id === normalizedModel) ?? false
+      ? normalizedModel
+      : "";
 
   useEffect(() => {
     if (aiSettings) {
@@ -39,11 +48,12 @@ export function AIAgentSection({
   const handleSave = async () => {
     if (!workspaceId) return;
     setIsSaving(true);
+    const nextModel = normalizeModelValue(model);
     try {
       await updateSettings({
         workspaceId,
         enabled,
-        model,
+        model: nextModel,
         confidenceThreshold,
         knowledgeSources: knowledgeSources as ("articles" | "internalArticles" | "snippets")[],
         personality: personality || undefined,
@@ -51,6 +61,7 @@ export function AIAgentSection({
         suggestionsEnabled,
         embeddingModel,
       });
+      setModel(nextModel);
     } catch (error) {
       console.error("Failed to save AI settings:", error);
     } finally {
@@ -131,18 +142,25 @@ export function AIAgentSection({
             <div className="space-y-2">
               <label className="text-sm font-medium">AI Model</label>
               <select
-                value={model}
+                value={selectedDiscoveredModel}
                 onChange={(e) => setModel(e.target.value)}
                 className="w-full px-3 py-2 border rounded-md text-sm bg-background"
               >
+                <option value="">{availableModels ? "Choose a discovered model" : "Loading discovered models..."}</option>
                 {availableModels?.map((m: NonNullable<typeof availableModels>[number]) => (
                   <option key={m.id} value={m.id}>
                     {m.name} ({m.provider})
                   </option>
                 ))}
               </select>
+              <Input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="openai/gpt-5-nano"
+              />
               <p className="text-xs text-muted-foreground">
-                Choose the AI model for generating responses.
+                Choose a discovered model or enter one manually. Raw model IDs are interpreted
+                against the currently configured AI gateway runtime.
               </p>
             </div>
 

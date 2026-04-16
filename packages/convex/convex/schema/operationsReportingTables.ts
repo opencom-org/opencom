@@ -5,7 +5,7 @@ import { jsonRecordValidator } from "../validators";
 export const operationsReportingTables = {
   aiResponses: defineTable({
     conversationId: v.id("conversations"),
-    messageId: v.id("messages"),
+    messageId: v.optional(v.id("messages")),
     query: v.string(),
     response: v.string(),
     generatedCandidateResponse: v.optional(v.string()),
@@ -28,6 +28,7 @@ export const operationsReportingTables = {
         articleId: v.optional(v.string()),
       })
     ),
+    attemptStatus: v.optional(v.string()),
     confidence: v.number(),
     feedback: v.optional(v.union(v.literal("helpful"), v.literal("not_helpful"))),
     handedOff: v.boolean(),

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { Id } from "@opencom/convex/dataModel";
 import type { HomeCard, HomeConfig, HomeDefaultSpace, HomeTab } from "@opencom/types";
 import {
@@ -83,8 +84,8 @@ const AI_SETTINGS_QUERY_REF = webQueryRef<
     } | null;
   } | null
 >("aiAgent:getSettings");
-const AVAILABLE_MODELS_QUERY_REF = webQueryRef<
-  Record<string, never>,
+const AVAILABLE_MODELS_ACTION_REF = webActionRef<
+  { workspaceId: Id<"workspaces">; selectedModel?: string },
   Array<{ id: string; name: string; provider: string }>
 >("aiAgent:listAvailableModels");
 const UPDATE_AI_SETTINGS_REF = webMutationRef<
@@ -278,9 +279,46 @@ const TRANSFER_OWNERSHIP_REF = webMutationRef<TransferOwnershipArgs, SuccessResp
 );
 
 export function useAIAgentSectionConvex(workspaceId?: Id<"workspaces">) {
+  const aiSettings = useWebQuery(AI_SETTINGS_QUERY_REF, workspaceId ? { workspaceId } : "skip");
+  const listAvailableModels = useWebAction(AVAILABLE_MODELS_ACTION_REF);
+  const [availableModels, setAvailableModels] = useState<
+    Array<{ id: string; name: string; provider: string }> | undefined
+  >(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!workspaceId) {
+      setAvailableModels(undefined);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void listAvailableModels({
+      workspaceId,
+      selectedModel: aiSettings?.model,
+    })
+      .then((models) => {
+        if (!cancelled) {
+          setAvailableModels(models);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load available AI models:", error);
+        if (!cancelled) {
+          setAvailableModels(undefined);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, aiSettings?.model, listAvailableModels]);
+
   return {
-    aiSettings: useWebQuery(AI_SETTINGS_QUERY_REF, workspaceId ? { workspaceId } : "skip"),
-    availableModels: useWebQuery(AVAILABLE_MODELS_QUERY_REF, {}),
+    aiSettings,
+    availableModels,
     updateSettings: useWebMutation(UPDATE_AI_SETTINGS_REF),
   };
 }

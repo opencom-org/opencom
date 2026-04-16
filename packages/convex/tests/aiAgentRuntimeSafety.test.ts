@@ -19,19 +19,29 @@ describe("aiAgentActions runtime safety", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.AI_GATEWAY_API_KEY = "test-ai-key";
+    process.env.AI_GATEWAY_BASE_URL = "https://api.openai.com/v1";
   });
 
   it("returns explicit diagnostics for invalid runtime configuration", () => {
     expect(getAIConfigurationDiagnostic("")).toMatchObject({
       code: "MISSING_MODEL",
     });
-    expect(getAIConfigurationDiagnostic("invalid-model-format")).toMatchObject({
+    expect(getAIConfigurationDiagnostic("invalid/model/format")).toMatchObject({
       code: "INVALID_MODEL_FORMAT",
     });
-    expect(getAIConfigurationDiagnostic("anthropic/claude-3-5-sonnet")).toMatchObject({
-      code: "UNSUPPORTED_PROVIDER",
-      provider: "anthropic",
-    });
+    expect(
+      getAIConfigurationDiagnostic("zai/glm-5-turbo", {
+        aiGatewayApiKey: "test-ai-key",
+        aiGatewayProviderLabel: "zai",
+      })
+    ).toBeNull();
+    expect(
+      getAIConfigurationDiagnostic("glm-5-turbo", {
+        aiGatewayApiKey: "test-ai-key",
+        aiGatewayProviderLabel: "zai",
+      })
+    ).toBeNull();
+    expect(getAIConfigurationDiagnostic("anthropic/claude-3-5-sonnet")).toBeNull();
   });
 
   it("falls back to handoff and records diagnostics when configuration is invalid", async () => {
@@ -42,7 +52,7 @@ describe("aiAgentActions runtime safety", () => {
       if ("workspaceId" in args && "conversationId" in args === false) {
         return {
           enabled: true,
-          model: "invalid-model-format",
+          model: "invalid/model/format",
           confidenceThreshold: 0.6,
           knowledgeSources: ["articles"],
           personality: null,

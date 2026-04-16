@@ -274,12 +274,24 @@ describe("aiAgent", () => {
 
   describe("listAvailableModels", () => {
     it("should return list of available models", async () => {
-      const models = await client.query(api.aiAgent.listAvailableModels, {});
+      const models = await client.action(api.aiAgent.listAvailableModels, {
+        workspaceId: testWorkspaceId,
+        selectedModel: "openai/gpt-5-nano",
+      });
 
       expect(models.length).toBeGreaterThan(0);
       expect(models[0]).toHaveProperty("id");
       expect(models[0]).toHaveProperty("name");
       expect(models[0]).toHaveProperty("provider");
+    });
+
+    it("should preserve the selected model when discovery falls back", async () => {
+      const models = await client.action(api.aiAgent.listAvailableModels, {
+        workspaceId: testWorkspaceId,
+        selectedModel: "openai/gpt-5.1-mini",
+      });
+
+      expect(models.some((model) => model.id === "openai/gpt-5.1-mini")).toBe(true);
     });
   });
 });
