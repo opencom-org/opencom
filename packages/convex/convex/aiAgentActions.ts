@@ -242,6 +242,13 @@ function getShallowRunAction(ctx: { runAction: unknown }) {
   ) => Promise<Return>;
 }
 
+function maybeGetShallowRunAction(ctx: { runAction?: unknown }) {
+  if (typeof ctx.runAction !== "function") {
+    return null;
+  }
+  return getShallowRunAction(ctx as { runAction: unknown });
+}
+
 const GENERATION_FAILURE_FALLBACK_RESPONSE =
   "I'm having trouble processing your request right now. Let me connect you with a human agent.";
 const EMPTY_RESPONSE_RETRY_LIMIT = 1;
@@ -477,7 +484,7 @@ export const generateResponse = action({
 
     const runQuery = getShallowRunQuery(ctx);
     const runMutation = getShallowRunMutation(ctx);
-    const runAction = getShallowRunAction(ctx);
+    const runAction = maybeGetShallowRunAction(ctx);
     const access = await runQuery(AUTHORIZE_CONVERSATION_ACCESS_REF, {
       conversationId: args.conversationId,
       visitorId: args.visitorId,
@@ -580,19 +587,21 @@ export const generateResponse = action({
 
     // Get relevant knowledge
     let knowledgeResults: RelevantKnowledgeResult[] = [];
-    try {
-      knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
-        workspaceId: args.workspaceId,
-        query: args.query,
-        knowledgeSources: settings.knowledgeSources,
-        limit: 5,
-        embeddingModel: settings.embeddingModel,
-      });
-    } catch (retrievalError) {
-      console.error(
-        "Knowledge retrieval failed; continuing without knowledge context:",
-        retrievalError
-      );
+    if (runAction) {
+      try {
+        knowledgeResults = await runAction(GET_RELEVANT_KNOWLEDGE_FOR_RUNTIME_ACTION_REF, {
+          workspaceId: args.workspaceId,
+          query: args.query,
+          knowledgeSources: settings.knowledgeSources,
+          limit: 5,
+          embeddingModel: settings.embeddingModel,
+        });
+      } catch (retrievalError) {
+        console.error(
+          "Knowledge retrieval failed; continuing without knowledge context:",
+          retrievalError
+        );
+      }
     }
 
     // Build knowledge context for prompt

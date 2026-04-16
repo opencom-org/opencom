@@ -67,12 +67,14 @@ describe("aiAgent authorization semantics", () => {
       {
         _id: "ai_response_1",
         conversationId,
+        messageId: "message_auth_1",
         response: "Response 1",
         confidence: 0.8,
       },
       {
         _id: "ai_response_2",
         conversationId,
+        messageId: "message_auth_2",
         response: "Response 2",
         confidence: 0.7,
       },
