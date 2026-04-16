@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import { Button } from "@opencom/ui";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import type { Id } from "@opencom/convex/dataModel";
 import { strToU8, zipSync } from "fflate";
@@ -39,12 +39,8 @@ function ArticlesContent() {
   const searchParams = useSearchParams();
   const { activeWorkspace } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>(
-    ALL_COLLECTION_FILTER
-  );
-  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(
-    ALL_VISIBILITY_FILTER
-  );
+  const [collectionFilter, setCollectionFilter] = useState<CollectionFilter>(ALL_COLLECTION_FILTER);
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(ALL_VISIBILITY_FILTER);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(ALL_STATUS_FILTER);
   const [importSourceName, setImportSourceName] = useState("");
   const [importTargetCollectionId, setImportTargetCollectionId] = useState<
@@ -68,6 +64,9 @@ function ArticlesContent() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteArticleTarget | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeletingArticle, setIsDeletingArticle] = useState(false);
+  const [isBackfillingEmbeddings, setIsBackfillingEmbeddings] = useState(false);
+  const [backfillNotice, setBackfillNotice] = useState<string | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const createQueryHandledRef = useRef(false);
   const {
@@ -84,6 +83,7 @@ function ArticlesContent() {
     restoreImportRun,
     syncMarkdownFolder,
     unpublishArticle,
+    backfillEmbeddings,
   } = useArticlesAdminConvex({
     workspaceId: activeWorkspace?._id,
     isExporting,
@@ -156,6 +156,31 @@ function ArticlesContent() {
       await unpublishArticle({ id });
     } else {
       await publishArticle({ id });
+    }
+  };
+
+  const handleBackfillEmbeddings = async () => {
+    if (!activeWorkspace?._id) {
+      return;
+    }
+
+    setIsBackfillingEmbeddings(true);
+    setBackfillError(null);
+    setBackfillNotice(null);
+
+    try {
+      const result = await backfillEmbeddings({
+        workspaceId: activeWorkspace._id,
+        contentTypes: ["article", "internalArticle"],
+      });
+      setBackfillNotice(
+        `Embeddings backfilled: ${result.processed} processed, ${result.skipped} skipped (already existed)`
+      );
+    } catch (error) {
+      console.error("Failed to backfill embeddings:", error);
+      setBackfillError(error instanceof Error ? error.message : "Failed to backfill embeddings.");
+    } finally {
+      setIsBackfillingEmbeddings(false);
     }
   };
 
@@ -517,18 +542,38 @@ function ArticlesContent() {
           <h1 className="text-2xl font-bold">Articles</h1>
           <p className="text-gray-500">Manage public and internal knowledge articles</p>
         </div>
-        <div className="flex gap-2">
-          <Link href="/articles/collections">
-            <Button variant="outline">Manage Collections</Button>
-          </Link>
-          <Button variant="outline" onClick={() => void handleCreateArticle("internal")}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Internal Article
-          </Button>
-          <Button onClick={() => void handleCreateArticle("public")}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Article
-          </Button>
+        <div className="flex flex-col gap-2 items-end">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => void handleBackfillEmbeddings()}
+              disabled={
+                isBackfillingEmbeddings ||
+                !activeWorkspace?._id ||
+                (activeWorkspace.role !== "owner" && activeWorkspace.role !== "admin")
+              }
+            >
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${isBackfillingEmbeddings ? "animate-spin" : ""}`}
+              />
+              {isBackfillingEmbeddings ? "Refreshing..." : "Refresh Embeddings"}
+            </Button>
+            <Link href="/articles/collections">
+              <Button variant="outline">Manage Collections</Button>
+            </Link>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => void handleCreateArticle("internal")}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Internal Article
+            </Button>
+            <Button onClick={() => void handleCreateArticle("public")}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Article
+            </Button>
+          </div>
+          {backfillNotice && <p className="text-sm text-green-600">{backfillNotice}</p>}
+          {backfillError && <p className="text-sm text-red-600">{backfillError}</p>}
         </div>
       </div>
 

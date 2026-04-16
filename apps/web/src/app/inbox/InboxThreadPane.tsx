@@ -75,10 +75,7 @@ interface InboxThreadPaneProps {
   onToggleKnowledgePicker: () => void;
   onKnowledgeSearchChange: (value: string) => void;
   onCloseKnowledgePicker: () => void;
-  onInsertKnowledgeContent: (
-    item: InboxKnowledgeItem,
-    action?: "content" | "link"
-  ) => void;
+  onInsertKnowledgeContent: (item: InboxKnowledgeItem, action?: "content" | "link") => void;
   onSaveDraftAsSnippet: () => void;
   onUpdateSnippetFromDraft: () => void;
   getConversationIdentityLabel: (conversation: InboxConversation) => string;
@@ -201,7 +198,7 @@ export function InboxThreadPane({
 
     if (item.type === "article" && item.slug) {
       return (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-1">
           <Button
             size="sm"
             variant="outline"
@@ -268,74 +265,118 @@ export function InboxThreadPane({
     >
       {selectedConversationId ? (
         <>
-            <div className="p-4 border-b space-y-3">
-              <div className="flex items-center gap-2 min-w-0">
-                {isCompactViewport && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onBackToList}
-                    data-testid="inbox-back-to-list"
-                    title="Back to conversations"
+          <div className="p-4 border-b space-y-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {isCompactViewport && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onBackToList}
+                  data-testid="inbox-back-to-list"
+                  title="Back to conversations"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back
+                </Button>
+              )}
+              <h2 className="font-semibold truncate">
+                {selectedConversation
+                  ? getConversationIdentityLabel(selectedConversation)
+                  : "Loading conversation..."}
+              </h2>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onResolveConversation}
+                disabled={isResolving || selectedConversation?.status === "closed"}
+                data-testid="inbox-resolve-button"
+                title="Resolve Conversation"
+              >
+                {isResolving ? "Resolving..." : "Resolve"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onConvertToTicket}
+                disabled={isConvertingTicket}
+                data-testid="inbox-convert-ticket-button"
+                title="Convert to Ticket"
+              >
+                <Ticket className="h-4 w-4 mr-1" />
+                {isConvertingTicket ? "Creating..." : "Create Ticket"}
+              </Button>
+              {selectedConversation?.visitorId ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onOpenVisitorProfile}
+                  data-testid="inbox-open-visitor-profile"
+                  title="View visitor profile"
+                >
+                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                  View visitor
+                </Button>
+              ) : null}
+              {!isCompactViewport && (
+                <Button
+                  variant={aiReviewPanelOpen ? "default" : "outline"}
+                  size="sm"
+                  onClick={onToggleAiReview}
+                  data-testid="inbox-open-ai-review"
+                >
+                  <Bot className="h-4 w-4 mr-1" />
+                  AI review
+                </Button>
+              )}
+              {!isCompactViewport && isSidecarEnabled && (
+                <Button
+                  variant={suggestionsPanelOpen ? "default" : "outline"}
+                  size="sm"
+                  onClick={onToggleSuggestions}
+                  data-testid="inbox-open-suggestions"
+                >
+                  <MessageSquareText className="h-4 w-4 mr-1" />
+                  Suggestions
+                  <span
+                    className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
+                      suggestionsPanelOpen
+                        ? "bg-primary-foreground/20 text-primary-foreground"
+                        : "bg-primary/10 text-primary"
+                    }`}
                   >
-                    <ArrowLeft className="h-4 w-4 mr-1" />
-                    Back
-                  </Button>
-                )}
-                <h2 className="font-semibold truncate">
-                  {selectedConversation
-                    ? getConversationIdentityLabel(selectedConversation)
-                    : "Loading conversation..."}
-                </h2>
+                    {isSuggestionsCountLoading ? "…" : suggestionsCount}
+                  </span>
+                </Button>
+              )}
+            </div>
+            {selectedConversation?.aiWorkflow?.state === "handoff" && (
+              <div
+                className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
+                data-testid="inbox-handoff-context-banner"
+              >
+                <Bot className="h-3 w-3" />
+                <span className="font-medium">AI handoff</span>
+                <span className="truncate">
+                  {getHandoffReasonLabel(selectedConversation.aiWorkflow.handoffReason)}
+                </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+            )}
+            {isCompactViewport && (
+              <div className="flex items-center gap-2" data-testid="inbox-compact-aux-actions">
                 <Button
-                  variant="outline"
+                  variant={activeCompactPanel === "ai-review" ? "default" : "outline"}
                   size="sm"
-                  onClick={onResolveConversation}
-                  disabled={isResolving || selectedConversation?.status === "closed"}
-                  data-testid="inbox-resolve-button"
-                  title="Resolve Conversation"
+                  onClick={onToggleAiReview}
+                  data-testid="inbox-open-ai-review"
                 >
-                  {isResolving ? "Resolving..." : "Resolve"}
+                  <Bot className="h-4 w-4 mr-1" />
+                  AI review
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onConvertToTicket}
-                  disabled={isConvertingTicket}
-                  data-testid="inbox-convert-ticket-button"
-                  title="Convert to Ticket"
-                >
-                  <Ticket className="h-4 w-4 mr-1" />
-                  {isConvertingTicket ? "Creating..." : "Create Ticket"}
-                </Button>
-                {selectedConversation?.visitorId ? (
+                {isSidecarEnabled && (
                   <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onOpenVisitorProfile}
-                    data-testid="inbox-open-visitor-profile"
-                    title="View visitor profile"
-                  >
-                    <ArrowUpRight className="h-4 w-4 mr-1" />
-                    View visitor
-                  </Button>
-                ) : null}
-                {!isCompactViewport && (
-                  <Button
-                    variant={aiReviewPanelOpen ? "default" : "outline"}
-                    size="sm"
-                    onClick={onToggleAiReview}
-                    data-testid="inbox-open-ai-review"
-                  >
-                    <Bot className="h-4 w-4 mr-1" />
-                    AI review
-                  </Button>
-                )}
-                {!isCompactViewport && isSidecarEnabled && (
-                  <Button
-                    variant={suggestionsPanelOpen ? "default" : "outline"}
+                    variant={activeCompactPanel === "suggestions" ? "default" : "outline"}
                     size="sm"
                     onClick={onToggleSuggestions}
                     data-testid="inbox-open-suggestions"
@@ -344,7 +385,7 @@ export function InboxThreadPane({
                     Suggestions
                     <span
                       className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
-                        suggestionsPanelOpen
+                        activeCompactPanel === "suggestions"
                           ? "bg-primary-foreground/20 text-primary-foreground"
                           : "bg-primary/10 text-primary"
                       }`}
@@ -354,312 +395,269 @@ export function InboxThreadPane({
                   </Button>
                 )}
               </div>
-              {selectedConversation?.aiWorkflow?.state === "handoff" && (
-                <div
-                  className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800"
-                  data-testid="inbox-handoff-context-banner"
-                >
-                  <Bot className="h-3 w-3" />
-                  <span className="font-medium">AI handoff</span>
-                  <span className="truncate">
-                    {getHandoffReasonLabel(selectedConversation.aiWorkflow.handoffReason)}
-                  </span>
-                </div>
-              )}
-              {isCompactViewport && (
-                <div className="flex items-center gap-2" data-testid="inbox-compact-aux-actions">
-                  <Button
-                    variant={activeCompactPanel === "ai-review" ? "default" : "outline"}
-                    size="sm"
-                    onClick={onToggleAiReview}
-                    data-testid="inbox-open-ai-review"
-                  >
-                    <Bot className="h-4 w-4 mr-1" />
-                    AI review
-                  </Button>
-                  {isSidecarEnabled && (
-                    <Button
-                      variant={activeCompactPanel === "suggestions" ? "default" : "outline"}
-                      size="sm"
-                      onClick={onToggleSuggestions}
-                      data-testid="inbox-open-suggestions"
-                    >
-                      <MessageSquareText className="h-4 w-4 mr-1" />
-                      Suggestions
-                      <span
-                        className={`ml-2 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-xs ${
-                          activeCompactPanel === "suggestions"
-                            ? "bg-primary-foreground/20 text-primary-foreground"
-                            : "bg-primary/10 text-primary"
-                        }`}
-                      >
-                        {isSuggestionsCountLoading ? "…" : suggestionsCount}
-                      </span>
-                    </Button>
-                  )}
-                </div>
-              )}
+            )}
+          </div>
+
+          {workflowError && (
+            <div
+              className="px-4 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700"
+              data-testid="inbox-workflow-error"
+            >
+              {workflowError}
             </div>
+          )}
 
-            {workflowError && (
-              <div
-                className="px-4 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700"
-                data-testid="inbox-workflow-error"
-              >
-                {workflowError}
+          {selectedConversation?.visitor?.identityVerified === false && (
+            <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-sm text-amber-800">
+              <ShieldAlert className="h-4 w-4 flex-shrink-0" />
+              <span>
+                <strong>Unverified user:</strong> This visitor&apos;s identity has not been
+                verified. Messages may be from an impersonator.
+              </span>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4" data-testid="inbox-message-list">
+            {messages === undefined ? (
+              <div className="text-sm text-muted-foreground" data-testid="inbox-messages-loading">
+                Loading conversation...
               </div>
-            )}
-
-            {selectedConversation?.visitor?.identityVerified === false && (
-              <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2 text-sm text-amber-800">
-                <ShieldAlert className="h-4 w-4 flex-shrink-0" />
-                <span>
-                  <strong>Unverified user:</strong> This visitor&apos;s identity has not been
-                  verified. Messages may be from an impersonator.
-                </span>
+            ) : messages.length === 0 ? (
+              <div className="text-sm text-muted-foreground" data-testid="inbox-messages-empty">
+                No messages yet
               </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4" data-testid="inbox-message-list">
-              {messages === undefined ? (
-                <div className="text-sm text-muted-foreground" data-testid="inbox-messages-loading">
-                  Loading conversation...
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="text-sm text-muted-foreground" data-testid="inbox-messages-empty">
-                  No messages yet
-                </div>
-              ) : (
-                messages.map((message) => (
+            ) : (
+              messages.map((message) => (
+                <div
+                  key={message._id}
+                  id={`message-${message._id}`}
+                  data-testid={`message-item-${message._id}`}
+                  data-highlighted={highlightedMessageId === message._id ? "true" : "false"}
+                  className={`flex ${
+                    message.senderType === "agent" || message.senderType === "bot"
+                      ? "justify-end"
+                      : "justify-start"
+                  }`}
+                >
                   <div
-                    key={message._id}
-                    id={`message-${message._id}`}
-                    data-testid={`message-item-${message._id}`}
-                    data-highlighted={highlightedMessageId === message._id ? "true" : "false"}
-                    className={`flex ${
-                      message.senderType === "agent" || message.senderType === "bot"
-                        ? "justify-end"
-                        : "justify-start"
-                    }`}
+                    className={`max-w-[70%] px-4 py-2 rounded-2xl ${
+                      message.senderType === "agent"
+                        ? "bg-primary text-primary-foreground"
+                        : message.senderType === "bot"
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-muted"
+                    } ${highlightedMessageId === message._id ? "ring-2 ring-primary/60 ring-offset-1" : ""}`}
                   >
-                    <div
-                      className={`max-w-[70%] px-4 py-2 rounded-2xl ${
-                        message.senderType === "agent"
-                          ? "bg-primary text-primary-foreground"
-                          : message.senderType === "bot"
-                            ? "bg-muted text-muted-foreground"
-                            : "bg-muted"
-                      } ${highlightedMessageId === message._id ? "ring-2 ring-primary/60 ring-offset-1" : ""}`}
-                    >
-                      {message.channel === "email" && message.emailMetadata?.subject && (
-                        <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
-                          <Mail className="h-3 w-3" />
-                          <span className="font-medium">{message.emailMetadata.subject}</span>
-                        </div>
-                      )}
-                      {message.channel === "email" &&
-                        message.senderType === "visitor" &&
-                        message.emailMetadata?.from && (
-                          <div className="text-xs opacity-70 mb-2">
-                            From: {message.emailMetadata.from}
-                          </div>
-                        )}
-                      {message.content.trim().length > 0 && (
-                        <p className="whitespace-pre-wrap">
-                          {message.content.replace(/<[^>]*>/g, "")}
-                        </p>
-                      )}
-                      {message.emailMetadata?.attachments &&
-                        message.emailMetadata.attachments.length > 0 && (
-                          <div className="flex items-center gap-1 text-xs opacity-70 mt-2">
-                            <Paperclip className="h-3 w-3" />
-                            <span>{message.emailMetadata.attachments.length} attachment(s)</span>
-                          </div>
-                        )}
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          {message.attachments.map((attachment) => (
-                            <div
-                              key={attachment._id}
-                              className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
-                                message.senderType === "agent"
-                                  ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground"
-                                  : "border-border bg-background/80 text-foreground"
-                              }`}
-                            >
-                              {attachment.url ? (
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex min-w-0 flex-1 items-center justify-between gap-3"
-                                >
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
-                                    <span className="truncate">{attachment.fileName}</span>
-                                  </span>
-                                  <span className="flex-shrink-0 text-xs opacity-70">
-                                    {formatSupportAttachmentSize(attachment.size)}
-                                  </span>
-                                </a>
-                              ) : (
-                                <>
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
-                                    <span className="truncate">{attachment.fileName}</span>
-                                  </span>
-                                  <span className="ml-3 flex-shrink-0 text-xs opacity-70">
-                                    {formatSupportAttachmentSize(attachment.size)}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-xs opacity-70 mt-1">
-                        <span>
-                          {message.channel === "email" && <Mail className="h-3 w-3 inline mr-1" />}
-                          {message.senderType === "bot"
-                            ? "Bot"
-                            : message.senderType === "agent"
-                              ? "You"
-                              : "Visitor"}{" "}
-                          • {new Date(message.createdAt).toLocaleTimeString()}
-                        </span>
-                        {message.channel === "email" &&
-                          message.senderType === "agent" &&
-                          message.deliveryStatus && (
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] ${
-                                message.deliveryStatus === "sent" || message.deliveryStatus === "delivered"
-                                  ? "bg-green-100 text-green-700"
-                                  : message.deliveryStatus === "pending"
-                                    ? "bg-yellow-100 text-yellow-700"
-                                    : "bg-red-100 text-red-700"
-                              }`}
-                            >
-                              {message.deliveryStatus}
-                            </span>
-                          )}
+                    {message.channel === "email" && message.emailMetadata?.subject && (
+                      <div className="flex items-center gap-1 text-xs opacity-70 mb-1">
+                        <Mail className="h-3 w-3" />
+                        <span className="font-medium">{message.emailMetadata.subject}</span>
                       </div>
+                    )}
+                    {message.channel === "email" &&
+                      message.senderType === "visitor" &&
+                      message.emailMetadata?.from && (
+                        <div className="text-xs opacity-70 mb-2">
+                          From: {message.emailMetadata.from}
+                        </div>
+                      )}
+                    {message.content.trim().length > 0 && (
+                      <p className="whitespace-pre-wrap">
+                        {message.content.replace(/<[^>]*>/g, "")}
+                      </p>
+                    )}
+                    {message.emailMetadata?.attachments &&
+                      message.emailMetadata.attachments.length > 0 && (
+                        <div className="flex items-center gap-1 text-xs opacity-70 mt-2">
+                          <Paperclip className="h-3 w-3" />
+                          <span>{message.emailMetadata.attachments.length} attachment(s)</span>
+                        </div>
+                      )}
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {message.attachments.map((attachment) => (
+                          <div
+                            key={attachment._id}
+                            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
+                              message.senderType === "agent"
+                                ? "border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground"
+                                : "border-border bg-background/80 text-foreground"
+                            }`}
+                          >
+                            {attachment.url ? (
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex min-w-0 flex-1 items-center justify-between gap-3"
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+                                  <span className="truncate">{attachment.fileName}</span>
+                                </span>
+                                <span className="flex-shrink-0 text-xs opacity-70">
+                                  {formatSupportAttachmentSize(attachment.size)}
+                                </span>
+                              </a>
+                            ) : (
+                              <>
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+                                  <span className="truncate">{attachment.fileName}</span>
+                                </span>
+                                <span className="ml-3 flex-shrink-0 text-xs opacity-70">
+                                  {formatSupportAttachmentSize(attachment.size)}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs opacity-70 mt-1">
+                      <span>
+                        {message.channel === "email" && <Mail className="h-3 w-3 inline mr-1" />}
+                        {message.senderType === "bot"
+                          ? "Bot"
+                          : message.senderType === "agent"
+                            ? "You"
+                            : "Visitor"}{" "}
+                        • {new Date(message.createdAt).toLocaleTimeString()}
+                      </span>
+                      {message.channel === "email" &&
+                        message.senderType === "agent" &&
+                        message.deliveryStatus && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] ${
+                              message.deliveryStatus === "sent" ||
+                              message.deliveryStatus === "delivered"
+                                ? "bg-green-100 text-green-700"
+                                : message.deliveryStatus === "pending"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {message.deliveryStatus}
+                          </span>
+                        )}
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-
-            <div className="p-4 border-t relative">
-              {showKnowledgePicker && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 overflow-hidden rounded-xl border bg-white shadow-lg">
-                  <div className="flex items-center gap-3 border-b px-3 py-3">
-                    <BookOpen className="h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={knowledgeSearch}
-                      onChange={(event) => onKnowledgeSearchChange(event.target.value)}
-                      placeholder="Search articles and snippets... (Ctrl+K)"
-                      className="flex-1 text-sm outline-none"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={onCloseKnowledgePicker}
-                      className="rounded p-1 hover:bg-muted"
-                      aria-label="Close knowledge picker"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="max-h-96 space-y-4 overflow-y-auto p-3">
-                    {!isSearchingKnowledge && hasRecentContent ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Recently Used
-                        </p>
-                        <div className="space-y-2">
-                          {recentContent?.map((item) => renderKnowledgeItem(item))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {!isSearchingKnowledge && hasSnippetLibrary ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Snippets
-                        </p>
-                        <div className="space-y-2">
-                          {allSnippets?.map((snippet) =>
-                            renderKnowledgeItem({
-                              id: snippet._id,
-                              type: "snippet",
-                              title: snippet.name,
-                              content: snippet.content,
-                              snippet: snippet.shortcut
-                                ? `/${snippet.shortcut} • ${snippet.content}`
-                                : snippet.content,
-                            })
-                          )}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {isSearchingKnowledge ? (
-                      hasKnowledgeResults ? (
-                        <div className="space-y-2">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Search Results
-                          </p>
-                          <div className="space-y-2">
-                            {knowledgeResults?.map((item) => renderKnowledgeItem(item))}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="py-6 text-center text-sm text-muted-foreground">
-                          No matching knowledge found.
-                        </p>
-                      )
-                    ) : null}
-
-                    {!isSearchingKnowledge && !hasRecentContent && !hasSnippetLibrary ? (
-                      <p className="py-6 text-center text-sm text-muted-foreground">
-                        Start typing to search knowledge, or save this draft as a snippet.
-                      </p>
-                    ) : null}
-                  </div>
                 </div>
-              )}
+              ))
+            )}
+          </div>
 
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={attachmentInputRef}
-                  type="file"
-                  multiple
-                  accept={SUPPORT_ATTACHMENT_ACCEPT}
-                  className="hidden"
-                  onChange={handleAttachmentInputChange}
-                />
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => attachmentInputRef.current?.click()}
-                    title="Attach files"
-                    disabled={isSending || isUploadingAttachments}
-                    data-testid="inbox-attach-button"
+          <div className="p-4 border-t relative">
+            {showKnowledgePicker && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 overflow-hidden rounded-xl border bg-white shadow-lg">
+                <div className="flex items-center gap-3 border-b px-3 py-3">
+                  <BookOpen className="h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={knowledgeSearch}
+                    onChange={(event) => onKnowledgeSearchChange(event.target.value)}
+                    placeholder="Search articles and snippets... (Ctrl+K)"
+                    className="flex-1 text-sm outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={onCloseKnowledgePicker}
+                    className="rounded p-1 hover:bg-muted"
+                    aria-label="Close knowledge picker"
                   >
-                    <Paperclip className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={showKnowledgePicker ? "default" : "ghost"}
-                    size="icon"
-                    onClick={onToggleKnowledgePicker}
-                    title="Search knowledge (Ctrl+K or /)"
-                  >
-                    <BookOpen className="h-4 w-4" />
-                  </Button>
-                  {/* <Button
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="max-h-96 space-y-4 overflow-y-auto p-3">
+                  {!isSearchingKnowledge && hasRecentContent ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Recently Used
+                      </p>
+                      <div className="space-y-2">
+                        {recentContent?.map((item) => renderKnowledgeItem(item))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {!isSearchingKnowledge && hasSnippetLibrary ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Snippets
+                      </p>
+                      <div className="space-y-2">
+                        {allSnippets?.map((snippet) =>
+                          renderKnowledgeItem({
+                            id: snippet._id,
+                            type: "snippet",
+                            title: snippet.name,
+                            content: snippet.content,
+                            snippet: snippet.shortcut
+                              ? `/${snippet.shortcut} • ${snippet.content}`
+                              : snippet.content,
+                          })
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {isSearchingKnowledge ? (
+                    hasKnowledgeResults ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Search Results
+                        </p>
+                        <div className="space-y-2">
+                          {knowledgeResults?.map((item) => renderKnowledgeItem(item))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="py-6 text-center text-sm text-muted-foreground">
+                        No matching knowledge found.
+                      </p>
+                    )
+                  ) : null}
+
+                  {!isSearchingKnowledge && !hasRecentContent && !hasSnippetLibrary ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      Start typing to search knowledge, or save this draft as a snippet.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                accept={SUPPORT_ATTACHMENT_ACCEPT}
+                className="hidden"
+                onChange={handleAttachmentInputChange}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => attachmentInputRef.current?.click()}
+                  title="Attach files"
+                  disabled={isSending || isUploadingAttachments}
+                  data-testid="inbox-attach-button"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={showKnowledgePicker ? "default" : "ghost"}
+                  size="icon"
+                  onClick={onToggleKnowledgePicker}
+                  title="Search knowledge (Ctrl+K or /)"
+                >
+                  <BookOpen className="h-4 w-4" />
+                </Button>
+                {/* <Button
                     variant="outline"
                     size="sm"
                     onClick={onSaveDraftAsSnippet}
@@ -668,59 +666,59 @@ export function InboxThreadPane({
                     <Zap className="mr-2 h-4 w-4" />
                     Save snippet
                   </Button> */}
-                  {/* {canUpdateSnippetFromDraft ? (
+                {/* {canUpdateSnippetFromDraft ? (
                     <Button variant="outline" size="sm" onClick={onUpdateSnippetFromDraft}>
                       Update {lastInsertedSnippetName ? `"${lastInsertedSnippetName}"` : "snippet"}
                     </Button>
                   ) : null} */}
-                </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  {pendingAttachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2" data-testid="inbox-pending-attachments">
-                      {pendingAttachments.map((attachment) => (
-                        <div
-                          key={attachment.attachmentId}
-                          className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs"
-                        >
-                          <Paperclip className="h-3 w-3" />
-                          <span className="max-w-[220px] truncate">{attachment.fileName}</span>
-                          <span className="text-muted-foreground">
-                            {formatSupportAttachmentSize(attachment.size)}
-                          </span>
-                          <button
-                            type="button"
-                            className="text-muted-foreground hover:text-foreground"
-                            onClick={() => onRemovePendingAttachment(attachment.attachmentId)}
-                            aria-label={`Remove ${attachment.fileName}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <Input
-                    ref={replyInputRef}
-                    value={inputValue}
-                    onChange={(event) => onInputChange(event.target.value)}
-                    onKeyDown={onInputKeyDown}
-                    placeholder="Type a message... (/ or Ctrl+K for knowledge)"
-                    data-testid="inbox-reply-input"
-                    disabled={isSending || isUploadingAttachments}
-                    className="flex-1"
-                  />
-                </div>
-                <Button
-                  onClick={onSendMessage}
-                  size="icon"
-                  data-testid="inbox-send-button"
-                  aria-label="Send reply"
-                  disabled={isSending || isUploadingAttachments || !canSendReply}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
               </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                {pendingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2" data-testid="inbox-pending-attachments">
+                    {pendingAttachments.map((attachment) => (
+                      <div
+                        key={attachment.attachmentId}
+                        className="inline-flex items-center gap-2 rounded-full border bg-muted px-3 py-1 text-xs"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        <span className="max-w-[220px] truncate">{attachment.fileName}</span>
+                        <span className="text-muted-foreground">
+                          {formatSupportAttachmentSize(attachment.size)}
+                        </span>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => onRemovePendingAttachment(attachment.attachmentId)}
+                          aria-label={`Remove ${attachment.fileName}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <Input
+                  ref={replyInputRef}
+                  value={inputValue}
+                  onChange={(event) => onInputChange(event.target.value)}
+                  onKeyDown={onInputKeyDown}
+                  placeholder="Type a message... (/ or Ctrl+K for knowledge)"
+                  data-testid="inbox-reply-input"
+                  disabled={isSending || isUploadingAttachments}
+                  className="flex-1"
+                />
+              </div>
+              <Button
+                onClick={onSendMessage}
+                size="icon"
+                data-testid="inbox-send-button"
+                aria-label="Send reply"
+                disabled={isSending || isUploadingAttachments || !canSendReply}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
             </div>
+          </div>
         </>
       ) : (
         <div className="flex-1 flex items-center justify-center text-muted-foreground">

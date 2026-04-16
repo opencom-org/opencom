@@ -315,6 +315,8 @@ export async function waitForSurveyVisible(page: Page, timeout = 10000): Promise
 export async function submitNPSRating(page: Page, rating: number): Promise<void> {
   const frame = getWidgetContainer(page);
 
+  await dismissTour(page);
+
   // Click the rating button (0-10)
   await frame
     .locator(

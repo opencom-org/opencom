@@ -87,6 +87,7 @@ export const inboxConversationTables = {
     aiWorkflowState: v.optional(
       v.union(v.literal("none"), v.literal("ai_handled"), v.literal("handoff"))
     ),
+    aiTurnSequence: v.optional(v.number()),
     aiHandoffReason: v.optional(v.string()),
     aiLastConfidence: v.optional(v.number()),
     aiLastResponseAt: v.optional(v.number()),

@@ -22,11 +22,14 @@ vi.mock("../convex/widgetSessions", () => ({
 import { getAuthenticatedUserFromSession } from "../convex/auth";
 import { requirePermission } from "../convex/permissions";
 import { resolveVisitorFromSession } from "../convex/widgetSessions";
-import { getConversationResponses } from "../convex/aiAgent";
+import { getConversationResponses as getConversationResponsesDefinition } from "../convex/aiAgent";
 
 const mockGetAuthenticatedUserFromSession = vi.mocked(getAuthenticatedUserFromSession);
 const mockRequirePermission = vi.mocked(requirePermission);
 const mockResolveVisitorFromSession = vi.mocked(resolveVisitorFromSession);
+const getConversationResponses = getConversationResponsesDefinition as unknown as {
+  _handler: (ctx: unknown, args: Record<string, unknown>) => Promise<Array<Record<string, unknown>>>;
+};
 
 describe("aiAgent authorization semantics", () => {
   beforeEach(() => {
@@ -67,14 +70,26 @@ describe("aiAgent authorization semantics", () => {
       {
         _id: "ai_response_1",
         conversationId,
+        messageId: "message_auth_1",
+        query: "How can I reset my password?",
         response: "Response 1",
+        sources: [],
         confidence: 0.8,
+        handedOff: false,
+        model: "openai/gpt-5-nano",
+        provider: "openai",
       },
       {
         _id: "ai_response_2",
         conversationId,
+        messageId: "message_auth_2",
+        query: "Can you help with billing?",
         response: "Response 2",
+        sources: [],
         confidence: 0.7,
+        handedOff: false,
+        model: "anthropic/claude-3-5-haiku-latest",
+        provider: "anthropic",
       },
     ];
 
@@ -118,6 +133,10 @@ describe("aiAgent authorization semantics", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0].conversationId).toBe(conversationId);
+    expect(result[0].model).toBe("openai/gpt-5-nano");
+    expect(result[0].provider).toBe("openai");
+    expect(result[1].model).toBe("anthropic/claude-3-5-haiku-latest");
+    expect(result[1].provider).toBe("anthropic");
   });
 
   it("exposes delivered and generated contexts with legacy compatibility", async () => {

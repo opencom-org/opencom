@@ -38,6 +38,25 @@ function getShallowRunMutation(ctx: { runMutation: unknown }) {
   ) => Promise<unknown>;
 }
 
+function parseMutationArgsJson(mutationArgsJson: string): Record<string, unknown> {
+  if (!mutationArgsJson.trim()) {
+    return {};
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(mutationArgsJson);
+  } catch {
+    throw new Error("mutationArgsJson must be valid JSON.");
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("mutationArgsJson must decode to a JSON object.");
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
 export function isAuthorizedAdminSecret(providedSecret: string, expectedSecret: string): boolean {
   const providedBytes = toSecretBytes(providedSecret);
   const expectedBytes = toSecretBytes(expectedSecret);
@@ -62,9 +81,9 @@ export const runTestMutation = action({
   args: {
     secret: v.string(),
     name: v.string(),
-    mutationArgs: v.any(),
+    mutationArgsJson: v.string(),
   },
-  handler: async (ctx, { secret, name, mutationArgs }) => {
+  handler: async (ctx, { secret, name, mutationArgsJson }) => {
     // Validate admin secret
     const expected = process.env.TEST_ADMIN_SECRET;
     if (!expected) {
@@ -92,6 +111,6 @@ export const runTestMutation = action({
     }
 
     const runMutation = getShallowRunMutation(ctx);
-    return await runMutation(getInternalRef(name), (mutationArgs ?? {}) as Record<string, unknown>);
+    return await runMutation(getInternalRef(name), parseMutationArgsJson(mutationArgsJson));
   },
 });

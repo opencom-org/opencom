@@ -48,6 +48,54 @@
       "expiresOn": "2026-06-30",
       "reason": "Transitive dev dependency through eslint -> file-entry-cache -> flat-cache -> flatted. Only used in dev toolchain for ESLint cache, not in production code.",
       "cleanupCriteria": "Remove when ESLint or flat-cache upgrades to flatted >= 3.3.4 which includes the fix."
+    },
+    {
+      "id": "1114591",
+      "module": "undici",
+      "owner": "platform-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
+      "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
+    },
+    {
+      "id": "1114592",
+      "module": "undici",
+      "owner": "platform-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
+      "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
+    },
+    {
+      "id": "1114637",
+      "module": "undici",
+      "owner": "platform-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
+      "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
+    },
+    {
+      "id": "1114638",
+      "module": "undici",
+      "owner": "platform-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
+      "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
+    },
+    {
+      "id": "1114639",
+      "module": "undici",
+      "owner": "platform-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
+      "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
+    },
+    {
+      "id": "1114640",
+      "module": "undici",
+      "owner": "platform-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
+      "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
     }
   ]
 }

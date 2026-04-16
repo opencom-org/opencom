@@ -71,6 +71,26 @@ export function ConversationMessageList({
   renderedMessages,
   messagesEndRef,
 }: ConversationMessageListProps) {
+  const handleMessageClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target;
+    if (!target) {
+      return;
+    }
+    const element = target instanceof Element ? target : (target as Text).parentElement;
+    if (!element) {
+      return;
+    }
+    const articleLink = element.closest("[data-article-id]");
+    if (articleLink) {
+      event.preventDefault();
+      event.stopPropagation();
+      const articleId = articleLink.getAttribute("data-article-id");
+      if (articleId) {
+        onSelectArticle(articleId as Id<"articles">);
+      }
+    }
+  };
+
   return (
     <div className="opencom-messages" data-testid="widget-message-list">
       {!messages || messages.length === 0 ? (
@@ -102,7 +122,9 @@ export function ConversationMessageList({
 
           return (
             <div key={msg._id} className="opencom-message-wrapper">
-              {showTimestamp && <div className="opencom-message-timestamp">{formatTime(msg._creationTime)}</div>}
+              {showTimestamp && (
+                <div className="opencom-message-timestamp">{formatTime(msg._creationTime)}</div>
+              )}
               <div
                 className={`opencom-message opencom-message-${
                   msg.senderType === "visitor" ? "user" : "agent"
@@ -115,7 +137,10 @@ export function ConversationMessageList({
                   </span>
                 )}
                 {isHumanAgent && (
-                  <span className="opencom-human-badge" data-testid={`widget-human-agent-badge-${msg._id}`}>
+                  <span
+                    className="opencom-human-badge"
+                    data-testid={`widget-human-agent-badge-${msg._id}`}
+                  >
                     <User /> {humanAgentName}
                   </span>
                 )}
@@ -125,6 +150,7 @@ export function ConversationMessageList({
                     dangerouslySetInnerHTML={{
                       __html: renderedMessages.get(msg._id) ?? "",
                     }}
+                    onClick={handleMessageClick}
                   />
                 )}
                 {msg.attachments && msg.attachments.length > 0 && (
@@ -150,7 +176,9 @@ export function ConversationMessageList({
                                     type="button"
                                     className="opencom-ai-source-link"
                                     data-testid={`widget-ai-source-link-${aiData._id}-${sourceIndex}`}
-                                    onClick={() => onSelectArticle(articleSourceId as Id<"articles">)}
+                                    onClick={() =>
+                                      onSelectArticle(articleSourceId as Id<"articles">)
+                                    }
                                   >
                                     {source.title}
                                   </button>

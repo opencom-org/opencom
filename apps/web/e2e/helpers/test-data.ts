@@ -37,7 +37,11 @@ async function callInternalMutation<T>(path: string, args: Record<string, unknow
     },
     body: JSON.stringify({
       path: "testAdmin:runTestMutation",
-      args: { secret: getAdminSecret(), name: path, mutationArgs: args },
+      args: {
+        secret: getAdminSecret(),
+        name: path,
+        mutationArgsJson: JSON.stringify(args),
+      },
       format: "json",
     }),
   });

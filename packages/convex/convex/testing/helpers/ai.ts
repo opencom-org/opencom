@@ -173,6 +173,19 @@ const updateTestAISettings = internalMutation({
   },
 });
 
+const listTestSuggestionFeedback = internalMutation({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("suggestionFeedback")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+      .order("desc")
+      .collect();
+  },
+});
+
 /**
  * Gets a visitor by ID directly (bypasses auth).
  */
@@ -181,4 +194,5 @@ export const aiTestHelpers: Record<string, ReturnType<typeof internalMutation>> 
   seedTestAIResponse,
   getTestAISettings,
   updateTestAISettings,
+  listTestSuggestionFeedback,
 } as const;
