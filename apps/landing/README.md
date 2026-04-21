@@ -10,6 +10,8 @@ cp .env.example .env.local
 pnpm dev:landing
 ```
 
+If you already ran the repo bootstrap, `./scripts/update-env.sh` writes these values for you.
+
 ## Widget Embed Behavior
 
 `src/components/widget-script.tsx` uses a declarative script tag with `data-opencom-*` attributes.
@@ -40,7 +42,7 @@ CONVEX_URL=<your-convex-url> WORKSPACE_ID=<your-workspace-id> TEST_ADMIN_SECRET=
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | Product Tour       | 5-step tour targeting current landing hooks (hero CTA, features section, product-tour showcase, final CTA) |
 | Checklist          | "Explore Opencom" with 5 tasks                                                                             |
-| Knowledge Base     | 6 collections, 24 published articles covering hosted, self-hosting, SDKs, security, and operations docs  |
+| Knowledge Base     | 6 collections, 24 published articles covering hosted, self-hosting, SDKs, security, and operations docs    |
 | Outbound Messages  | Welcome post (click → new conversation) + docs banner (click → URL)                                        |
 | Survey             | NPS survey after 60s on page                                                                               |
 | Tooltips           | 3 contextual hints on hero CTA, product-tour showcase, and GitHub nav link                                 |

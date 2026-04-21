@@ -16,7 +16,15 @@ Use the repo bootstrap script:
 ./scripts/setup.sh
 ```
 
-The script performs dependency install, Convex initialization, basic auth env setup, local `.env.local` generation, and optional dev server start.
+The script now:
+
+- runs `pnpm install`
+- configures or reuses the local Convex dev deployment with the current `convex dev --once` flow
+- validates the local password-auth bootstrap env contract and generates `AUTH_SECRET` when needed
+- signs up or signs in through the repo's real `auth:signIn` password flow
+- resolves an existing workspace by default, with explicit opt-in workspace creation on reruns
+- updates the supported local `.env.local` files non-destructively
+- optionally offers to start the web/widget dev servers at the end
 
 Update generated env files later with:
 
@@ -24,11 +32,20 @@ Update generated env files later with:
 ./scripts/update-env.sh --url https://<your-deployment>.convex.cloud --workspace <workspace-id>
 ```
 
+Helpful rerun flags:
+
+```bash
+./scripts/setup.sh --reconfigure
+./scripts/setup.sh --create-workspace --workspace "My New Workspace"
+./scripts/setup.sh --non-interactive --email admin@example.com --password 'Opencom!123' --skip-dev
+```
+
 ## Manual Setup (step-by-step)
 
 ```bash
 pnpm install
-pnpm --filter @opencom/convex dev
+pnpm --filter @opencom/convex exec convex dev --once
+./scripts/update-env.sh --url https://<your-deployment>.convex.cloud --workspace <workspace-id>
 pnpm dev:web
 pnpm dev:widget
 ```
@@ -84,40 +101,43 @@ By default, each deploy publishes a unique immutable runtime key (`v/<packageVer
 
 ### Convex backend (`packages/convex`)
 
-| Variable                                            | Required                                    | Purpose                                                                                                           |
-| --------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `AUTH_SECRET`                                       | Yes                                         | Auth signing secret for Convex auth runtime                                                                       |
-| `SITE_URL`                                          | Yes (dashboard env key)                     | Convex dashboard env key commonly set via `convex env set SITE_URL ...`; surfaced as `CONVEX_SITE_URL` in runtime |
-| `CONVEX_SITE_URL`                                   | Yes (runtime)                               | Auth provider domain used in `convex/auth.config.ts`                                                              |
-| `AUTH_RESEND_KEY`                                   | Optional                                    | OTP provider API key override (falls back to `RESEND_API_KEY`)                                                    |
-| `RESEND_API_KEY`                                    | Optional (required for email features)      | Transactional/campaign email sending                                                                              |
-| `EMAIL_FROM`                                        | Optional                                    | Sender identity for auth and email channel flows                                                                  |
-| `RESEND_WEBHOOK_SECRET`                             | Recommended                                 | Verifies inbound Resend webhook signatures                                                                        |
-| `EMAIL_WEBHOOK_INTERNAL_SECRET`                     | Recommended                                 | Internal webhook gateway secret for email handlers                                                                |
-| `ENFORCE_WEBHOOK_SIGNATURES`                        | Optional (`true` default)                   | Fail-closed webhook enforcement toggle                                                                            |
-| `WEBHOOK_MAX_AGE_SECONDS`                           | Optional                                    | Replay-window bound for webhook signatures                                                                        |
-| `OPENCOM_PUBLIC_CORS_ORIGINS`                       | Required for production web origins         | Allowlist for `/.well-known/opencom.json` CORS                                                                    |
-| `AI_GATEWAY_API_KEY`                                | Optional (required for AI agent generation) | AI provider credential                                                                                            |
-| `AI_GATEWAY_BASE_URL`                               | Optional                                    | AI provider base URL override                                                                                     |
-| `OPENCOM_ENABLE_SERIES_ORCHESTRATION`               | Optional (`true` default)                   | Runtime guard for series orchestration                                                                            |
-| `OPENCOM_DEMO_BLOCKED_EMAIL_CAMPAIGN_WORKSPACE_IDS` | Optional                                    | Comma-separated workspace IDs where outbound campaign sends are blocked                                           |
-| `ALLOW_TEST_DATA`                                   | Test-only                                   | Enables internal test-data mutations                                                                              |
-| `TEST_ADMIN_SECRET`                                 | Test-only                                   | Secret for `testAdmin:runTestMutation` gateway                                                                    |
+| Variable                                            | Required                                    | Purpose                                                                                                                   |
+| --------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`                                       | Yes for local password-auth bootstrap       | Auth signing secret for Convex auth runtime                                                                               |
+| `SITE_URL`                                          | Recommended local default                   | Convex dashboard env key used for callback/link generation; bootstrap defaults it to `http://localhost:3000` when missing |
+| `CONVEX_SITE_URL`                                   | Runtime-derived                             | Auth provider domain surfaced from `SITE_URL` for `convex/auth.config.ts`                                                 |
+| `AUTH_RESEND_KEY`                                   | Optional                                    | OTP provider API key override (falls back to `RESEND_API_KEY`)                                                            |
+| `RESEND_API_KEY`                                    | Optional (required for email features)      | Transactional/campaign email sending                                                                                      |
+| `EMAIL_FROM`                                        | Optional                                    | Sender identity for auth and email channel flows                                                                          |
+| `RESEND_WEBHOOK_SECRET`                             | Recommended                                 | Verifies inbound Resend webhook signatures                                                                                |
+| `EMAIL_WEBHOOK_INTERNAL_SECRET`                     | Recommended                                 | Internal webhook gateway secret for email handlers                                                                        |
+| `ENFORCE_WEBHOOK_SIGNATURES`                        | Optional (`true` default)                   | Fail-closed webhook enforcement toggle                                                                                    |
+| `WEBHOOK_MAX_AGE_SECONDS`                           | Optional                                    | Replay-window bound for webhook signatures                                                                                |
+| `OPENCOM_PUBLIC_CORS_ORIGINS`                       | Required for production web origins         | Allowlist for `/.well-known/opencom.json` CORS                                                                            |
+| `AI_GATEWAY_API_KEY`                                | Optional (required for AI agent generation) | AI provider credential                                                                                                    |
+| `AI_GATEWAY_BASE_URL`                               | Optional                                    | AI provider base URL override                                                                                             |
+| `OPENCOM_ENABLE_SERIES_ORCHESTRATION`               | Optional (`true` default)                   | Runtime guard for series orchestration                                                                                    |
+| `OPENCOM_DEMO_BLOCKED_EMAIL_CAMPAIGN_WORKSPACE_IDS` | Optional                                    | Comma-separated workspace IDs where outbound campaign sends are blocked                                                   |
+| `ALLOW_TEST_DATA`                                   | Test-only                                   | Enables internal test-data mutations                                                                                      |
+| `TEST_ADMIN_SECRET`                                 | Test-only                                   | Secret for `testAdmin:runTestMutation` gateway                                                                            |
 
 ### Web app (`apps/web`)
 
-| Variable                                  | Required             | Purpose                                           |
-| ----------------------------------------- | -------------------- | ------------------------------------------------- |
-| `NEXT_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL` | Optional             | Default backend shown/auto-selected for app users |
-| `NEXT_PUBLIC_CONVEX_URL`                  | Optional             | Used by widget-demo/e2e helper flows              |
-| `NEXT_PUBLIC_WIDGET_URL`                  | Optional             | Widget bundle URL override for demo flows         |
-| `NEXT_PUBLIC_TEST_WORKSPACE_ID`           | Optional (test/demo) | Widget demo workspace override                    |
+| Variable                                  | Required | Purpose                                           |
+| ----------------------------------------- | -------- | ------------------------------------------------- |
+| `NEXT_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL` | Optional | Default backend shown/auto-selected for app users |
+| `NEXT_PUBLIC_CONVEX_URL`                  | Optional | Used by widget-demo/e2e helper flows              |
+| `NEXT_PUBLIC_TEST_WORKSPACE_ID`           | Optional | Default workspace for the local widget demo page  |
+| `E2E_BACKEND_URL`                         | Optional | Backend override used by Playwright helper flows  |
+| `NEXT_PUBLIC_WIDGET_URL`                  | Optional | Widget bundle URL override for demo flows         |
 
 ### Mobile app (`apps/mobile`)
 
-| Variable                                  | Required | Purpose                                  |
-| ----------------------------------------- | -------- | ---------------------------------------- |
-| `EXPO_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL` | Optional | Default backend URL for mobile admin app |
+| Variable                                  | Required | Purpose                                         |
+| ----------------------------------------- | -------- | ----------------------------------------------- |
+| `EXPO_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL` | Optional | Default backend URL for mobile admin app        |
+| `EXPO_PUBLIC_CONVEX_URL`                  | Optional | Direct Convex URL used by local admin flows     |
+| `EXPO_PUBLIC_WORKSPACE_ID`                | Optional | Default workspace for local mobile auth/testing |
 
 ### Landing app (`apps/landing`)
 
@@ -142,6 +162,19 @@ By default, each deploy publishes a unique immutable runtime key (`v/<packageVer
 | `EXPO_PUBLIC_CONVEX_URL`   | Yes (for example app) | Convex backend URL |
 | `EXPO_PUBLIC_WORKSPACE_ID` | Yes (for example app) | Workspace ID       |
 
+### Local bootstrap-managed files
+
+`./scripts/setup.sh` and `./scripts/update-env.sh` manage only the Opencom-owned keys in:
+
+- `apps/web/.env.local`
+- `apps/widget/.env.local`
+- `apps/mobile/.env.local`
+- `apps/landing/.env.local`
+- `packages/react-native-sdk/example/.env.local`
+- `packages/convex/.env.local`
+
+Unrelated keys and comments outside those managed keys are preserved on rerun.
+
 ## CI/E2E-specific Variables
 
 | Variable            | Purpose                                                |
@@ -158,6 +191,31 @@ By default, each deploy publishes a unique immutable runtime key (`v/<packageVer
    - Ensure Convex deployment has matching `TEST_ADMIN_SECRET` and `ALLOW_TEST_DATA=true` in test environments.
 3. **OTP email flow unavailable**
    - Configure `AUTH_RESEND_KEY` or `RESEND_API_KEY` plus `EMAIL_FROM`.
+
+## Disposable Container Smoke Path
+
+When you want to sanity-check the real setup flow against a clean machine state, run it in a disposable container and use a throwaway Convex dev deployment:
+
+```bash
+docker run --rm -it \
+  -v "$PWD":/workspace \
+  -w /workspace \
+  node:20-bookworm bash
+```
+
+Inside the container:
+
+```bash
+corepack enable
+corepack prepare pnpm@9 --activate
+./scripts/setup.sh --skip-dev
+```
+
+Notes:
+
+- The Convex login/project-selection flow is still interactive inside the container.
+- Use a temporary or disposable Convex project when smoke testing this path.
+- When you exit the container, the machine-local login/session state is discarded.
 
 ## Related Docs
 

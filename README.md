@@ -115,11 +115,11 @@ The setup script will:
 
 1. Check prerequisites (Node.js 18+, PNPM 9+)
 2. Install dependencies
-3. Create a Convex project and deploy
-4. Prompt for your admin email and password
-5. Create your workspace and admin account
-6. Generate all `.env.local` files
-7. Start the web dashboard and widget
+3. Configure or reuse a Convex dev deployment with the current CLI flow
+4. Validate the local password-auth bootstrap env contract
+5. Sign up or sign in through the repo's real Convex Auth password flow
+6. Generate/update all supported `.env.local` files without deleting unrelated keys
+7. Optionally offer to start the web dashboard and widget
 
 **Prerequisites:**
 
@@ -131,6 +131,13 @@ The setup script will:
 
 ```bash
 ./scripts/setup.sh --email admin@example.com --password yourpassword --non-interactive --skip-dev
+```
+
+**Force a reconfigure or create a new workspace on rerun:**
+
+```bash
+./scripts/setup.sh --reconfigure
+./scripts/setup.sh --create-workspace --workspace "My New Workspace"
 ```
 
 **Update environment files:**
@@ -147,14 +154,11 @@ If you prefer manual setup:
 # Install dependencies
 pnpm install
 
-# Navigate to convex package
-cd packages/convex
+# Configure the local Convex dev deployment
+pnpm --filter @opencom/convex exec convex dev --once
 
-# Login to Convex
-npx convex login
-
-# Initialize and deploy
-npx convex dev
+# Propagate the backend URL and workspace into the local app env files
+./scripts/update-env.sh --url https://your-project.convex.cloud --workspace your_workspace_id
 ```
 
 Then create `.env.local` files manually (see Environment Variables Reference below).
