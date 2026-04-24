@@ -2,6 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
@@ -30,6 +31,31 @@ async function createTempRepo() {
   await fs.mkdir(path.join(rootDir, "apps/mobile"), { recursive: true });
   await fs.mkdir(path.join(rootDir, "apps/landing"), { recursive: true });
   return rootDir;
+}
+
+async function writeExecutable(filePath, contents) {
+  await fs.writeFile(filePath, contents, "utf8");
+  await fs.chmod(filePath, 0o755);
+}
+
+async function createFakeBin(tools) {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencom-local-setup-bin-"));
+  for (const [name, contents] of Object.entries(tools)) {
+    await writeExecutable(path.join(binDir, name), contents);
+  }
+  return binDir;
+}
+
+function runWrapperWithFakePath(scriptName, fakeBinDir) {
+  const repoRoot = path.resolve(__dirname, "../..");
+  return spawnSync("bash", [path.join(repoRoot, "scripts", scriptName), "--help"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH || ""}`,
+    },
+    encoding: "utf8",
+  });
 }
 
 function createHarness({
@@ -255,6 +281,31 @@ function createHarness({
     runtime,
   };
 }
+
+test("setup.sh rejects pnpm older than the pinned major before running setup", async () => {
+  const fakeBin = await createFakeBin({
+    node: "#!/bin/sh\nif [ \"$1\" = \"-v\" ]; then echo \"v18.20.0\"; exit 0; fi\necho \"unexpected node execution\" >&2\nexit 42\n",
+    pnpm: "#!/bin/sh\necho \"8.15.9\"\n",
+  });
+
+  const result = runWrapperWithFakePath("setup.sh", fakeBin);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PNPM 9\+ is required/);
+  assert.match(result.stderr, /8\.15\.9/);
+});
+
+test("update-env.sh rejects Node older than the runtime contract", async () => {
+  const fakeBin = await createFakeBin({
+    node: "#!/bin/sh\nif [ \"$1\" = \"-v\" ]; then echo \"v16.20.2\"; exit 0; fi\necho \"unexpected node execution\" >&2\nexit 42\n",
+  });
+
+  const result = runWrapperWithFakePath("update-env.sh", fakeBin);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Node\.js 18\+ is required/);
+  assert.match(result.stderr, /v16\.20\.2/);
+});
 
 test("clean-environment setup configures deployment, auth env, and local files", async () => {
   const rootDir = await createTempRepo();

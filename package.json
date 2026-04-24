@@ -83,8 +83,8 @@
   "pnpm": {
     "overrides": {
       "@isaacs/brace-expansion": "5.0.1",
-      "@xmldom/xmldom@0.7.13": "0.8.12",
-      "@xmldom/xmldom@0.8.11": "0.8.12",
+      "@xmldom/xmldom@0.7.13": "0.8.13",
+      "@xmldom/xmldom@0.8.11": "0.8.13",
       "esbuild": "^0.27.0",
       "fast-xml-parser": "4.5.5",
       "flatted": "3.4.2",
