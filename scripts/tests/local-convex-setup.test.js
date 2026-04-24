@@ -1,0 +1,630 @@
+"use strict";
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
+
+const {
+  SetupError,
+  generateJwtKeyPair,
+  mergeEnvFileContent,
+  parseEnvContent,
+  readEnvFile,
+  runSetup,
+  runUpdateEnv,
+} = require("../local-convex-setup");
+
+const GENERATED_JWT_PRIVATE_KEY = "generated-jwt-private-key";
+const GENERATED_JWKS = JSON.stringify({
+  keys: [{ use: "sig", kty: "RSA", n: "generated-modulus", e: "AQAB" }],
+});
+
+async function createTempRepo() {
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencom-local-setup-"));
+  await fs.mkdir(path.join(rootDir, "packages/convex"), { recursive: true });
+  await fs.mkdir(path.join(rootDir, "packages/react-native-sdk/example"), { recursive: true });
+  await fs.mkdir(path.join(rootDir, "apps/web"), { recursive: true });
+  await fs.mkdir(path.join(rootDir, "apps/widget"), { recursive: true });
+  await fs.mkdir(path.join(rootDir, "apps/mobile"), { recursive: true });
+  await fs.mkdir(path.join(rootDir, "apps/landing"), { recursive: true });
+  return rootDir;
+}
+
+async function writeExecutable(filePath, contents) {
+  await fs.writeFile(filePath, contents, "utf8");
+  await fs.chmod(filePath, 0o755);
+}
+
+async function createFakeBin(tools) {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencom-local-setup-bin-"));
+  for (const [name, contents] of Object.entries(tools)) {
+    await writeExecutable(path.join(binDir, name), contents);
+  }
+  return binDir;
+}
+
+function runWrapperWithFakePath(scriptName, fakeBinDir) {
+  const repoRoot = path.resolve(__dirname, "../..");
+  return spawnSync("bash", [path.join(repoRoot, "scripts", scriptName), "--help"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      PATH: `${fakeBinDir}${path.delimiter}${process.env.PATH || ""}`,
+    },
+    encoding: "utf8",
+  });
+}
+
+function createHarness({
+  rootDir,
+  initialConvexEnv = "",
+  backendEnv = {},
+  setupState = { hasUsers: false, hasWorkspaces: false },
+  workspaces = [],
+  authError = "",
+  requireWorkspaceCreation = false,
+}) {
+  const commands = [];
+  const envStore = { ...backendEnv };
+  const tokenValue = "token-local-bootstrap";
+  let activeWorkspaceId = workspaces[0]?._id || null;
+  let authAttempts = 0;
+
+  async function ensureConvexEnvFile(contents) {
+    await fs.writeFile(path.join(rootDir, "packages/convex/.env.local"), contents, "utf8");
+  }
+
+  async function getFileContents(relativePath) {
+    return fs.readFile(path.join(rootDir, relativePath), "utf8");
+  }
+
+  const runtime = {
+    rootDir,
+    output: {
+      isTTY: false,
+      write() {},
+    },
+    ui: {
+      async ask() {
+        return "";
+      },
+      async askSecret() {
+        return "";
+      },
+      async confirm() {
+        return true;
+      },
+      async select(_question, options, defaultIndex) {
+        return options[defaultIndex].value;
+      },
+      async close() {},
+    },
+    log() {},
+    warn() {},
+    error() {},
+    generateJwtKeyPair() {
+      return {
+        JWT_PRIVATE_KEY: GENERATED_JWT_PRIVATE_KEY,
+        JWKS: GENERATED_JWKS,
+      };
+    },
+    async exists(filePath) {
+      try {
+        await fs.access(filePath);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async readFile(filePath, encoding = "utf8") {
+      return fs.readFile(filePath, encoding);
+    },
+    async writeFile(filePath, contents) {
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, contents, "utf8");
+    },
+    async runCommand(command, args) {
+      commands.push([command, ...args]);
+      const joined = `${command} ${args.join(" ")}`;
+
+      if (joined === "pnpm install") {
+        return { stdout: "", stderr: "", code: 0 };
+      }
+
+      if (
+        joined === "pnpm --filter @opencom/convex exec convex dev --once" ||
+        joined === "pnpm --filter @opencom/convex exec convex dev --once --configure"
+      ) {
+        await ensureConvexEnvFile(
+          [
+            initialConvexEnv,
+            'CONVEX_DEPLOYMENT="dev:opencom-test"',
+            'CONVEX_URL="https://opencom-test.convex.cloud"',
+          ]
+            .filter(Boolean)
+            .join("\n") + "\n"
+        );
+        return { stdout: "", stderr: "", code: 0 };
+      }
+
+      if (
+        command === "pnpm" &&
+        args[0] === "--filter" &&
+        args[1] === "@opencom/convex" &&
+        args[2] === "exec" &&
+        args[3] === "convex" &&
+        args[4] === "env" &&
+        args[5] === "get"
+      ) {
+        const key = args[6];
+        if (envStore[key]) {
+          return { stdout: `${envStore[key]}\n`, stderr: "", code: 0 };
+        }
+        const error = new Error(`missing env ${key}`);
+        error.stdout = "";
+        error.stderr = `Environment variable ${key} is not set.`;
+        throw error;
+      }
+
+      if (
+        command === "pnpm" &&
+        args[0] === "--filter" &&
+        args[1] === "@opencom/convex" &&
+        args[2] === "exec" &&
+        args[3] === "convex" &&
+        args[4] === "env" &&
+        args[5] === "set"
+      ) {
+        if (args[6] === "--from-file") {
+          const parsedValues = parseEnvContent(await fs.readFile(args[7], "utf8"));
+          Object.assign(envStore, parsedValues);
+          return { stdout: "", stderr: "", code: 0 };
+        }
+        envStore[args[6]] = args[7];
+        return { stdout: "", stderr: "", code: 0 };
+      }
+
+      throw new Error(`Unexpected command: ${joined}`);
+    },
+    async fetchImpl(_url, init) {
+      const request = JSON.parse(init.body);
+
+      if (request.path === "setup:checkExistingSetup") {
+        return new Response(JSON.stringify(setupState), { status: 200 });
+      }
+
+      if (request.path === "auth:signIn") {
+        authAttempts += 1;
+        if (authError) {
+          return new Response(JSON.stringify({ status: "error", errorMessage: authError }), {
+            status: 200,
+          });
+        }
+
+        if (request.args.params.flow === "signUp" && workspaces.length === 0) {
+          workspaces.push({
+            _id: "workspace_bootstrap",
+            name: request.args.params.workspaceName || "Bootstrap Workspace",
+            role: "admin",
+          });
+          activeWorkspaceId = "workspace_bootstrap";
+        }
+
+        return new Response(
+          JSON.stringify({
+            status: "success",
+            value: {
+              tokens: {
+                token: tokenValue,
+                refreshToken: "refresh-token",
+              },
+            },
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (request.path === "auth:currentUser") {
+        if (requireWorkspaceCreation && !workspaces.length) {
+          return new Response(
+            JSON.stringify({
+              user: {
+                _id: "user_1",
+                workspaceId: null,
+              },
+              workspaces: [],
+            }),
+            { status: 200 }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            user: {
+              _id: "user_1",
+              email: authAttempts > 0 ? "admin@example.com" : "unknown@example.com",
+              workspaceId: activeWorkspaceId,
+            },
+            workspaces,
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (request.path === "workspaces:create") {
+        const created = {
+          _id: "workspace_created",
+          name: request.args.name,
+          role: "owner",
+        };
+        workspaces.push(created);
+        activeWorkspaceId = created._id;
+        return new Response(JSON.stringify(created._id), { status: 200 });
+      }
+
+      if (request.path === "auth:switchWorkspace") {
+        activeWorkspaceId = request.args.workspaceId;
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch path: ${request.path}`);
+    },
+  };
+
+  return {
+    commands,
+    envStore,
+    getFileContents,
+    runtime,
+  };
+}
+
+test("setup.sh rejects pnpm older than the pinned major before running setup", async () => {
+  const fakeBin = await createFakeBin({
+    node: "#!/bin/sh\nif [ \"$1\" = \"-v\" ]; then echo \"v18.20.0\"; exit 0; fi\necho \"unexpected node execution\" >&2\nexit 42\n",
+    pnpm: "#!/bin/sh\necho \"8.15.9\"\n",
+  });
+
+  const result = runWrapperWithFakePath("setup.sh", fakeBin);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /PNPM 9\+ is required/);
+  assert.match(result.stderr, /8\.15\.9/);
+});
+
+test("update-env.sh rejects Node older than the runtime contract", async () => {
+  const fakeBin = await createFakeBin({
+    node: "#!/bin/sh\nif [ \"$1\" = \"-v\" ]; then echo \"v16.20.2\"; exit 0; fi\necho \"unexpected node execution\" >&2\nexit 42\n",
+  });
+
+  const result = runWrapperWithFakePath("update-env.sh", fakeBin);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Node\.js 18\+ is required/);
+  assert.match(result.stderr, /v16\.20\.2/);
+});
+
+test("clean-environment setup configures deployment, auth env, and local files", async () => {
+  const rootDir = await createTempRepo();
+  const harness = createHarness({
+    rootDir,
+    backendEnv: {},
+    setupState: { hasUsers: false, hasWorkspaces: false },
+    workspaces: [],
+  });
+
+  await runSetup(
+    {
+      adminEmail: "admin@example.com",
+      adminPassword: "Opencom!123",
+      adminName: "Admin User",
+      workspaceName: "Fresh Workspace",
+      nonInteractive: true,
+      skipDev: true,
+    },
+    harness.runtime
+  );
+
+  assert.equal(harness.envStore.JWT_PRIVATE_KEY, GENERATED_JWT_PRIVATE_KEY);
+  assert.equal(harness.envStore.JWKS, GENERATED_JWKS);
+  assert.equal(harness.envStore.SITE_URL, "http://localhost:3000");
+  assert.ok(
+    harness.commands.some((command) => command.join(" ") === "pnpm install"),
+    "expected pnpm install to run"
+  );
+  assert.ok(
+    harness.commands.some(
+      (command) => command.join(" ") === "pnpm --filter @opencom/convex exec convex dev --once"
+    ),
+    "expected convex dev --once to run"
+  );
+
+  const webEnv = await readEnvFile(path.join(rootDir, "apps/web/.env.local"));
+  const convexEnv = await readEnvFile(path.join(rootDir, "packages/convex/.env.local"));
+
+  assert.equal(webEnv.NEXT_PUBLIC_CONVEX_URL, "https://opencom-test.convex.cloud");
+  assert.equal(webEnv.NEXT_PUBLIC_TEST_WORKSPACE_ID, "workspace_bootstrap");
+  assert.equal(convexEnv.CONVEX_DEPLOYMENT, "dev:opencom-test");
+  assert.equal(convexEnv.CONVEX_URL, "https://opencom-test.convex.cloud");
+  assert.equal(convexEnv.WORKSPACE_ID, "workspace_bootstrap");
+  assert.equal(convexEnv.E2E_BACKEND_URL, "https://opencom-test.convex.cloud");
+});
+
+test("rerun setup reuses existing deployment and preserves unrelated env entries", async () => {
+  const rootDir = await createTempRepo();
+  await fs.writeFile(
+    path.join(rootDir, "packages/convex/.env.local"),
+    [
+      "# Keep this comment",
+      'CUSTOM_KEEP="yes"',
+      'CONVEX_DEPLOYMENT="dev:existing"',
+      'CONVEX_URL="https://existing.convex.cloud"',
+    ].join("\n") + "\n",
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(rootDir, "apps/web/.env.local"),
+    ["# Existing web comment", 'MANUAL_FLAG="keep-me"', 'NEXT_PUBLIC_CONVEX_URL="stale"'].join(
+      "\n"
+    ) + "\n",
+    "utf8"
+  );
+
+  const harness = createHarness({
+    rootDir,
+    backendEnv: {
+      JWT_PRIVATE_KEY: "already-configured-private-key",
+      JWKS: JSON.stringify({ keys: [{ use: "sig", kty: "RSA", n: "existing", e: "AQAB" }] }),
+      SITE_URL: "http://localhost:3000",
+    },
+    setupState: { hasUsers: true, hasWorkspaces: true },
+    workspaces: [
+      { _id: "workspace_active", name: "Active Workspace", role: "admin" },
+      { _id: "workspace_other", name: "Other Workspace", role: "agent" },
+    ],
+  });
+
+  await runSetup(
+    {
+      adminEmail: "admin@example.com",
+      adminPassword: "Opencom!123",
+      nonInteractive: true,
+      skipDev: true,
+    },
+    harness.runtime
+  );
+
+  assert.ok(
+    !harness.commands.some(
+      (command) => command.join(" ") === "pnpm --filter @opencom/convex exec convex dev --once"
+    ),
+    "expected existing deployment to be reused without reconfiguration"
+  );
+
+  const convexContent = await harness.getFileContents("packages/convex/.env.local");
+  const webContent = await harness.getFileContents("apps/web/.env.local");
+  const webEnv = parseEnvContent(webContent);
+
+  assert.match(convexContent, /# Keep this comment/);
+  assert.match(convexContent, /CUSTOM_KEEP="yes"/);
+  assert.match(webContent, /# Existing web comment/);
+  assert.match(webContent, /MANUAL_FLAG="keep-me"/);
+  assert.equal(webEnv.NEXT_PUBLIC_TEST_WORKSPACE_ID, "workspace_active");
+  assert.equal(webEnv.NEXT_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL, "https://existing.convex.cloud");
+});
+
+test("partial Convex Auth JWT env regenerates both paired values", async () => {
+  const rootDir = await createTempRepo();
+  await fs.writeFile(
+    path.join(rootDir, "packages/convex/.env.local"),
+    [
+      'CONVEX_DEPLOYMENT="dev:existing"',
+      'CONVEX_URL="https://existing.convex.cloud"',
+    ].join("\n") + "\n",
+    "utf8"
+  );
+
+  const harness = createHarness({
+    rootDir,
+    backendEnv: {
+      JWT_PRIVATE_KEY: "stale-unpaired-private-key",
+      SITE_URL: "http://localhost:3000",
+    },
+    setupState: { hasUsers: true, hasWorkspaces: true },
+    workspaces: [{ _id: "workspace_active", name: "Active Workspace", role: "admin" }],
+  });
+
+  await runSetup(
+    {
+      adminEmail: "admin@example.com",
+      adminPassword: "Opencom!123",
+      nonInteractive: true,
+      skipDev: true,
+    },
+    harness.runtime
+  );
+
+  assert.equal(harness.envStore.JWT_PRIVATE_KEY, GENERATED_JWT_PRIVATE_KEY);
+  assert.equal(harness.envStore.JWKS, GENERATED_JWKS);
+  assert.ok(
+    harness.commands.some(
+      (command) =>
+        command[0] === "pnpm" &&
+        command.slice(1, 8).join(" ") ===
+          "--filter @opencom/convex exec convex env set --from-file" &&
+        command.includes("--force")
+    ),
+    "expected JWT_PRIVATE_KEY and JWKS to be reset together from a file"
+  );
+});
+
+test("malformed Convex Auth JWKS regenerates both paired values", async () => {
+  const rootDir = await createTempRepo();
+  await fs.writeFile(
+    path.join(rootDir, "packages/convex/.env.local"),
+    [
+      'CONVEX_DEPLOYMENT="dev:existing"',
+      'CONVEX_URL="https://existing.convex.cloud"',
+    ].join("\n") + "\n",
+    "utf8"
+  );
+
+  const harness = createHarness({
+    rootDir,
+    backendEnv: {
+      JWT_PRIVATE_KEY: "-----BEGIN PRIVATE KEY----- stale -----END PRIVATE KEY-----",
+      JWKS: "{\\\"keys\\\":[{\\\"use\\\":\\\"sig\\\"}]}",
+      SITE_URL: "http://localhost:3000",
+    },
+    setupState: { hasUsers: true, hasWorkspaces: true },
+    workspaces: [{ _id: "workspace_active", name: "Active Workspace", role: "admin" }],
+  });
+
+  await runSetup(
+    {
+      adminEmail: "admin@example.com",
+      adminPassword: "Opencom!123",
+      nonInteractive: true,
+      skipDev: true,
+    },
+    harness.runtime
+  );
+
+  assert.equal(harness.envStore.JWT_PRIVATE_KEY, GENERATED_JWT_PRIVATE_KEY);
+  assert.equal(harness.envStore.JWKS, GENERATED_JWKS);
+});
+
+test("setup surfaces actionable errors when auth sign-in fails", async () => {
+  const rootDir = await createTempRepo();
+  const harness = createHarness({
+    rootDir,
+    initialConvexEnv: [
+      'CONVEX_DEPLOYMENT="dev:existing"',
+      'CONVEX_URL="https://existing.convex.cloud"',
+    ].join("\n"),
+    backendEnv: {
+      JWT_PRIVATE_KEY: "already-configured-private-key",
+      JWKS: JSON.stringify({ keys: [{ use: "sig", kty: "RSA", n: "existing", e: "AQAB" }] }),
+      SITE_URL: "http://localhost:3000",
+    },
+    setupState: { hasUsers: true, hasWorkspaces: true },
+    workspaces: [{ _id: "workspace_active", name: "Active Workspace", role: "admin" }],
+    authError: "Invalid credentials",
+  });
+
+  await assert.rejects(
+    () =>
+      runSetup(
+        {
+          adminEmail: "admin@example.com",
+          adminPassword: "wrong-password",
+          nonInteractive: true,
+          skipDev: true,
+        },
+        harness.runtime
+      ),
+    (error) => {
+      assert.ok(error instanceof SetupError);
+      assert.match(error.summary, /Invalid credentials/i);
+      assert.match(error.why, /Convex Auth password sign-in\/sign-up path/i);
+      assert.ok(error.fix.some((step) => /existing admin account/i.test(step)));
+      return true;
+    }
+  );
+});
+
+test("generateJwtKeyPair returns a Convex Auth compatible key pair shape", () => {
+  const pair = generateJwtKeyPair();
+  assert.match(pair.JWT_PRIVATE_KEY, /^-----BEGIN PRIVATE KEY-----/);
+  assert.match(pair.JWT_PRIVATE_KEY, /-----END PRIVATE KEY-----$/);
+
+  const jwks = JSON.parse(pair.JWKS);
+  assert.equal(Array.isArray(jwks.keys), true);
+  assert.equal(jwks.keys.length, 1);
+  assert.equal(jwks.keys[0].use, "sig");
+  assert.equal(jwks.keys[0].kty, "RSA");
+  assert.equal(jwks.keys[0].e, "AQAB");
+  assert.equal(typeof jwks.keys[0].n, "string");
+});
+
+test("update-env writes all local targets without deleting unrelated keys or comments", async () => {
+  const rootDir = await createTempRepo();
+  await fs.writeFile(
+    path.join(rootDir, "apps/landing/.env.local"),
+    ["# Manual landing note", 'NEXT_PUBLIC_WIDGET_URL="https://cdn.example/widget.js"'].join("\n") +
+      "\n",
+    "utf8"
+  );
+
+  const runtime = {
+    rootDir,
+    output: {
+      isTTY: false,
+      write() {},
+    },
+    ui: {
+      async close() {},
+    },
+    log() {},
+    warn() {},
+    error() {},
+    async exists(filePath) {
+      try {
+        await fs.access(filePath);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    async readFile(filePath, encoding = "utf8") {
+      return fs.readFile(filePath, encoding);
+    },
+    async writeFile(filePath, contents) {
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await fs.writeFile(filePath, contents, "utf8");
+    },
+  };
+
+  await runUpdateEnv(
+    {
+      convexUrl: "https://manual.convex.cloud",
+      workspaceId: "workspace_sync",
+      nonInteractive: true,
+    },
+    runtime
+  );
+
+  const landingContent = await fs.readFile(path.join(rootDir, "apps/landing/.env.local"), "utf8");
+  const landingEnv = parseEnvContent(landingContent);
+  const widgetEnv = await readEnvFile(path.join(rootDir, "apps/widget/.env.local"));
+  const convexEnv = await readEnvFile(path.join(rootDir, "packages/convex/.env.local"));
+
+  assert.match(landingContent, /# Manual landing note/);
+  assert.match(landingContent, /NEXT_PUBLIC_WIDGET_URL="https:\/\/cdn.example\/widget.js"/);
+  assert.equal(landingEnv.NEXT_PUBLIC_CONVEX_URL, "https://manual.convex.cloud");
+  assert.equal(landingEnv.NEXT_PUBLIC_WORKSPACE_ID, "workspace_sync");
+  assert.equal(widgetEnv.VITE_WORKSPACE_ID, "workspace_sync");
+  assert.equal(convexEnv.E2E_BACKEND_URL, "https://manual.convex.cloud");
+  assert.equal(convexEnv.WORKSPACE_ID, "workspace_sync");
+});
+
+test("mergeEnvFileContent updates managed keys in place and appends missing ones once", () => {
+  const merged = mergeEnvFileContent(
+    ["# Existing", 'KEEP_ME="1"', 'NEXT_PUBLIC_CONVEX_URL="old"'].join("\n") + "\n",
+    {
+      NEXT_PUBLIC_CONVEX_URL: "https://fresh.convex.cloud",
+      NEXT_PUBLIC_TEST_WORKSPACE_ID: "workspace_123",
+    },
+    "Managed block"
+  );
+
+  const env = parseEnvContent(merged);
+  assert.match(merged, /# Existing/);
+  assert.match(merged, /KEEP_ME="1"/);
+  assert.equal(env.NEXT_PUBLIC_CONVEX_URL, "https://fresh.convex.cloud");
+  assert.equal(env.NEXT_PUBLIC_TEST_WORKSPACE_ID, "workspace_123");
+  assert.equal((merged.match(/Managed block/g) || []).length, 1);
+});
