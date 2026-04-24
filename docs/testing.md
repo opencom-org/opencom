@@ -19,13 +19,11 @@ To avoid polluting development or production data, tests run against a dedicated
 **Initial Setup:**
 
 ```bash
-cd packages/convex
+# Create or reuse a dedicated Convex test deployment
+pnpm --filter @opencom/convex exec convex dev --once --configure
 
-# Login to Convex (if not already)
-npx convex login
-
-# Create test deployment
-npx convex dev --project opencom-test --once
+# Configure Convex Auth JWT_PRIVATE_KEY/JWKS and SITE_URL
+pnpm --filter @opencom/convex exec convex auth add
 ```
 
 **Configuration:**

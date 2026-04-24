@@ -3,6 +3,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const os = require("node:os");
 const { spawn } = require("node:child_process");
 const readline = require("node:readline/promises");
 
@@ -117,6 +118,14 @@ function formatEnvValue(value) {
     .replace(/\t/g, "\\t")}"`;
 }
 
+function formatConvexEnvFileValue(value) {
+  const stringValue = String(value);
+  if (stringValue.includes('"') && !stringValue.includes("'")) {
+    return `'${stringValue}'`;
+  }
+  return formatEnvValue(value);
+}
+
 function mergeEnvFileContent(existingContent, desiredEntries, managedComment) {
   const desiredKeys = Object.keys(desiredEntries);
   const normalized = existingContent.replace(/\r\n/g, "\n");
@@ -152,8 +161,58 @@ function mergeEnvFileContent(existingContent, desiredEntries, managedComment) {
   return result;
 }
 
-function generateAuthSecret() {
-  return crypto.randomBytes(32).toString("base64url");
+function generateJwtKeyPair() {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicExponent: 0x10001,
+  });
+  const jwtPrivateKey = privateKey
+    .export({ type: "pkcs8", format: "pem" })
+    .trimEnd()
+    .replace(/\n/g, " ");
+  const publicJwk = publicKey.export({ format: "jwk" });
+  return {
+    JWT_PRIVATE_KEY: jwtPrivateKey,
+    JWKS: JSON.stringify({ keys: [{ use: "sig", ...publicJwk }] }),
+  };
+}
+
+function isValidJwtPrivateKey(value) {
+  const normalized = String(value || "").trim();
+  return (
+    normalized.startsWith("-----BEGIN PRIVATE KEY-----") &&
+    normalized.endsWith("-----END PRIVATE KEY-----")
+  );
+}
+
+function isValidJwks(value) {
+  try {
+    const parsed = JSON.parse(String(value || ""));
+    return (
+      parsed &&
+      typeof parsed === "object" &&
+      Array.isArray(parsed.keys) &&
+      parsed.keys.length > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isValidCoreBackendEnvValue(entry, key, value) {
+  if (!value) {
+    return false;
+  }
+  if (entry.resolution !== "generate-jwt-keypair") {
+    return true;
+  }
+  if (key === "JWT_PRIVATE_KEY") {
+    return isValidJwtPrivateKey(value);
+  }
+  if (key === "JWKS") {
+    return isValidJwks(value);
+  }
+  return true;
 }
 
 function trimCommandOutput(value) {
@@ -319,7 +378,7 @@ function createRuntime(overrides = {}) {
     output,
     ui,
     fetchImpl: overrides.fetchImpl || global.fetch,
-    generateAuthSecret: overrides.generateAuthSecret || generateAuthSecret,
+    generateJwtKeyPair: overrides.generateJwtKeyPair || generateJwtKeyPair,
     log: overrides.log || ((message) => output.write(`${message}\n`)),
     warn: overrides.warn || ((message) => output.write(`${message}\n`)),
     error: overrides.error || ((message) => output.write(`${message}\n`)),
@@ -511,16 +570,79 @@ async function setBackendEnvValue(runtime, key, value) {
   );
 }
 
+async function setBackendEnvValues(runtime, values, options = {}) {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencom-convex-env-"));
+  const tempEnvFile = path.join(tempDir, "env.values");
+  const content =
+    Object.entries(values)
+      .map(([key, value]) => `${key}=${formatConvexEnvFileValue(value)}`)
+      .join("\n") + "\n";
+
+  try {
+    await runtime.writeFile(tempEnvFile, content);
+    const args = [
+      "--filter",
+      "@opencom/convex",
+      "exec",
+      "convex",
+      "env",
+      "set",
+      "--from-file",
+      tempEnvFile,
+    ];
+    if (options.force) {
+      args.push("--force");
+    }
+    await runtime.runCommand("pnpm", args, { stdio: "inherit" });
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function ensureCoreBackendEnv(runtime) {
   logSection(runtime, "3. Validate Backend Auth Bootstrap Env");
   const resolvedValues = {};
 
   for (const entry of CORE_BACKEND_ENV) {
+    if (entry.resolution === "generate-jwt-keypair") {
+      const keys = entry.keys || [];
+      const currentValues = {};
+      for (const key of keys) {
+        currentValues[key] = await getBackendEnvValue(runtime, key);
+      }
+
+      const missingKeys = keys.filter(
+        (key) => !isValidCoreBackendEnvValue(entry, key, currentValues[key])
+      );
+      if (missingKeys.length > 0) {
+        const generatedValues = runtime.generateJwtKeyPair();
+        const desiredValues = Object.fromEntries(keys.map((key) => [key, generatedValues[key]]));
+        try {
+          await setBackendEnvValues(runtime, desiredValues, { force: true });
+          Object.assign(currentValues, desiredValues);
+        } catch (error) {
+          throw new SetupError({
+            summary: `Could not set required backend env ${missingKeys.join(", ")}.`,
+            why: entry.description,
+            fix: [
+              "Run `pnpm --filter @opencom/convex exec convex auth add`, then rerun ./scripts/setup.sh.",
+              "If either JWT_PRIVATE_KEY or JWKS is missing, regenerate and set both values from the same key pair.",
+            ],
+            details: toErrorMessage(error),
+          });
+        }
+      }
+
+      for (const key of keys) {
+        resolvedValues[key] = currentValues[key];
+      }
+      logSuccess(runtime, `${keys.join(" and ")} are configured.`);
+      continue;
+    }
+
     let currentValue = await getBackendEnvValue(runtime, entry.key);
     if (!currentValue) {
-      if (entry.resolution === "generate") {
-        currentValue = runtime.generateAuthSecret();
-      } else if (entry.resolution === "default") {
+      if (entry.resolution === "default") {
         currentValue = entry.defaultValue;
       }
 
@@ -727,12 +849,16 @@ function authErrorFixes(errorMessage) {
 
   if (
     normalized.includes("auth_secret") ||
+    normalized.includes("jwt_private_key") ||
+    normalized.includes("jwks") ||
+    normalized.includes("convex_site_url") ||
+    normalized.includes("missing environment variable") ||
     normalized.includes("openid") ||
     normalized.includes("issuer") ||
     normalized.includes("site_url")
   ) {
     fixes.push(
-      "Confirm AUTH_SECRET is set, and set SITE_URL if your deployment needs Convex Auth callback metadata."
+      "Confirm JWT_PRIVATE_KEY and JWKS are set from the same key pair, and that CONVEX_SITE_URL is available on the deployment."
     );
   }
 
@@ -757,12 +883,14 @@ async function signInWithPassword(runtime, convexUrl, params) {
     }
     return token;
   } catch (error) {
-    const message = toErrorMessage(error);
+    const message = error instanceof SetupError ? error.summary : toErrorMessage(error);
+    const details = error instanceof SetupError ? error.details || toErrorMessage(error) : message;
+    const fixInput = `${message}\n${details}`;
     throw new SetupError({
       summary: `Password auth bootstrap failed: ${message}`,
       why: "The local setup flow relies on the repo's real Convex Auth password sign-in/sign-up path.",
-      fix: authErrorFixes(message),
-      details: message,
+      fix: authErrorFixes(fixInput),
+      details,
     });
   }
 }
@@ -1418,6 +1546,7 @@ module.exports = {
   SetupError,
   convexCloudToSiteUrl,
   createRuntime,
+  generateJwtKeyPair,
   mergeEnvFileContent,
   parseEnvContent,
   readEnvFile,

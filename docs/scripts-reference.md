@@ -17,7 +17,7 @@ Interactive setup script for first-time Opencom installation.
 1. Checks prerequisites (Node.js 18+, PNPM 9+)
 2. Installs dependencies (`pnpm install`)
 3. Configures or reuses the local Convex dev deployment with `convex dev --once`
-4. Validates the local password-auth bootstrap env contract and generates `AUTH_SECRET` when needed
+4. Validates the local password-auth bootstrap env contract and generates `JWT_PRIVATE_KEY`/`JWKS` when needed
 5. Prompts for admin credentials (or accepts them via flags) and uses the repo's real `auth:signIn` flow
 6. Reuses or resolves the workspace to wire into local envs, with explicit opt-in creation on reruns
 7. Updates the supported `.env.local` files without deleting unrelated entries/comments

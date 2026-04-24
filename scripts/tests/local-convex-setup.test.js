@@ -8,12 +8,18 @@ const path = require("node:path");
 
 const {
   SetupError,
+  generateJwtKeyPair,
   mergeEnvFileContent,
   parseEnvContent,
   readEnvFile,
   runSetup,
   runUpdateEnv,
 } = require("../local-convex-setup");
+
+const GENERATED_JWT_PRIVATE_KEY = "generated-jwt-private-key";
+const GENERATED_JWKS = JSON.stringify({
+  keys: [{ use: "sig", kty: "RSA", n: "generated-modulus", e: "AQAB" }],
+});
 
 async function createTempRepo() {
   const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencom-local-setup-"));
@@ -73,8 +79,11 @@ function createHarness({
     log() {},
     warn() {},
     error() {},
-    generateAuthSecret() {
-      return "generated-auth-secret";
+    generateJwtKeyPair() {
+      return {
+        JWT_PRIVATE_KEY: GENERATED_JWT_PRIVATE_KEY,
+        JWKS: GENERATED_JWKS,
+      };
     },
     async exists(filePath) {
       try {
@@ -143,6 +152,11 @@ function createHarness({
         args[4] === "env" &&
         args[5] === "set"
       ) {
+        if (args[6] === "--from-file") {
+          const parsedValues = parseEnvContent(await fs.readFile(args[7], "utf8"));
+          Object.assign(envStore, parsedValues);
+          return { stdout: "", stderr: "", code: 0 };
+        }
         envStore[args[6]] = args[7];
         return { stdout: "", stderr: "", code: 0 };
       }
@@ -263,7 +277,8 @@ test("clean-environment setup configures deployment, auth env, and local files",
     harness.runtime
   );
 
-  assert.equal(harness.envStore.AUTH_SECRET, "generated-auth-secret");
+  assert.equal(harness.envStore.JWT_PRIVATE_KEY, GENERATED_JWT_PRIVATE_KEY);
+  assert.equal(harness.envStore.JWKS, GENERATED_JWKS);
   assert.equal(harness.envStore.SITE_URL, "http://localhost:3000");
   assert.ok(
     harness.commands.some((command) => command.join(" ") === "pnpm install"),
@@ -310,7 +325,8 @@ test("rerun setup reuses existing deployment and preserves unrelated env entries
   const harness = createHarness({
     rootDir,
     backendEnv: {
-      AUTH_SECRET: "already-configured",
+      JWT_PRIVATE_KEY: "already-configured-private-key",
+      JWKS: JSON.stringify({ keys: [{ use: "sig", kty: "RSA", n: "existing", e: "AQAB" }] }),
       SITE_URL: "http://localhost:3000",
     },
     setupState: { hasUsers: true, hasWorkspaces: true },
@@ -349,6 +365,87 @@ test("rerun setup reuses existing deployment and preserves unrelated env entries
   assert.equal(webEnv.NEXT_PUBLIC_OPENCOM_DEFAULT_BACKEND_URL, "https://existing.convex.cloud");
 });
 
+test("partial Convex Auth JWT env regenerates both paired values", async () => {
+  const rootDir = await createTempRepo();
+  await fs.writeFile(
+    path.join(rootDir, "packages/convex/.env.local"),
+    [
+      'CONVEX_DEPLOYMENT="dev:existing"',
+      'CONVEX_URL="https://existing.convex.cloud"',
+    ].join("\n") + "\n",
+    "utf8"
+  );
+
+  const harness = createHarness({
+    rootDir,
+    backendEnv: {
+      JWT_PRIVATE_KEY: "stale-unpaired-private-key",
+      SITE_URL: "http://localhost:3000",
+    },
+    setupState: { hasUsers: true, hasWorkspaces: true },
+    workspaces: [{ _id: "workspace_active", name: "Active Workspace", role: "admin" }],
+  });
+
+  await runSetup(
+    {
+      adminEmail: "admin@example.com",
+      adminPassword: "Opencom!123",
+      nonInteractive: true,
+      skipDev: true,
+    },
+    harness.runtime
+  );
+
+  assert.equal(harness.envStore.JWT_PRIVATE_KEY, GENERATED_JWT_PRIVATE_KEY);
+  assert.equal(harness.envStore.JWKS, GENERATED_JWKS);
+  assert.ok(
+    harness.commands.some(
+      (command) =>
+        command[0] === "pnpm" &&
+        command.slice(1, 8).join(" ") ===
+          "--filter @opencom/convex exec convex env set --from-file" &&
+        command.includes("--force")
+    ),
+    "expected JWT_PRIVATE_KEY and JWKS to be reset together from a file"
+  );
+});
+
+test("malformed Convex Auth JWKS regenerates both paired values", async () => {
+  const rootDir = await createTempRepo();
+  await fs.writeFile(
+    path.join(rootDir, "packages/convex/.env.local"),
+    [
+      'CONVEX_DEPLOYMENT="dev:existing"',
+      'CONVEX_URL="https://existing.convex.cloud"',
+    ].join("\n") + "\n",
+    "utf8"
+  );
+
+  const harness = createHarness({
+    rootDir,
+    backendEnv: {
+      JWT_PRIVATE_KEY: "-----BEGIN PRIVATE KEY----- stale -----END PRIVATE KEY-----",
+      JWKS: "{\\\"keys\\\":[{\\\"use\\\":\\\"sig\\\"}]}",
+      SITE_URL: "http://localhost:3000",
+    },
+    setupState: { hasUsers: true, hasWorkspaces: true },
+    workspaces: [{ _id: "workspace_active", name: "Active Workspace", role: "admin" }],
+  });
+
+  await runSetup(
+    {
+      adminEmail: "admin@example.com",
+      adminPassword: "Opencom!123",
+      nonInteractive: true,
+      skipDev: true,
+    },
+    harness.runtime
+  );
+
+  assert.equal(harness.envStore.JWT_PRIVATE_KEY, GENERATED_JWT_PRIVATE_KEY);
+  assert.equal(harness.envStore.JWKS, GENERATED_JWKS);
+});
+
 test("setup surfaces actionable errors when auth sign-in fails", async () => {
   const rootDir = await createTempRepo();
   const harness = createHarness({
@@ -358,7 +455,8 @@ test("setup surfaces actionable errors when auth sign-in fails", async () => {
       'CONVEX_URL="https://existing.convex.cloud"',
     ].join("\n"),
     backendEnv: {
-      AUTH_SECRET: "already-configured",
+      JWT_PRIVATE_KEY: "already-configured-private-key",
+      JWKS: JSON.stringify({ keys: [{ use: "sig", kty: "RSA", n: "existing", e: "AQAB" }] }),
       SITE_URL: "http://localhost:3000",
     },
     setupState: { hasUsers: true, hasWorkspaces: true },
@@ -385,6 +483,20 @@ test("setup surfaces actionable errors when auth sign-in fails", async () => {
       return true;
     }
   );
+});
+
+test("generateJwtKeyPair returns a Convex Auth compatible key pair shape", () => {
+  const pair = generateJwtKeyPair();
+  assert.match(pair.JWT_PRIVATE_KEY, /^-----BEGIN PRIVATE KEY-----/);
+  assert.match(pair.JWT_PRIVATE_KEY, /-----END PRIVATE KEY-----$/);
+
+  const jwks = JSON.parse(pair.JWKS);
+  assert.equal(Array.isArray(jwks.keys), true);
+  assert.equal(jwks.keys.length, 1);
+  assert.equal(jwks.keys[0].use, "sig");
+  assert.equal(jwks.keys[0].kty, "RSA");
+  assert.equal(jwks.keys[0].e, "AQAB");
+  assert.equal(typeof jwks.keys[0].n, "string");
 });
 
 test("update-env writes all local targets without deleting unrelated keys or comments", async () => {

@@ -10,7 +10,7 @@ This guide is the canonical OSS setup and deployment reference for Opencom.
 
 ## Fastest Setup Path
 
-Use the repo bootstrap script:
+Use the repo bootstrap script. This is the preferred path for new users:
 
 ```bash
 ./scripts/setup.sh
@@ -20,7 +20,7 @@ The script now:
 
 - runs `pnpm install`
 - configures or reuses the local Convex dev deployment with the current `convex dev --once` flow
-- validates the local password-auth bootstrap env contract and generates `AUTH_SECRET` when needed
+- validates the local password-auth bootstrap env contract and generates `JWT_PRIVATE_KEY`/`JWKS` when needed
 - signs up or signs in through the repo's real `auth:signIn` password flow
 - resolves an existing workspace by default, with explicit opt-in workspace creation on reruns
 - updates the supported local `.env.local` files non-destructively
@@ -42,9 +42,13 @@ Helpful rerun flags:
 
 ## Manual Setup (step-by-step)
 
+Use this only when debugging or when you need to control each step yourself.
+The one-command setup above also handles admin/workspace bootstrap; this manual path requires you to resolve a real workspace ID before running `update-env.sh`.
+
 ```bash
 pnpm install
 pnpm --filter @opencom/convex exec convex dev --once
+pnpm --filter @opencom/convex exec convex auth add
 ./scripts/update-env.sh --url https://<your-deployment>.convex.cloud --workspace <workspace-id>
 pnpm dev:web
 pnpm dev:widget
@@ -103,9 +107,10 @@ By default, each deploy publishes a unique immutable runtime key (`v/<packageVer
 
 | Variable                                            | Required                                    | Purpose                                                                                                                   |
 | --------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_SECRET`                                       | Yes for local password-auth bootstrap       | Auth signing secret for Convex auth runtime                                                                               |
+| `JWT_PRIVATE_KEY`                                   | Yes for local password-auth bootstrap       | Private key used by Convex Auth to sign session JWTs; setup generates this with the matching `JWKS` when needed           |
+| `JWKS`                                              | Yes for local password-auth bootstrap       | Public key set matching `JWT_PRIVATE_KEY`, exposed by Convex Auth for JWT verification                                    |
 | `SITE_URL`                                          | Recommended local default                   | Convex dashboard env key used for callback/link generation; bootstrap defaults it to `http://localhost:3000` when missing |
-| `CONVEX_SITE_URL`                                   | Runtime-derived                             | Auth provider domain surfaced from `SITE_URL` for `convex/auth.config.ts`                                                 |
+| `CONVEX_SITE_URL`                                   | Convex-managed                              | Convex site URL used as the auth issuer and JWKS endpoint                                                                 |
 | `AUTH_RESEND_KEY`                                   | Optional                                    | OTP provider API key override (falls back to `RESEND_API_KEY`)                                                            |
 | `RESEND_API_KEY`                                    | Optional (required for email features)      | Transactional/campaign email sending                                                                                      |
 | `EMAIL_FROM`                                        | Optional                                    | Sender identity for auth and email channel flows                                                                          |

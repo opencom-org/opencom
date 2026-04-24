@@ -4,11 +4,12 @@ const LOCAL_SITE_URL = "http://localhost:3000";
 
 const CORE_BACKEND_ENV = [
   {
-    key: "AUTH_SECRET",
+    id: "convex-auth-jwt-keys",
+    keys: ["JWT_PRIVATE_KEY", "JWKS"],
     required: true,
     description:
-      "Required by Convex Auth to sign password-auth sessions for the local bootstrap flow.",
-    resolution: "generate",
+      "Required by Convex Auth to sign password-auth sessions and expose the matching public JWKS.",
+    resolution: "generate-jwt-keypair",
   },
   {
     key: "SITE_URL",
