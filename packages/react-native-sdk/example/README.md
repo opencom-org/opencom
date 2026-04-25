@@ -23,6 +23,8 @@ EXPO_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 EXPO_PUBLIC_WORKSPACE_ID=your-workspace-id
 ```
 
+If you already ran the repo bootstrap, `./scripts/update-env.sh` writes these values for you.
+
 ### 3. Run the App
 
 ```bash

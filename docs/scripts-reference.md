@@ -16,11 +16,12 @@ Interactive setup script for first-time Opencom installation.
 
 1. Checks prerequisites (Node.js 18+, PNPM 9+)
 2. Installs dependencies (`pnpm install`)
-3. Creates a Convex project and deploys the backend
-4. Prompts for admin email/password (or accepts via flags)
-5. Creates workspace and admin account
-6. Generates `.env.local` files for all apps
-7. Optionally starts the dev server
+3. Configures or reuses the local Convex dev deployment with `convex dev --once`
+4. Validates the local password-auth bootstrap env contract and generates `JWT_PRIVATE_KEY`/`JWKS` when needed
+5. Prompts for admin credentials (or accepts them via flags) and uses the repo's real `auth:signIn` flow
+6. Reuses or resolves the workspace to wire into local envs, with explicit opt-in creation on reruns
+7. Updates the supported `.env.local` files without deleting unrelated entries/comments
+8. Optionally offers to start the web + widget dev servers
 
 **Flags:**
 
@@ -29,8 +30,11 @@ Interactive setup script for first-time Opencom installation.
 | `--email <email>`       | Admin email address                                   |
 | `--password <password>` | Admin password                                        |
 | `--name <name>`         | Admin display name                                    |
-| `--workspace <name>`    | Workspace name                                        |
-| `--skip-dev`            | Skip starting dev server                              |
+| `--workspace <name>`    | Workspace name when creating a new workspace          |
+| `--reconfigure`         | Force Convex CLI reconfiguration                      |
+| `--create-workspace`    | Create a new workspace on an existing deployment      |
+| `--skip-dev`            | Skip the dev-server prompt entirely                   |
+| `--start-dev`           | Start web + widget dev servers automatically          |
 | `--non-interactive`     | Run without prompts (requires --email and --password) |
 
 **Non-interactive example (CI):**
@@ -41,7 +45,7 @@ Interactive setup script for first-time Opencom installation.
 
 ### `update-env.sh`
 
-Regenerates `.env.local` files after setup or configuration changes.
+Refreshes the Opencom-managed local env keys after setup or configuration changes.
 
 ```bash
 ./scripts/update-env.sh --url https://your-project.convex.cloud --workspace your_workspace_id
@@ -51,6 +55,8 @@ Regenerates `.env.local` files after setup or configuration changes.
 | ------------------ | --------------------- |
 | `--url <url>`      | Convex deployment URL |
 | `--workspace <id>` | Workspace ID          |
+
+`update-env.sh` preserves unrelated manual keys and comments in the target files instead of overwriting them wholesale.
 
 ## Build & Deploy
 
@@ -264,18 +270,18 @@ Files in `security/` configure CI gate behavior:
 
 ### Quality
 
-| Command                  | Description                                       |
-| ------------------------ | ------------------------------------------------- |
-| `pnpm web:lint`          | Lint `@opencom/web` using ESLint CLI             |
+| Command                  | Description                                              |
+| ------------------------ | -------------------------------------------------------- |
+| `pnpm web:lint`          | Lint `@opencom/web` using ESLint CLI                     |
 | `pnpm convex:lint`       | Lint `@opencom/convex` Help Center import/export modules |
-| `pnpm quality:lint`      | Run standardized lint gates for web + convex     |
-| `pnpm web:typecheck`     | Typecheck `@opencom/web`                         |
-| `pnpm convex:typecheck`  | Typecheck `@opencom/convex`                      |
-| `pnpm quality:typecheck` | Run standardized typecheck gates for web + convex |
-| `pnpm lint`              | Lint all packages (workspace-wide)               |
-| `pnpm format`            | Format all files                                 |
-| `pnpm format:check`      | Check formatting                                 |
-| `pnpm typecheck`         | Typecheck all packages                           |
+| `pnpm quality:lint`      | Run standardized lint gates for web + convex             |
+| `pnpm web:typecheck`     | Typecheck `@opencom/web`                                 |
+| `pnpm convex:typecheck`  | Typecheck `@opencom/convex`                              |
+| `pnpm quality:typecheck` | Run standardized typecheck gates for web + convex        |
+| `pnpm lint`              | Lint all packages (workspace-wide)                       |
+| `pnpm format`            | Format all files                                         |
+| `pnpm format:check`      | Check formatting                                         |
+| `pnpm typecheck`         | Typecheck all packages                                   |
 
 ### Testing
 

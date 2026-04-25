@@ -2,6 +2,18 @@
 
 Open-source customer messaging platform - an alternative to Intercom.
 
+## Quick Start
+
+After cloning the repo, run one setup command:
+
+```bash
+./scripts/setup.sh
+```
+
+It installs dependencies, creates or reuses a Convex dev deployment, configures Convex Auth, creates or reuses a workspace, and writes the local `.env.local` files for the web, widget, mobile, landing, and SDK example apps.
+
+Prerequisites: Node.js 18+, PNPM 9+, and a Convex account.
+
 ## Documentation
 
 ### Quick Links
@@ -100,14 +112,14 @@ For the canonical setup paths (quickstart, self-host, env vars, deployment profi
 
 ### Quick Start (Self-Hosters)
 
-The fastest way to get Opencom running locally:
+The fastest supported local setup path is the bootstrap script:
 
 ```bash
 # Clone the repository
 git clone https://github.com/opencom-org/opencom.git
 cd opencom
 
-# Run the setup script
+# Run the one-command setup
 ./scripts/setup.sh
 ```
 
@@ -115,11 +127,11 @@ The setup script will:
 
 1. Check prerequisites (Node.js 18+, PNPM 9+)
 2. Install dependencies
-3. Create a Convex project and deploy
-4. Prompt for your admin email and password
-5. Create your workspace and admin account
-6. Generate all `.env.local` files
-7. Start the web dashboard and widget
+3. Configure or reuse a Convex dev deployment with the current CLI flow
+4. Validate the local password-auth bootstrap env contract
+5. Sign up or sign in through the repo's real Convex Auth password flow
+6. Generate/update all supported `.env.local` files without deleting unrelated keys
+7. Optionally offer to start the web dashboard and widget
 
 **Prerequisites:**
 
@@ -133,31 +145,38 @@ The setup script will:
 ./scripts/setup.sh --email admin@example.com --password yourpassword --non-interactive --skip-dev
 ```
 
+**Force a reconfigure or create a new workspace on rerun:**
+
+```bash
+./scripts/setup.sh --reconfigure
+./scripts/setup.sh --create-workspace --workspace "My New Workspace"
+```
+
 **Update environment files:**
 
 ```bash
 ./scripts/update-env.sh --url https://your-project.convex.cloud --workspace your_workspace_id
 ```
 
-### Manual Setup
+### Manual Setup (Escape Hatch)
 
-If you prefer manual setup:
+Prefer `./scripts/setup.sh`. Use this path only when you need to debug or control each setup step yourself:
 
 ```bash
 # Install dependencies
 pnpm install
 
-# Navigate to convex package
-cd packages/convex
+# Configure the local Convex dev deployment
+pnpm --filter @opencom/convex exec convex dev --once
 
-# Login to Convex
-npx convex login
+# Configure Convex Auth JWT_PRIVATE_KEY/JWKS and SITE_URL
+pnpm --filter @opencom/convex exec convex auth add
 
-# Initialize and deploy
-npx convex dev
+# Propagate the backend URL and workspace into the local app env files
+./scripts/update-env.sh --url https://your-project.convex.cloud --workspace your_workspace_id
 ```
 
-Then create `.env.local` files manually (see Environment Variables Reference below).
+You still need to create or reuse an admin/workspace yourself before `update-env.sh` can wire a real workspace ID into the local app env files.
 
 ## Development
 
@@ -225,15 +244,17 @@ npx convex login
 
 # Create and deploy your project
 npx convex dev --once
+
+# Configure Convex Auth
+pnpm exec convex auth add
 ```
 
-**2. Configure environment variables in Convex Dashboard:**
+**2. Configure optional integration environment variables in Convex Dashboard:**
 
-Go to your Convex dashboard → Settings → Environment Variables and set:
+`pnpm exec convex auth add` configures the required Convex Auth `JWT_PRIVATE_KEY` and `JWKS` values. For optional email features, go to your Convex dashboard → Settings → Environment Variables and set:
 
 | Variable         | Required  | Description                                                              |
 | ---------------- | --------- | ------------------------------------------------------------------------ |
-| `AUTH_SECRET`    | Yes       | Random string for JWT signing (generate with `openssl rand -base64 32`)  |
 | `RESEND_API_KEY` | For email | API key from [Resend](https://resend.com) for sending emails             |
 | `EMAIL_FROM`     | For email | Email address to send from (e.g., `YourCompany<noreply@yourdomain.com>`) |
 
@@ -390,7 +411,8 @@ Set these in your Convex Dashboard → Settings → Environment Variables:
 
 | Variable                                            | Required              | Description                                                                                                                         |
 | --------------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_SECRET`                                       | Yes                   | Secret for JWT signing                                                                                                              |
+| `JWT_PRIVATE_KEY`                                   | Yes                   | Private key for Convex Auth JWT signing                                                                                             |
+| `JWKS`                                              | Yes                   | Public key set matching `JWT_PRIVATE_KEY` for Convex Auth JWT verification                                                          |
 | `AUTH_RESEND_KEY`                                   | For email             | Resend API key for OTP email sending                                                                                                |
 | `RESEND_API_KEY`                                    | For email             | Resend API key for transactional/campaign emails                                                                                    |
 | `EMAIL_FROM`                                        | For email             | Sender email address (e.g., `Opencom <noreply@yourdomain.com>`)                                                                     |
@@ -489,11 +511,9 @@ Opencom uses a dedicated Convex test deployment to avoid polluting development o
 **Setting up the test deployment:**
 
 ```bash
-# Navigate to convex package
-cd packages/convex
-
-# Create and deploy to test project (first time only)
-npx convex dev --project opencom-test --once
+# Create or reuse a dedicated test deployment, then configure Convex Auth
+pnpm --filter @opencom/convex exec convex dev --once --configure
+pnpm --filter @opencom/convex exec convex auth add
 
 # Create a local test env file from template
 cp .env.test.example .env.test
@@ -568,8 +588,9 @@ When self-hosting Opencom, consider these security best practices:
 | `EMAIL_WEBHOOK_INTERNAL_SECRET` | Restrict webhook-only email handlers to trusted internal callers                | Convex Dashboard                         |
 | `ENFORCE_WEBHOOK_SIGNATURES`    | Fail closed on webhook signature/internal-secret validation (`true` by default) | Convex Dashboard                         |
 | `WEBHOOK_MAX_AGE_SECONDS`       | Replay-window bound for webhook signatures (default: 300s)                      | Convex Dashboard                         |
-| `AUTH_SECRET`                   | Sign authentication/session tokens                                              | Convex Dashboard                         |
-| `CONVEX_SITE_URL`               | Auth callback domain used by Convex Auth provider                               | Convex Dashboard                         |
+| `JWT_PRIVATE_KEY`               | Sign authentication/session tokens                                              | Convex Dashboard                         |
+| `JWKS`                          | Verify authentication/session tokens                                            | Convex Dashboard                         |
+| `CONVEX_SITE_URL`               | Auth issuer and JWKS endpoint used by Convex Auth provider                      | Convex-managed                           |
 | `ALLOW_TEST_DATA`               | Enable/disable test data mutations                                              | Convex Dashboard                         |
 | `TEST_ADMIN_SECRET`             | Secure test admin gateway for internal test mutations                           | Convex Dashboard (test deployments only) |
 
@@ -673,8 +694,8 @@ try {
 
 **"Could not determine Convex deployment URL"**
 
-- Ensure you're logged into Convex: `npx convex whoami`
-- Try running `npx convex dev --once` manually in `packages/convex/`
+- Rerun `./scripts/setup.sh --reconfigure` and complete the Convex CLI login/project-selection flow.
+- If you are debugging manually, run `pnpm --filter @opencom/convex exec convex dev --once --configure`.
 
 **"npx convex login" hangs or fails**
 

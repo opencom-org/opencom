@@ -52,6 +52,7 @@
     "ci:check": "pnpm lint && pnpm typecheck && pnpm security:convex-auth-guard && pnpm security:convex-any-args-gate && pnpm security:secret-scan && pnpm security:headers-check && pnpm security:audit-gate && pnpm test:convex && pnpm --filter @opencom/web build",
     "test:summary": "node scripts/test-summary.js",
     "test:clear": "node scripts/test-summary.js clear",
+    "test:setup-bootstrap": "node --test scripts/tests/local-convex-setup.test.js",
     "test:timeout": "node scripts/run-with-timeout.js",
     "test:e2e:prod": "E2E_USE_PROD_BUILD=true pnpm web:test:e2e",
     "seed:landing": "pnpm dlx dotenv-cli -e apps/landing/.env.local -- tsx scripts/seed-landing-demo.ts",
@@ -82,8 +83,8 @@
   "pnpm": {
     "overrides": {
       "@isaacs/brace-expansion": "5.0.1",
-      "@xmldom/xmldom@0.7.13": "0.8.12",
-      "@xmldom/xmldom@0.8.11": "0.8.12",
+      "@xmldom/xmldom@0.7.13": "0.8.13",
+      "@xmldom/xmldom@0.8.11": "0.8.13",
       "esbuild": "^0.27.0",
       "fast-xml-parser": "4.5.5",
       "flatted": "3.4.2",
