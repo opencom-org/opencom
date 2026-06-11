@@ -458,6 +458,10 @@ describe("runtime type hardening guards", () => {
 
     expect(testAdminSource).toContain('const ALLOWED_MODULE_PREFIXES = ["testData", "testing"]');
     expect(testAdminSource).toContain("if (!ALLOWED_MODULE_PREFIXES.includes(topModule))");
+    expect(testAdminSource).toContain("requireTestDataGatewayEnabled();");
+    expect(testAdminSource.indexOf("requireTestDataGatewayEnabled();")).toBeLessThan(
+      testAdminSource.indexOf("return await runMutation(getInternalRef(name),")
+    );
     expect(testAdminSource).toContain("return await runMutation(getInternalRef(name),");
     expect(testAdminSource).not.toContain('"notifications"');
     expect(testAdminSource).not.toContain('"messages"');

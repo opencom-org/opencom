@@ -9,7 +9,7 @@
  * - Requires TEST_ADMIN_SECRET env var to be set on the Convex deployment
  * - Caller must provide the matching secret
  * - Only functions in "testData" and "testing" modules are allowed
- * - The ALLOW_TEST_DATA env var guard inside each mutation still applies
+ * - Requires ALLOW_TEST_DATA=true before any test mutation is dispatched
  */
 
 import { makeFunctionReference } from "convex/server";
@@ -77,6 +77,18 @@ export function isAuthorizedAdminSecret(providedSecret: string, expectedSecret: 
   return mismatch === 0;
 }
 
+export function isTestDataGatewayEnabled(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  return env.ALLOW_TEST_DATA === "true";
+}
+
+function requireTestDataGatewayEnabled() {
+  if (!isTestDataGatewayEnabled()) {
+    throw new Error("Test data mutations are disabled");
+  }
+}
+
 export const runTestMutation = action({
   args: {
     secret: v.string(),
@@ -92,6 +104,7 @@ export const runTestMutation = action({
     if (!isAuthorizedAdminSecret(secret, expected)) {
       throw new Error("Unauthorized: invalid admin secret.");
     }
+    requireTestDataGatewayEnabled();
 
     // Parse function path: "testData:seedTour" or "testing/helpers:cleanupE2ETestData"
     const colonIdx = name.indexOf(":");

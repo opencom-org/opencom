@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAuthorizedAdminSecret } from "../convex/testAdmin";
+import { isAuthorizedAdminSecret, isTestDataGatewayEnabled } from "../convex/testAdmin";
 
 describe("testAdmin secret validation", () => {
   it("authorizes matching secrets", () => {
@@ -21,5 +21,12 @@ describe("testAdmin secret validation", () => {
   it("rejects empty secrets", () => {
     expect(isAuthorizedAdminSecret("", "configured-secret")).toBe(false);
     expect(isAuthorizedAdminSecret("configured-secret", "")).toBe(false);
+  });
+
+  it("enables the test data gateway only when ALLOW_TEST_DATA is exactly true", () => {
+    expect(isTestDataGatewayEnabled({ ALLOW_TEST_DATA: "true" })).toBe(true);
+    expect(isTestDataGatewayEnabled({ ALLOW_TEST_DATA: "false" })).toBe(false);
+    expect(isTestDataGatewayEnabled({ ALLOW_TEST_DATA: "TRUE" })).toBe(false);
+    expect(isTestDataGatewayEnabled({})).toBe(false);
   });
 });

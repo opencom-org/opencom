@@ -51,7 +51,7 @@
     "@types/react": "~19.1.0",
     "react-native-builder-bob": "^0.40.13",
     "typescript": "~5.0.4",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.8"
   },
   "peerDependencies": {
     "expo": "*",

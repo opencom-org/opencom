@@ -24,6 +24,6 @@
     "@types/markdown-it": "^14.1.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.3.0",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.8"
   }
 }
