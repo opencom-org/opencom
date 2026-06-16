@@ -20,7 +20,8 @@ export const helpCenterTables = {
     .index("by_slug", ["workspaceId", "slug"])
     .index("by_parent", ["workspaceId", "parentId"])
     .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
-    .index("by_import_source_path", ["importSourceId", "importPath"]),
+    .index("by_import_source_path", ["importSourceId", "importPath"])
+    .index("by_workspace_updated_at", ["workspaceId", "updatedAt"]),
 
   // Help Center - Articles
   articles: defineTable({
@@ -54,7 +55,8 @@ export const helpCenterTables = {
     .index("by_visibility", ["workspaceId", "visibility"])
     .index("by_workspace_import_source", ["workspaceId", "importSourceId"])
     .index("by_import_source_path", ["importSourceId", "importPath"])
-    .index("by_legacy_internal_article", ["legacyInternalArticleId"]),
+    .index("by_legacy_internal_article", ["legacyInternalArticleId"])
+    .index("by_workspace_updated_at", ["workspaceId", "updatedAt"]),
 
   // Help Center - Article Assets
   articleAssets: defineTable({

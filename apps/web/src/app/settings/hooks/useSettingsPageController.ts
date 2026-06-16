@@ -242,9 +242,12 @@ export function useSettingsPageController() {
       if (sectionId === "email-channel") {
         return isAdmin;
       }
+      if (sectionId === "automation-api") {
+        return isAdmin && workspace?.automationApiEnabled;
+      }
       return true;
     });
-  }, [isAdmin]);
+  }, [isAdmin, workspace?.automationApiEnabled]);
 
   const visibleSections = useMemo(
     () => SETTINGS_SECTION_CONFIG.filter((section) => visibleSectionIds.includes(section.id)),
@@ -347,6 +350,7 @@ export function useSettingsPageController() {
             ? ("success" as const)
             : ("neutral" as const),
       },
+      "automation-api": { label: "Managed", tone: "neutral" as const },
       installations: { label: "In onboarding", tone: "neutral" as const },
       "backend-connection": {
         label: activeBackend?.name ? "Connected" : "Unknown",

@@ -93,6 +93,7 @@ export const inboxConversationTables = {
     aiLastResponseAt: v.optional(v.number()),
   })
     .index("by_workspace", ["workspaceId"])
+    .index("by_workspace_updated_at", ["workspaceId", "updatedAt"])
     .index("by_visitor", ["visitorId"])
     .index("by_status", ["workspaceId", "status"])
     .index("by_last_message", ["workspaceId", "lastMessageAt"])
@@ -144,6 +145,7 @@ export const inboxConversationTables = {
       )
     ),
     attachmentIds: v.optional(supportAttachmentIdArrayValidator),
+    automationCredentialId: v.optional(v.id("automationCredentials")),
     createdAt: v.number(),
   })
     .index("by_conversation", ["conversationId"])

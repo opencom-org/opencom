@@ -14,6 +14,7 @@ import {
 import { supportAttachmentIdArrayValidator } from "./supportAttachmentTypes";
 import { formDataValidator } from "./validators";
 import { authMutation, authQuery } from "./lib/authWrappers";
+import { emitAutomationEvent } from "./automationEvents";
 
 type TicketCreatedNotificationArgs = {
   ticketId: Id<"tickets">;
@@ -410,6 +411,14 @@ export const create = mutation({
       ticketId,
     });
 
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "ticket.created",
+      resourceType: "ticket",
+      resourceId: ticketId,
+      data: { channel: "support_ticket", status: "submitted", priority: args.priority || "normal" },
+    });
+
     return ticketId;
   },
 });
@@ -473,6 +482,19 @@ export const update = authMutation({
         actorUserId: ctx.user._id,
       });
     }
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: ticket.workspaceId,
+      eventType: "ticket.updated",
+      resourceType: "ticket",
+      resourceId: args.id,
+      data: {
+        channel: "support_ticket",
+        status: args.status ?? ticket.status,
+        priority: args.priority ?? ticket.priority,
+        assigneeId: args.assigneeId ?? ticket.assigneeId,
+      },
+    });
 
     return args.id;
   },
@@ -663,6 +685,14 @@ export const convertFromConversation = authMutation({
       ticketId,
     });
 
+    await emitAutomationEvent(ctx, {
+      workspaceId: conversation.workspaceId,
+      eventType: "ticket.created",
+      resourceType: "ticket",
+      resourceId: ticketId,
+      data: { channel: "support_ticket", status: "submitted", priority: args.priority || "normal" },
+    });
+
     return ticketId;
   },
 });
@@ -749,6 +779,16 @@ export const addComment = mutation({
       });
     }
 
+    if (!isInternal) {
+      await emitAutomationEvent(ctx, {
+        workspaceId: ticket.workspaceId,
+        eventType: "ticket.comment_added",
+        resourceType: "ticket",
+        resourceId: args.ticketId,
+        data: { channel: "support_ticket", commentId, authorType },
+      });
+    }
+
     return commentId;
   },
 });
@@ -793,6 +833,14 @@ export const resolve = authMutation({
       ticketId: args.id,
       resolutionSummary: args.resolutionSummary,
       actorUserId: ctx.user._id,
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: ticket.workspaceId,
+      eventType: "ticket.updated",
+      resourceType: "ticket",
+      resourceId: args.id,
+      data: { channel: "support_ticket", status: "resolved", priority: ticket.priority, assigneeId: ticket.assigneeId },
     });
 
     return args.id;

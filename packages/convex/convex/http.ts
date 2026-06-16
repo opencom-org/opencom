@@ -691,4 +691,80 @@ http.route({
   }),
 });
 
+// ── Automation API v1 routes ─────────────────────────────────────
+
+import {
+  listConversations,
+  getConversation,
+  updateConversation,
+  listMessages,
+  sendMessage,
+  claimConversation,
+  releaseConversation,
+  escalateConversation,
+  listVisitors,
+  getVisitor,
+  createVisitor,
+  updateVisitor,
+  listTickets,
+  getTicket,
+  createTicket,
+  updateTicket,
+  listArticles,
+  getArticle,
+  createArticle,
+  updateArticle,
+  deleteArticle,
+  listCollections,
+  getCollection,
+  createCollection,
+  updateCollection,
+  deleteCollection,
+  eventsFeed,
+  listOutboundMessages,
+  getOutboundMessage,
+  createOutboundMessage,
+  updateOutboundMessage,
+  deleteOutboundMessage,
+  activateOutboundMessage,
+  pauseOutboundMessage,
+  replayWebhookDelivery,
+} from "./automationHttpRoutes";
+
+http.route({ path: "/api/v1/conversations", method: "GET", handler: listConversations });
+http.route({ path: "/api/v1/conversations/get", method: "GET", handler: getConversation });
+http.route({ path: "/api/v1/conversations/update", method: "POST", handler: updateConversation });
+http.route({ path: "/api/v1/conversations/messages", method: "GET", handler: listMessages });
+http.route({ path: "/api/v1/conversations/messages/send", method: "POST", handler: sendMessage });
+http.route({ path: "/api/v1/conversations/claim", method: "POST", handler: claimConversation });
+http.route({ path: "/api/v1/conversations/release", method: "POST", handler: releaseConversation });
+http.route({ path: "/api/v1/conversations/escalate", method: "POST", handler: escalateConversation });
+http.route({ path: "/api/v1/visitors", method: "GET", handler: listVisitors });
+http.route({ path: "/api/v1/visitors/get", method: "GET", handler: getVisitor });
+http.route({ path: "/api/v1/visitors/create", method: "POST", handler: createVisitor });
+http.route({ path: "/api/v1/visitors/update", method: "POST", handler: updateVisitor });
+http.route({ path: "/api/v1/tickets", method: "GET", handler: listTickets });
+http.route({ path: "/api/v1/tickets/get", method: "GET", handler: getTicket });
+http.route({ path: "/api/v1/tickets/create", method: "POST", handler: createTicket });
+http.route({ path: "/api/v1/tickets/update", method: "POST", handler: updateTicket });
+http.route({ path: "/api/v1/articles", method: "GET", handler: listArticles });
+http.route({ path: "/api/v1/articles/get", method: "GET", handler: getArticle });
+http.route({ path: "/api/v1/articles/create", method: "POST", handler: createArticle });
+http.route({ path: "/api/v1/articles/update", method: "POST", handler: updateArticle });
+http.route({ path: "/api/v1/articles/delete", method: "POST", handler: deleteArticle });
+http.route({ path: "/api/v1/collections", method: "GET", handler: listCollections });
+http.route({ path: "/api/v1/collections/get", method: "GET", handler: getCollection });
+http.route({ path: "/api/v1/collections/create", method: "POST", handler: createCollection });
+http.route({ path: "/api/v1/collections/update", method: "POST", handler: updateCollection });
+http.route({ path: "/api/v1/collections/delete", method: "POST", handler: deleteCollection });
+http.route({ path: "/api/v1/outbound", method: "GET", handler: listOutboundMessages });
+http.route({ path: "/api/v1/outbound/get", method: "GET", handler: getOutboundMessage });
+http.route({ path: "/api/v1/outbound/create", method: "POST", handler: createOutboundMessage });
+http.route({ path: "/api/v1/outbound/update", method: "POST", handler: updateOutboundMessage });
+http.route({ path: "/api/v1/outbound/delete", method: "POST", handler: deleteOutboundMessage });
+http.route({ path: "/api/v1/outbound/activate", method: "POST", handler: activateOutboundMessage });
+http.route({ path: "/api/v1/outbound/pause", method: "POST", handler: pauseOutboundMessage });
+http.route({ path: "/api/v1/events/feed", method: "GET", handler: eventsFeed });
+http.route({ path: "/api/v1/webhooks/replay", method: "POST", handler: replayWebhookDelivery });
+
 export default http;

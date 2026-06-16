@@ -76,3 +76,5 @@ packages/convex/.env.test
 artifacts
 apps/landing/public/opencom-widget.iife.js
 apps/web/public/opencom-widget.iife.js
+CLAUDE.md
+openspec/config.yaml

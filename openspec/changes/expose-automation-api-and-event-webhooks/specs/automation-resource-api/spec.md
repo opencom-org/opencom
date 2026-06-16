@@ -1,17 +1,20 @@
 ## ADDED Requirements
 
-### Requirement: Automation API MUST expose CRUD access for automation-critical workspace resources
-Opencom SHALL expose a versioned HTTP API that lets authorized automation clients create, read, update, delete, and list automation-critical workspace resources including conversations, messages, visitors, tickets, ticket comments, articles, collections, outbound messages, custom attributes, and custom events according to credential scope.
-
-#### Scenario: Automation syncs knowledge content into Opencom
-- **WHEN** an authorized automation client creates or updates collections and articles through the automation API
-- **THEN** Opencom SHALL persist those resources with stable IDs and machine-readable state
-- **AND** the same resources SHALL be retrievable through the supported external API without relying on internal Convex function names
+### Requirement: Automation API MUST expose CRUD access for automation-critical inbox resources
+Opencom SHALL expose a versioned HTTP API that lets authorized automation clients create, read, update, delete, and list automation-critical inbox resources including conversations, messages, visitors, tickets, ticket comments, outbound messages, and custom attributes according to credential scope.
 
 #### Scenario: Automation reads inbox state and creates follow-on actions
 - **WHEN** an authorized automation client reads a conversation and creates a reply, ticket mutation, or outbound message through scoped endpoints
 - **THEN** Opencom SHALL authorize the action according to workspace-scoped permissions
 - **AND** the resulting resources SHALL remain visible in existing Opencom inbox and outbound management surfaces
+
+### Requirement: Automation API MUST expose CRUD access for knowledge resources
+Opencom SHALL expose a versioned HTTP API that lets authorized automation clients create, read, update, delete, and list knowledge resources including articles and collections according to credential scope.
+
+#### Scenario: Automation syncs knowledge content into Opencom
+- **WHEN** an authorized automation client creates or updates collections and articles through the automation API
+- **THEN** Opencom SHALL persist those resources with stable IDs and machine-readable state
+- **AND** the same resources SHALL be retrievable through the supported external API without relying on internal Convex function names
 
 ### Requirement: Automation API MUST support incremental sync and server-side filtering
 List and search endpoints SHALL support cursor-based pagination and server-side filters including updated time, status, channel, assignee, external identifiers, email, and relevant custom-attribute predicates so automation clients can mirror state without full rescans.

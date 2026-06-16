@@ -21,6 +21,7 @@ export type SettingsSectionId =
   | "notifications"
   | "email-channel"
   | "mobile-devices"
+  | "automation-api"
   | "installations"
   | "backend-connection";
 
@@ -157,14 +158,24 @@ export const SETTINGS_SECTION_CONFIG: SettingsSectionConfig[] = [
     mobileOrder: 11,
   },
   {
+    id: "automation-api",
+    label: "Automation API",
+    description: "Manage API credentials, webhooks, and delivery logs",
+    category: "integrations-channels",
+    keywords: ["api", "automation", "credentials", "webhooks", "keys", "secret", "delivery"],
+    defaultExpanded: false,
+    priority: 12,
+    mobileOrder: 12,
+  },
+  {
     id: "email-channel",
     label: "Email Channel",
     description: "Set forwarding and outbound email behavior",
     category: "integrations-channels",
     keywords: ["email", "channel", "forwarding", "signature", "from"],
     defaultExpanded: false,
-    priority: 12,
-    mobileOrder: 12,
+    priority: 13,
+    mobileOrder: 13,
   },
   {
     id: "mobile-devices",
@@ -173,8 +184,8 @@ export const SETTINGS_SECTION_CONFIG: SettingsSectionConfig[] = [
     category: "integrations-channels",
     keywords: ["mobile", "sdk", "devices", "push"],
     defaultExpanded: false,
-    priority: 13,
-    mobileOrder: 13,
+    priority: 14,
+    mobileOrder: 14,
   },
   {
     id: "installations",
@@ -183,8 +194,8 @@ export const SETTINGS_SECTION_CONFIG: SettingsSectionConfig[] = [
     category: "integrations-channels",
     keywords: ["install", "widget", "sdk", "onboarding", "setup"],
     defaultExpanded: false,
-    priority: 14,
-    mobileOrder: 14,
+    priority: 15,
+    mobileOrder: 15,
   },
   {
     id: "backend-connection",
@@ -193,7 +204,7 @@ export const SETTINGS_SECTION_CONFIG: SettingsSectionConfig[] = [
     category: "system",
     keywords: ["backend", "environment", "connection"],
     defaultExpanded: false,
-    priority: 15,
-    mobileOrder: 15,
+    priority: 16,
+    mobileOrder: 16,
   },
 ];

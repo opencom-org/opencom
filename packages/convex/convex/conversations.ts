@@ -9,6 +9,7 @@ import {
 } from "./notifications/functionRefs";
 import { requirePermission, hasPermission } from "./permissions";
 import { resolveVisitorFromSession } from "./widgetSessions";
+import { emitAutomationEvent } from "./automationEvents";
 
 // Helper function to create a new conversation (shared by getOrCreateForVisitor and createForVisitor)
 async function createConversationInternal(
@@ -38,6 +39,14 @@ async function createConversationInternal(
   const runAfter = getShallowRunAfter(ctx);
   await runAfter(0, notifyNewConversationRef, {
     conversationId: id,
+  });
+
+  await emitAutomationEvent(ctx, {
+    workspaceId,
+    eventType: "conversation.created",
+    resourceType: "conversation",
+    resourceId: id,
+    data: { channel: "chat", status: "open", visitorId },
   });
 
   return await ctx.db.get(id);
@@ -124,7 +133,7 @@ export const create = mutation({
 
     const now = Date.now();
 
-    return await ctx.db.insert("conversations", {
+    const conversationId = await ctx.db.insert("conversations", {
       workspaceId: args.workspaceId,
       visitorId: args.visitorId,
       userId: args.userId,
@@ -133,6 +142,16 @@ export const create = mutation({
       updatedAt: now,
       aiWorkflowState: "none",
     });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: args.workspaceId,
+      eventType: "conversation.created",
+      resourceType: "conversation",
+      resourceId: conversationId,
+      data: { channel: "chat", status: "open", visitorId: args.visitorId },
+    });
+
+    return conversationId;
   },
 });
 
@@ -200,6 +219,14 @@ export const updateStatus = mutation({
     }
 
     await ctx.db.patch(args.id, patch);
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: conversation.workspaceId,
+      eventType: "conversation.updated",
+      resourceType: "conversation",
+      resourceId: args.id,
+      data: { status: args.status },
+    });
   },
 });
 
@@ -231,6 +258,14 @@ export const assign = mutation({
       conversationId: args.id,
       assignedAgentId: args.agentId,
       actorUserId: user._id,
+    });
+
+    await emitAutomationEvent(ctx, {
+      workspaceId: conversation.workspaceId,
+      eventType: "conversation.updated",
+      resourceType: "conversation",
+      resourceId: args.id,
+      data: { assignedAgentId: args.agentId },
     });
   },
 });

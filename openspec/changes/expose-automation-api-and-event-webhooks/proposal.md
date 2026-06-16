@@ -4,7 +4,7 @@ Teams moving support operations into Opencom want to plug in their own AI system
 
 ## What Changes
 
-- Add a versioned automation HTTP API for CRUD access to automation-critical workspace resources including conversations, messages, visitors, tickets, ticket comments, articles, collections, outbound messages, custom attributes, and custom events.
+- Add a versioned automation HTTP API for CRUD access to automation-critical workspace resources including conversations, messages, visitors, tickets, ticket comments, articles, collections, outbound messages, and custom attributes, with knowledge resources (articles and collections) landing before the remaining follow-on inbox surfaces.
 - Add incremental sync, filter, and idempotency primitives so external scripts and agents can import knowledge, backfill metadata, and safely retry writes without creating duplicates.
 - Add outbound webhook subscriptions for automation trigger events, plus a polling-friendly event feed for cron-based integrations that do not want webhooks.
 - Add workspace-scoped automation credentials, scopes, rate limits, audit attribution, and delivery observability.

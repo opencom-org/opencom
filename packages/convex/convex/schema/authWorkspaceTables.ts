@@ -56,6 +56,8 @@ export const authWorkspaceTables = {
     // Signed widget sessions (always on — sessionLifetimeMs configures per-workspace lifetime)
     sessionLifetimeMs: v.optional(v.number()),
     supportAttachmentCleanupScheduledAt: v.optional(v.number()),
+    // Automation API feature flag
+    automationApiEnabled: v.optional(v.boolean()),
   })
     .index("by_name", ["name"])
     .index("by_created_at", ["createdAt"]),
