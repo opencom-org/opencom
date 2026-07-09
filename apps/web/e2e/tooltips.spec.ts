@@ -94,12 +94,19 @@ test.describe.serial("Tooltips", () => {
     await page.getByTestId("tooltip-selector-input").fill("#tour-target-1");
     await page.getByTestId("tooltip-content-input").fill("Initial tooltip content");
     await submitTooltipForm(page);
+
+    // Explicitly wait for modal to close and page to refresh or navigate
+    await expect(page.getByTestId("tooltip-modal")).not.toBeVisible({ timeout: 10000 });
     await openTooltipsPage(page);
 
     const crudCard = page
       .locator("[data-testid^='tooltip-card-']")
       .filter({ hasText: crudTooltipName });
-    await expect(crudCard).toHaveCount(1, { timeout: 10000 });
+
+    // Add retry loop for the card to appear, as Convex sync might take a moment
+    await expect.poll(async () => crudCard.count(), {
+      timeout: 15000,
+    }).toBe(1);
     await crudCard.locator("[data-testid^='tooltip-edit-']").click();
     await page.getByTestId("tooltip-content-input").fill("Updated tooltip content");
     await submitTooltipForm(page);

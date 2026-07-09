@@ -96,6 +96,14 @@
       "expiresOn": "2026-06-30",
       "reason": "Transitive dev dependency through wrangler -> miniflare for Cloudflare Workers local development. Not used in production. WebSocket vulnerabilities only affect dev environment connecting to local servers.",
       "cleanupCriteria": "Remove when miniflare or wrangler upgrades to undici with fixes."
+    },
+    {
+      "id": "1114772",
+      "module": "fast-xml-parser",
+      "owner": "mobile-sdk-team",
+      "expiresOn": "2026-06-30",
+      "reason": "Numeric entity expansion vulnerability (CVE-2026-33036, related to incomplete fix for CVE-2026-26278) in fast-xml-parser. Transitive through Expo/React Native CLI chain which is not yet updated.",
+      "cleanupCriteria": "Remove once fast-xml-parser >= 5.5.6 is adopted by upstream dependencies."
     }
   ]
 }

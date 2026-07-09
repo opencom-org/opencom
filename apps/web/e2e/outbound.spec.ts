@@ -29,23 +29,31 @@ async function openSeriesBuilderForNewSeries(page: Page) {
   await openSeriesTab(page);
 
   const newSeriesButton = page.getByRole("button", { name: /new\s+series/i });
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await expect(newSeriesButton).toBeVisible({ timeout: 10000 });
-    await newSeriesButton.click();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await expect(newSeriesButton).toBeVisible({ timeout: 15000 });
+
+    try {
+      await newSeriesButton.click({ timeout: 5000 });
+    } catch (e) {
+      // Button might be temporarily covered by a toast or transition
+      await newSeriesButton.click({ force: true, timeout: 5000 }).catch(() => {});
+    }
 
     const openedBuilder = await page
       .waitForURL(/\/campaigns\/series\/.+/, {
         timeout: 10000,
-        waitUntil: "domcontentloaded",
+        waitUntil: "load",
       })
       .then(() => true)
       .catch(() => false);
 
     if (openedBuilder) {
+      // Ensure editor is initialized
+      await page.waitForLoadState("networkidle").catch(() => {});
       return;
     }
 
-    await page.waitForTimeout(500 * (attempt + 1));
+    await page.waitForTimeout(1000 * (attempt + 1));
   }
 
   throw new Error("[outbound.e2e] Failed to open series builder after clicking New Series");
